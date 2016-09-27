@@ -54,9 +54,10 @@ IF (${HOMME_QUAD_PREC})
 ENDIF ()
 
 # Some options for conditional builds
-OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" ON)
-OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
-OPTION(BUILD_HOMME_PREQX_ACC "Primitive equations FEM with OpenACC" ON)
+OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" OFF)
+OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" ON)
+OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" OFF)
+OPTION(BUILD_HOMME_PREQX_ACC "Primitive equations FEM with OpenACC" OFF)
 OPTION(BUILD_HOMME_SWIM  "Shallow water equations implicit" OFF)
 OPTION(BUILD_HOMME_PRIM  "Primitive equations implicit" OFF)
 
@@ -170,6 +171,10 @@ ADD_SUBDIRECTORY(utils/timing)
 SET(EXEC_LIST ""  CACHE INTERNAL "List of configured executables")
 IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(src/sweqx)
+ENDIF()
+
+IF(${BUILD_HOMME_SWEQX_FLAT})
+  ADD_SUBDIRECTORY(src/sweqx_flat)
 ENDIF()
 
 IF(${BUILD_HOMME_PREQX})
