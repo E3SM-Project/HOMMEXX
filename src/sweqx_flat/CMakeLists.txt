@@ -1,10 +1,10 @@
 # Relevant Directories within the HOMME repository
 # holding source files needed for building the library
-# and executable sweqx.
+# and executable sweqx_flat.
 
-macro(sweqx_setup)
+macro(sweqx_flat_setup)
 
-SET(TARGET_DIR        ${HOMME_SOURCE_DIR}/src/sweqx)
+SET(TARGET_DIR        ${HOMME_SOURCE_DIR}/src/sweqx_flat)
 SET(SRC_BASE          ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE         ${HOMME_SOURCE_DIR}/src/share)
 SET(SRC_UTILS         ${HOMME_SOURCE_DIR}/utils/csm_share)
@@ -16,7 +16,7 @@ FILE(GLOB TARGET_F90  ${TARGET_DIR}/*.F90)
 # Make INCLUDE_DIRS global so the tests can access it
 SET (EXEC_INCLUDE_DIRS ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} )
 
-SET(SWEQX_SRCS
+SET(SWEQX_FLAT_SRCS
   ${TARGET_F90}
   ${SRC_BASE}/checksum_mod.F90
   ${SRC_BASE}/common_io_mod.F90
@@ -85,34 +85,33 @@ SET(SWEQX_SRCS
   ${SRC_BASE}/jrio.c
 )
 
-SET(EXEC_SOURCES ${SWEQX_SRCS} )
+SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
 # Set up defaults
-IF (NOT SWEQX_NP)
-  SET (SWEQX_NP 8) 
+IF (NOT SWEQX_FLAT_NP)
+  SET (SWEQX_FLAT_NP 8)
 ENDIF ()
-IF (NOT SWEQX_PLEV)
-  SET (SWEQX_PLEV 4) 
+IF (NOT SWEQX_FLAT_PLEV)
+  SET (SWEQX_FLAT_PLEV 4)
 ENDIF ()
-IF (NOT SWEQX_USE_PIO)
-  SET (SWEQX_USE_PIO FALSE) 
+IF (NOT SWEQX_FLAT_USE_PIO)
+  SET (SWEQX_FLAT_USE_PIO FALSE)
 ENDIF ()
-IF (NOT SWEQX_USE_ENERGY)
-  SET (SWEQX_USE_ENERGY FALSE) 
+IF (NOT SWEQX_FLAT_USE_ENERGY)
+  SET (SWEQX_FLAT_USE_ENERGY FALSE)
 ENDIF ()
-IF (NOT SWEQX_NC)
-  SET (SWEQX_NC 4)
+IF (NOT SWEQX_FLAT_NC)
+  SET (SWEQX_FLAT_NC 4)
 ENDIF ()
 IF (NOT QSIZE_D)
   SET (QSIZE_D 4)
 ENDIF ()
 
-endmacro(sweqx_setup)
+endmacro(sweqx_flat_setup)
 
 ############################################################################
 # createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
 ############################################################################
 
-sweqx_setup()
-createTestExec(sweqx sweqx ${SWEQX_NP} ${SWEQX_NC} ${SWEQX_PLEV} ${SWEQX_USE_PIO} ${SWEQX_USE_ENERGY} ${QSIZE_D})
-
+sweqx_flat_setup()
+createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_FLAT_PLEV} ${SWEQX_FLAT_USE_PIO} ${SWEQX_FLAT_USE_ENERGY} ${QSIZE_D})
