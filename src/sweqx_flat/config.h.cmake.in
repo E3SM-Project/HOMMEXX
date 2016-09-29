@@ -35,3 +35,6 @@
 
 /* Enable persistent MPI comm */
 #cmakedefine MPI_PERSISTENT
+
+/* Pointers in SW */
+#cmakedefine01 SW_USE_FLAT_ARRAYS
