@@ -23,7 +23,7 @@ contains
     ! --------------------------------
     use quadrature_mod, only :  test_gauss, test_gausslobatto, quadrature_t, gausslobatto
     ! --------------------------------
-    use element_mod, only : element_t, allocate_element_desc
+    use element_mod, only : element_t, allocate_element_desc, setup_element_pointers_sw
     ! --------------------------------
     use mass_matrix_mod, only : mass_matrix
     ! --------------------------------
@@ -253,6 +253,8 @@ contains
 #endif
 
     allocate(elem(nelemd))
+print *, 'IN INIT, before setup sw pointers'
+    call setup_element_pointers_sw(elem)
     call allocate_element_desc(elem)
     if (present(fvm)) then
     if (ntrac>0) then

@@ -22,6 +22,7 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: derived_divdp            (:,:,:,:)        ! (np,np,nlev,nelemd)                     divergence of dp
   real (kind=real_kind), allocatable, target, public :: derived_divdp_proj       (:,:,:,:)        ! (np,np,nlev,nelemd)                     DSSed divdp
 
+
 #if USE_OPENACC
 
   type, public :: elem_state_t
@@ -255,8 +256,15 @@ module element_mod
 
   end type elem_accum_t
 
+! if not _PRIM
 #else
 ! ================== SHALLOW-WATER DATA-STRUCTURES ===================
+
+  public :: setup_element_pointers_sw
+  real (kind=real_kind), allocatable, target, public :: elem_Dinv    (:,:,:,:,:)    ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_metdet  (:,:,:)        ! (np,np,nelemd)    
+  real (kind=real_kind), allocatable, target, public :: elem_rmetdet (:,:,:)        ! (np,np,nelemd) 
+
 
   type, public :: elem_state_t
 
@@ -325,11 +333,16 @@ module element_mod
      ! Metric terms
      real (kind=real_kind)    :: met(np,np,2,2)                       ! metric tensor on velocity and pressure grid
      real (kind=real_kind)    :: metinv(np,np,2,2)                    ! metric tensor on velocity and pressure grid
+     real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
+#if SW_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer    :: metdet(:,:)                       
+     real (kind=real_kind), pointer    :: rmetdet(:,:) 
+     real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
+#else
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
-     real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
-
+#endif   
 
      ! Mass flux across the sides of each sub-element.
      ! The storage is redundent since the mass across shared sides
@@ -581,6 +594,32 @@ contains
     enddo
 #endif
   end subroutine setup_element_pointers
+
+  !___________________________________________________________________
+  subroutine setup_element_pointers_sw(elem)
+    use dimensions_mod, only: nelemd, qsize
+    implicit none
+    type(element_t), intent(inout) :: elem(:)
+#if SW_USE_FLAT_ARRAYS
+    integer :: ie
+
+print *, 'CALLING setup_element_pointers_sw'
+!!!!! I need to sort out what we do in pure advection!!!
+!    allocate( state_Qdp                (np,np,nlev,qsize,2,nelemd)            )
+!    allocate( derived_vn0              (np,np,2,nlev,nelemd)                  )
+!    allocate( derived_divdp            (np,np,nlev,nelemd)                    )
+
+    allocate( elem_metdet              (np,np,nelemd)            )
+    allocate( elem_rmetdet             (np,np,nelemd)            )
+    allocate( elem_Dinv                (np,np,2,2,nelemd)                  )
+    do ie = 1 , nelemd
+      elem(ie)%metdet                 => elem_metdet(:,:,ie)
+      elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
+      elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
+    enddo
+#endif
+  end subroutine setup_element_pointers_sw
+
 
 
 end module element_mod
