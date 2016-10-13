@@ -29,9 +29,10 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
 
-# Set up some directories to facilitate finding netcdf and pnetcdf
+# Set up some directories to facilitate finding netcdf, pnetcdf, and Trilinos
 INCLUDE(SetHostPaths)
 INCLUDE(HommeMacros)
+INCLUDE(Trilinos)
 
 # Debug statement, please leave here
 #MESSAGE(STATUS "CMAKE_IMP_LIBS=${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES}")
