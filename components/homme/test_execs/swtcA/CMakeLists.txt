@@ -6,7 +6,7 @@ IF (${HOMME_BUILD_SWEQX})
    createTestExec(swtcA sweqx  8   4    4   FALSE        FALSE   4 )
 ENDIF()
 
-IF (${HOMME_BUILD_SWEQX_FLAT})
+IF (${BUILD_HOMME_SWEQX_FLAT})
    sweqx_flat_setup()
 
    createTestExec(swtcA_flat sweqx_flat 8 4 4 FALSE FALSE 4)
