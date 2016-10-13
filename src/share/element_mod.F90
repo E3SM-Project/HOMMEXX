@@ -264,15 +264,24 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_Dinv    (:,:,:,:,:)    ! (np,np,2,2,nelemd)
   real (kind=real_kind), allocatable, target, public :: elem_metdet  (:,:,:)        ! (np,np,nelemd)    
   real (kind=real_kind), allocatable, target, public :: elem_rmetdet (:,:,:)        ! (np,np,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_state_p (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)  
+  real (kind=real_kind), allocatable, target, public :: elem_state_ps (:,:,:)       ! (np,np,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_state_v (:,:,:,:,:,:)  ! (np,np,2,nlev,timelevels,nelemd) 
 
 
   type, public :: elem_state_t
 
     ! prognostic variables for shallow-water solver
+     real (kind=real_kind) :: gradps(np,np,2)                         ! gradient of surface geopotential
+#if SW_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer   :: p(:,:,:,:) 
+     real (kind=real_kind), pointer   :: ps(:,:)                      ! surface geopotential
+     real (kind=real_kind), pointer   :: v(:,:,:,:,:)                 ! contravarient comp 
+#else
      real (kind=real_kind) :: p(np,np,nlev,timelevels)
      real (kind=real_kind) :: ps(np,np)                               ! surface geopotential
-     real (kind=real_kind) :: gradps(np,np,2)                         ! gradient of surface geopotential
      real (kind=real_kind) :: v(np,np,2,nlev,timelevels)              ! contravarient comp
+#endif
 
   end type elem_state_t
 
@@ -612,10 +621,16 @@ print *, 'CALLING setup_element_pointers_sw'
     allocate( elem_metdet              (np,np,nelemd)            )
     allocate( elem_rmetdet             (np,np,nelemd)            )
     allocate( elem_Dinv                (np,np,2,2,nelemd)                  )
+    allocate( elem_state_p             (np,np,nlev,timelevels,nelemd) )
+    allocate (elem_state_ps            (np,np,nelemd) ) 
+    allocate (elem_state_v             (np,np,2,nlev,timelevels,nelemd) ) 
     do ie = 1 , nelemd
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
       elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
+      elem(ie)%state%p                => elem_state_p(:,:,:,:,ie) 
+      elem(ie)%state%ps                => elem_state_ps(:,:,ie) 
+      elem(ie)%state%v               => elem_state_v(:,:,:,:,:,ie)   
     enddo
 #endif
   end subroutine setup_element_pointers_sw
