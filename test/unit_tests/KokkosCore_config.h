@@ -1,1 +1,0 @@
-/* Stub file to avoid Kokkos compilation complaints */

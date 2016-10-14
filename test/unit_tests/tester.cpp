@@ -3,7 +3,6 @@
 
 #include "catch/catch.hpp"
 
-#define KOKKOS_DONT_INCLUDE_CORE_CONFIG_H
 #include <Kokkos_Core.hpp>
 
 int main(int argc, char **argv) {

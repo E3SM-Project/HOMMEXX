@@ -19,5 +19,5 @@ IF(usecuda)
 ENDIF()
 
 ADD_EXECUTABLE(targetname ${UNITTESTER_DIR}/tester.cpp ${targetsrcs})
-
+TARGET_LINK_LIBRARIES(targetname dl pthread rt -parallel kokkoscore)
 endmacro(cxx_unit_test)
