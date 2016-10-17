@@ -119,4 +119,7 @@ endmacro(sweqx_flat_setup)
 sweqx_flat_setup()
 createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_FLAT_PLEV} ${SWEQX_FLAT_USE_PIO} ${SWEQX_FLAT_USE_ENERGY} ${QSIZE_D})
 
-cxx_unit_test(sweqx_flat_ut 1 0 "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp")
+OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
+OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
+
+cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp")

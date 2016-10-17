@@ -20,4 +20,5 @@ ENDIF()
 
 ADD_EXECUTABLE(${targetname} ${UNITTESTER_DIR}/tester.cpp ${targetsrcs})
 TARGET_LINK_LIBRARIES(${targetname} dl pthread rt -parallel kokkoscore)
+ADD_TEST(${targetname}_test ${targetname})
 endmacro(cxx_unit_test)
