@@ -122,4 +122,6 @@ createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_F
 OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
 OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
 
-cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp")
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../")
+
+cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp;${CMAKE_CURRENT_SOURCE_DIR}/derivative_mod.F90")
