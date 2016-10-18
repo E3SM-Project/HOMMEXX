@@ -16,8 +16,7 @@ FILE(GLOB TARGET_F90  ${TARGET_DIR}/*.F90)
 # Make INCLUDE_DIRS global so the tests can access it
 SET (EXEC_INCLUDE_DIRS ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} )
 
-SET(SWEQX_FLAT_SRCS
-  ${TARGET_F90}
+SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/checksum_mod.F90
   ${SRC_BASE}/common_io_mod.F90
   ${SRC_BASE}/common_movie_mod.F90
@@ -85,6 +84,11 @@ SET(SWEQX_FLAT_SRCS
   ${SRC_BASE}/jrio.c
 )
 
+SET(SWEQX_FLAT_SRCS
+  ${TARGET_F90}
+  ${SWEQX_FLAT_DEPS}
+)
+
 SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
 # Set up defaults
@@ -124,4 +128,4 @@ OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
 
 INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../")
 
-cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp;${CMAKE_CURRENT_SOURCE_DIR}/derivative_mod.F90")
+cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp;${SWEQX_FLAT_DEPS}")
