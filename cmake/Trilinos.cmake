@@ -1,7 +1,7 @@
 
 # Set up Trilinos as an external project
 SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
-SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals")
+SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
 
 SET(EXECUTION_SPACES "-DTPL_ENABLE_MPI=ON")
 
