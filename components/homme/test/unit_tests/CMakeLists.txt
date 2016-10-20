@@ -19,6 +19,6 @@ IF(${usecuda})
 ENDIF()
 
 ADD_EXECUTABLE(${targetname} ${UNITTESTER_DIR}/tester.cpp ${targetsrcs})
-TARGET_LINK_LIBRARIES(${targetname} dl pthread rt -parallel kokkoscore)
+TARGET_LINK_LIBRARIES(${targetname} dl pthread rt -parallel kokkoscore pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 ADD_TEST(${targetname}_test ${targetname})
 endmacro(cxx_unit_test)
