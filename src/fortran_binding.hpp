@@ -9,4 +9,5 @@
 #define QUOTE(a) Q(a)
 
 #define FORTRAN(modname, fname) __asm__(QUOTE(CAT(CAT(modname, _), CAT(fname, _))))
+#define FORTRAN_C(fname) __asm__(QUOTE(fname))
 #endif
