@@ -2,8 +2,10 @@
 #ifndef _DERIVATIVE_HPP_
 #define _DERIVATIVE_HPP_
 
-#include <kinds.hpp>
 #include <dimensions.hpp>
+#include <kinds.hpp>
+
+namespace Homme {
 
 struct derivative_t {
   real Dvv[np * np];
@@ -23,5 +25,7 @@ struct derivative_stag_t {
   real M_twt[np * np];
   real M_t[np * np];
 };
+
+}  // namespace Homme
 
 #endif

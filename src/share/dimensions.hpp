@@ -2,6 +2,8 @@
 #ifndef _DIMENSIONS_HPP_
 #define _DIMENSIONS_HPP_
 
+namespace Homme {
+
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif
@@ -19,5 +21,7 @@ constexpr const int qsize_d = 4;
 
 constexpr const int nlev = PLEV;
 constexpr const int nlevp = nlev + 1;
+
+}  // namespace Homme
 
 #endif
