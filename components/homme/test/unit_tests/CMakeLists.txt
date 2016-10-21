@@ -1,19 +1,7 @@
 
 SET(UNITTESTER_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fopenmp" PARENT_SCOPE)
-
-ENABLE_LANGUAGE(CXX)
-
-INCLUDE(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG(-parallel CXX_PARALLEL_FLAG)
-
-IF(${CXX_PARALLEL_FLAG})
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -parallel" PARENT_SCOPE)
-ENDIF()
 
 macro(cxx_unit_test targetname useomp usecuda targetsrcs)
-
-ENABLE_LANGUAGE(CXX)
 
 ADD_EXECUTABLE(${targetname} ${UNITTESTER_DIR}/tester.cpp ${targetsrcs})
 TARGET_LINK_LIBRARIES(${targetname} dl pthread rt kokkoscore pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
