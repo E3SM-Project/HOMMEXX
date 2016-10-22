@@ -272,6 +272,7 @@ contains
 
     ! We want to make this leap-frog compliant
     ! Copy u^n to u^n+1
+!IKT, 10/21/16: local loop 
     do ie=nets,nete
        do k=1,nlev
           do j=1,np
@@ -285,6 +286,7 @@ contains
     enddo
     real_time = dt*real(nstep,kind=real_kind)
 
+!IKT, 10/21/16: this loop stays in Fortran 
     do s=1,MyRk%Stages
        dtstage = dt*(MyRk%beta(s)/MyRk%alpha(s))
 
@@ -296,6 +298,7 @@ contains
        ! ===================================
 
 !group optimal based on iteration
+!IKT, 10/21/16: this requires communications
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
           call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
        endif
@@ -314,7 +317,10 @@ contains
 
 !applying viscosity to q field
 
+!IKT, 10/21/16: local loop ("recover q") - to refactor: does not need team
+!parallelism (b/c tightly nested loop, if take out if statement) 
 	if(kmass.ne.-1)then
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
 	do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
@@ -325,6 +331,8 @@ contains
 	enddo
 	endif
 
+!IKT, 10/21/16: local loop - to refactor 
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
         do ie=nets,nete
            do k=1,nlev
               ! contra -> latlon
@@ -338,8 +346,12 @@ contains
               enddo
            enddo
         enddo
+!IKT, 10/21/16 - Oksana will refactor biharmonic -> requires local laplace, dss,
+!local laplace 
 	call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
         ! convert lat-lon -> contra variant
+!IKT, 10/21/16: local loop - to refactor 
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
         do ie=nets,nete
            do k=1,nlev
               do j=1,np
@@ -353,7 +365,8 @@ contains
            enddo
         enddo
         
-
+!IKT, 10/21/16: local loop - to refactor 
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
 	do ie=nets,nete
 	    spheremp     => elem(ie)%spheremp
 	    do k=1,nlev
@@ -363,6 +376,8 @@ contains
 	    enddo
 	enddo
 
+!IKT, 10/21/16: local loop - to refactor 
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
 	if(kmass.ne.-1)then
 	!we do not apply viscosity to mass field
 	ptens(:,:,kmass,:)=0.0d0
@@ -376,6 +391,8 @@ contains
 	enddo
 	endif
 
+!IKT, 10/21/16: the following needs to be team policy --> call to
+!divergence_sphere
        do ie=nets,nete
           fcor   => elem(ie)%fcor
           spheremp     => elem(ie)%spheremp
@@ -386,6 +403,7 @@ contains
              ! ==============================================
              ! Compute kinetic energy term
              ! ==============================================
+!IKT, 10/21/16: we wrote part of this code in AdvanceRK.cpp 
              do j=1,np
                 do i=1,np
 
@@ -463,11 +481,13 @@ contains
           ! Pack cube edges of tendencies, rotate velocities
           ! ===================================================
           kptr=0
+!IKT, 10/21/16: packing needs to be pulled out (separate loop) 
           call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
           kptr=nlev
           call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
 
        end do
+!IKT, 10/21/16: end of team policy loop 
 
        if(Debug) print *,'homme: adv.._rk 2'
 
@@ -475,6 +495,8 @@ contains
        !$OMP BARRIER
 #endif
 
+!IKT, 10/21/16: communications in boundary exchange - will stay in Fortran for
+!now
        call bndry_exchangeV(hybrid,edge3)
 
 #if (defined HORIZ_OPENMP)
@@ -488,6 +510,8 @@ contains
           ! ===========================================================
           ! Unpack the edges for vgradp and vtens
           ! ===========================================================
+!IKT, 10/21/16: initially put unpacking in separate loop; should be able to
+!unpack in parallel ultimately. 
           kptr=0
           call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
 
@@ -497,6 +521,7 @@ contains
           ! ===========================================================
           ! Compute velocity and pressure tendencies for all levels
           ! ===========================================================
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
           do k=1,nlev
              do j=1,np
                 do i=1,np
@@ -511,6 +536,7 @@ contains
              end do
           end do
 
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
           do k=1,nlev
              ! ====================================================
              ! average different timelevels for RK-SSP
@@ -530,6 +556,7 @@ contains
 
        real_time =real_time + dtstage
 !this is only for output reasons, if velocities are prescribed
+!IKT, 10/21/16: set_prescribed_velocity will be parallel_for 
       do ie=nets,nete
 	  call set_prescribed_velocity(elem(ie),n0,real_time)
       enddo
@@ -1476,6 +1503,7 @@ contains
 !----------------------------------------------------------------------------------------
 
 
+!IKT, 10/21/16: can be done in parallel_for (vector notation => parallel_for)  
   subroutine set_prescribed_velocity(elem,n0,time)
   use control_mod, only :  topology, test_case
   use element_mod, only : element_t
