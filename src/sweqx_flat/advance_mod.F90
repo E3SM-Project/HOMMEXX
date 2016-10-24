@@ -194,6 +194,7 @@ contains
     use global_norms_mod
     use types_mod,      only: rk_t
 
+    use perf_mod,       only: t_startf, t_stopf
 
     implicit none
 
@@ -273,6 +274,7 @@ contains
     ! We want to make this leap-frog compliant
     ! Copy u^n to u^n+1
 !IKT, 10/21/16: local loop 
+    call t_startf('timer_advancerk_loop1')
     do ie=nets,nete
        do k=1,nlev
           do j=1,np
@@ -284,6 +286,7 @@ contains
           end do
        end do
     enddo
+    call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
 !IKT, 10/21/16: this loop stays in Fortran 
@@ -319,20 +322,23 @@ contains
 
 !IKT, 10/21/16: local loop ("recover q") - to refactor: does not need team
 !parallelism (b/c tightly nested loop, if take out if statement) 
-	if(kmass.ne.-1)then
+       if(kmass.ne.-1)then
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-	do ie=nets,nete
+         call t_startf('timer_advancerk_loop2')
+         do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
 		elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)/&
 					    elem(ie)%state%p(:,:,kmass,n0)
-	      endif
+              endif
 	    enddo
-	enddo
+          enddo
+          call t_stopf('timer_advancerk_loop2')
 	endif
 
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+        call t_startf('timer_advancerk_loop3')
         do ie=nets,nete
            do k=1,nlev
               ! contra -> latlon
@@ -346,12 +352,16 @@ contains
               enddo
            enddo
         enddo
+        call t_stopf('timer_advancerk_loop3')
 !IKT, 10/21/16 - Oksana will refactor biharmonic -> requires local laplace, dss,
 !local laplace 
+        call t_startf('timer_advancerk_biharmonic')
 	call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
+        call t_stopf('timer_advancerk_biharmonic')
         ! convert lat-lon -> contra variant
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+        call t_startf('timer_advancerk_loop4')
         do ie=nets,nete
            do k=1,nlev
               do j=1,np
@@ -364,9 +374,11 @@ contains
               enddo
            enddo
         enddo
+        call t_stopf('timer_advancerk_loop4')
         
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+        call t_startf('timer_advancerk_loop5')
 	do ie=nets,nete
 	    spheremp     => elem(ie)%spheremp
 	    do k=1,nlev
@@ -375,12 +387,14 @@ contains
 	      vtens(:,:,2,k,ie) = -nu*vtens(:,:,2,k,ie)/spheremp(:,:)
 	    enddo
 	enddo
+        call t_stopf('timer_advancerk_loop5')
 
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
 	if(kmass.ne.-1)then
 	!we do not apply viscosity to mass field
 	ptens(:,:,kmass,:)=0.0d0
+        call t_stopf('timer_advancerk_loop6')
 	do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
@@ -389,10 +403,12 @@ contains
 	      endif
 	    enddo
 	enddo
+        call t_stopf('timer_advancerk_loop6')
 	endif
 
 !IKT, 10/21/16: the following needs to be team policy --> call to
 !divergence_sphere
+       call t_startf('timer_advancerk_loop7')
        do ie=nets,nete
           fcor   => elem(ie)%fcor
           spheremp     => elem(ie)%spheremp
@@ -487,6 +503,7 @@ contains
           call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
 
        end do
+       call t_stopf('timer_advancerk_loop7')
 !IKT, 10/21/16: end of team policy loop 
 
        if(Debug) print *,'homme: adv.._rk 2'
@@ -522,6 +539,7 @@ contains
           ! Compute velocity and pressure tendencies for all levels
           ! ===========================================================
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+          call t_startf('timer_advancerk_loop8')
           do k=1,nlev
              do j=1,np
                 do i=1,np
@@ -535,8 +553,10 @@ contains
                 end do
              end do
           end do
+          call t_stopf('timer_advancerk_loop8')
 
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+          call t_startf('timer_advancerk_loop9')
           do k=1,nlev
              ! ====================================================
              ! average different timelevels for RK-SSP
@@ -552,6 +572,7 @@ contains
                 end do
              end do
           end do
+          call t_stopf('timer_advancerk_loop9')
        end do
 
        real_time =real_time + dtstage
