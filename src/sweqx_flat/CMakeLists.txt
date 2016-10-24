@@ -9,6 +9,7 @@ SET(SRC_BASE          ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE         ${HOMME_SOURCE_DIR}/src/share)
 SET(SRC_UTILS         ${HOMME_SOURCE_DIR}/utils/csm_share)
 SET(UTILS_TIMING_DIR  ${CMAKE_BINARY_DIR}/utils/timing)
+SET(SRC_KERNELS_DIR   ${SRC_BASE}/kokkos_kernels)
 SET(UNIT_TEST_DIR     ${TARGET_DIR}/unit_tests)
 
 # Find F90 files in target directory
@@ -83,6 +84,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_UTILS}/shr_spfn_mod.F90
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
+  ${SRC_KERNELS_DIR}/AdvanceRK.cpp
 )
 
 SET(SWEQX_FLAT_SRCS
