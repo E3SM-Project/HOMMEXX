@@ -262,11 +262,15 @@ module element_mod
 
   public :: setup_element_pointers_sw
   real (kind=real_kind), allocatable, target, public :: elem_Dinv    (:,:,:,:,:)    ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_D       (:,:,:,:,:)    ! (np,np,2,2,nelemd)
   real (kind=real_kind), allocatable, target, public :: elem_metdet  (:,:,:)        ! (np,np,nelemd)    
   real (kind=real_kind), allocatable, target, public :: elem_rmetdet (:,:,:)        ! (np,np,nelemd) 
   real (kind=real_kind), allocatable, target, public :: elem_state_p (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)  
   real (kind=real_kind), allocatable, target, public :: elem_state_ps (:,:,:)       ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_state_v (:,:,:,:,:,:)  ! (np,np,2,nlev,timelevels,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_state_v  (:,:,:,:,:,:) ! (np,np,2,nlev,timelevels,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_spheremp  (:,:,:)      ! (np,np,nelemd)    
+  real (kind=real_kind), allocatable, target, public :: elem_rspheremp (:,:,:)      ! (np,np,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_fcor      (:,:,:)      ! (np,np,nelemd) 
 
 
   type, public :: elem_state_t
@@ -342,15 +346,26 @@ module element_mod
      ! Metric terms
      real (kind=real_kind)    :: met(np,np,2,2)                       ! metric tensor on velocity and pressure grid
      real (kind=real_kind)    :: metinv(np,np,2,2)                    ! metric tensor on velocity and pressure grid
-     real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
 #if SW_USE_FLAT_ARRAYS
      real (kind=real_kind), pointer    :: metdet(:,:)                       
      real (kind=real_kind), pointer    :: rmetdet(:,:) 
      real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
+     real (kind=real_kind), pointer    :: D(:,:,:,:) 
+     real (kind=real_kind), pointer    :: spheremp(:,:) 
+     real (kind=real_kind), pointer    :: rspheremp(:,:) 
+     real (kind=real_kind), pointer    :: fcor(:,:) 
 #else
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
+     real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
+     
+     ! Mass matrix terms for an element on the sphere
+     ! This mass matrix is used when solving the equations in weak form
+     ! with the natural (surface area of the sphere) inner product
+     real (kind=real_kind)    :: spheremp(np,np)                      ! mass matrix on v and p grid
+     real (kind=real_kind)    :: rspheremp(np,np)                     ! inverse mass matrix on v and p grid
+     real (kind=real_kind)    :: fcor(np,np)                          ! Coreolis term
 #endif   
 
      ! Mass flux across the sides of each sub-element.
@@ -397,15 +412,7 @@ module element_mod
      real (kind=real_kind)    :: mp(np,np)                            ! mass matrix on v and p grid
      real (kind=real_kind)    :: rmp(np,np)                           ! inverse mass matrix on v and p grid
 
-     ! Mass matrix terms for an element on the sphere
-     ! This mass matrix is used when solving the equations in weak form
-     ! with the natural (surface area of the sphere) inner product
-     real (kind=real_kind)    :: spheremp(np,np)                      ! mass matrix on v and p grid
-     real (kind=real_kind)    :: rspheremp(np,np)                     ! inverse mass matrix on v and p grid
-
      integer(kind=long_kind)  :: gdofP(np,np)                         ! global degree of freedom (P-grid)
-
-     real (kind=real_kind)    :: fcor(np,np)                          ! Coreolis term
 
      type (index_t) :: idxP
      type (index_t),pointer :: idxV
@@ -620,17 +627,25 @@ print *, 'CALLING setup_element_pointers_sw'
 
     allocate( elem_metdet              (np,np,nelemd)            )
     allocate( elem_rmetdet             (np,np,nelemd)            )
-    allocate( elem_Dinv                (np,np,2,2,nelemd)                  )
+    allocate( elem_Dinv                (np,np,2,2,nelemd)        )
+    allocate( elem_D                   (np,np,2,2,nelemd)        )
     allocate( elem_state_p             (np,np,nlev,timelevels,nelemd) )
-    allocate (elem_state_ps            (np,np,nelemd) ) 
-    allocate (elem_state_v             (np,np,2,nlev,timelevels,nelemd) ) 
+    allocate( elem_state_ps            (np,np,nelemd) ) 
+    allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) ) 
+    allocate( elem_spheremp            (np,np, nelemd)           )
+    allocate( elem_rspheremp           (np,np, nelemd)          )
+    allocate( elem_fcor                (np,np, nelemd)          )
     do ie = 1 , nelemd
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
       elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
+      elem(ie)%D                      => elem_D(:,:,:,:,ie)
       elem(ie)%state%p                => elem_state_p(:,:,:,:,ie) 
-      elem(ie)%state%ps                => elem_state_ps(:,:,ie) 
-      elem(ie)%state%v               => elem_state_v(:,:,:,:,:,ie)   
+      elem(ie)%state%ps               => elem_state_ps(:,:,ie) 
+      elem(ie)%state%v                => elem_state_v(:,:,:,:,:,ie)   
+      elem(ie)%spheremp               => elem_spheremp(:,:,ie)   
+      elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)   
+      elem(ie)%fcor                   => elem_fcor(:,:,ie)   
     enddo
 #endif
   end subroutine setup_element_pointers_sw

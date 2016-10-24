@@ -9,6 +9,7 @@ SET(SRC_BASE          ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE         ${HOMME_SOURCE_DIR}/src/share)
 SET(SRC_UTILS         ${HOMME_SOURCE_DIR}/utils/csm_share)
 SET(UTILS_TIMING_DIR  ${CMAKE_BINARY_DIR}/utils/timing)
+SET(UNIT_TEST_DIR     ${TARGET_DIR}/unit_tests)
 
 # Find F90 files in target directory
 FILE(GLOB TARGET_F90  ${TARGET_DIR}/*.F90)
@@ -89,6 +90,11 @@ SET(SWEQX_FLAT_SRCS
   ${SWEQX_FLAT_DEPS}
 )
 
+SET(SWEQX_FLAT_UT_SRCS
+  ${UNIT_TEST_DIR}/divergence.cpp;
+  ${SWEQX_FLAT_DEPS}
+)
+
 SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
 # Set up defaults
@@ -111,7 +117,6 @@ IF (NOT QSIZE_D)
   SET (QSIZE_D 4)
 ENDIF ()
 
-
 SET(SW_USE_FLAT_ARRAYS TRUE)
 
 endmacro(sweqx_flat_setup)
@@ -126,6 +131,6 @@ createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_F
 OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
 OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
 
-INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/../")
+INCLUDE_DIRECTORIES(${SRC_BASE} ${SRC_SHARE})
 
-cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/divergence.cpp;${SWEQX_FLAT_DEPS}")
+cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${SWEQX_FLAT_UT_SRCS}")
