@@ -3,8 +3,7 @@
 constexpr const int TIMELEVELS = 3;
 
 // temporary until we have views in - column major
-// multiplication with
-// right dimensions
+// multiplication with right dimensions
 // FIXME: implement P_IDX as column major - Dan will do
 // p(np,np,nlev,timelevels)
 #define P_IDX(i, j, k, tl, ie) \
@@ -46,4 +45,4 @@ void recover_q_kokkos(int nets, int nete, int kmass, int n0,
   }
 }
 
-}  // namespace Homme
+} // namespace Homme
