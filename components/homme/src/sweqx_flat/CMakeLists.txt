@@ -84,7 +84,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_UTILS}/shr_spfn_mod.F90
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
-  ${SRC_KERNELS_DIR}/AdvanceRK.cpp
+  ${SRC_KERNELS_DIR}/recover_q.cpp
 )
 
 SET(SWEQX_FLAT_SRCS
