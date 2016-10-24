@@ -154,9 +154,14 @@ IF (${HOMME_QUEUING})
 ENDIF ()
 
 # Add the test exec subdirs for the sweqx executable
-IF(${BUILD_HOMME_SWEQX} OR ${BUILD_HOMME_SWEQX_FLAT})
+IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(swtcA)
   ADD_SUBDIRECTORY(swtcB)
+ENDIF()
+
+IF(${BUILD_HOMME_SWEQX_FLAT})
+  ADD_SUBDIRECTORY(swtcA_flat)
+  ADD_SUBDIRECTORY(swtcB_flat)
 ENDIF()
 
 # Add the test exec subdirs for the preqx executable
