@@ -1,5 +1,5 @@
 
-PROJECT(HOMME C Fortran)
+PROJECT(HOMME C CXX Fortran)
 
 ENABLE_LANGUAGE(Fortran) 
 INCLUDE(FortranCInterface)

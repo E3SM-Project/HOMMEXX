@@ -1,3 +1,6 @@
+
+#include <Kokkos_Core.hpp>
+
 #include <config.h.c>
 
 constexpr const int TIMELEVELS = 3;
@@ -11,8 +14,7 @@ constexpr const int TIMELEVELS = 3;
 
 namespace Homme {
 
-void recover_q(int tote, int nets, int nete, int kmass,
-               int n0, double *p) {
+void recover_q(int &nets, int &nete, int &kmass, int &n0, double *p) {
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < PLEV; ++k) {
