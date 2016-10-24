@@ -18,4 +18,4 @@ SET(MESH_FILES ${HOMME_ROOT}/test/mesh_files/mountain_10_x2.g)
 
 SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/${TEST_NAME}.nl)
 
-SET(NC_OUTPUT_FILES swtc21_flat.nc)
+SET(NC_OUTPUT_FILES swtc21.nc)

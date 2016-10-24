@@ -20,11 +20,11 @@ SET(NAMELIST_FILES
 )
 
 # files to compare against baselines
-SET(NC_OUTPUT_FILES swtc61_flat.nc )
+SET(NC_OUTPUT_FILES swtc61.nc )
 
 # compare exodus output vs internal cubed sphere output:
 SET(TESTCASE_REF_TOL 1E-14)
-SET(NC_OUTPUT_REF swtc61_flat.nc )
-SET(NC_OUTPUT_CHECKREF  exodus-swtc61_flat.nc)
+SET(NC_OUTPUT_REF swtc61.nc )
+SET(NC_OUTPUT_CHECKREF  exodus-swtc61.nc)
 
 
