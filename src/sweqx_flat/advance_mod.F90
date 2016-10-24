@@ -341,7 +341,7 @@ contains
 !parallelism (b/c tightly nested loop, if take out if statement) 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop2')
-#ifndef DONT_USE_KOKKOS
+#ifdef USE_KOKKOS
        ptr_buf = c_loc(elem_state_p)
        call recover_q(nets, nete, kmass, n0, ptr_buf)
 #else
