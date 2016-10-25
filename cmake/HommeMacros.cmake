@@ -71,8 +71,6 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
   ADD_EXECUTABLE(${execName} ${EXEC_SOURCES})
   SET_TARGET_PROPERTIES(${execName} PROPERTIES LINKER_LANGUAGE ${linkLang})
 
-  MESSAGE("${CXXLIB_SUPPORTED}")
-  MESSAGE(${linkLang})
   if (${linkLang} STREQUAL "Fortran")
     if (${CXXLIB_SUPPORTED})
       MESSAGE(STATUS "   Linking Fortran with -cxxlib")
