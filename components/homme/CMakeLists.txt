@@ -1,10 +1,9 @@
 
-PROJECT(HOMME C Fortran)
-
-ENABLE_LANGUAGE(Fortran) 
-INCLUDE(FortranCInterface)
+PROJECT(HOMME C CXX Fortran)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.5)
+
+INCLUDE(FortranCInterface)
 
 # CTest For Nightly/Experimental Builds
 OPTION(HOMME_USE_CTEST "Use CTest Dashboard" FALSE)
@@ -29,10 +28,9 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
 
-# Set up some directories to facilitate finding netcdf, pnetcdf, and Trilinos
+# Set up some directories to facilitate finding netcdf, pnetcdf
 INCLUDE(SetHostPaths)
 INCLUDE(HommeMacros)
-INCLUDE(Trilinos)
 
 # Debug statement, please leave here
 #MESSAGE(STATUS "CMAKE_IMP_LIBS=${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES}")
@@ -65,20 +63,6 @@ OPTION(BUILD_HOMME_PRIM  "Primitive equations implicit" OFF)
 # Cristoph's "standalone" executables
 OPTION(BUILD_HOMME_FVM  "Standalone FVM tracers" OFF)
 
-# swim and prim executables require C++ compiler
-IF(${BUILD_HOMME_SWIM} OR ${BUILD_HOMME_PRIM})
-  SET (HOMME_USE_CXX TRUE)
-  SET (HOMME_USE_TRILINOS TRUE)
-ELSE ()
-  SET(HOMME_USE_CXX FALSE)
-  SET(HOMME_USE_TRILINOS FALSE)
-ENDIF ()
-
-IF (${HOMME_USE_CXX})
-  MESSAGE(STATUS "This configuration of HOMME requires a C++ compiler")
-  ENABLE_LANGUAGE(CXX)
-ENDIF ()
-
 OPTION(REFSOLN "Whether to read/write reference soln data" FALSE)
 # Reference solution data
 IF(REFSOLN)
@@ -96,6 +80,12 @@ MESSAGE(STATUS "Fortran Flags = ${CMAKE_Fortran_FLAGS}")
 MESSAGE(STATUS "C Flags = ${CMAKE_C_FLAGS}")
 MESSAGE(STATUS "CXX Flags = ${CMAKE_CXX_FLAGS}")
 MESSAGE(STATUS "Linker Flags = ${CMAKE_EXE_LINKER_FLAGS}")
+
+##############################################################################
+# Trilinos Configuration depends on available compiler options
+##############################################################################
+INCLUDE(Trilinos)
+
 ##############################################################################
 
 OPTION(ENABLE_PERSISTENT_MPI "Enable persistent MPI" OFF)
@@ -121,10 +111,6 @@ ELSE()
     ADD_SUBDIRECTORY(libs/lapack)
   ENDIF()
 ENDIF()
-IF (${HOMME_USE_TRILINOS})
-  MESSAGE(STATUS "This configuration of requires Trilinos")
-  FIND_PACKAGE(Trilinos REQUIRED)
-ENDIF ()
 
 # Zoltan partitioning library
 IF (DEFINED ZOLTAN_DIR)

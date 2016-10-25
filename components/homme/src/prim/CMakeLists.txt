@@ -144,10 +144,8 @@ ENDIF ()
 endmacro(prim_setup)
 
 prim_setup()
-# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
+# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY LINK_LANGUAGE)
 createTestExec(prim prim ${PRIM_NP} ${PRIM_NC} ${PRIM_PLEV} 
-               ${PRIM_USE_PIO}  ${PRIM_USE_ENERGY} ${QSIZE_D})
-
-SET_PROPERTY(TARGET prim PROPERTY LINKER_LANGUAGE Fortran)
+               ${PRIM_USE_PIO}  ${PRIM_USE_ENERGY} ${QSIZE_D} Fortran)
 
 TARGET_LINK_LIBRARIES(prim ${Trilinos_LIBRARIES} ${Trilinos_TPL_LIBRARIES})
