@@ -13,6 +13,7 @@ module dimensions_mod
   use constituents, only : qsize_d=>pcnst ! _EXTERNAL
 #endif
 #endif
+  use iso_c_binding
   implicit none
   private
 

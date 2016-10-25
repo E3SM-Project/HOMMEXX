@@ -1,29 +1,32 @@
 
-#include <KokkosExp_MDRangePolicy.hpp>
-#include <Kokkos_Core.hpp>
+#include <Types.hpp>
 
-#include <config.h.c>
+#include <dimensions.hpp>
+#include <kinds.hpp>
+
+#include <iostream>
 
 namespace Homme {
+
+constexpr const int TIMELEVELS = 3;
 
 // temporary until we have views in - column major
 // multiplication with right dimensions
 // FIXME: implement P_IDX as column major - Dan will do
 // p(np,np,nlev,timelevels)
 #define P_IDX(i, j, k, tl, ie) \
-  (i + NP * (j + NP * (k + PLEV * (tl + TIMELEVELS * ie))))
-
-constexpr const int TIMELEVELS = 3;
+  (i + np * (j + np * (k + nlev * (tl + TIMELEVELS * ie))))
 
 extern "C" {
-void recover_q(int &nets, int &nete, int &kmass, int &n0,
+#if 0
+void recover_q(int &nets, int &nete, int &kmass, int nelems, int &n0,
                double *p) {
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
-      for(int k = 0; k < PLEV; ++k) {
+      for(int k = 0; k < nlev; ++k) {
         if(k != kmass) {
-          for(int j = 0; j < NP; ++j) {
-            for(int i = 0; i < NP; ++i) {
+          for(int j = 0; j < np; ++j) {
+            for(int i = 0; i < np; ++i) {
               p[P_IDX(i, j, k, n0, ie)] /=
                   p[P_IDX(i, j, kmass, n0, ie)];
             }
@@ -34,19 +37,29 @@ void recover_q(int &nets, int &nete, int &kmass, int &n0,
   }
 }
 
-// Disable this until the Kokkos defines are set up
-#if 0
-void recover_q_kokkos(int nets, int nete, int kmass, int n0,
-                      double *p_ptr) {
-  ViewP p(p_ptr);  // unmanaged view - FIXME: implement this
-                   // typedef (Dan)
+#else
+
+void recover_q(int nets, int nete, int kmass, int n0,
+               int nelems, double *p_ptr) {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          2, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  P p(p_ptr, np, np, nlev, TIMELEVELS,
+      nelems);  // unmanaged view - FIXME: implement this
+                // typedef (Dan)
   if(kmass != -1) {
-    md_parallel_for(
-		    Kokkos::Experimental::MDRangePolicy({0, 0, 0, nets - 1},
-                      {NP, NP, PLEV, nete}),
-        KOKKOS_LAMBDA(int i, int j, int k, int ie) {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
           if(k != kmass) {
-            p(i, j, k, n0, ie) /= p(i, j, kmass, n0, ie);
+            for(int j = 0; j < np; ++j) {
+              for(int i = 0; i < np; ++i) {
+                p(i, j, k, n0, ie) /=
+                    p(i, j, kmass, n0, ie);
+              }
+            }
           }
         });
   }
