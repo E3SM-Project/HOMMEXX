@@ -176,7 +176,7 @@ contains
        dt,  pmean,     tl,   nets,   nete)
 
     use kinds,          only: real_kind
-    use dimensions_mod, only: np, nlev
+    use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: element_t, elem_state_p
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only: EdgeBuffer_t
@@ -201,12 +201,13 @@ contains
     implicit none
 
     interface
-       subroutine recover_q(nets, nete, kmass, n0, p) bind(c)
+       subroutine recover_q(nets, nete, kmass, n0, numelems, p) bind(c)
          use iso_c_binding,  only: c_ptr
          integer :: nets
          integer :: nete
          integer :: kmass
          integer :: n0
+         integer :: numelems
          type(c_ptr) :: p
        end subroutine recover_q
     end interface
@@ -342,9 +343,9 @@ contains
 !parallelism (b/c tightly nested loop, if take out if statement) 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop2')
-#ifdef USE_KOKKOS
+#ifndef DONT_USE_KOKKOS
        ptr_buf = c_loc(elem_state_p)
-       call recover_q(nets, nete, kmass, n0, ptr_buf)
+       call recover_q(nets, nete, kmass, n0, nelemd, ptr_buf)
 #else
        if(kmass.ne.-1)then
          do ie=nets,nete
