@@ -1,23 +1,29 @@
 
-# Set up Trilinos as an external project
-SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
-SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
-
-SET(EXECUTION_SPACES "-DTPL_ENABLE_MPI=ON")
-
-FIND_PACKAGE(CUDA QUIET)
-IF(${CUDA_FOUND})
-  OPTION(ENABLE_CUDA "Whether or not to enable CUDA" ON)
-  IF(${ENABLE_CUDA})
-    SET(EXECUTION_SPACES "${EXECUTION_SPACES} -DTPL_ENABLE_CUDA=ON")
-  ENDIF()
-ENDIF()
-
 SET(TRILINOS_INSTALL_DIR "~/prefix" CACHE FILEPATH "Where to install Trilinos")
 
 FIND_PACKAGE(Trilinos QUIET PATHS ${TRILINOS_INSTALL_DIR}/lib/cmake/Trilinos)
 
 IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
+
+  SET(EXECUTION_SPACES "-DTPL_ENABLE_MPI=ON -DKokkos_ENABLE_MPI=ON -DKokkos_ENABLE_Pthread=ON")
+
+  IF(${OPENMP_FOUND})
+    MESSAGE(STATUS "Enabling Trilinos' OpenMP")
+    SET(EXECUTION_SPACES "${EXECUTION_SPACES} -DTrilinos_ENABLE_OpenMP=ON -DKokkos_ENABLE_OpenMP")
+  ENDIF()
+
+  FIND_PACKAGE(CUDA QUIET)
+  IF(${CUDA_FOUND})
+    OPTION(ENABLE_CUDA "Whether or not to enable CUDA" ON)
+    IF(${ENABLE_CUDA})
+      SET(EXECUTION_SPACES "${EXECUTION_SPACES} -DTPL_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA_UVM=ON")
+    ENDIF()
+  ENDIF()
+
+  # Set up Trilinos as an external project
+  SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
+  SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
+
   SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} -DTrilinos_ENABLE_Kokkos=ON ${EXECUTION_SPACES})
 
   INCLUDE(ExternalProject)

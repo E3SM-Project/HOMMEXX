@@ -131,8 +131,8 @@ endmacro(swim_setup)
 
 
 swim_setup()
-# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
-createTestExec(swim swim ${SWIM_NP} ${SWIM_NC} ${SWIM_PLEV} ${SWIM_USE_PIO} ${SWIM_USE_ENERGY} ${QSIZE_D})
+# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY LINK_LANGUAGE)
+createTestExec(swim swim ${SWIM_NP} ${SWIM_NC} ${SWIM_PLEV} ${SWIM_USE_PIO} ${SWIM_USE_ENERGY} ${QSIZE_D} Fortran)
 
 SET_PROPERTY(TARGET swim PROPERTY LINKER_LANGUAGE Fortran)
 
