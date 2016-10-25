@@ -122,11 +122,12 @@ SET(SW_USE_FLAT_ARRAYS TRUE)
 endmacro(sweqx_flat_setup)
 
 ############################################################################
-# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
+# createTestExec execName  execType  macroNP macroNC macroPLEV
+#                macroUSE_PIO macroWITH_ENERGY macroQSIZE_D linkLang)
 ############################################################################
 
 sweqx_flat_setup()
-createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_FLAT_PLEV} ${SWEQX_FLAT_USE_PIO} ${SWEQX_FLAT_USE_ENERGY} ${QSIZE_D})
+createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_FLAT_PLEV} ${SWEQX_FLAT_USE_PIO} ${SWEQX_FLAT_USE_ENERGY} ${QSIZE_D} Fortran)
 
 OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
 OPTION(SWEQX_FLAT_TESTS_CUDA OFF)

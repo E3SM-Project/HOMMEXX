@@ -1,6 +1,9 @@
 ##############################################################################
 # Compiler specific options
 ##############################################################################
+
+# Fortran Flags
+
 SET(CMAKE_Fortran_FLAGS "")
 MESSAGE(STATUS "CMAKE_Fortran_COMPILER_ID = ${CMAKE_Fortran_COMPILER_ID}")
 # Need this for a fix in repro_sum_mod
@@ -47,6 +50,18 @@ ELSE ()
     ADD_DEFINITIONS(-DCPRCRAY)
  ENDIF ()
 ENDIF ()
+
+# C++ Flags
+
+INCLUDE(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX11_SUPPORTED)
+IF (${CXX11_SUPPORTED})
+  SET (CMAKE_CXX_FLAGS "-std=c++11")
+ELSE ()
+  MESSAGE (FATAL_ERROR "The C++ compiler does not support C++11")
+ENDIF ()
+
+CHECK_CXX_COMPILER_FLAG("-cxxlib" CXXLIB_SUPPORTED)
 
 ##############################################################################
 # Optimization flags
