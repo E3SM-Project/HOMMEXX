@@ -162,11 +162,11 @@ endmacro(preqx_acc_setup)
 
 
 ############################################################################
-# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
+# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY LINK_LANGUAGE)
 ############################################################################
 
 preqx_acc_setup()
 createTestExec(preqx_acc preqx_acc ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} 
-               ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D})
+               ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
 
 
