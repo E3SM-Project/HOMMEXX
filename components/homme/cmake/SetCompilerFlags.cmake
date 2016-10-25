@@ -61,6 +61,8 @@ ELSE ()
   MESSAGE (FATAL_ERROR "The C++ compiler does not support C++11")
 ENDIF ()
 
+CHECK_CXX_COMPILER_FLAG("-cxxlib" CXXLIB_SUPPORTED)
+
 ##############################################################################
 # Optimization flags
 # 1) OPT_FLAGS if specified sets the Fortran,C, and CXX optimization flags

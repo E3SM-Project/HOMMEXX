@@ -6,8 +6,8 @@ function (prc var)
 endfunction ()
 
 # Macro to create the individual tests
-macro(createTestExec execName execType macroNP macroNC 
-                     macroPLEV macroUSE_PIO macroWITH_ENERGY macroQSIZE_D)
+macro(createTestExec execName execType macroNP macroNC macroPLEV
+                     macroUSE_PIO macroWITH_ENERGY macroQSIZE_D linkLang)
 
 # before calling this macro, be sure that these are set locally:
 # EXEC_INCLUDE_DIRS 
@@ -69,6 +69,12 @@ macro(createTestExec execName execType macroNP macroNC
   ADD_DEFINITIONS(-DHAVE_CONFIG_H)
   
   ADD_EXECUTABLE(${execName} ${EXEC_SOURCES})
+  SET_TARGET_PROPERTIES(${execName} PROPERTIES LINKER_LANGUAGE ${linkLang})
+
+  if (${linkLang} STREQUAL "Fortran" AND ${CXXLIB_SUPPORTED})
+    MESSAGE(STATUS " Linking Fortran ${execName} with -cxxlib")
+    TARGET_LINK_LIBRARIES(${execName} -cxxlib)
+  endif ()
 
   # Add this executable to a list 
   SET(EXEC_LIST ${EXEC_LIST} ${execName} CACHE INTERNAL "List of configured executables")
