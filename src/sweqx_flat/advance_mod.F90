@@ -177,7 +177,7 @@ contains
 
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev
-    use element_mod,    only: element_t
+    use element_mod,    only: element_t, elem_state_p
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only: EdgeBuffer_t
     use filter_mod,     only: filter_t
@@ -196,7 +196,20 @@ contains
 
     use perf_mod,       only: t_startf, t_stopf
 
+    use iso_c_binding,  only: c_ptr, c_loc
+
     implicit none
+
+    interface
+       subroutine recover_q(nets, nete, kmass, n0, p) bind(c)
+         use iso_c_binding,  only: c_ptr
+         integer :: nets
+         integer :: nete
+         integer :: kmass
+         integer :: n0
+         type(c_ptr) :: p
+       end subroutine recover_q
+    end interface
 
     type (element_t)     , intent(inout), target :: elem(:)
     type (Rk_t)          , intent(in) :: MyRk
@@ -251,6 +264,8 @@ contains
     integer :: ntmp
 
     logical :: Debug = .FALSE.
+
+    type (c_ptr) :: ptr_buf
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -325,9 +340,13 @@ contains
 
 !IKT, 10/21/16: local loop ("recover q") - to refactor: does not need team
 !parallelism (b/c tightly nested loop, if take out if statement) 
-       if(kmass.ne.-1)then
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-         call t_startf('timer_advancerk_loop2')
+       call t_startf('timer_advancerk_loop2')
+#ifdef USE_KOKKOS
+       ptr_buf = c_loc(elem_state_p)
+       call recover_q(nets, nete, kmass, n0, ptr_buf)
+#else
+       if(kmass.ne.-1)then
          do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
@@ -336,8 +355,9 @@ contains
               endif
 	    enddo
           enddo
-          call t_stopf('timer_advancerk_loop2')
 	endif
+#endif
+        call t_stopf('timer_advancerk_loop2')
 
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 

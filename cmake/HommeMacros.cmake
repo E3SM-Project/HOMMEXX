@@ -83,7 +83,10 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
   # Add this executable to a list 
   SET(EXEC_LIST ${EXEC_LIST} ${execName} CACHE INTERNAL "List of configured executables")
 
+  TARGET_INCLUDE_DIRECTORIES(${execName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
   TARGET_LINK_LIBRARIES(${execName} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+
+  TARGET_LINK_LIBRARIES(${execName} dl pthread kokkoscore)
 
   # Move the module files out of the way so the parallel build 
   # doesn't have a race condition
