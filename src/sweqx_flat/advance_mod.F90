@@ -183,10 +183,11 @@ contains
     use filter_mod,     only: filter_t
     use hybrid_mod,     only: hybrid_t
     use derivative_mod, only: derivative_t, gradient_sphere, divergence_sphere,vorticity_sphere,&
-         divergence_sphere_wk, edge_flux_u_cg
+        divergence_sphere_wk, edge_flux_u_cg, laplace_sphere_wk, vlaplace_sphere_wk
     use time_mod,       only: timelevel_t
     use control_mod,    only:  test_case, limiter_option, nu, nu_s, &
-         tracer_advection_formulation, TRACERADV_UGRADQ, kmass
+         tracer_advection_formulation, TRACERADV_UGRADQ, kmass, &
+         hypervis_scaling, nu_div
     use bndry_mod,      only: bndry_exchangev
     use viscosity_mod,  only: neighbor_minmax, biharmonic_wk
     !  FOR DEBUGING use only 
@@ -251,6 +252,18 @@ contains
     integer :: ntmp
 
     logical :: Debug = .FALSE.
+
+
+!local for biharmonic_wk
+integer :: ic
+real (kind=real_kind), dimension(:,:), pointer :: rspheremv_bh
+real (kind=real_kind), dimension(np,np) :: lap_ps_bh
+real (kind=real_kind), dimension(np,np,nlev) :: T_bh
+real (kind=real_kind), dimension(np,np,2) :: v_bh
+real (kind=real_kind) ::  nu_ratio1_bh,nu_ratio2_bh
+logical var_coef1_bh
+
+
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -359,7 +372,100 @@ contains
 !IKT, 10/21/16 - Oksana will refactor biharmonic -> requires local laplace, dss,
 !local laplace 
         call t_startf('timer_advancerk_biharmonic')
-	call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
+!       call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
+
+
+
+
+
+
+!      subroutine
+!      biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
+
+   var_coef1_bh = .true.
+   if(hypervis_scaling > 0)  var_coef1_bh = .false.
+
+   nu_ratio1_bh=1
+   nu_ratio2_bh=1
+   if (nu_div/=nu) then
+      if(hypervis_scaling /= 0) then
+         nu_ratio1_bh=(nu_div/nu)**2   ! preserve buggy scaling
+         nu_ratio2_bh=1
+      else
+         nu_ratio1_bh=nu_div/nu
+         nu_ratio2_bh=nu_div/nu
+      endif
+   endif
+
+
+   do ie=nets,nete
+      do k=1,nlev
+         do j=1,np
+            do i=1,np
+               T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
+            enddo
+         enddo
+        
+         ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
+         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
+              elem(ie),var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
+
+      enddo
+      kptr=0
+      call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
+      kptr=nlev
+      call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,ie)
+
+   enddo
+   
+   call t_startf('biwk_bexchV')
+   call bndry_exchangeV(hybrid,edge3)
+   call t_stopf('biwk_bexchV')
+   
+   do ie=nets,nete
+      rspheremv_bh     => elem(ie)%rspheremp(:,:)
+      
+      kptr=0
+      call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
+      kptr=nlev
+      call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
+      
+      do k=1,nlev
+         do j=1,np
+            do i=1,np
+               T_bh(i,j,k)=rspheremv_bh(i,j)*ptens(i,j,k,ie)
+               v_bh(i,j,1)=rspheremv_bh(i,j)*vtens(i,j,1,k,ie)
+               v_bh(i,j,2)=rspheremv_bh(i,j)*vtens(i,j,2,k,ie)
+            enddo
+         enddo
+         ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=.true.)
+         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
+              nu_ratio=nu_ratio2_bh)
+      enddo
+        
+   enddo
+!end biharmonic 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         call t_stopf('timer_advancerk_biharmonic')
         ! convert lat-lon -> contra variant
 !IKT, 10/21/16: local loop - to refactor 
