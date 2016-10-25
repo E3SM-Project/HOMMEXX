@@ -224,8 +224,8 @@ contains
 
     ! Thread private working set ...
 
-    real (kind=real_kind), dimension(np,np,2,nlev,nets:nete) :: vtens
-    real (kind=real_kind), dimension(np,np,nlev,nets:nete)   :: ptens
+    real (kind=real_kind), allocatable :: vtens(:,:,:,:,:) 
+    real (kind=real_kind), allocatable :: ptens(:,:,:,:) 
     real (kind=real_kind), dimension(np,np,nlev,nets:nete)   :: ptens_dg
     real (kind=real_kind), dimension(0:np+1,0:np+1,nlev)     :: pedges
 
@@ -251,6 +251,9 @@ contains
     integer :: ntmp
 
     logical :: Debug = .FALSE.
+
+    allocate(vtens(np,np,2,nlev,nets:nete))
+    allocate(ptens(np,np,nlev,nets:nete))
 
     ! shallow water test cases require conservation form of h equation
     if (tracer_advection_formulation==TRACERADV_UGRADQ) then
@@ -594,6 +597,8 @@ contains
 #if (defined HORIZ_OPENMP)
     !$OMP BARRIER
 #endif
+    deallocate(vtens) 
+    deallocate(ptens) 
   end subroutine advance_nonstag_rk
 
 !-----------------------------------------------------------------------------------------------
