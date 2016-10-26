@@ -22,7 +22,9 @@ extern "C" {
 #if 0
 void recover_q(const int &nets, const int &nete,
                const int &kmass, const int &nelems,
-               const int &n0, double *p) noexcept {
+               const int &n0, real *&p) noexcept {
+  std::cout.precision(20);
+  std::cout << nets << ", " << nete << ", " << kmass << ", " << nelems << ", " << n0 << ", " << p << "\n";
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < nlev; ++k) {
@@ -31,19 +33,21 @@ void recover_q(const int &nets, const int &nete,
             for(int i = 0; i < np; ++i) {
               p[P_IDX(i, j, k, n0, ie)] /=
                   p[P_IDX(i, j, kmass, n0, ie)];
+	      std::cout << ie << ", " << n0 << ", " << k << ", " << j << ", " << i << ":     " <<  p[P_IDX(i, j, k, n0, ie)] << "\n";
             }
           }
         }
       }
     }
   }
+  std::cout.flush();
 }
 
 #else
 
 void recover_q(const int &nets, const int &nete,
                const int &kmass, const int &n0,
-               const int &nelems, double *p_ptr) noexcept {
+               const int &nelems, real *&p_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
