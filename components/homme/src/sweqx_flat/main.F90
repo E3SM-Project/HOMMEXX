@@ -39,11 +39,10 @@ program main
   interface
      subroutine init_kokkos() bind(c)
      end subroutine init_kokkos
-     
+
      subroutine finalize_kokkos() bind(c)
      end subroutine finalize_kokkos
   end interface
-     
 
   type (element_t), pointer :: elem(:)
   type (fvm_struct), pointer  :: fvm(:)
@@ -64,11 +63,10 @@ program main
   ! =====================================================
 
   par=initmp()
+
   call t_initf('input.nl',LogPrint=par%masterproc, &
        Mpicom=par%comm, MasterTask=par%masterproc)
   call t_startf('Total')
-
-  call init_kokkos()
 
   call init(elem,edge1,edge2,edge3,red,par,dom_mt,fvm)
   ! =====================================================
@@ -98,6 +96,8 @@ program main
   ! =====================================
 
   call syncmp(par)
+
+  call init_kokkos()
 
   ! =====================================
   ! Begin threaded region...
@@ -129,10 +129,10 @@ program main
   ! ================================================
   ! End distributed memory region
   ! ================================================
+  call finalize_kokkos()
   call t_stopf('Total')
   call t_prf('HommeSWTime',par%comm)
   call t_finalizef()
-  call finalize_kokkos()
   call haltmp("exiting program...")
   deallocate(elem)
 end program main
