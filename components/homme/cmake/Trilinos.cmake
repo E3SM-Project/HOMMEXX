@@ -5,20 +5,38 @@ FIND_PACKAGE(Trilinos QUIET PATHS ${TRILINOS_INSTALL_DIR}/lib/cmake/Trilinos)
 
 IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
 
-  SET(EXECUTION_SPACES "-DTPL_ENABLE_MPI=ON -DKokkos_ENABLE_MPI=ON")
+  SET(PACKAGES -DTrilinos_ENABLE_Kokkos=ON
+               -DTrilinos_ENABLE_KokkosAlgorithms=ON
+               -DTrilinos_ENABLE_KokkosContainers=ON
+               -DTrilinos_ENABLE_KokkosCore=ON
+               -DTrilinos_ENABLE_KokkosExample=OFF)
+  SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
+                       -DKokkos_ENABLE_MPI=ON)
 
   IF(${OPENMP_FOUND})
     MESSAGE(STATUS "Enabling Trilinos' OpenMP")
-    SET(EXECUTION_SPACES "${EXECUTION_SPACES}
+    SET(EXECUTION_SPACES ${EXECUTION_SPACES}
         -DTrilinos_ENABLE_OpenMP=ON
-        -DKokkos_ENABLE_OpenMP=ON")
+        -DKokkos_ENABLE_OpenMP=ON
+        -DTPL_ENABLE_Pthread=OFF
+        -DKokkos_ENABLE_Pthread=OFF)
+  ELSE()
+    MESSAGE(STATUS "Enabling Trilinos' Pthread")
+    SET(EXECUTION_SPACES ${EXECUTION_SPACES}
+        -DTrilinos_ENABLE_OpenMP=OFF
+        -DKokkos_ENABLE_OpenMP=OFF
+        -DTPL_ENABLE_Pthread=ON
+        -DKokkos_ENABLE_Pthread=ON)
   ENDIF()
 
   FIND_PACKAGE(CUDA QUIET)
   IF(${CUDA_FOUND})
     OPTION(ENABLE_CUDA "Whether or not to enable CUDA" ON)
     IF(${ENABLE_CUDA})
-      SET(EXECUTION_SPACES "${EXECUTION_SPACES} -DTPL_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA_UVM=ON")
+      SET(EXECUTION_SPACES ${EXECUTION_SPACES}
+          -DTPL_ENABLE_CUDA=ON
+          -DKokkos_ENABLE_CUDA=ON
+          -DKokkos_ENABLE_CUDA_UVM=ON)
     ENDIF()
   ENDIF()
 
@@ -26,7 +44,7 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
   SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
   SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
 
-  SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} -DTrilinos_ENABLE_Kokkos=ON ${EXECUTION_SPACES})
+  SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
 
   INCLUDE(ExternalProject)
 
@@ -41,6 +59,9 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
 
     CMAKE_ARGS ${TRILINOS_CMAKE_ARGS}
   )
+
+  SET(CMAKE_EXE_LINKER_FLAGS -L${TRILINOS_INSTALL_DIR}/lib)
+  INCLUDE_DIRECTORIES(${TRILINOS_INSTALL_DIR}/include)
 ELSE()
   MESSAGE("\nFound Trilinos!  Here are the details: ")
   MESSAGE("   Trilinos_DIR = ${Trilinos_DIR}")
