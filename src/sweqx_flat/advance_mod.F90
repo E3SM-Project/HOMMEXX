@@ -36,8 +36,8 @@ module advance_mod
 
 contains
 
-  subroutine recover_q_f90(nets, nete, kmass, numelems, n0, p_ptr) bind(c)
-    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
+  subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
+    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer, c_loc
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: timelevels
     integer (kind=c_int), intent(in) :: nets
@@ -55,7 +55,7 @@ contains
       do ie=nets, nete
         do k=0, nlev
           if(k.ne.kmass) then
-             p(:, :, k, n0, ie) = p(:, :, k, n0, ie) / p(:, :, kmass, n0, ie)
+            p(:, :, k, n0, ie) = p(:, :, k, n0, ie) / p(:, :, kmass, n0, ie)
           endif
         enddo
       enddo
