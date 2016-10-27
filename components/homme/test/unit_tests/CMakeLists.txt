@@ -4,8 +4,13 @@ SET(UNITTESTER_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 macro(cxx_unit_test targetname useomp usecuda targetsrcs)
 
 ADD_EXECUTABLE(${targetname} ${UNITTESTER_DIR}/tester.cpp ${targetsrcs})
-TARGET_LINK_LIBRARIES(${targetname} dl pthread rt kokkoscore pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 ADD_TEST(${targetname}_test ${targetname})
+
+TARGET_LINK_LIBRARIES(${targetname} dl pthread kokkoscore pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+
+IF(UNIX AND NOT APPLE)
+  TARGET_LINK_LIBRARIES(${targetname} rt)
+ENDIF()
 
 TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${UNITTESTER_DIR}")
 TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
