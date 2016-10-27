@@ -11,36 +11,60 @@ namespace Homme {
 
 constexpr const int TIMELEVELS = 3;
 
+extern "C" {
+#if 0
 // temporary until we have views in - column major
 // multiplication with right dimensions
-// FIXME: implement P_IDX as column major - Dan will do
-// p(np,np,nlev,timelevels)
 #define P_IDX(i, j, k, tl, ie) \
   (i + np * (j + np * (k + nlev * (tl + TIMELEVELS * ie))))
 
-extern "C" {
-#if 0
 void recover_q(const int &nets, const int &nete,
                const int &kmass, const int &nelems,
                const int &n0, real *&p) noexcept {
-  std::cout.precision(20);
-  std::cout << nets << ", " << nete << ", " << kmass << ", " << nelems << ", " << n0 << ", " << p << "\n";
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < nlev; ++k) {
         if(k != kmass) {
           for(int j = 0; j < np; ++j) {
             for(int i = 0; i < np; ++i) {
-              p[P_IDX(i, j, k, n0, ie)] /=
-                  p[P_IDX(i, j, kmass, n0, ie)];
-	      std::cout << ie << ", " << n0 << ", " << k << ", " << j << ", " << i << ":     " <<  p[P_IDX(i, j, k, n0, ie)] << "\n";
+              p[P_IDX(i, j, k, n0 - 1, ie)] /=
+                  p[P_IDX(i, j, kmass, n0 - 1, ie)];
             }
           }
         }
       }
     }
   }
-  std::cout.flush();
+}
+
+#define V_IDX(i, j, n, k, tl, ie) \
+  (i +                            \
+   np * (j +                      \
+         np * (n +                \
+               2 * (k + nlev * (tl + TIMELEVELS * ie)))))
+
+#define D_IDX(i, j, m, n, ie) \
+  (i + np * (j + np * (m + 2 * (n + 2 * ie))))
+
+/* TODO: Give this a better name */
+void loop3(const int &nets, const int &nete, const int &n0,
+           const int &nelems, real *const &D,
+           real *&v) noexcept {
+  for(int ie = nets - 1; ie < nete; ++ie) {
+    for(int k = 0; k < nlev; k++) {
+      for(int j = 0; j < np; j++) {
+        for(int i = 0; i < np; i++) {
+          real v1 = v[V_IDX(i, j, 0, k, n0 - 1, ie)];
+          real v2 = v[V_IDX(i, j, 1, k, n0 - 1, ie)];
+          for(int h = 0; h < 2; h++) {
+            v[V_IDX(i, j, h, k, n0 - 1, ie)] =
+                D[D_IDX(i, j, h, 0, ie)] * v1 +
+                D[D_IDX(i, j, h, 1, ie)] * v2;
+          }
+        }
+      }
+    }
+  }
 }
 
 #else
@@ -62,8 +86,8 @@ void recover_q(const int &nets, const int &nete,
             if(k != kmass) {
               for(int j = 0; j < np; ++j) {
                 for(int i = 0; i < np; ++i) {
-                  p(i, j, k, n0, ie) /=
-                      p(i, j, kmass, n0, ie);
+                  p(i, j, k, n0 - 1, ie) /=
+                      p(i, j, kmass, n0 - 1, ie);
                 }
               }
             }
@@ -77,6 +101,45 @@ void recover_q(const int &nets, const int &nete,
     }
   }
 }
+
+/* TODO: Give this a better name */
+void loop3(const int &nets, const int &nete, const int &n0,
+           const int &nelems, real *const &d_ptr,
+           real *&v_ptr) noexcept {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          2, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  constexpr const int dim = 2;
+  V v(v_ptr, np, np, dim, nlev, TIMELEVELS, nelems);
+  D d(d_ptr, np, np, dim, dim, nelems);
+
+  try {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
+          for(int j = 0; j < np; j++) {
+            for(int i = 0; i < np; i++) {
+              real v1 = v(i, j, 0, k, n0 - 1, ie);
+              real v2 = v(i, j, 1, k, n0 - 1, ie);
+              for(int h = 0; h < dim; h++) {
+                v(i, j, h, k, n0 - 1, ie) =
+                    d(i, j, h, 0, ie) * v1 +
+                    d(i, j, h, 1, ie) * v2;
+              }
+            }
+          }
+        });
+  } catch(std::exception &e) {
+    std::cout << e.what() << std::endl;
+    std::abort();
+  } catch(...) {
+    std::cout << "Unknown exception" << std::endl;
+    std::abort();
+  }
+}
+
 #endif
 }
 }  // namespace Homme
