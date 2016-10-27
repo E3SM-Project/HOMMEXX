@@ -17,16 +17,16 @@ extern "C" {
   (i + np * (j + np * (k + nlev * (tl + timelevels * ie))))
 
 void recover_q_c(const int &nets, const int &nete,
-               const int &kmass, const int &nelems,
-               const int &n0, real *&p) noexcept {
+                 const int &kmass, const int &nelems,
+                 const int &n0, real *&p) noexcept {
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < nlev; ++k) {
-        if(k != kmass) {
+        if(k != kmass - 1) {
           for(int j = 0; j < np; ++j) {
             for(int i = 0; i < np; ++i) {
               p[P_IDX(i, j, k, n0 - 1, ie)] /=
-                  p[P_IDX(i, j, kmass, n0 - 1, ie)];
+                  p[P_IDX(i, j, kmass - 1, n0 - 1, ie)];
             }
           }
         }
@@ -45,9 +45,9 @@ void recover_q_c(const int &nets, const int &nete,
   (i + np * (j + np * (m + 2 * (n + 2 * ie))))
 
 /* TODO: Give this a better name */
-void loop3_c(const int &nets, const int &nete, const int &n0,
-           const int &nelems, real *const &D,
-           real *&v) noexcept {
+void loop3_c(const int &nets, const int &nete,
+             const int &n0, const int &nelems,
+             real *const &D, real *&v) noexcept {
   for(int ie = nets - 1; ie < nete; ++ie) {
     for(int k = 0; k < nlev; k++) {
       for(int j = 0; j < np; j++) {
@@ -81,11 +81,11 @@ void recover_q_c(const int &nets, const int &nete,
       Kokkos::Experimental::md_parallel_for(
           RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
           KOKKOS_LAMBDA(int k, int ie) {
-            if(k != kmass) {
+            if(k != kmass - 1) {
               for(int j = 0; j < np; ++j) {
                 for(int i = 0; i < np; ++i) {
                   p(i, j, k, n0 - 1, ie) /=
-                      p(i, j, kmass, n0 - 1, ie);
+                      p(i, j, kmass - 1, n0 - 1, ie);
                 }
               }
             }
