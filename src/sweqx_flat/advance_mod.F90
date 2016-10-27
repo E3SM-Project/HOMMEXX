@@ -60,6 +60,8 @@ contains
           endif
         enddo
       enddo
+    else
+      call exit(1)
     endif
   end subroutine recover_q_f90
 
@@ -79,8 +81,8 @@ contains
     integer :: ie, k, j, i, h
     real (kind=c_double) :: v1, v2
     real (kind=c_double), pointer :: v(:, :, :, :, :, :), D(:, :, :, :, :)
-    call c_f_pointer(D_ptr, D, [np, np, 2, 2, nelemd])
-    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelemd])
+    call c_f_pointer(D_ptr, D, [np, np, 2, 2, numelems])
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, numelems])
 
     do ie=nets,nete
       do k=1,nlev
@@ -97,7 +99,7 @@ contains
       enddo
     enddo
   end subroutine loop3_f90
-
+#define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define LOOP3 loop3_f90
