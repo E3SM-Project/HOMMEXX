@@ -9,10 +9,100 @@ module advance_mod
 
   implicit none
 
+  interface
+     subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: kmass
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: numelems
+       type(c_ptr) :: p
+     end subroutine recover_q_c
+
+     subroutine loop3_c(nets, nete, n0, numelems, D, v) bind(c)
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: numelems
+       type(c_ptr) :: D
+       type(c_ptr) :: v
+     end subroutine loop3_c
+  end interface
+
   ! semi-implicit needs to be re-initialized each time dt changes
   real (kind=real_kind) :: initialized_for_dt   = 0
 
 contains
+
+  subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
+    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer, c_loc
+    use dimensions_mod, only: np, nlev, nelemd
+    use element_mod,    only: timelevels
+    integer (kind=c_int), intent(in) :: nets
+    integer (kind=c_int), intent(in) :: nete
+    integer (kind=c_int), intent(in) :: kmass
+    integer (kind=c_int), intent(in) :: n0
+    integer (kind=c_int), intent(in) :: numelems
+    type(c_ptr), intent(in) :: p_ptr
+
+    integer :: ie, k
+    real (kind=c_double), pointer :: p(:, :, :, :, :)
+    call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,nelemd])
+
+    if(kmass.ne.-1) then
+      do ie=nets, nete
+        do k=1, nlev
+          if(k.ne.kmass) then
+            p(:, :, k, n0, ie) = p(:, :, k, n0, ie) / p(:, :, kmass, n0, ie)
+          endif
+        enddo
+      enddo
+    endif
+  end subroutine recover_q_f90
+
+  ! TODO: Give this a better name
+  subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
+    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
+    use dimensions_mod, only: np, nlev, nelemd
+    use element_mod,    only: timelevels
+    integer, intent(in) :: nets
+    integer, intent(in) :: nete
+    integer, intent(in) :: n0
+    integer, intent(in) :: numelems
+    type(c_ptr), intent(in) :: D_ptr
+    type(c_ptr), intent(in) :: v_ptr
+
+    integer :: ie, k, j, i, h
+    real (kind=c_double) :: v1, v2
+    real (kind=c_double), pointer :: v(:, :, :, :, :, :), D(:, :, :, :, :)
+    call c_f_pointer(D_ptr, D, [np, np, 2, 2, nelemd])
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelemd])
+
+    do ie=nets,nete
+      do k=1,nlev
+        ! contra -> latlon
+        do j=1,np
+          do i=1,np
+            v1     = v(i,j,1,k,n0,ie)   ! contra
+            v2     = v(i,j,2,k,n0,ie)   ! contra
+            do h=1,2
+              v(i,j,h,k,n0,ie)=D(i,j,h,1,ie)*v1 + D(i,j,h,2,ie)*v2   ! contra->latlon
+            enddo
+          enddo
+        enddo
+      enddo
+    enddo
+  end subroutine loop3_f90
+
+#ifdef DONT_USE_KOKKOS
+#define RECOVER_Q recover_q_f90
+#define LOOP3 loop3_f90
+#else
+#define RECOVER_Q recover_q_c
+#define LOOP3 loop3_c
+#endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
        dt,  pmean,     tl,   nets,   nete)
@@ -176,8 +266,8 @@ contains
        dt,  pmean,     tl,   nets,   nete)
 
     use kinds,          only: real_kind
-    use dimensions_mod, only: np, nlev
-    use element_mod,    only: element_t, elem_state_p
+    use dimensions_mod, only: np, nlev, nelemd
+    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only: EdgeBuffer_t
     use filter_mod,     only: filter_t
@@ -200,17 +290,6 @@ contains
     use iso_c_binding,  only: c_ptr, c_loc
 
     implicit none
-
-    interface
-       subroutine recover_q(nets, nete, kmass, n0, p) bind(c)
-         use iso_c_binding,  only: c_ptr
-         integer :: nets
-         integer :: nete
-         integer :: kmass
-         integer :: n0
-         type(c_ptr) :: p
-       end subroutine recover_q
-    end interface
 
     type (element_t)     , intent(inout), target :: elem(:)
     type (Rk_t)          , intent(in) :: MyRk
@@ -275,8 +354,8 @@ contains
     real (kind=real_kind) ::  nu_ratio1_bh,nu_ratio2_bh
     logical var_coef1_bh
 
-
-    type (c_ptr) :: ptr_buf
+    ! Temporary C pointer buffers for recoverq and loop 3
+    type (c_ptr) :: ptr_buf1, ptr_buf2
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -353,40 +432,15 @@ contains
 !parallelism (b/c tightly nested loop, if take out if statement) 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop2')
-#ifdef USE_KOKKOS
-       ptr_buf = c_loc(elem_state_p)
-       call recover_q(nets, nete, kmass, n0, ptr_buf)
-#else
-       if(kmass.ne.-1)then
-         do ie=nets,nete
-	    do k=1,nlev
-	      if(k.ne.kmass)then
-		elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)/&
-					    elem(ie)%state%p(:,:,kmass,n0)
-              endif
-	    enddo
-          enddo
-	endif
-#endif
-        call t_stopf('timer_advancerk_loop2')
-
+       ptr_buf1 = c_loc(elem_state_p)
+       call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-        call t_startf('timer_advancerk_loop3')
-        do ie=nets,nete
-           do k=1,nlev
-              ! contra -> latlon
-              do j=1,np
-                 do i=1,np
-                    v1     = elem(ie)%state%v(i,j,1,k,n0)   ! contra
-                    v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra 
-                    elem(ie)%state%v(i,j,1,k,n0)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
-                    elem(ie)%state%v(i,j,2,k,n0)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
-                 enddo
-              enddo
-           enddo
-        enddo
-        call t_stopf('timer_advancerk_loop3')
+       call t_startf('timer_advancerk_loop3')
+       ptr_buf1 = c_loc(elem_D)
+       ptr_buf2 = c_loc(elem_state_v)
+       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call t_stopf('timer_advancerk_loop3')
 
         call t_startf('timer_advancerk_biharmonic')
 !       call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
@@ -467,8 +521,8 @@ contains
         ! convert lat-lon -> contra variant
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-        call t_startf('timer_advancerk_loop4')
-        do ie=nets,nete
+       call t_startf('timer_advancerk_loop4')
+       do ie=nets,nete
            do k=1,nlev
               do j=1,np
                  do i=1,np
