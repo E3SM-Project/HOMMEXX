@@ -11,21 +11,21 @@ module advance_mod
 
   interface
      subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
-       use iso_c_binding,  only: c_ptr
-       integer :: nets
-       integer :: nete
-       integer :: kmass
-       integer :: n0
-       integer :: numelems
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: kmass
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: numelems
        type(c_ptr) :: p
      end subroutine recover_q_c
 
      subroutine loop3_c(nets, nete, n0, numelems, D, v) bind(c)
-       use iso_c_binding,  only: c_ptr
-       integer :: nets
-       integer :: nete
-       integer :: n0
-       integer :: numelems
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: numelems
        type(c_ptr) :: D
        type(c_ptr) :: v
      end subroutine loop3_c
@@ -36,19 +36,19 @@ module advance_mod
 
 contains
 
-  subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
-    use iso_c_binding,  only: c_ptr, c_f_pointer
+  subroutine recover_q_f90(nets, nete, kmass, numelems, n0, p_ptr) bind(c)
+    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: timelevels
-    integer, intent(in) :: nets
-    integer, intent(in) :: nete
-    integer, intent(in) :: kmass
-    integer, intent(in) :: n0
-    integer, intent(in) :: numelems
+    integer (kind=c_int), intent(in) :: nets
+    integer (kind=c_int), intent(in) :: nete
+    integer (kind=c_int), intent(in) :: kmass
+    integer (kind=c_int), intent(in) :: n0
+    integer (kind=c_int), intent(in) :: numelems
     type(c_ptr), intent(in) :: p_ptr
 
     integer :: ie, k
-    real (kind=real_kind), pointer :: p(:, :, :, :, :)
+    real (kind=c_double), pointer :: p(:, :, :, :, :)
     call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,nelemd])
 
     if(kmass.ne.-1) then
@@ -64,7 +64,7 @@ contains
 
   ! TODO: Give this a better name
   subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
-    use iso_c_binding,  only: c_ptr, c_f_pointer
+    use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: timelevels
     integer, intent(in) :: nets
@@ -75,8 +75,8 @@ contains
     type(c_ptr), intent(in) :: v_ptr
 
     integer :: ie, k, j, i, h
-    real (kind=real_kind) :: v1, v2
-    real (kind=real_kind), pointer :: v(:, :, :, :, :, :), D(:, :, :, :, :)
+    real (kind=c_double) :: v1, v2
+    real (kind=c_double), pointer :: v(:, :, :, :, :, :), D(:, :, :, :, :)
     call c_f_pointer(D_ptr, D, [np, np, 2, 2, nelemd])
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelemd])
 
