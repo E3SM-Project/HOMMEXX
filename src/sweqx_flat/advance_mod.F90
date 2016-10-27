@@ -387,91 +387,81 @@ contains
            enddo
         enddo
         call t_stopf('timer_advancerk_loop3')
-!IKT, 10/21/16 - Oksana will refactor biharmonic -> requires local laplace, dss,
-!local laplace 
+
         call t_startf('timer_advancerk_biharmonic')
 !       call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
+!       subroutine
+!       biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
 
+        var_coef1_bh = .true.
+        if(hypervis_scaling > 0)  var_coef1_bh = .false.
 
+        nu_ratio1_bh=1
+        nu_ratio2_bh=1
+        if (nu_div/=nu) then
+           if(hypervis_scaling /= 0) then
+              nu_ratio1_bh=(nu_div/nu)**2   ! preserve buggy scaling
+              nu_ratio2_bh=1
+           else
+              nu_ratio1_bh=nu_div/nu
+              nu_ratio2_bh=nu_div/nu
+           endif
+        endif
 
-
-
-
-!      subroutine
-!      biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
-
-   var_coef1_bh = .true.
-   if(hypervis_scaling > 0)  var_coef1_bh = .false.
-
-   nu_ratio1_bh=1
-   nu_ratio2_bh=1
-   if (nu_div/=nu) then
-      if(hypervis_scaling /= 0) then
-         nu_ratio1_bh=(nu_div/nu)**2   ! preserve buggy scaling
-         nu_ratio2_bh=1
-      else
-         nu_ratio1_bh=nu_div/nu
-         nu_ratio2_bh=nu_div/nu
-      endif
-   endif
-
-
-   do ie=nets,nete
-      do k=1,nlev
-         do j=1,np
-            do i=1,np
-               T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
+! OG : local loop to refactor
+        do ie=nets,nete
+          do k=1,nlev
+            do j=1,np
+              do i=1,np
+                 T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
+              enddo
             enddo
-         enddo
         
-         ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
-         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
+            ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
+            vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
               elem(ie),var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
+          enddo
+        enddo
+! OG : end local loop to refactor
 
-      enddo
-      kptr=0
-      call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
-      kptr=nlev
-      call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,ie)
+        do ie = nets,nete
+          kptr=0
+          call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
+          kptr=nlev
+          call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,ie)
+        enddo ! end ie loop, dss
 
-   enddo
+
+        call t_startf('biwk_bexchV')
+        call bndry_exchangeV(hybrid,edge3)
+        call t_stopf('biwk_bexchV')
    
-   call t_startf('biwk_bexchV')
-   call bndry_exchangeV(hybrid,edge3)
-   call t_stopf('biwk_bexchV')
-   
-   do ie=nets,nete
-      rspheremv_bh     => elem(ie)%rspheremp(:,:)
-      
-      kptr=0
-      call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
-      kptr=nlev
-      call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
-      
-      do k=1,nlev
-         do j=1,np
-            do i=1,np
-               T_bh(i,j,k)=rspheremv_bh(i,j)*ptens(i,j,k,ie)
-               v_bh(i,j,1)=rspheremv_bh(i,j)*vtens(i,j,1,k,ie)
-               v_bh(i,j,2)=rspheremv_bh(i,j)*vtens(i,j,2,k,ie)
+        do ie=nets,nete
+          kptr=0
+          call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
+          kptr=nlev
+          call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
+        enddo
+
+! OG : local loop to refactor
+        do ie = nets,nete
+          rspheremv_bh     => elem(ie)%rspheremp(:,:)      
+          do k=1,nlev
+            do j=1,np
+              do i=1,np
+                T_bh(i,j,k)=rspheremv_bh(i,j)*ptens(i,j,k,ie)
+                v_bh(i,j,1)=rspheremv_bh(i,j)*vtens(i,j,1,k,ie)
+                v_bh(i,j,2)=rspheremv_bh(i,j)*vtens(i,j,2,k,ie)
+              enddo
             enddo
-         enddo
-         ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=.true.)
-         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
+            ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=.true.)
+            vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
               nu_ratio=nu_ratio2_bh)
-      enddo
-        
-   enddo
+          enddo
+       enddo ! end ie loop
+! OG : end of local loop to refactor
+
 !end biharmonic 
-
-
-
-
-
-
-
-
-
 
         call t_stopf('timer_advancerk_biharmonic')
         ! convert lat-lon -> contra variant
