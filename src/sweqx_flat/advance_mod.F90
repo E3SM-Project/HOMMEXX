@@ -36,6 +36,7 @@ module advance_mod
 
 contains
 
+  !DEC$ ATTRIBUTES NOINLINE :: recover_q_f90
   subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer, c_loc
     use dimensions_mod, only: np, nlev, nelemd
@@ -63,6 +64,7 @@ contains
   end subroutine recover_q_f90
 
   ! TODO: Give this a better name
+  !DEC$ ATTRIBUTES NOINLINE :: loop3_f90
   subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
@@ -434,6 +436,7 @@ contains
        call t_startf('timer_advancerk_loop2')
        ptr_buf1 = c_loc(elem_state_p)
        call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
+       call t_stopf('timer_advancerk_loop2')
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop3')
