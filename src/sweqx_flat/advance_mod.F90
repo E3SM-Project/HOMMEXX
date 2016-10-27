@@ -53,7 +53,7 @@ contains
 
     if(kmass.ne.-1) then
       do ie=nets, nete
-        do k=0, nlev
+        do k=1, nlev
           if(k.ne.kmass) then
             p(:, :, k, n0, ie) = p(:, :, k, n0, ie) / p(:, :, kmass, n0, ie)
           endif
