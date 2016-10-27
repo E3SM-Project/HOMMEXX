@@ -8,6 +8,9 @@
 #define QUOTE_HELPER(a) #a
 #define QUOTE(a) QUOTE_HELPER(a)
 
+/* The following definitions are compiler specific */
+
+/* GCC only: */
 #define FORTRAN_FUNC(modname, fname) \
   __asm__(QUOTE(CAT(CAT(modname, _), CAT(fname, _))))
 

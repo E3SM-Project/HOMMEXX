@@ -29,11 +29,8 @@ void loop3_c(const int &nets, const int &nete,
              real *const &D, real *&v);
 }
 
-extern int nelemd FORTRAN_VAR(dimensions_mod, nelemd);
-
 TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
-  nelemd = numelems;
 
   // real elem_state_p (np,np,nlevel,timelevels,nelemd)
   constexpr const int p_len =
@@ -82,7 +79,6 @@ TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
 TEST_CASE("loop3", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
   constexpr const int dim = 2;
-  nelemd = numelems;
   // real elem_D (np,np,2,2,nelemd)
   // real elem_state_v (np,np,2,nlev,timelevels,nelemd)
   constexpr const int D_len =
