@@ -9,16 +9,14 @@
 
 namespace Homme {
 
-constexpr const int TIMELEVELS = 3;
-
 extern "C" {
 #if 0
 // temporary until we have views in - column major
 // multiplication with right dimensions
 #define P_IDX(i, j, k, tl, ie) \
-  (i + np * (j + np * (k + nlev * (tl + TIMELEVELS * ie))))
+  (i + np * (j + np * (k + nlev * (tl + timelevels * ie))))
 
-void recover_q(const int &nets, const int &nete,
+void recover_q_c(const int &nets, const int &nete,
                const int &kmass, const int &nelems,
                const int &n0, real *&p) noexcept {
   if(kmass != -1) {
@@ -41,13 +39,13 @@ void recover_q(const int &nets, const int &nete,
   (i +                            \
    np * (j +                      \
          np * (n +                \
-               2 * (k + nlev * (tl + TIMELEVELS * ie)))))
+               2 * (k + nlev * (tl + timelevels * ie)))))
 
 #define D_IDX(i, j, m, n, ie) \
   (i + np * (j + np * (m + 2 * (n + 2 * ie))))
 
 /* TODO: Give this a better name */
-void loop3(const int &nets, const int &nete, const int &n0,
+void loop3_c(const int &nets, const int &nete, const int &n0,
            const int &nelems, real *const &D,
            real *&v) noexcept {
   for(int ie = nets - 1; ie < nete; ++ie) {
@@ -69,15 +67,15 @@ void loop3(const int &nets, const int &nete, const int &n0,
 
 #else
 
-void recover_q(const int &nets, const int &nete,
-               const int &kmass, const int &n0,
-               const int &nelems, real *&p_ptr) noexcept {
+void recover_q_c(const int &nets, const int &nete,
+                 const int &kmass, const int &n0,
+                 const int &nelems, real *&p_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  P p(p_ptr, np, np, nlev, TIMELEVELS, nelems);
+  P p(p_ptr, np, np, nlev, timelevels, nelems);
   if(kmass != -1) {
     try {
       Kokkos::Experimental::md_parallel_for(
@@ -103,16 +101,16 @@ void recover_q(const int &nets, const int &nete,
 }
 
 /* TODO: Give this a better name */
-void loop3(const int &nets, const int &nete, const int &n0,
-           const int &nelems, real *const &d_ptr,
-           real *&v_ptr) noexcept {
+void loop3_c(const int &nets, const int &nete,
+             const int &n0, const int &nelems,
+             real *const &d_ptr, real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   constexpr const int dim = 2;
-  V v(v_ptr, np, np, dim, nlev, TIMELEVELS, nelems);
+  V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
   D d(d_ptr, np, np, dim, dim, nelems);
 
   try {
