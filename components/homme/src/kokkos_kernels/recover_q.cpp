@@ -17,8 +17,8 @@ extern "C" {
   (i + np * (j + np * (k + nlev * (tl + timelevels * ie))))
 
 void recover_q_c(const int &nets, const int &nete,
-                 const int &kmass, const int &nelems,
-                 const int &n0, real *&p) noexcept {
+                 const int &kmass, const int &n0,
+                 const int &nelems, real *&p) noexcept {
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < nlev; ++k) {

@@ -1,6 +1,7 @@
 
 #include <catch/catch.hpp>
 
+#include <iostream>
 #include <random>
 
 #include <dimensions.hpp>
@@ -12,26 +13,32 @@ using namespace Homme;
 extern "C" {
 
 void recover_q_f90(const int &nets, const int &nete,
-                   const int &kmass, const int &nelems,
-                   const int &n0, real *&p)
-    FORTRAN_C(recover_q_f90);
+                   const int &kmass, const int &n0,
+                   const int &nelems, real *const &p);
+
 void recover_q_c(const int &nets, const int &nete,
-                 const int &kmass, const int &nelems,
-                 const int &n0, real *&p);
+                 const int &kmass, const int &n0,
+                 const int &nelems, real *const &p);
 
 void loop3_f90(const int &nets, const int &nete,
-               const int &kmass, const int &nelems,
-               const int &n0, real *const &D, real *&v)
-    FORTRAN_C(loop3_f90);
+               const int &kmass, const int &n0,
+               const int &nelems, real *const &D,
+               real *const &v);
+
 void loop3_c(const int &nets, const int &nete,
-             const int &kmass, const int &nelems,
-             const int &n0, real *const &D, real *&v);
+             const int &kmass, const int &n0,
+             const int &nelems, real *const &D,
+             real *const &v);
 }
+
+extern int nelemd FORTRAN_VAR(dimensions_mod, nelemd);
 
 TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
+  nelemd = numelems;
 
   std::uniform_real_distribution<real> p_dist(0, 1.0);
+  // real elem_state_p (np,np,nlevel,timelevels,nelemd)
   constexpr const int p_len =
       numelems * timelevels * nlev * np * np;
   real *p_theory = new real[p_len];
@@ -39,7 +46,7 @@ TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
 
   constexpr const int numRandTests = 10;
 
-  SECTION("random tests") {
+  SECTION("random test") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
@@ -52,20 +59,27 @@ TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
           1, timelevels))(engine);
       int kmass = (std::uniform_int_distribution<int>(
           0, nlev))(engine);
+      /* kmass needs to be in [1, nlev] or be -1 for the
+       * Fortran implementation */
       if(kmass == 0) {
         kmass = -1;
       }
 
-      for(int i = 0; i < p_len; i++) {
-        p_theory[i] = p_dist(engine);
-        p_exper[i] = p_theory[i];
+      for(int j = 0; j < p_len; j++) {
+        p_theory[j] = p_dist(engine);
+        p_exper[j] = p_theory[j];
       }
-      recover_q_f90(nets, nete, kmass, numelems, n0,
+      recover_q_f90(nets, nete, kmass, n0, numelems,
                     p_theory);
-      recover_q_c(nets, nete, kmass, numelems, n0,
-                  p_theory);
-      for(int i = 0; i < p_len; i++) {
-        REQUIRE(p_exper[i] == p_theory[i]);
+      recover_q_c(nets, nete, kmass, n0, numelems, p_exper);
+      for(int j = 0; j < p_len; j++) {
+        if(p_exper[j] != p_theory[j]) {
+          std::cout << i << ", " << j << " < " << p_len
+                    << std::endl;
+          std::cout << nets << ", " << nete << ", " << n0
+                    << ", " << kmass << std::endl;
+          REQUIRE(p_exper[j] == p_theory[j]);
+        }
       }
     }
   }
