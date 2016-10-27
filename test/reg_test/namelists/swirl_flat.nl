@@ -62,7 +62,7 @@ kcut_fm       = 2
 !=======================================================!
 output_start_time= 0
 output_end_time  = 1200000
-output_frequency = 6
+output_frequency = 1
 output_timeunits = 1
 output_varnames1 = 'geop','u','v'
 output_type='netcdf'
