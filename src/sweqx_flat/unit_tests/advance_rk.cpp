@@ -73,13 +73,7 @@ TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
                     p_theory);
       recover_q_c(nets, nete, kmass, n0, numelems, p_exper);
       for(int j = 0; j < p_len; j++) {
-        if(p_exper[j] != p_theory[j]) {
-          std::cout << i << ", " << j << " < " << p_len
-                    << std::endl;
-          std::cout << nets << ", " << nete << ", " << n0
-                    << ", " << kmass << std::endl;
-          REQUIRE(p_exper[j] == p_theory[j]);
-        }
+        REQUIRE(p_exper[j] == p_theory[j]);
       }
     }
   }
