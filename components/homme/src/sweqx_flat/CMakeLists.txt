@@ -94,7 +94,9 @@ SET(SWEQX_FLAT_SRCS
 )
 
 SET(SWEQX_FLAT_UT_SRCS
-  ${UNIT_TEST_DIR}/divergence.cpp;
+  ${UNIT_TEST_DIR}/advance_rk.cpp
+  ${TARGET_DIR}/advance_mod.F90
+  ${TARGET_DIR}/shallow_water_mod.F90
   ${SWEQX_FLAT_DEPS}
 )
 

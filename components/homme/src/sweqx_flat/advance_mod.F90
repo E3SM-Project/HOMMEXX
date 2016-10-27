@@ -9,11 +9,8 @@ module advance_mod
 
   implicit none
 
-#define DONT_USE_KOKKOS
-
-#ifndef DONT_USE_KOKKOS
   interface
-     subroutine recover_q(nets, nete, kmass, n0, numelems, p) bind(c)
+     subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
        use iso_c_binding,  only: c_ptr
        integer :: nets
        integer :: nete
@@ -21,9 +18,9 @@ module advance_mod
        integer :: n0
        integer :: numelems
        type(c_ptr) :: p
-     end subroutine recover_q
+     end subroutine recover_q_c
 
-     subroutine loop3(nets, nete, n0, numelems, D, v) bind(c)
+     subroutine loop3_c(nets, nete, n0, numelems, D, v) bind(c)
        use iso_c_binding,  only: c_ptr
        integer :: nets
        integer :: nete
@@ -31,17 +28,15 @@ module advance_mod
        integer :: numelems
        type(c_ptr) :: D
        type(c_ptr) :: v
-     end subroutine loop3
+     end subroutine loop3_c
   end interface
-#endif !DONT_USE_KOKKOS
 
   ! semi-implicit needs to be re-initialized each time dt changes
   real (kind=real_kind) :: initialized_for_dt   = 0
 
 contains
 
-#ifdef DONT_USE_KOKKOS
-  subroutine recover_q(nets, nete, kmass, n0, numelems, p_ptr)
+  subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: timelevels
@@ -65,10 +60,10 @@ contains
         enddo
       enddo
     endif
-  end subroutine recover_q
+  end subroutine recover_q_f90
 
   ! TODO: Give this a better name
-  subroutine loop3(nets, nete, n0, numelems, D_ptr, v_ptr)
+  subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: timelevels
@@ -99,8 +94,15 @@ contains
         enddo
       enddo
     enddo
-  end subroutine loop3
-#endif !DONT_USE_KOKKOS
+  end subroutine loop3_f90
+
+#ifdef DONT_USE_KOKKOS
+#define RECOVER_Q recover_q_f90
+#define LOOP3 loop3_f90
+#else
+#define RECOVER_Q recover_q_c
+#define LOOP3 loop3_c
+#endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
        dt,  pmean,     tl,   nets,   nete)
@@ -420,13 +422,13 @@ contains
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop2')
        ptr_buf1 = c_loc(elem_state_p)
-       call recover_q(nets, nete, kmass, n0, nelemd, ptr_buf1)
+       call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
        call t_startf('timer_advancerk_loop3')
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
-       call loop3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop3')
 !IKT, 10/21/16 - Oksana will refactor biharmonic -> requires local laplace, dss,
 !local laplace 

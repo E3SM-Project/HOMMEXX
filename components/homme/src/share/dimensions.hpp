@@ -22,6 +22,8 @@ constexpr const int qsize_d = 4;
 constexpr const int nlev = PLEV;
 constexpr const int nlevp = nlev + 1;
 
+constexpr const int timelevels = 3;
+
 }  // namespace Homme
 
 #endif
