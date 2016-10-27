@@ -85,6 +85,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
   ${SRC_KERNELS_DIR}/recover_q.cpp
+  ${SRC_SHARE}/kokkos_init.cpp
 )
 
 SET(SWEQX_FLAT_SRCS
@@ -93,7 +94,9 @@ SET(SWEQX_FLAT_SRCS
 )
 
 SET(SWEQX_FLAT_UT_SRCS
-  ${UNIT_TEST_DIR}/divergence.cpp;
+  ${UNIT_TEST_DIR}/advance_rk.cpp
+  ${TARGET_DIR}/advance_mod.F90
+  ${TARGET_DIR}/shallow_water_mod.F90
   ${SWEQX_FLAT_DEPS}
 )
 
@@ -134,6 +137,6 @@ createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_F
 OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
 OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
 
-INCLUDE_DIRECTORIES(${SRC_BASE} ${SRC_SHARE})
+INCLUDE_DIRECTORIES(${SRC_BASE} ${SRC_SHARE} ${SRC_KERNELS_DIR})
 
 cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${SWEQX_FLAT_UT_SRCS}")

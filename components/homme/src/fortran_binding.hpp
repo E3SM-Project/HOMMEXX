@@ -8,8 +8,12 @@
 #define QUOTE_HELPER(a) #a
 #define QUOTE(a) QUOTE_HELPER(a)
 
-#define FORTRAN(modname, fname) \
+#define FORTRAN_FUNC(modname, fname) \
   __asm__(QUOTE(CAT(CAT(modname, _), CAT(fname, _))))
-#define FORTRAN_C(fname) __asm__(QUOTE(fname))
+
+#define FORTRAN_C_FUNC(fname) __asm__(QUOTE(fname))
+
+#define FORTRAN_VAR(modname, vname) \
+  __asm__(QUOTE(CAT(CAT(CAT(__, modname), _MOD_), vname)))
 
 #endif
