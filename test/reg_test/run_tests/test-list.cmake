@@ -8,6 +8,7 @@ SET(HOMME_TESTS
   swtc2_flat.cmake
   swtc5_flat.cmake
   swtc6_flat.cmake
+  swirl_flat.cmake
   swimtc5.cmake
   baro2b.cmake
   baro2c.cmake

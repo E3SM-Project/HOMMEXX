@@ -510,7 +510,7 @@ contains
 	if(kmass.ne.-1)then
 	!we do not apply viscosity to mass field
 	ptens(:,:,kmass,:)=0.0d0
-        call t_stopf('timer_advancerk_loop6')
+        call t_startf('timer_advancerk_loop6')
 	do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
