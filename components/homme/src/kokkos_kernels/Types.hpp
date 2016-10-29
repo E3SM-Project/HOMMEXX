@@ -5,8 +5,18 @@
 
 namespace Homme {
 
-using D = Kokkos::View<real*****,  Kokkos::LayoutLeft, Kokkos::MemoryUnmanaged>;
-using P = Kokkos::View<real*****,  Kokkos::LayoutLeft, Kokkos::MemoryUnmanaged>;
-using V = Kokkos::View<real******, Kokkos::LayoutLeft, Kokkos::MemoryUnmanaged>;
+using D = Kokkos::View<real *****, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
+using P = Kokkos::View<real *****, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
+using V = Kokkos::View<real ******, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
 
-} // namespace Homme
+using SphereMP = Kokkos::View<real ***, Kokkos::LayoutLeft,
+                              Kokkos::MemoryUnmanaged>;
+using PTens = Kokkos::View<real ****, Kokkos::LayoutLeft,
+                           Kokkos::MemoryUnmanaged>;
+using VTens = Kokkos::View<real *****, Kokkos::LayoutLeft,
+                           Kokkos::MemoryUnmanaged>;
+
+}  // namespace Homme
