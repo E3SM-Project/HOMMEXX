@@ -39,7 +39,7 @@ contains
   !DEC$ ATTRIBUTES NOINLINE :: recover_q_f90
   subroutine recover_q_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer, c_loc
-    use dimensions_mod, only: np, nlev, nelemd
+    use dimensions_mod, only: np, nlev
     use element_mod,    only: timelevels
     integer (kind=c_int), intent(in) :: nets
     integer (kind=c_int), intent(in) :: nete
@@ -50,7 +50,7 @@ contains
 
     integer :: ie, k
     real (kind=c_double), pointer :: p(:, :, :, :, :)
-    call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,nelemd])
+    call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,numelems])
 
     if(kmass.ne.-1) then
       do ie=nets, nete
@@ -69,7 +69,7 @@ contains
   !DEC$ ATTRIBUTES NOINLINE :: loop3_f90
   subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
-    use dimensions_mod, only: np, nlev, nelemd
+    use dimensions_mod, only: np, nlev
     use element_mod,    only: timelevels
     integer, intent(in) :: nets
     integer, intent(in) :: nete
@@ -99,13 +99,42 @@ contains
       enddo
     enddo
   end subroutine loop3_f90
+
+  subroutine loop5_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use control_mod, only: nu, nu_s
+    integer, intent(in) :: nets, nete, numelems
+    type(c_ptr), intent(in) :: spheremp_ptr, ptens_ptr, vtens_ptr
+
+    integer :: ie, k
+    real (kind=real_kind), pointer :: spheremp(:, :, :)
+    real (kind=real_kind), pointer :: vtens(:, :, :, :, :), ptens(:, :, :, :)
+    ! real (kind=real_kind), dimension(np,np,2,nlev,nets:nete)  :: vtens
+    ! real (kind=real_kind), dimension(np,np,nlev,nets:nete) :: ptens
+    ! TODO: Find out if the index base of an array can be changed
+    ! without doing the computation by hand
+    call c_f_pointer(spheremp_ptr, spheremp, [np, np, numelems])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev, nete - nets + 1])
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev, nete - nets + 1])
+    do ie=nets,nete
+      do k=1,nlev
+        ptens(:,:,k,ie - nets + 1) =  -nu_s*ptens(:,:,k,ie - nets + 1)/spheremp(:,:,ie)
+        vtens(:,:,1,k,ie - nets + 1) = -nu*vtens(:,:,1,k,ie - nets + 1)/spheremp(:,:,ie)
+        vtens(:,:,2,k,ie - nets + 1) = -nu*vtens(:,:,2,k,ie - nets + 1)/spheremp(:,:,ie)
+      enddo
+    enddo
+  end subroutine loop5_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define LOOP3 loop3_f90
+#define LOOP5 loop5_f90
 #else
 #define RECOVER_Q recover_q_c
 #define LOOP3 loop3_c
+#define LOOP5 loop5_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -271,7 +300,7 @@ contains
 
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev, nelemd
-    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D
+    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D, elem_Dinv, elem_spheremp
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only: EdgeBuffer_t
     use filter_mod,     only: filter_t
@@ -321,8 +350,8 @@ contains
 
     ! Thread private working set ...
 
-    real (kind=real_kind), allocatable :: vtens(:,:,:,:,:) 
-    real (kind=real_kind), allocatable :: ptens(:,:,:,:) 
+    real (kind=real_kind), allocatable, target :: vtens(:,:,:,:,:) 
+    real (kind=real_kind), allocatable, target :: ptens(:,:,:,:) 
     real (kind=real_kind), dimension(np,np,nlev,nets:nete)   :: ptens_dg
     real (kind=real_kind), dimension(0:np+1,0:np+1,nlev)     :: pedges
 
@@ -359,7 +388,7 @@ contains
     logical var_coef1_bh
 
     ! Temporary C pointer buffers for recoverq and loop 3
-    type (c_ptr) :: ptr_buf1, ptr_buf2
+    type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -523,36 +552,22 @@ contains
 !end biharmonic 
 
         call t_stopf('timer_advancerk_biharmonic')
-        ! convert lat-lon -> contra variant
-!IKT, 10/21/16: local loop - to refactor 
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+
+       ! convert lat-lon -> contra variant
        call t_startf('timer_advancerk_loop4')
-       do ie=nets,nete
-           do k=1,nlev
-              do j=1,np
-                 do i=1,np
-                    v1=elem(ie)%state%v(i,j,1,k,n0)
-                    v2=elem(ie)%state%v(i,j,2,k,n0)
-                    elem(ie)%state%v(i,j,1,k,n0) = elem(ie)%Dinv(i,j,1,1)*v1 + elem(ie)%Dinv(i,j,1,2)*v2
-                    elem(ie)%state%v(i,j,2,k,n0) = elem(ie)%Dinv(i,j,2,1)*v1 + elem(ie)%Dinv(i,j,2,2)*v2
-                 enddo
-              enddo
-           enddo
-        enddo
-        call t_stopf('timer_advancerk_loop4')
+       ptr_buf1 = c_loc(elem_Dinv)
+       ptr_buf2 = c_loc(elem_state_v)
+       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call t_stopf('timer_advancerk_loop4')
         
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-        call t_startf('timer_advancerk_loop5')
-	do ie=nets,nete
-	    spheremp     => elem(ie)%spheremp
-	    do k=1,nlev
-	      ptens(:,:,k,ie) =  -nu_s*ptens(:,:,k,ie)/spheremp(:,:)
-	      vtens(:,:,1,k,ie) = -nu*vtens(:,:,1,k,ie)/spheremp(:,:)
-	      vtens(:,:,2,k,ie) = -nu*vtens(:,:,2,k,ie)/spheremp(:,:)
-	    enddo
-	enddo
-        call t_stopf('timer_advancerk_loop5')
+       call t_startf('timer_advancerk_loop5')
+       ptr_buf1 = c_loc(elem_spheremp)
+       ptr_buf2 = c_loc(ptens)
+       ptr_buf3 = c_loc(vtens)
+       call LOOP5(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3)
+       call t_stopf('timer_advancerk_loop5')
 
 !IKT, 10/21/16: local loop - to refactor 
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
