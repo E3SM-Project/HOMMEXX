@@ -29,6 +29,17 @@ module advance_mod
        type(c_ptr) :: D
        type(c_ptr) :: v
      end subroutine loop3_c
+
+     subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: numelems
+       type(c_ptr), intent(in) :: spheremp_ptr
+       type(c_ptr), intent(in) :: ptens_ptr
+       type(c_ptr), intent(in) :: vtens_ptr
+     end subroutine loop5_c
+
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
