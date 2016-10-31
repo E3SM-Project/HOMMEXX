@@ -44,6 +44,14 @@ void loop6_f90(const int &nets, const int &nete,
 void loop6_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
              const int &nelems, real *const &p);
+
+void loop8_f90(real *const &rspheremp_ptr,
+               real *const &dinv_ptr, real *&ptens_ptr,
+               real *&vtens_ptr);
+
+void loop8_c(real *const &rspheremp_ptr,
+             real *const &dinv_ptr, real *&ptens_ptr,
+             real *&vtens_ptr);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -55,9 +63,27 @@ void genRandArray(number *arr, int arr_len, rngAlg &engine,
 }
 
 template <typename rngAlg, typename dist, typename number>
+void genRandArray(number *arr, int arr_len, rngAlg &engine,
+                  dist &&pdf) {
+  for(int i = 0; i < arr_len; i++) {
+    arr[i] = pdf(engine);
+  }
+}
+
+template <typename rngAlg, typename dist, typename number>
 void genRandTheoryExper(number *arr_theory,
                         number *arr_exper, int arr_len,
                         rngAlg &engine, dist &pdf) {
+  for(int i = 0; i < arr_len; i++) {
+    arr_theory[i] = pdf(engine);
+    arr_exper[i] = arr_theory[i];
+  }
+}
+
+template <typename rngAlg, typename dist, typename number>
+void genRandTheoryExper(number *arr_theory,
+                        number *arr_exper, int arr_len,
+                        rngAlg &engine, dist &&pdf) {
   for(int i = 0; i < arr_len; i++) {
     arr_theory[i] = pdf(engine);
     arr_exper[i] = arr_theory[i];
@@ -235,4 +261,56 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
     }
   }
   delete[] spheremp;
+}
+
+TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
+  constexpr const int dim = 2;
+  constexpr const int rspheremp_len = np * np;
+  real *rspheremp = new real[rspheremp_len];
+  constexpr const int dinv_len = np * np * dim * dim;
+  real *dinv = new real[dinv_len];
+  constexpr const int ptens_len = np * np * nlev;
+  real *ptens_theory = new real[ptens_len];
+  real *ptens_exper = new real[ptens_len];
+  constexpr const int vtens_len = np * np * dim * nlev;
+  real *vtens_theory = new real[vtens_len];
+  real *vtens_exper = new real[vtens_len];
+
+  constexpr const int numRandTests = 10;
+
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      genRandArray(
+          rspheremp, rspheremp_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          dinv, dinv_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          ptens_theory, ptens_exper, ptens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          vtens_theory, vtens_exper, vtens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      loop8_f90(rspheremp, dinv, ptens_theory,
+                vtens_theory);
+      loop8_c(rspheremp, dinv, ptens_exper, vtens_exper);
+      for(int j = 0; j < ptens_len; j++) {
+        REQUIRE(ptens_exper[j] == ptens_theory[j]);
+      }
+      for(int j = 0; j < vtens_len; j++) {
+        REQUIRE(vtens_exper[j] == vtens_theory[j]);
+      }
+    }
+  }
+
+  delete[] rspheremp;
+  delete[] dinv;
+  delete[] ptens_theory;
+  delete[] ptens_exper;
+  delete[] vtens_theory;
+  delete[] vtens_exper;
 }
