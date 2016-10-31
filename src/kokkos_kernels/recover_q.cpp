@@ -253,6 +253,9 @@ void loop8_c(real *const &rspheremp_ptr,
   }
 }
 
+void loop9_c() {
+}
+
 #endif
 }
 }  // namespace Homme
