@@ -36,6 +36,14 @@ void loop5_f90(const int &nets, const int &nete,
 void loop5_c(const int &nets, const int &nete,
              const int &nelems, real *const &spheremp,
              real *&ptens, real *&vtens);
+
+void loop6_f90(const int &nets, const int &nete,
+               const int &kmass, const int &n0,
+               const int &nelems, real *const &p);
+
+void loop6_c(const int &nets, const int &nete,
+             const int &kmass, const int &n0,
+             const int &nelems, real *const &p);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -56,7 +64,7 @@ void genRandTheoryExper(number *arr_theory,
   }
 }
 
-TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
+TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
 
   // real elem_state_p (np,np,nlevel,timelevels,nelemd)
@@ -94,6 +102,11 @@ TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
       recover_q_f90(nets, nete, kmass, n0, numelems,
                     p_theory);
       recover_q_c(nets, nete, kmass, n0, numelems, p_exper);
+      for(int j = 0; j < p_len; j++) {
+        REQUIRE(p_exper[j] == p_theory[j]);
+      }
+      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
+      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
       for(int j = 0; j < p_len; j++) {
         REQUIRE(p_exper[j] == p_theory[j]);
       }
