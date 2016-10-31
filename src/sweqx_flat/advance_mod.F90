@@ -60,8 +60,6 @@ contains
           endif
         enddo
       enddo
-    else
-      call exit(1)
     endif
   end subroutine recover_q_f90
 
