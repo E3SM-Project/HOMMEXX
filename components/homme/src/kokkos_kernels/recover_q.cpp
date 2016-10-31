@@ -165,11 +165,13 @@ void loop5_c(const int &nets, const int &nete,
         KOKKOS_LAMBDA(int k, int ie) {
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
-              ptens(i, j, k, ie - nets + 1) *=
-                  -nu_s / spheremp(i, j, ie);
+              ptens(i, j, k, ie - nets + 1) =
+                  -nu_s * ptens(i, j, k, ie - nets + 1) /
+                  spheremp(i, j, ie);
               for(int h = 0; h < dim; h++) {
-                vtens(i, j, h, k, ie - nets + 1) *=
-                    -nu / spheremp(i, j, ie);
+                vtens(i, j, h, k, ie - nets + 1) =
+                    -nu * vtens(i, j, h, k, ie - nets + 1) /
+                    spheremp(i, j, ie);
               }
             }
           }
