@@ -31,11 +31,26 @@ void loop3_c(const int &nets, const int &nete,
 
 void loop5_f90(const int &nets, const int &nete,
                const int &nelems, real *const &spheremp,
-							 real *&ptens, real *&vtens);
+	       real *&ptens, real *&vtens);
 
 void loop5_c(const int &nets, const int &nete,
              const int &nelems, real *const &spheremp,
-						 real *&ptens, real *&vtens);
+	     real *&ptens, real *&vtens);
+}
+
+template <typename rngAlg, typename dist, typename number>
+void genRandArray(number *arr, int arr_len, rngAlg &engine, dist &pdf) {
+  for(int i = 0; i < arr_len; i++) {
+    arr[i] = pdf(engine);
+  }
+}
+
+template <typename rngAlg, typename dist, typename number>
+void genRandTheoryExper(number *arr_theory, number *arr_exper, int arr_len, rngAlg &engine, dist &pdf) {
+  for(int i = 0; i < arr_len; i++) {
+    arr_theory[i] = pdf(engine);
+    arr_exper[i] = arr_theory[i];
+  }
 }
 
 TEST_CASE("recover_q", "advance_nonstag_rk_cxx") {
