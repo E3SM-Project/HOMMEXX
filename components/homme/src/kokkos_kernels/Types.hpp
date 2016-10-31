@@ -19,4 +19,13 @@ using PTens = Kokkos::View<real ****, Kokkos::LayoutLeft,
 using VTens = Kokkos::View<real *****, Kokkos::LayoutLeft,
                            Kokkos::MemoryUnmanaged>;
 
+using D_noie = Kokkos::View<real ****, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
+using SphereMP_noie = Kokkos::View<real **, Kokkos::LayoutLeft,
+				   Kokkos::MemoryUnmanaged>;
+using PTens_noie = Kokkos::View<real ***, Kokkos::LayoutLeft,
+                           Kokkos::MemoryUnmanaged>;
+using VTens_noie = Kokkos::View<real ****, Kokkos::LayoutLeft,
+                           Kokkos::MemoryUnmanaged>;
+
 }  // namespace Homme
