@@ -109,6 +109,8 @@ contains
     enddo
   end subroutine loop3_f90
 
+  ! TODO: Give this a better name
+  !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
   subroutine loop5_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_f_pointer
     use dimensions_mod, only: np, nlev
