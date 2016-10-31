@@ -16,7 +16,12 @@
 
 #define FORTRAN_C_FUNC(fname) __asm__(QUOTE(fname))
 
+#ifdef __INTEL_COMPILER
+#define FORTRAN_VAR(modname, vname) \
+  __asm__(QUOTE(CAT(CAT(CAT(modname, _mp_), vname), _)))
+#elif defined(__GNUG__)
 #define FORTRAN_VAR(modname, vname) \
   __asm__(QUOTE(CAT(CAT(CAT(__, modname), _MOD_), vname)))
+#endif
 
 #endif
