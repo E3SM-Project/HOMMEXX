@@ -4,6 +4,8 @@
 #include <dimensions.hpp>
 #include <kinds.hpp>
 
+#include <fortran_binding.hpp>
+
 #include <iostream>
 #include <stdexcept>
 
@@ -125,6 +127,51 @@ void loop3_c(const int &nets, const int &nete,
                 v(i, j, h, k, n0 - 1, ie) =
                     d(i, j, h, 0, ie) * v1 +
                     d(i, j, h, 1, ie) * v2;
+              }
+            }
+          }
+        });
+  } catch(std::exception &e) {
+    std::cout << e.what() << std::endl;
+    std::abort();
+  } catch(...) {
+    std::cout << "Unknown exception" << std::endl;
+    std::abort();
+  }
+}
+
+/* TODO: Deal with Fortran's globals in a better way */
+extern real nu FORTRAN_VAR(control_mod, nu);
+extern real nu_s FORTRAN_VAR(control_mod, nu_s);
+
+/* TODO: Give this a better name */
+void loop5_c(const int &nets, const int &nete,
+             const int &nelems, real *const &spheremp_ptr,
+             real *&ptens_ptr, real *&vtens_ptr) noexcept {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          2, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  constexpr const int dim = 2;
+
+  SphereMP spheremp(spheremp_ptr, np, np, nelems);
+  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
+  VTens vtens(vtens_ptr, np, np, dim, nlev,
+              nete - nets + 1);
+  try {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
+          for(int j = 0; j < np; j++) {
+            for(int i = 0; i < np; i++) {
+              ptens(i, j, k, ie - nets + 1) =
+                  -nu_s * ptens(i, j, k, ie - nets + 1) /
+                  spheremp(i, j, ie);
+              for(int h = 0; h < dim; h++) {
+                vtens(i, j, h, k, ie - nets + 1) =
+                    -nu * vtens(i, j, h, k, ie - nets + 1) /
+                    spheremp(i, j, ie);
               }
             }
           }
