@@ -185,6 +185,7 @@ void loop5_c(const int &nets, const int &nete,
   }
 }
 
+/* TODO: Give this a better name */
 void loop6_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
              const int &numelems, real *&p_ptr) {
@@ -205,6 +206,42 @@ void loop6_c(const int &nets, const int &nete,
                     p(i, j, kmass - 1, n0 - 1, ie);
               }
             }
+          }
+        });
+  } catch(std::exception &e) {
+    std::cout << e.what() << std::endl;
+    std::abort();
+  } catch(...) {
+    std::cout << "Unknown exception" << std::endl;
+    std::abort();
+  }
+}
+
+/* TODO: Give this a better name */
+void loop8_c(real *const &rspheremp_ptr,
+             real *const &dinv_ptr, real *&ptens_ptr,
+             real *&vtens_ptr) noexcept {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          3, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  constexpr const int dim = 2;
+
+  SphereMP_noie rspheremp(rspheremp_ptr, np, np);
+  D_noie dinv(dinv_ptr, np, np, dim, dim);
+  PTens_noie ptens(ptens_ptr, np, np, nlev);
+  VTens_noie vtens(vtens_ptr, np, np, dim, nlev);
+  try {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, 0, 0}, {np, np, nlev}, {1, 1, 1}),
+        KOKKOS_LAMBDA(int i, int j, int k) {
+          ptens(i, j, k) *= rspheremp(i, j);
+          real vtens1 = rspheremp(i, j) * vtens(i, j, 0, k);
+          real vtens2 = rspheremp(i, j) * vtens(i, j, 1, k);
+          for(int h = 0; h < dim; h++) {
+            vtens(i, j, h, k) = dinv(i, j, h, 0) * vtens1 +
+                                dinv(i, j, h, 1) * vtens2;
           }
         });
   } catch(std::exception &e) {

@@ -168,17 +168,50 @@ contains
     enddo
   end subroutine loop6_f90
 
+  subroutine loop8_f90(rspheremp_ptr, Dinv_ptr, &
+                       ptens_ptr, vtens_ptr) bind(c)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+
+    type(c_ptr), intent(in) :: rspheremp_ptr, Dinv_ptr, ptens_ptr, vtens_ptr
+
+    integer :: k, j, i, h
+    real (kind=real_kind) :: vtens1, vtens2
+    real (kind=real_kind), pointer :: rspheremp(:, :), Dinv(:, :, :, :), &
+                                      ptens(:, :, :), vtens(:, :, :, :)
+    call c_f_pointer(rspheremp_ptr, rspheremp, [np, np])
+    call c_f_pointer(Dinv_ptr, Dinv, [np, np, 2, 2])
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev])
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          ptens(i,j,k) = rspheremp(i,j)*ptens(i,j,k)
+          vtens1=rspheremp(i,j)*vtens(i,j,1,k)
+          vtens2=rspheremp(i,j)*vtens(i,j,2,k)
+
+          do h=1,2
+            ! lat-lon -> contra
+            vtens(i,j,h,k) = Dinv(i,j,h,1)*vtens1 + Dinv(i,j,h,2)*vtens2
+          enddo
+        end do
+      end do
+    end do
+  end subroutine loop8_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define LOOP3 loop3_f90
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
+#define LOOP8 loop8_f90
 #else
 #define RECOVER_Q recover_q_c
 #define LOOP3 loop3_c
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
+#define LOOP8 loop8_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -344,7 +377,7 @@ contains
 
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev, nelemd
-    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D, elem_Dinv, elem_spheremp
+    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D, elem_Dinv, elem_spheremp, elem_rspheremp
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only: EdgeBuffer_t
     use filter_mod,     only: filter_t
@@ -431,8 +464,8 @@ contains
     real (kind=real_kind) ::  nu_ratio1_bh,nu_ratio2_bh
     logical var_coef1_bh
 
-    ! Temporary C pointer buffers for recoverq and loop 3
-    type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3
+    ! Temporary C pointer buffers for recoverq and loops
+    type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -758,19 +791,11 @@ contains
           ! ===========================================================
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
           call t_startf('timer_advancerk_loop8')
-          do k=1,nlev
-             do j=1,np
-                do i=1,np
-                   ptens(i,j,k,ie) = rspheremp(i,j)*ptens(i,j,k,ie)
-                   vtens1=rspheremp(i,j)*vtens(i,j,1,k,ie)
-                   vtens2=rspheremp(i,j)*vtens(i,j,2,k,ie)
-
-                   ! lat-lon -> contra
-                   vtens(i,j,1,k,ie) = elem(ie)%Dinv(i,j,1,1)*vtens1 + elem(ie)%Dinv(i,j,1,2)*vtens2
-                   vtens(i,j,2,k,ie) = elem(ie)%Dinv(i,j,2,1)*vtens1 + elem(ie)%Dinv(i,j,2,2)*vtens2
-                end do
-             end do
-          end do
+          ptr_buf1 = c_loc(elem_rspheremp(1,1,ie))
+          ptr_buf2 = c_loc(elem_Dinv(1,1,1,1,ie))
+          ptr_buf3 = c_loc(ptens(1,1,1,ie))
+          ptr_buf4 = c_loc(vtens(1,1,1,1,ie))
+          call LOOP8(ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
           call t_stopf('timer_advancerk_loop8')
 
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
