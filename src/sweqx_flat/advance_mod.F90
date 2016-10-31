@@ -67,6 +67,7 @@ contains
 
   ! TODO: Give this a better name
   !DEC$ ATTRIBUTES NOINLINE :: loop3_f90
+  !og : name it 'contra2latlon'
   subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev, nelemd
@@ -272,7 +273,8 @@ contains
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev, nelemd
     use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D
-    use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack
+    use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack, &
+                              initEdgeBuffer, edgevunpackmax, edgevunpackmin, freeedgebuffer
     use edgetype_mod,   only: EdgeBuffer_t
     use filter_mod,     only: filter_t
     use hybrid_mod,     only: hybrid_t
@@ -358,6 +360,15 @@ contains
     real (kind=real_kind) ::  nu_ratio1_bh,nu_ratio2_bh
     logical var_coef1_bh
 
+!local for neighbor_minmax
+!real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
+!real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
+real (kind=real_kind) :: Qmin_mm(np,np,nlev)
+real (kind=real_kind) :: Qmax_mm(np,np,nlev)
+type (EdgeBuffer_t)          :: edgebuf_mm
+!integer, optional :: kmass
+
+
     ! Temporary C pointer buffers for recoverq and loop 3
     type (c_ptr) :: ptr_buf1, ptr_buf2
 
@@ -415,7 +426,90 @@ contains
 !group optimal based on iteration
 !IKT, 10/21/16: this requires communications
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
-          call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
+! og 10/30: Expand this call
+!call neighbor_minmax(elem,hybrid,edge3,     nets,nete,n0,pmin,     pmax,                     kmass=kmass)
+!neighbor_minmax     (elem,hybrid,edgeMinMax,nets,nete,nt,min_neigh,max_neigh,min_var,max_var,kmass)
+!
+! compute Q min&max over the element and all its neighbors
+!
+!
+!nt=t0
+!edgeMinMAx=edge3
+!real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
+!real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
+!real (kind=real_kind) :: Qmin_mm(np,np,nlev)
+!real (kind=real_kind) :: Qmax_mm(np,np,nlev)
+!type (EdgeBuffer_t)          :: edgebuf_mm
+!integer, optional :: kmass
+!type (EdgeDescriptor_t), allocatable :: desc_mm(:)
+
+
+  if(kmass.ne.-1)then
+!the check if kmass is a valid number is done in sweq_mod
+    do k=1,nlev
+      if(k.ne.kmass)then
+         do ie=nets,nete
+            elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)/&
+            elem(ie)%state%p(:,:,kmass,n0)
+         enddo
+      endif
+    enddo
+  endif
+
+    ! create edge buffer for 3 fields
+    call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
+
+    ! compute p min, max
+    do ie=nets,nete
+       do k=1,nlev
+          Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
+          Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
+       enddo
+       call edgeVpack(edgebuf_mm,Qmax_mm,nlev,0,ie)
+       call edgeVpack(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
+    enddo
+
+    call t_startf('nmm_bexchV')
+    call bndry_exchangeV(hybrid,edgebuf_mm)
+    call t_stopf('nmm_bexchV')
+
+    do ie=nets,nete
+       do k=1,nlev
+          Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
+          Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
+       enddo
+
+! WARNING - edgeVunpackMin/Max take second argument as input/ouput
+       call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
+       call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
+       do k=1,nlev
+          pmax(k,ie)=maxval(Qmax_mm(:,:,k))
+          pmin(k,ie)=minval(Qmin_mm(:,:,k))
+       enddo
+
+    end do
+
+    call FreeEdgeBuffer(edgebuf_mm)
+
+  if(kmass.ne.-1)then
+    do k=1,nlev
+       if(k.ne.kmass)then
+          do ie=nets,nete
+             elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)*&
+             elem(ie)%state%p(:,:,kmass,n0)
+          enddo
+       endif
+    enddo
+  endif
+!end subroutine neighb_minmax
+
+
+
+
+
+
+
+
        endif
 
 
