@@ -40,6 +40,16 @@ module advance_mod
        type(c_ptr), intent(in) :: vtens_ptr
      end subroutine loop5_c
 
+     subroutine loop6_c(nets, nete, kmass, n0, numelems, p) bind(c)
+       use iso_c_binding,  only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: kmass
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: numelems
+       type(c_ptr) :: p
+     end subroutine loop6_c
+
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
@@ -137,15 +147,38 @@ contains
     enddo
   end subroutine loop5_f90
 
+  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  subroutine loop6_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use element_mod, only: timelevels
+    integer, intent(in) :: nets, nete, kmass, n0, numelems
+    type(c_ptr), intent(in) :: p_ptr
+
+    integer :: ie, k
+    real (kind=real_kind), pointer :: p(:, :, :, :, :)
+    call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,numelems])
+
+    do ie=nets,nete
+      do k=1,nlev
+        if(k.ne.kmass)then
+	  p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
+        endif
+      enddo
+    enddo
+  end subroutine loop6_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define LOOP3 loop3_f90
 #define LOOP5 loop5_f90
+#define LOOP6 loop6_f90
 #else
 #define RECOVER_Q recover_q_c
 #define LOOP3 loop3_c
 #define LOOP5 loop5_c
+#define LOOP6 loop6_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -586,14 +619,8 @@ contains
 	!we do not apply viscosity to mass field
 	ptens(:,:,kmass,:)=0.0d0
         call t_startf('timer_advancerk_loop6')
-	do ie=nets,nete
-	    do k=1,nlev
-	      if(k.ne.kmass)then
-		elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)*&
-					    elem(ie)%state%p(:,:,kmass,n0)
-	      endif
-	    enddo
-	enddo
+        ptr_buf1 = c_loc(elem_state_p)
+        call LOOP6(nets, nete, kmass, n0, nelemd, ptr_buf1)
         call t_stopf('timer_advancerk_loop6')
 	endif
 
