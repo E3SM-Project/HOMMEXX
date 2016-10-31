@@ -1,9 +1,9 @@
 
 #include <catch/catch.hpp>
 
+#include <cmath>
 #include <iostream>
 #include <random>
-#include <cmath>
 
 #include <dimensions.hpp>
 #include <fortran_binding.hpp>
@@ -31,22 +31,25 @@ void loop3_c(const int &nets, const int &nete,
 
 void loop5_f90(const int &nets, const int &nete,
                const int &nelems, real *const &spheremp,
-	       real *&ptens, real *&vtens);
+               real *&ptens, real *&vtens);
 
 void loop5_c(const int &nets, const int &nete,
              const int &nelems, real *const &spheremp,
-	     real *&ptens, real *&vtens);
+             real *&ptens, real *&vtens);
 }
 
 template <typename rngAlg, typename dist, typename number>
-void genRandArray(number *arr, int arr_len, rngAlg &engine, dist &pdf) {
+void genRandArray(number *arr, int arr_len, rngAlg &engine,
+                  dist &pdf) {
   for(int i = 0; i < arr_len; i++) {
     arr[i] = pdf(engine);
   }
 }
 
 template <typename rngAlg, typename dist, typename number>
-void genRandTheoryExper(number *arr_theory, number *arr_exper, int arr_len, rngAlg &engine, dist &pdf) {
+void genRandTheoryExper(number *arr_theory,
+                        number *arr_exper, int arr_len,
+                        rngAlg &engine, dist &pdf) {
   for(int i = 0; i < arr_len; i++) {
     arr_theory[i] = pdf(engine);
     arr_exper[i] = arr_theory[i];
@@ -153,8 +156,8 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
   constexpr const int dim = 2;
 
-	constexpr const int spheremp_len = np * np * numelems;
-	real *spheremp = new real[spheremp_len];
+  constexpr const int spheremp_len = np * np * numelems;
+  real *spheremp = new real[spheremp_len];
 
   constexpr const int numRandTests = 10;
 
@@ -168,49 +171,54 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
       const int nete = (std::uniform_int_distribution<int>(
           nets + 1, numelems))(engine);
 
-			// real ptens (np,np,nlev,nets:nete)
-			// real vtens (np,np,2,nlev,nets:nete)
-			const int ptens_len =
-				np * np * nlev * (nete - nets + 1);
-			real *ptens_theory = new real[ptens_len];
-			real *ptens_exper = new real[ptens_len];
-			const int vtens_len =
-				np * np * dim * nlev * (nete - nets + 1);
-			real *vtens_theory = new real[vtens_len];
-			real *vtens_exper = new real[vtens_len];
+      // real ptens (np,np,nlev,nets:nete)
+      // real vtens (np,np,2,nlev,nets:nete)
+      const int ptens_len =
+          np * np * nlev * (nete - nets + 1);
+      real *ptens_theory = new real[ptens_len];
+      real *ptens_exper = new real[ptens_len];
+      const int vtens_len =
+          np * np * dim * nlev * (nete - nets + 1);
+      real *vtens_theory = new real[vtens_len];
+      real *vtens_exper = new real[vtens_len];
 
-      std::uniform_real_distribution<real> ptens_dist(0, 1.0);
+      std::uniform_real_distribution<real> ptens_dist(0,
+                                                      1.0);
       for(int j = 0; j < ptens_len; j++) {
         ptens_theory[j] = ptens_dist(engine);
         ptens_exper[j] = ptens_theory[j];
       }
-      std::uniform_real_distribution<real> vtens_dist(0, 1.0);
+      std::uniform_real_distribution<real> vtens_dist(0,
+                                                      1.0);
       for(int j = 0; j < vtens_len; j++) {
         vtens_theory[j] = vtens_dist(engine);
         vtens_exper[j] = vtens_theory[j];
       }
 
-      std::uniform_real_distribution<real> spheremp_dist(0, 1.0);
+      std::uniform_real_distribution<real> spheremp_dist(
+          0, 1.0);
       for(int j = 0; j < spheremp_len; j++) {
         spheremp[j] = spheremp_dist(engine);
       }
 
-      loop5_f90(nets, nete, numelems, spheremp, ptens_theory, vtens_theory);
-      loop5_c(nets, nete, numelems, spheremp, ptens_exper, vtens_exper);
+      loop5_f90(nets, nete, numelems, spheremp,
+                ptens_theory, vtens_theory);
+      loop5_c(nets, nete, numelems, spheremp, ptens_exper,
+              vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
-				if(ptens_exper[j] != ptens_theory[j]) {
-					std::cout << ptens_exper[j] - ptens_theory[j];
-				}
+        if(ptens_exper[j] != ptens_theory[j]) {
+          std::cout << ptens_exper[j] - ptens_theory[j];
+        }
         REQUIRE(ptens_exper[j] - ptens_theory[j] == 0.0);
-			}
+      }
       for(int j = 0; j < vtens_len; j++) {
         REQUIRE(vtens_exper[j] - vtens_theory[j] == 0.0);
       }
 
-			delete[] ptens_theory;
-			delete[] ptens_exper;
-			delete[] vtens_theory;
-			delete[] vtens_exper;
+      delete[] ptens_theory;
+      delete[] ptens_exper;
+      delete[] vtens_theory;
+      delete[] vtens_exper;
     }
   }
   delete[] spheremp;
