@@ -5,6 +5,8 @@
 
 namespace Homme {
 
+using Alpha = Kokkos::View<real *, Kokkos::LayoutLeft,
+			   Kokkos::MemoryUnmanaged>;
 using D = Kokkos::View<real *****, Kokkos::LayoutLeft,
                        Kokkos::MemoryUnmanaged>;
 using P = Kokkos::View<real *****, Kokkos::LayoutLeft,
@@ -20,6 +22,10 @@ using VTens = Kokkos::View<real *****, Kokkos::LayoutLeft,
                            Kokkos::MemoryUnmanaged>;
 
 using D_noie = Kokkos::View<real ****, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
+using P_noie = Kokkos::View<real ****, Kokkos::LayoutLeft,
+                       Kokkos::MemoryUnmanaged>;
+using V_noie = Kokkos::View<real *****, Kokkos::LayoutLeft,
                        Kokkos::MemoryUnmanaged>;
 using SphereMP_noie = Kokkos::View<real **, Kokkos::LayoutLeft,
 				   Kokkos::MemoryUnmanaged>;

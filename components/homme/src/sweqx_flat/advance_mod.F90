@@ -200,6 +200,44 @@ contains
     end do
   end subroutine loop8_f90
 
+  subroutine loop9_f90(n0, np1, s, rkstages, &
+                       v_ptr, p_ptr, alpha0_ptr, &
+                       alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use element_mod, only: timelevels
+
+    integer, intent(in) :: n0, np1, s, rkstages
+    type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, &
+                              alpha_ptr, ptens_ptr, vtens_ptr
+
+    integer :: k, j, i, h
+    real (kind=real_kind), pointer :: v(:, :, :, :, :), p(:, :, :, :), &
+                                      alpha0(:), alpha(:), &
+                                      ptens(:, :, :), vtens(:, :, :, :)
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels])
+    call c_f_pointer(alpha0_ptr, alpha0, [rkstages])
+    call c_f_pointer(alpha_ptr, alpha, [rkstages])
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev])
+    do k=1,nlev
+      ! ====================================================
+      ! average different timelevels for RK-SSP
+      ! ====================================================
+      do j=1,np
+        do i=1,np
+          do h = 1,2
+            v(i,j,h,k,n0) = alpha0(s)*v(i,j,h,k,np1) &
+              + alpha(s)*vtens(i,j,h,k)
+          end do
+          p(i,j,k,n0) = alpha0(s)*p(i,j,k,np1) &
+            + alpha(s)*ptens(i,j,k)
+        end do
+      end do
+    end do
+  end subroutine loop9_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
@@ -207,12 +245,14 @@ contains
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
 #define LOOP8 loop8_f90
+#define LOOP9 loop9_f90
 #else
 #define RECOVER_Q recover_q_c
 #define LOOP3 loop3_c
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
 #define LOOP8 loop8_c
+#define LOOP9 loop9_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -404,7 +444,7 @@ contains
     implicit none
 
     type (element_t)     , intent(inout), target :: elem(:)
-    type (Rk_t)          , intent(in) :: MyRk
+    type (Rk_t)          , intent(in), target :: MyRk
     type (EdgeBuffer_t)  , intent(in) :: edge2
     type (EdgeBuffer_t)  , intent(inout) :: edge3
 
@@ -475,7 +515,8 @@ contains
     !integer, optional :: kmass
 
     ! Temporary C pointer buffers for recoverq and loops
-    type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4
+    type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, &
+                    ptr_buf4, ptr_buf5, ptr_buf6
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -893,21 +934,15 @@ contains
 
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
           call t_startf('timer_advancerk_loop9')
-          do k=1,nlev
-             ! ====================================================
-             ! average different timelevels for RK-SSP
-             ! ====================================================
-             do j=1,np
-                do i=1,np
-                   elem(ie)%state%v(i,j,1,k,n0) = MyRk%alpha0(s)*elem(ie)%state%v(i,j,1,k,np1) &
-                        + MyRk%alpha(s)*vtens(i,j,1,k,ie)
-                   elem(ie)%state%v(i,j,2,k,n0) = MyRk%alpha0(s)*elem(ie)%state%v(i,j,2,k,np1) &
-                        + MyRk%alpha(s)*vtens(i,j,2,k,ie)
-                   elem(ie)%state%p(i,j,k,n0) = MyRk%alpha0(s)*elem(ie)%state%p(i,j,k,np1)+ &
-                        MyRk%alpha(s)*ptens(i,j,k,ie)
-                end do
-             end do
-          end do
+          ptr_buf1 = c_loc(elem_state_v(1, 1, 1, 1, 1, ie))
+          ptr_buf2 = c_loc(elem_state_p(1, 1, 1, 1, ie))
+          ptr_buf3 = c_loc(MyRk%alpha0)
+          ptr_buf4 = c_loc(MyRk%alpha)
+          ptr_buf5 = c_loc(ptens(1,1,1,ie))
+          ptr_buf6 = c_loc(vtens(1,1,1,1,ie))
+          call LOOP9(n0, np1, s, MyRk%stages, &
+                     ptr_buf1, ptr_buf2, ptr_buf3, &
+                     ptr_buf4, ptr_buf5, ptr_buf6)
           call t_stopf('timer_advancerk_loop9')
        end do
 

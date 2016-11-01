@@ -253,6 +253,47 @@ void loop8_c(real *const &rspheremp_ptr,
   }
 }
 
+void loop9_c(const int &n0, const int &np1, const int &s,
+             const int &rkstages, real *&v_ptr,
+             real *&p_ptr, real *const &alpha0_ptr,
+             real *const &alpha_ptr, real *const &ptens_ptr,
+             real *const &vtens_ptr) {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          3, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  constexpr const int dim = 2;
+
+  V_noie v(v_ptr, np, np, dim, nlev, timelevels);
+  P_noie p(p_ptr, np, np, nlev, timelevels);
+  Alpha alpha0(alpha0_ptr, rkstages);
+  Alpha alpha(alpha_ptr, rkstages);
+  PTens_noie ptens(ptens_ptr, np, np, nlev);
+  VTens_noie vtens(vtens_ptr, np, np, dim, nlev);
+
+  try {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, 0, 0}, {np, np, nlev}, {1, 1, 1}),
+        KOKKOS_LAMBDA(int i, int j, int k) {
+          for(int h = 0; h < dim; h++) {
+            v(i, j, h, k, n0 - 1) =
+                alpha0(s - 1) * v(i, j, h, k, np1 - 1) +
+                alpha(s - 1) * vtens(i, j, h, k);
+          }
+          p(i, j, k, n0 - 1) =
+              alpha0(s - 1) * p(i, j, k, np1 - 1) +
+              alpha(s - 1) * ptens(i, j, k);
+        });
+  } catch(std::exception &e) {
+    std::cout << e.what() << std::endl;
+    std::abort();
+  } catch(...) {
+    std::cout << "Unknown exception" << std::endl;
+    std::abort();
+  }
+}
+
 #endif
 }
 }  // namespace Homme
