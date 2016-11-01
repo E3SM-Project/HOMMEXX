@@ -208,10 +208,13 @@ contains
     use element_mod, only: timelevels
 
     integer, intent(in) :: n0, np1, s, rkstages
-    type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, alpha_ptr, ptens_ptr, vtens_ptr
+    type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, &
+                              alpha_ptr, ptens_ptr, vtens_ptr
 
+    print *, "rkstages", rkstages
     integer :: k, j, i, h
-    real (kind=real_kind), pointer :: v(:, :, :, :, :), p(:, :, :, :), alpha0(:), alpha(:), &
+    real (kind=real_kind), pointer :: v(:, :, :, :, :), p(:, :, :, :), &
+                                      alpha0(:), alpha(:), &
                                       ptens(:, :, :), vtens(:, :, :, :)
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels])
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels])
