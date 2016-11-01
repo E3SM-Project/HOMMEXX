@@ -276,7 +276,7 @@ void loop9_c(const int &n0, const int &np1, const int &s,
     Kokkos::Experimental::md_parallel_for(
         RangePolicy({0, 0, 0}, {np, np, nlev}, {1, 1, 1}),
         KOKKOS_LAMBDA(int i, int j, int k) {
-          for(int h = 0; h < 1; h++) {
+          for(int h = 0; h < dim; h++) {
             v(i, j, h, k, n0 - 1) =
                 alpha0(s - 1) * v(i, j, h, k, np1 - 1) +
                 alpha(s - 1) * vtens(i, j, h, k);

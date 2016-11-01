@@ -52,6 +52,19 @@ void loop8_f90(real *const &rspheremp_ptr,
 void loop8_c(real *const &rspheremp_ptr,
              real *const &dinv_ptr, real *&ptens_ptr,
              real *&vtens_ptr);
+
+void loop9_f90(const int &n0, const int &np1, const int &s,
+               const int &rkstages, real *&v_ptr,
+               real *&p_ptr, real *const &alpha0_ptr,
+               real *const &alpha_ptr,
+               real *const &ptens_ptr,
+               real *const &vtens_ptr);
+
+void loop9_c(const int &n0, const int &np1, const int &s,
+             const int &rkstages, real *&v_ptr,
+             real *&p_ptr, real *const &alpha0_ptr,
+             real *const &alpha_ptr, real *const &ptens_ptr,
+             real *const &vtens_ptr);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -313,4 +326,77 @@ TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
   delete[] ptens_exper;
   delete[] vtens_theory;
   delete[] vtens_exper;
+}
+
+TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
+  constexpr const int dim = 2;
+  constexpr const int rkstages = 5;
+  real *alpha0 = new real[rkstages];
+  real *alpha = new real[rkstages];
+  constexpr const int ptens_len = np * np * nlev;
+  real *ptens = new real[ptens_len];
+  constexpr const int vtens_len = np * np * dim * nlev;
+  real *vtens = new real[vtens_len];
+  constexpr const int p_len = np * np * nlev * timelevels;
+  real *p_theory = new real[p_len];
+  real *p_exper = new real[p_len];
+  constexpr const int v_len =
+      np * np * dim * nlev * timelevels;
+  real *v_theory = new real[v_len];
+  real *v_exper = new real[v_len];
+
+  constexpr const int numRandTests = 10;
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      genRandArray(
+          alpha0, rkstages, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          alpha, rkstages, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          ptens, ptens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          vtens, vtens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          p_theory, p_exper, p_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          v_theory, v_exper, v_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+
+      const int n0 = (std::uniform_int_distribution<int>(
+          1, timelevels))(engine);
+      const int np1 = (std::uniform_int_distribution<int>(
+          1, timelevels))(engine);
+      const int s = (std::uniform_int_distribution<int>(
+          1, rkstages))(engine);
+
+      loop9_f90(n0, np1, s, rkstages, v_theory, p_theory,
+                alpha0, alpha, ptens, vtens);
+      loop9_c(n0, np1, s, rkstages, v_exper, p_exper,
+              alpha0, alpha, ptens, vtens);
+
+      for(int j = 0; j < p_len; j++) {
+        REQUIRE(p_exper[j] == p_theory[j]);
+      }
+      for(int j = 0; j < v_len; j++) {
+        REQUIRE(v_exper[j] == v_theory[j]);
+      }
+    }
+  }
+
+  delete[] alpha0;
+  delete[] alpha;
+  delete[] ptens;
+  delete[] vtens;
+  delete[] p_theory;
+  delete[] p_exper;
+  delete[] v_theory;
+  delete[] v_exper;
 }
