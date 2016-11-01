@@ -50,6 +50,30 @@ module advance_mod
        type(c_ptr) :: p
      end subroutine loop6_c
 
+     subroutine loop8_c(rspheremp_ptr, Dinv_ptr, &
+                        ptens_ptr, vtens_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_f_pointer
+       type(c_ptr) :: rspheremp_ptr
+       type(c_ptr) :: Dinv_ptr
+       type(c_ptr) :: ptens_ptr
+       type(c_ptr) :: vtens_ptr
+     end subroutine loop8_c
+
+     subroutine loop9_c(n0, np1, s, rkstages, &
+                          v_ptr, p_ptr, alpha0_ptr, &
+                          alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_f_pointer
+       integer :: n0
+       integer :: np1
+       integer :: s
+       integer :: rkstages
+       type(c_ptr) :: v_ptr
+       type(c_ptr) :: p_ptr
+       type(c_ptr) :: alpha0_ptr
+       type(c_ptr) :: alpha_ptr
+       type(c_ptr) :: ptens_ptr
+       type(c_ptr) :: vtens_ptr
+     end subroutine loop9_c
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
