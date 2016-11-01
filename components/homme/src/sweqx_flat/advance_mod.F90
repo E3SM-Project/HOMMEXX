@@ -211,7 +211,6 @@ contains
     type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, &
                               alpha_ptr, ptens_ptr, vtens_ptr
 
-    print *, "rkstages", rkstages
     integer :: k, j, i, h
     real (kind=real_kind), pointer :: v(:, :, :, :, :), p(:, :, :, :), &
                                       alpha0(:), alpha(:), &
