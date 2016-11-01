@@ -467,12 +467,9 @@ contains
     logical var_coef1_bh
 
     !local for neighbor_minmax
-    !real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
-    !real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
     real (kind=real_kind) :: Qmin_mm(np,np,nlev)
     real (kind=real_kind) :: Qmax_mm(np,np,nlev)
     type (EdgeBuffer_t)          :: edgebuf_mm
-    !integer, optional :: kmass
 
     ! Temporary C pointer buffers for recoverq and loops
     type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4
@@ -531,35 +528,12 @@ contains
 !group optimal based on iteration
 !IKT, 10/21/16: this requires communications
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
-! og 10/30: Expand this call
-!call neighbor_minmax(elem,hybrid,edge3,     nets,nete,n0,pmin,     pmax,                     kmass=kmass)
-!neighbor_minmax     (elem,hybrid,edgeMinMax,nets,nete,nt,min_neigh,max_neigh,min_var,max_var,kmass)
-!
-! compute Q min&max over the element and all its neighbors
-!
-!
-!nt=t0
-!edgeMinMAx=edge3
-!real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
-!real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
-!real (kind=real_kind) :: Qmin_mm(np,np,nlev)
-!real (kind=real_kind) :: Qmax_mm(np,np,nlev)
-!type (EdgeBuffer_t)          :: edgebuf_mm
-!integer, optional :: kmass
-!type (EdgeDescriptor_t), allocatable :: desc_mm(:)
+!call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
 
-
-  if(kmass.ne.-1)then
-!the check if kmass is a valid number is done in sweq_mod
-    do k=1,nlev
-      if(k.ne.kmass)then
-         do ie=nets,nete
-            elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)/&
-            elem(ie)%state%p(:,:,kmass,n0)
-         enddo
-      endif
-    enddo
-  endif
+       call t_startf('timer_advancerk_minmax_loop1')
+       ptr_buf1 = c_loc(elem_state_p)
+       call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
+       call t_stopf('timer_advancerk_minmax_loop2')
 
     ! create edge buffer for 3 fields
     call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
@@ -607,15 +581,9 @@ contains
     enddo
   endif
 !end subroutine neighb_minmax
-
-
-
-
-
-
-
-
        endif
+
+
 
 
        if(Debug) print *,'homme: adv.._rk 1'
