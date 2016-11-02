@@ -317,17 +317,18 @@ void loop9_c(const int &nets, const int &nete,
 }
 
 void copy_timelevels_c(const int &nets, const int &nete,
-                 const int &numelems, 
-                 const int &n_src, const int &n_dist,
-                 real *&p_ptr, real *&v_ptr) noexcept {
+                       const int &numelems,
+                       const int &n_src, const int &n_dist,
+                       real *&p_ptr,
+                       real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   constexpr const int dim = 2;
-  //P p(p_ptr, np, np,    nlev, timelevels, nelems);
-  //V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
+  // P p(p_ptr, np, np,    nlev, timelevels, nelems);
+  // V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
   V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
   P p(p_ptr, np, np, nlev, timelevels, numelems);
   try {
@@ -336,21 +337,24 @@ void copy_timelevels_c(const int &nets, const int &nete,
         KOKKOS_LAMBDA(int k, int ie) {
           for(int j = 0; j < np; ++j) {
             for(int i = 0; i < np; ++i) {
-              p(i, j, k, n_dist - 1, ie) = p(i, j, k, n_src - 1, ie);
-              v(i, j, 0, k, n_dist - 1, ie) = v(i, j, 0, k, n_src - 1, ie);
-              v(i, j, 1, k, n_dist - 1, ie) = v(i, j, 1, k, n_src - 1, ie);
+              p(i, j, k, n_dist - 1, ie) =
+                  p(i, j, k, n_src - 1, ie);
+              v(i, j, 0, k, n_dist - 1, ie) =
+                  v(i, j, 0, k, n_src - 1, ie);
+              v(i, j, 1, k, n_dist - 1, ie) =
+                  v(i, j, 1, k, n_src - 1, ie);
             }
-          } 
-    });
+          }
+        });
   } catch(std::exception &e) {
     std::cout << e.what() << std::endl;
     std::abort();
   } catch(...) {
-    std::cout << "Unknown exception in copy_timelevels_c" << std::endl;
+    std::cout << "Unknown exception in copy_timelevels_c"
+              << std::endl;
     std::abort();
-  } 
+  }
 }
-
 
 #endif
 }
