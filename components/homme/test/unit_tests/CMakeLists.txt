@@ -27,4 +27,6 @@ IF(${usecuda})
   TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${TRILINOS_INSTALL_DIR}/include/Cuda")
 ENDIF()
 
+ADD_DEPENDENCIES(${targetname} Trilinos)
+
 endmacro(cxx_unit_test)
