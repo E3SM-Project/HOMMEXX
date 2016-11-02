@@ -62,6 +62,19 @@ module advance_mod
        type(c_ptr) :: vtens_ptr
      end subroutine loop8_c
 
+     subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
+                        p_ptr, v_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: nt_src
+       integer (kind=c_int) :: nt_dest
+       integer (kind=c_int) :: nelems
+       type(c_ptr) :: v_ptr
+       type(c_ptr) :: p_ptr
+     end subroutine copy_timelevels_c
+
+
      subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
                         v_ptr, p_ptr, alpha0_ptr, &
                         alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
@@ -232,7 +245,47 @@ contains
     end do
   end subroutine loop8_f90
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  !DEC$ ATTRIBUTES NOINLINE :: copy_timelevels_f90
+  subroutine copy_timelevels_f90(nets, nete, nelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use control_mod, only: nu, nu_s
+    use element_mod, only: timelevels
+    integer, intent(in) :: nets, nete, nelems
+    type(c_ptr), intent(in) :: p_ptr, v_ptr
+    integer, intent(in) :: nt_src, nt_dest
+
+    integer :: ie, k
+    real (kind=real_kind), pointer :: p(:, :, :, :, :), v(:, :, :, :, :, :)
+    ! real (kind=real_kind), dimension(np,np,2,nlev,tl,nets:nete)  :: v
+    ! real (kind=real_kind), dimension(np,np,nlev,tl,nets:nete) :: p
+    ! TODO: Find out if the index base of an array can be changed
+    ! without doing the computation by hand
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nete - nets + 1])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nete - nets + 1])
+    do ie=nets,nete
+      do k=1,nlev
+        p(:,:,  k, nt_dest, ie - nets + 1) = p(:,:,  k, nt_src, ie - nets + 1) 
+        v(:,:,1,k, nt_dest, ie - nets + 1) = v(:,:,1,k, nt_src, ie - nets + 1)
+        v(:,:,2,k, nt_dest, ie - nets + 1) = v(:,:,2,k, nt_src, ie - nets + 1)
+      enddo
+    enddo
+! The original code from advance_nonstag_rk
+!    do ie=nets,nete
+!       do k=1,nlev
+!          do j=1,np
+!             do i=1,np
+!                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
+!                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
+!                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
+!             end do
+!          end do
+!       end do
+!    enddo
+  end subroutine copy_timelevels_f90
+
+
+  !DEC$ ATTRIBUTES NOINLINE :: loop9_f90
   subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
                        v_ptr, p_ptr, alpha0_ptr, &
                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
@@ -273,6 +326,7 @@ contains
       end do
     end do
   end subroutine loop9_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
@@ -280,6 +334,7 @@ contains
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
 #define LOOP8 loop8_f90
+#define COPY_TIMELEVELS copy_timelevels_f90
 #define LOOP9 loop9_f90
 #else
 #define RECOVER_Q recover_q_c
@@ -287,6 +342,7 @@ contains
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
 #define LOOP8 loop8_c
+#define COPY_TIMELEVELS copy_timelevels_c
 #define LOOP9 loop9_c
 #endif
 
@@ -542,12 +598,9 @@ contains
     logical var_coef1_bh
 
     !local for neighbor_minmax
-    !real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
-    !real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
     real (kind=real_kind) :: Qmin_mm(np,np,nlev)
     real (kind=real_kind) :: Qmax_mm(np,np,nlev)
     type (EdgeBuffer_t)          :: edgebuf_mm
-    !integer, optional :: kmass
 
     ! Temporary C pointer buffers for recoverq and loops
     type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, &
@@ -579,17 +632,20 @@ contains
     ! Copy u^n to u^n+1
 !IKT, 10/21/16: local loop 
     call t_startf('timer_advancerk_loop1')
-    do ie=nets,nete
-       do k=1,nlev
-          do j=1,np
-             do i=1,np
-                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
-                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
-                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
-             end do
-          end do
-       end do
-    enddo
+! replace this with copy_timelevels
+       ptr_buf1 = c_loc(elem_state_p)
+       ptr_buf2 = c_loc(elem_state_v)
+       call COPY_TIMELEVELS(nets, nete, nelemd, n0, np1, ptr_buf1, ptr_buf2)
+!       do k=1,nlev
+!          do j=1,np
+!             do i=1,np
+!                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
+!                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
+!                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
+!             end do
+!          end do
+!       end do
+!    enddo
     call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
@@ -607,35 +663,12 @@ contains
 !group optimal based on iteration
 !IKT, 10/21/16: this requires communications
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
-! og 10/30: Expand this call
-!call neighbor_minmax(elem,hybrid,edge3,     nets,nete,n0,pmin,     pmax,                     kmass=kmass)
-!neighbor_minmax     (elem,hybrid,edgeMinMax,nets,nete,nt,min_neigh,max_neigh,min_var,max_var,kmass)
-!
-! compute Q min&max over the element and all its neighbors
-!
-!
-!nt=t0
-!edgeMinMAx=edge3
-!real (kind=real_kind) :: min_neigh(nlev,nets:nete)=pmin
-!real (kind=real_kind) :: max_neigh(nlev,nets:nete)=pmax
-!real (kind=real_kind) :: Qmin_mm(np,np,nlev)
-!real (kind=real_kind) :: Qmax_mm(np,np,nlev)
-!type (EdgeBuffer_t)          :: edgebuf_mm
-!integer, optional :: kmass
-!type (EdgeDescriptor_t), allocatable :: desc_mm(:)
+!call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
 
-
-  if(kmass.ne.-1)then
-!the check if kmass is a valid number is done in sweq_mod
-    do k=1,nlev
-      if(k.ne.kmass)then
-         do ie=nets,nete
-            elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)/&
-            elem(ie)%state%p(:,:,kmass,n0)
-         enddo
-      endif
-    enddo
-  endif
+       call t_startf('timer_advancerk_minmax_loop1')
+       ptr_buf1 = c_loc(elem_state_p)
+       call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
+       call t_stopf('timer_advancerk_minmax_loop2')
 
     ! create edge buffer for 3 fields
     call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
@@ -683,15 +716,9 @@ contains
     enddo
   endif
 !end subroutine neighb_minmax
-
-
-
-
-
-
-
-
        endif
+
+
 
 
        if(Debug) print *,'homme: adv.._rk 1'
