@@ -60,8 +60,6 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
     CMAKE_ARGS ${TRILINOS_CMAKE_ARGS}
   )
 
-  SET(CMAKE_EXE_LINKER_FLAGS -L${TRILINOS_INSTALL_DIR}/lib)
-  INCLUDE_DIRECTORIES(${TRILINOS_INSTALL_DIR}/include)
 ELSE()
   MESSAGE("\nFound Trilinos!  Here are the details: ")
   MESSAGE("   Trilinos_DIR = ${Trilinos_DIR}")
@@ -86,3 +84,12 @@ ELSE()
 ENDIF()
 
 
+macro(link_to_trilinos targetName)
+  TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
+  TARGET_LINK_LIBRARIES(${targetName} dl pthread kokkoscore -L${TRILINOS_INSTALL_DIR}/lib)
+
+  IF(TARGET Trilinos)
+    # In case we are building Trilinos with ExternalProject, we need to compile this after the fact
+    ADD_DEPENDENCIES(${targetName} Trilinos)
+  ENDIF()
+endmacro(link_to_trilinos)
