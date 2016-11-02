@@ -315,9 +315,9 @@ void loop9_c(const int &nets, const int &nete,
     std::abort();
   }
 }
-/*
-void copy_timeleveles_c(const int &nets, const int &nete,
-                 const int &nelems, 
+
+void copy_timelevels_c(const int &nets, const int &nete,
+                 const int &numelems, 
                  const int &n_src, const int &n_dist,
                  real *&p_ptr, real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -325,9 +325,11 @@ void copy_timeleveles_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  P p(p_ptr, np, np,    nlev, timelevels, nelems);
-  P v(p_ptr, np, np, 2, nlev, timelevels, nelems);
-  
+  constexpr const int dim = 2;
+  //P p(p_ptr, np, np,    nlev, timelevels, nelems);
+  //V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
+  V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
+  P p(p_ptr, np, np, nlev, timelevels, numelems);
   try {
     Kokkos::Experimental::md_parallel_for(
         RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -348,7 +350,6 @@ void copy_timeleveles_c(const int &nets, const int &nete,
     std::abort();
   } 
 }
-*/
 
 
 #endif

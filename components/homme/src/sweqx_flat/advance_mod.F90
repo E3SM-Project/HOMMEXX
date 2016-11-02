@@ -62,6 +62,19 @@ module advance_mod
        type(c_ptr) :: vtens_ptr
      end subroutine loop8_c
 
+     subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
+                        p_ptr, v_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: nt_src
+       integer (kind=c_int) :: nt_dest
+       integer (kind=c_int) :: nelems
+       type(c_ptr) :: v_ptr
+       type(c_ptr) :: p_ptr
+     end subroutine copy_timelevels_c
+
+
      subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
                         v_ptr, p_ptr, alpha0_ptr, &
                         alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
@@ -233,12 +246,12 @@ contains
   end subroutine loop8_f90
 
   !DEC$ ATTRIBUTES NOINLINE :: copy_timelevels_f90
-  subroutine copy_timelevels_f90(nets, nete, numelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
+  subroutine copy_timelevels_f90(nets, nete, nelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_f_pointer
     use dimensions_mod, only: np, nlev
     use control_mod, only: nu, nu_s
     use element_mod, only: timelevels
-    integer, intent(in) :: nets, nete, numelems
+    integer, intent(in) :: nets, nete, nelems
     type(c_ptr), intent(in) :: p_ptr, v_ptr
     integer, intent(in) :: nt_src, nt_dest
 
@@ -272,7 +285,7 @@ contains
   end subroutine copy_timelevels_f90
 
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  !DEC$ ATTRIBUTES NOINLINE :: loop9_f90
   subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
                        v_ptr, p_ptr, alpha0_ptr, &
                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
@@ -313,6 +326,7 @@ contains
       end do
     end do
   end subroutine loop9_f90
+
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
@@ -618,20 +632,20 @@ contains
     ! Copy u^n to u^n+1
 !IKT, 10/21/16: local loop 
     call t_startf('timer_advancerk_loop1')
-
 ! replace this with copy_timelevels
-    do ie=nets,nete
-       do k=1,nlev
-          do j=1,np
-             do i=1,np
-                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
-                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
-                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
-             end do
-          end do
-       end do
-    enddo
-
+       ptr_buf1 = c_loc(elem_state_p)
+       ptr_buf2 = c_loc(elem_state_v)
+       call COPY_TIMELEVELS(nets, nete, nelemd, n0, np1, ptr_buf1, ptr_buf2)
+!       do k=1,nlev
+!          do j=1,np
+!             do i=1,np
+!                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
+!                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
+!                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
+!             end do
+!          end do
+!       end do
+!    enddo
     call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
