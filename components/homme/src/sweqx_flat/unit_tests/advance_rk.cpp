@@ -21,13 +21,13 @@ void recover_q_c(const int &nets, const int &nete,
                  const int &kmass, const int &n0,
                  const int &nelems, real *const &p);
 
-void loop3_f90(const int &nets, const int &nete,
-               const int &n0, const int &nelems,
-               real *const &D, real *&v);
+void contra2latlon_f90(const int &nets, const int &nete,
+                       const int &n0, const int &nelems,
+                       real *const &D, real *&v);
 
-void loop3_c(const int &nets, const int &nete,
-             const int &n0, const int &nelems,
-             real *const &D, real *&v);
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &D, real *&v);
 
 void loop5_f90(const int &nets, const int &nete,
                const int &nelems, real *const &spheremp,
@@ -200,8 +200,9 @@ TEST_CASE("loop3", "advance_nonstag_rk_cxx") {
         v_theory[j] = v_dist(engine);
         v_exper[j] = v_theory[j];
       }
-      loop3_f90(nets, nete, n0, numelems, D, v_theory);
-      loop3_c(nets, nete, n0, numelems, D, v_exper);
+      contra2latlon_f90(nets, nete, n0, numelems, D,
+                        v_theory);
+      contra2latlon_c(nets, nete, n0, numelems, D, v_exper);
       for(int j = 0; j < v_len; j++) {
         REQUIRE(v_exper[j] == v_theory[j]);
       }

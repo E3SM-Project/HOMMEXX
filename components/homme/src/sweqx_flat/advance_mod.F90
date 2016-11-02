@@ -20,7 +20,7 @@ module advance_mod
        type(c_ptr) :: p
      end subroutine recover_q_c
 
-     subroutine loop3_c(nets, nete, n0, numelems, D, v) bind(c)
+     subroutine contra2latlon_c(nets, nete, n0, numelems, D, v) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -28,7 +28,7 @@ module advance_mod
        integer (kind=c_int) :: numelems
        type(c_ptr) :: D
        type(c_ptr) :: v
-     end subroutine loop3_c
+     end subroutine contra2latlon_c
 
      subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
@@ -114,10 +114,8 @@ contains
     endif
   end subroutine recover_q_f90
 
-  ! TODO: Give this a better name
-  !DEC$ ATTRIBUTES NOINLINE :: loop3_f90
-  !og : name it 'contra2latlon'
-  subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
+  !DEC$ ATTRIBUTES NOINLINE :: contra2latlon_f90
+  subroutine contra2latlon_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod,    only: timelevels
@@ -148,7 +146,7 @@ contains
         enddo
       enddo
     enddo
-  end subroutine loop3_f90
+  end subroutine contra2latlon_f90
 
   ! TODO: Give this a better name
   !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
@@ -275,18 +273,17 @@ contains
       end do
     end do
   end subroutine loop9_f90
-
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
-#define LOOP3 loop3_f90
+#define CONTRATOLATLON contra2latlon_f90
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
 #define LOOP8 loop8_f90
 #define LOOP9 loop9_f90
 #else
 #define RECOVER_Q recover_q_c
-#define LOOP3 loop3_c
+#define CONTRATOLATLON contra2latlon_c
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
 #define LOOP8 loop8_c
@@ -722,7 +719,7 @@ contains
        call t_startf('timer_advancerk_loop3')
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
-       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop3')
 
         call t_startf('timer_advancerk_biharmonic')
@@ -806,7 +803,7 @@ contains
        call t_startf('timer_advancerk_loop4')
        ptr_buf1 = c_loc(elem_Dinv)
        ptr_buf2 = c_loc(elem_state_v)
-       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop4')
         
 !IKT, 10/21/16: local loop - to refactor 

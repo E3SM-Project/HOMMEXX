@@ -46,10 +46,9 @@ void recover_q_c(const int &nets, const int &nete,
 #define D_IDX(i, j, m, n, ie) \
   (i + np * (j + np * (m + 2 * (n + 2 * ie))))
 
-/* TODO: Give this a better name */
-void loop3_c(const int &nets, const int &nete,
-             const int &n0, const int &nelems,
-             real *const &D, real *&v) noexcept {
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &D, real *&v) noexcept {
   for(int ie = nets - 1; ie < nete; ++ie) {
     for(int k = 0; k < nlev; k++) {
       for(int j = 0; j < np; j++) {
@@ -102,10 +101,10 @@ void recover_q_c(const int &nets, const int &nete,
   }
 }
 
-/* TODO: Give this a better name */
-void loop3_c(const int &nets, const int &nete,
-             const int &n0, const int &nelems,
-             real *const &d_ptr, real *&v_ptr) noexcept {
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &d_ptr,
+                     real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
