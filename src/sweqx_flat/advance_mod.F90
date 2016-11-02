@@ -20,7 +20,7 @@ module advance_mod
        type(c_ptr) :: p
      end subroutine recover_q_c
 
-     subroutine loop3_c(nets, nete, n0, numelems, D, v) bind(c)
+     subroutine contra2latlon_c(nets, nete, n0, numelems, D, v) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -28,7 +28,7 @@ module advance_mod
        integer (kind=c_int) :: numelems
        type(c_ptr) :: D
        type(c_ptr) :: v
-     end subroutine loop3_c
+     end subroutine contra2latlon_c
 
      subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
@@ -50,23 +50,29 @@ module advance_mod
        type(c_ptr) :: p
      end subroutine loop6_c
 
-     subroutine loop8_c(rspheremp_ptr, Dinv_ptr, &
+     subroutine loop8_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                         ptens_ptr, vtens_ptr) bind(c)
-       use iso_c_binding, only: c_ptr, c_f_pointer
+       use iso_c_binding, only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: numelems
        type(c_ptr) :: rspheremp_ptr
        type(c_ptr) :: Dinv_ptr
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
      end subroutine loop8_c
 
-     subroutine loop9_c(n0, np1, s, rkstages, &
-                          v_ptr, p_ptr, alpha0_ptr, &
-                          alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
-       use iso_c_binding, only: c_ptr, c_f_pointer
-       integer :: n0
-       integer :: np1
-       integer :: s
-       integer :: rkstages
+     subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
+                        v_ptr, p_ptr, alpha0_ptr, &
+                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_int
+       integer (kind=c_int) :: nets
+       integer (kind=c_int) :: nete
+       integer (kind=c_int) :: n0
+       integer (kind=c_int) :: np1
+       integer (kind=c_int) :: s
+       integer (kind=c_int) :: rkstages
+       integer (kind=c_int) :: numelems
        type(c_ptr) :: v_ptr
        type(c_ptr) :: p_ptr
        type(c_ptr) :: alpha0_ptr
@@ -108,10 +114,8 @@ contains
     endif
   end subroutine recover_q_f90
 
-  ! TODO: Give this a better name
-  !DEC$ ATTRIBUTES NOINLINE :: loop3_f90
-  !og : name it 'contra2latlon'
-  subroutine loop3_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
+  !DEC$ ATTRIBUTES NOINLINE :: contra2latlon_f90
+  subroutine contra2latlon_f90(nets, nete, n0, numelems, D_ptr, v_ptr) bind(c)
     use iso_c_binding,  only: c_ptr, c_int, c_double, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod,    only: timelevels
@@ -142,15 +146,15 @@ contains
         enddo
       enddo
     enddo
-  end subroutine loop3_f90
+  end subroutine contra2latlon_f90
 
   ! TODO: Give this a better name
   !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
   subroutine loop5_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
-    use iso_c_binding, only: c_ptr, c_f_pointer
+    use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use control_mod, only: nu, nu_s
-    integer, intent(in) :: nets, nete, numelems
+    integer (kind=c_int), intent(in) :: nets, nete, numelems
     type(c_ptr), intent(in) :: spheremp_ptr, ptens_ptr, vtens_ptr
 
     integer :: ie, k
@@ -174,10 +178,10 @@ contains
 
   !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
   subroutine loop6_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
-    use iso_c_binding, only: c_ptr, c_f_pointer
+    use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod, only: timelevels
-    integer, intent(in) :: nets, nete, kmass, n0, numelems
+    integer (kind=c_int), intent(in) :: nets, nete, kmass, n0, numelems
     type(c_ptr), intent(in) :: p_ptr
 
     integer :: ie, k
@@ -193,86 +197,93 @@ contains
     enddo
   end subroutine loop6_f90
 
-  subroutine loop8_f90(rspheremp_ptr, Dinv_ptr, &
+  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  subroutine loop8_f90(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                        ptens_ptr, vtens_ptr) bind(c)
-    use iso_c_binding, only: c_ptr, c_f_pointer
+    use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
 
+    integer (kind=c_int), intent(in) :: nets, nete, numelems
     type(c_ptr), intent(in) :: rspheremp_ptr, Dinv_ptr, ptens_ptr, vtens_ptr
 
-    integer :: k, j, i, h
+    integer :: k, j, i, h, ie
     real (kind=real_kind) :: vtens1, vtens2
-    real (kind=real_kind), pointer :: rspheremp(:, :), Dinv(:, :, :, :), &
-                                      ptens(:, :, :), vtens(:, :, :, :)
-    call c_f_pointer(rspheremp_ptr, rspheremp, [np, np])
-    call c_f_pointer(Dinv_ptr, Dinv, [np, np, 2, 2])
-    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev])
-    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev])
-    do k=1,nlev
-      do j=1,np
-        do i=1,np
-          ptens(i,j,k) = rspheremp(i,j)*ptens(i,j,k)
-          vtens1=rspheremp(i,j)*vtens(i,j,1,k)
-          vtens2=rspheremp(i,j)*vtens(i,j,2,k)
+    real (kind=real_kind), pointer :: rspheremp(:, :, :), Dinv(:, :, :, :, :), &
+                                      ptens(:, :, :, :), vtens(:, :, :, :, :)
+    call c_f_pointer(rspheremp_ptr, rspheremp, [np, np, numelems])
+    call c_f_pointer(Dinv_ptr, Dinv, [np, np, 2, 2, numelems])
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev, nete - nets + 1])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev, nete - nets + 1])
+    do ie = nets, nete
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+            ptens(i,j,k,ie - nets + 1) = rspheremp(i,j,ie)*ptens(i,j,k,ie - nets + 1)
+            vtens1=rspheremp(i,j,ie)*vtens(i,j,1,k,ie - nets + 1)
+            vtens2=rspheremp(i,j,ie)*vtens(i,j,2,k,ie - nets + 1)
 
-          do h=1,2
-            ! lat-lon -> contra
-            vtens(i,j,h,k) = Dinv(i,j,h,1)*vtens1 + Dinv(i,j,h,2)*vtens2
+            do h=1,2
+              ! lat-lon -> contra
+              vtens(i,j,h,k,ie - nets + 1) = Dinv(i,j,h,1,ie)*vtens1 + Dinv(i,j,h,2,ie)*vtens2
+           enddo
           enddo
         end do
       end do
     end do
   end subroutine loop8_f90
 
-  subroutine loop9_f90(n0, np1, s, rkstages, &
+  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
                        v_ptr, p_ptr, alpha0_ptr, &
                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
-    use iso_c_binding, only: c_ptr, c_f_pointer
+    use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod, only: timelevels
 
-    integer, intent(in) :: n0, np1, s, rkstages
+    integer (kind=c_int), intent(in) :: nets, nete, n0, np1, s, rkstages, numelems
     type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, &
                               alpha_ptr, ptens_ptr, vtens_ptr
 
-    integer :: k, j, i, h
-    real (kind=real_kind), pointer :: v(:, :, :, :, :), p(:, :, :, :), &
+    integer :: k, j, i, h, ie
+    real (kind=real_kind), pointer :: v(:, :, :, :, :, :), p(:, :, :, :, :), &
                                       alpha0(:), alpha(:), &
-                                      ptens(:, :, :), vtens(:, :, :, :)
-    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels])
-    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels])
+                                      ptens(:, :, :, :), vtens(:, :, :, :, :)
+
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, numelems])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, numelems])
     call c_f_pointer(alpha0_ptr, alpha0, [rkstages])
     call c_f_pointer(alpha_ptr, alpha, [rkstages])
-    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev])
-    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev])
-    do k=1,nlev
-      ! ====================================================
-      ! average different timelevels for RK-SSP
-      ! ====================================================
-      do j=1,np
-        do i=1,np
-          do h = 1,2
-            v(i,j,h,k,n0) = alpha0(s)*v(i,j,h,k,np1) &
-              + alpha(s)*vtens(i,j,h,k)
-          end do
-          p(i,j,k,n0) = alpha0(s)*p(i,j,k,np1) &
-            + alpha(s)*ptens(i,j,k)
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev, nete - nets + 1])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev, nete - nets + 1])
+    do ie=nets,nete
+      do k=1,nlev
+        ! ====================================================
+        ! average different timelevels for RK-SSP
+        ! ====================================================
+        do j=1,np
+          do i=1,np
+            do h = 1,2
+              v(i,j,h,k,n0,ie) = alpha0(s)*v(i,j,h,k,np1,ie) &
+                + alpha(s)*vtens(i,j,h,k,ie - nets + 1)
+            end do
+            p(i,j,k,n0,ie) = alpha0(s)*p(i,j,k,np1,ie) &
+              + alpha(s)*ptens(i,j,k,ie - nets + 1)
+         end do
         end do
       end do
     end do
   end subroutine loop9_f90
-
 #define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
-#define LOOP3 loop3_f90
+#define CONTRATOLATLON contra2latlon_f90
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
 #define LOOP8 loop8_f90
 #define LOOP9 loop9_f90
 #else
 #define RECOVER_Q recover_q_c
-#define LOOP3 loop3_c
+#define CONTRATOLATLON contra2latlon_c
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
 #define LOOP8 loop8_c
@@ -708,7 +719,7 @@ contains
        call t_startf('timer_advancerk_loop3')
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
-       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop3')
 
         call t_startf('timer_advancerk_biharmonic')
@@ -792,7 +803,7 @@ contains
        call t_startf('timer_advancerk_loop4')
        ptr_buf1 = c_loc(elem_Dinv)
        ptr_buf2 = c_loc(elem_state_v)
-       call LOOP3(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
+       call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop4')
         
 !IKT, 10/21/16: local loop - to refactor 
@@ -943,32 +954,32 @@ contains
 
           kptr=nlev
           call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
-
-          ! ===========================================================
-          ! Compute velocity and pressure tendencies for all levels
-          ! ===========================================================
-!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
-          call t_startf('timer_advancerk_loop8')
-          ptr_buf1 = c_loc(elem_rspheremp(1,1,ie))
-          ptr_buf2 = c_loc(elem_Dinv(1,1,1,1,ie))
-          ptr_buf3 = c_loc(ptens(1,1,1,ie))
-          ptr_buf4 = c_loc(vtens(1,1,1,1,ie))
-          call LOOP8(ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
-          call t_stopf('timer_advancerk_loop8')
-
-!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
-          call t_startf('timer_advancerk_loop9')
-          ptr_buf1 = c_loc(elem_state_v(1, 1, 1, 1, 1, ie))
-          ptr_buf2 = c_loc(elem_state_p(1, 1, 1, 1, ie))
-          ptr_buf3 = c_loc(MyRk%alpha0)
-          ptr_buf4 = c_loc(MyRk%alpha)
-          ptr_buf5 = c_loc(ptens(1,1,1,ie))
-          ptr_buf6 = c_loc(vtens(1,1,1,1,ie))
-          call LOOP9(n0, np1, s, MyRk%stages, &
-                     ptr_buf1, ptr_buf2, ptr_buf3, &
-                     ptr_buf4, ptr_buf5, ptr_buf6)
-          call t_stopf('timer_advancerk_loop9')
        end do
+
+       ! ===========================================================
+       ! Compute velocity and pressure tendencies for all levels
+       ! ===========================================================
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+       call t_startf('timer_advancerk_loop8')
+       ptr_buf1 = c_loc(elem_rspheremp)
+       ptr_buf2 = c_loc(elem_Dinv)
+       ptr_buf3 = c_loc(ptens)
+       ptr_buf4 = c_loc(vtens)
+       call LOOP8(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
+       call t_stopf('timer_advancerk_loop8')
+
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+       call t_startf('timer_advancerk_loop9')
+       ptr_buf1 = c_loc(elem_state_v)
+       ptr_buf2 = c_loc(elem_state_p)
+       ptr_buf3 = c_loc(MyRk%alpha0)
+       ptr_buf4 = c_loc(MyRk%alpha)
+       ptr_buf5 = c_loc(ptens)
+       ptr_buf6 = c_loc(vtens)
+       call LOOP9(nets, nete, n0, np1, s, MyRk%stages, nelemd, &
+                  ptr_buf1, ptr_buf2, ptr_buf3, &
+                  ptr_buf4, ptr_buf5, ptr_buf6)
+       call t_stopf('timer_advancerk_loop9')
 
        real_time =real_time + dtstage
 !this is only for output reasons, if velocities are prescribed
