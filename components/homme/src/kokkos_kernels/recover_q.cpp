@@ -252,6 +252,41 @@ void loop8_c(real *const &rspheremp_ptr,
     std::abort();
   }
 }
+/*
+void copy_timeleveles_c(const int &nets, const int &nete,
+                 const int &nelems, 
+                 const int &n_src, const int &n_dist,
+                 real *&p_ptr, real *&v_ptr) noexcept {
+  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+      Kokkos::Experimental::Rank<
+          2, Kokkos::Experimental::Iterate::Left,
+          Kokkos::Experimental::Iterate::Left>,
+      Kokkos::IndexType<int> >;
+  P p(p_ptr, np, np,    nlev, timelevels, nelems);
+  P v(p_ptr, np, np, 2, nlev, timelevels, nelems);
+  
+  try {
+    Kokkos::Experimental::md_parallel_for(
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
+          for(int j = 0; j < np; ++j) {
+            for(int i = 0; i < np; ++i) {
+              p(i, j, k, n_dist - 1, ie) = p(i, j, k, n_src - 1, ie);
+              v(i, j, 0, k, n_dist - 1, ie) = v(i, j, 0, k, n_src - 1, ie);
+              v(i, j, 1, k, n_dist - 1, ie) = v(i, j, 1, k, n_src - 1, ie);
+            }
+          } 
+    });
+  } catch(std::exception &e) {
+    std::cout << e.what() << std::endl;
+    std::abort();
+  } catch(...) {
+    std::cout << "Unknown exception in copy_timelevels_c" << std::endl;
+    std::abort();
+  } 
+}
+*/
+
 
 #endif
 }

@@ -200,19 +200,61 @@ contains
     end do
   end subroutine loop8_f90
 
-#define DONT_USE_KOKKOS
+  !DEC$ ATTRIBUTES NOINLINE :: copy_timelevels_f90
+  subroutine copy_timelevels_f90(nets, nete, numelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
+    use iso_c_binding, only: c_ptr, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use control_mod, only: nu, nu_s
+    use element_mod, only: timelevels
+    integer, intent(in) :: nets, nete, numelems
+    type(c_ptr), intent(in) :: p_ptr, v_ptr
+    integer, intent(in) :: nt_src, nt_dest
+
+    integer :: ie, k
+    real (kind=real_kind), pointer :: p(:, :, :, :, :), v(:, :, :, :, :, :)
+    ! real (kind=real_kind), dimension(np,np,2,nlev,tl,nets:nete)  :: v
+    ! real (kind=real_kind), dimension(np,np,nlev,tl,nets:nete) :: p
+    ! TODO: Find out if the index base of an array can be changed
+    ! without doing the computation by hand
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nete - nets + 1])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nete - nets + 1])
+    do ie=nets,nete
+      do k=1,nlev
+        p(:,:,  k, nt_dest, ie - nets + 1) = p(:,:,  k, nt_src, ie - nets + 1) 
+        v(:,:,1,k, nt_dest, ie - nets + 1) = v(:,:,1,k, nt_src, ie - nets + 1)
+        v(:,:,2,k, nt_dest, ie - nets + 1) = v(:,:,2,k, nt_src, ie - nets + 1)
+      enddo
+    enddo
+! The original code from advance_nonstag_rk
+!    do ie=nets,nete
+!       do k=1,nlev
+!          do j=1,np
+!             do i=1,np
+!                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
+!                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
+!                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
+!             end do
+!          end do
+!       end do
+!    enddo
+  end subroutine copy_timelevels_f90
+
+
+!#define DONT_USE_KOKKOS
 #ifdef DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define LOOP3 loop3_f90
 #define LOOP5 loop5_f90
 #define LOOP6 loop6_f90
 #define LOOP8 loop8_f90
+#define COPY_TIMELEVELS copy_timelevels_f90
 #else
 #define RECOVER_Q recover_q_c
 #define LOOP3 loop3_c
 #define LOOP5 loop5_c
 #define LOOP6 loop6_c
 #define LOOP8 loop8_c
+#define COPY_TIMELEVELS copy_timelevels_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -500,6 +542,8 @@ contains
     ! Copy u^n to u^n+1
 !IKT, 10/21/16: local loop 
     call t_startf('timer_advancerk_loop1')
+
+! replace this with copy_timelevels
     do ie=nets,nete
        do k=1,nlev
           do j=1,np
@@ -511,6 +555,7 @@ contains
           end do
        end do
     enddo
+
     call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
