@@ -46,10 +46,9 @@ void recover_q_c(const int &nets, const int &nete,
 #define D_IDX(i, j, m, n, ie) \
   (i + np * (j + np * (m + 2 * (n + 2 * ie))))
 
-/* TODO: Give this a better name */
-void loop3_c(const int &nets, const int &nete,
-             const int &n0, const int &nelems,
-             real *const &D, real *&v) noexcept {
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &D, real *&v) noexcept {
   for(int ie = nets - 1; ie < nete; ++ie) {
     for(int k = 0; k < nlev; k++) {
       for(int j = 0; j < np; j++) {
@@ -102,10 +101,10 @@ void recover_q_c(const int &nets, const int &nete,
   }
 }
 
-/* TODO: Give this a better name */
-void loop3_c(const int &nets, const int &nete,
-             const int &n0, const int &nelems,
-             real *const &d_ptr, real *&v_ptr) noexcept {
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &d_ptr,
+                     real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
@@ -218,30 +217,43 @@ void loop6_c(const int &nets, const int &nete,
 }
 
 /* TODO: Give this a better name */
-void loop8_c(real *const &rspheremp_ptr,
+void loop8_c(const int &nets, const int &nete,
+             const int &numelems,
+             real *const &rspheremp_ptr,
              real *const &dinv_ptr, real *&ptens_ptr,
              real *&vtens_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
-          3, Kokkos::Experimental::Iterate::Left,
+          2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   constexpr const int dim = 2;
 
-  SphereMP_noie rspheremp(rspheremp_ptr, np, np);
-  D_noie dinv(dinv_ptr, np, np, dim, dim);
-  PTens_noie ptens(ptens_ptr, np, np, nlev);
-  VTens_noie vtens(vtens_ptr, np, np, dim, nlev);
+  SphereMP rspheremp(rspheremp_ptr, np, np, numelems);
+  D dinv(dinv_ptr, np, np, dim, dim, numelems);
+  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
+  VTens vtens(vtens_ptr, np, np, dim, nlev,
+              nete - nets + 1);
   try {
     Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, 0, 0}, {np, np, nlev}, {1, 1, 1}),
-        KOKKOS_LAMBDA(int i, int j, int k) {
-          ptens(i, j, k) *= rspheremp(i, j);
-          real vtens1 = rspheremp(i, j) * vtens(i, j, 0, k);
-          real vtens2 = rspheremp(i, j) * vtens(i, j, 1, k);
-          for(int h = 0; h < dim; h++) {
-            vtens(i, j, h, k) = dinv(i, j, h, 0) * vtens1 +
-                                dinv(i, j, h, 1) * vtens2;
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
+          for(int j = 0; j < np; j++) {
+            for(int i = 0; i < np; i++) {
+              ptens(i, j, k, ie - nets + 1) *=
+                  rspheremp(i, j, ie);
+              real vtens1 =
+                  rspheremp(i, j, ie) *
+                  vtens(i, j, 0, k, ie - nets + 1);
+              real vtens2 =
+                  rspheremp(i, j, ie) *
+                  vtens(i, j, 1, k, ie - nets + 1);
+              for(int h = 0; h < dim; h++) {
+                vtens(i, j, h, k, ie - nets + 1) =
+                    dinv(i, j, h, 0, ie) * vtens1 +
+                    dinv(i, j, h, 1, ie) * vtens2;
+              }
+            }
           }
         });
   } catch(std::exception &e) {
@@ -253,37 +265,47 @@ void loop8_c(real *const &rspheremp_ptr,
   }
 }
 
-void loop9_c(const int &n0, const int &np1, const int &s,
-             const int &rkstages, real *&v_ptr,
-             real *&p_ptr, real *const &alpha0_ptr,
+void loop9_c(const int &nets, const int &nete,
+             const int &n0, const int &np1, const int &s,
+             const int &rkstages, const int &numelems,
+             real *&v_ptr, real *&p_ptr,
+             real *const &alpha0_ptr,
              real *const &alpha_ptr, real *const &ptens_ptr,
              real *const &vtens_ptr) {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
-          3, Kokkos::Experimental::Iterate::Left,
+          2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   constexpr const int dim = 2;
 
-  V_noie v(v_ptr, np, np, dim, nlev, timelevels);
-  P_noie p(p_ptr, np, np, nlev, timelevels);
+  V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
+  P p(p_ptr, np, np, nlev, timelevels, numelems);
   Alpha alpha0(alpha0_ptr, rkstages);
   Alpha alpha(alpha_ptr, rkstages);
-  PTens_noie ptens(ptens_ptr, np, np, nlev);
-  VTens_noie vtens(vtens_ptr, np, np, dim, nlev);
+  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
+  VTens vtens(vtens_ptr, np, np, dim, nlev,
+              nete - nets + 1);
 
   try {
     Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, 0, 0}, {np, np, nlev}, {1, 1, 1}),
-        KOKKOS_LAMBDA(int i, int j, int k) {
-          for(int h = 0; h < dim; h++) {
-            v(i, j, h, k, n0 - 1) =
-                alpha0(s - 1) * v(i, j, h, k, np1 - 1) +
-                alpha(s - 1) * vtens(i, j, h, k);
+        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        KOKKOS_LAMBDA(int k, int ie) {
+          for(int j = 0; j < np; j++) {
+            for(int i = 0; i < np; i++) {
+              for(int h = 0; h < dim; h++) {
+                v(i, j, h, k, n0 - 1, ie) =
+                    alpha0(s - 1) *
+                        v(i, j, h, k, np1 - 1, ie) +
+                    alpha(s - 1) *
+                        vtens(i, j, h, k, ie - nets + 1);
+              }
+              p(i, j, k, n0 - 1, ie) =
+                  alpha0(s - 1) * p(i, j, k, np1 - 1, ie) +
+                  alpha(s - 1) *
+                      ptens(i, j, k, ie - nets + 1);
+            }
           }
-          p(i, j, k, n0 - 1) =
-              alpha0(s - 1) * p(i, j, k, np1 - 1) +
-              alpha(s - 1) * ptens(i, j, k);
         });
   } catch(std::exception &e) {
     std::cout << e.what() << std::endl;
