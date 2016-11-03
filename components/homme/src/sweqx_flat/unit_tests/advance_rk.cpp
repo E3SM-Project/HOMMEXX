@@ -13,6 +13,17 @@ using namespace Homme;
 
 extern "C" {
 
+void copy_timelevels_f90(const int &nets, const int &nete,
+                         const int &numelems,
+                         const int &n_src,
+                         const int &n_dist, real *&p_ptr,
+                         real *&v_ptr);
+
+void copy_timelevels_c(const int &nets, const int &nete,
+                       const int &numelems,
+                       const int &n_src, const int &n_dist,
+                       real *&p_ptr, real *&v_ptr);
+
 void recover_q_f90(const int &nets, const int &nete,
                    const int &kmass, const int &n0,
                    const int &nelems, real *const &p);
@@ -111,6 +122,66 @@ void genRandTheoryExper(number *arr_theory,
   }
 }
 
+TEST_CASE("copy_timelevels", "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 100;
+  constexpr const int dim = 2;
+
+  constexpr const int p_len =
+      np * np * nlev * timelevels * numelems;
+  real *p_theory = new real[p_len];
+  real *p_exper = new real[p_len];
+  constexpr const int v_len =
+      np * np * dim * nlev * timelevels * numelems;
+  real *v_theory = new real[v_len];
+  real *v_exper = new real[v_len];
+
+  constexpr const int numRandTests = 10;
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      const int nets = (std::uniform_int_distribution<int>(
+          1, numelems - 1))(engine);
+      const int nete = (std::uniform_int_distribution<int>(
+          nets + 1, numelems))(engine);
+
+      genRandTheoryExper(
+          p_theory, p_exper, p_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          v_theory, v_exper, v_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+
+      const int n_src = (std::uniform_int_distribution<int>(
+          1, timelevels))(engine);
+      const int n_dist =
+          (std::uniform_int_distribution<int>(
+              1, timelevels))(engine);
+
+      copy_timelevels_f90(nets, nete, numelems, n_src,
+                          n_dist, p_theory, v_theory);
+      copy_timelevels_c(nets, nete, numelems, n_src, n_dist,
+                        p_exper, v_exper);
+
+      for(int j = 0; j < p_len; j++) {
+        if(p_exper[j] != p_theory[j]) {
+          std::cout << "error at " << j << std::endl;
+        }
+        REQUIRE(p_exper[j] == p_theory[j]);
+      }
+      for(int j = 0; j < v_len; j++) {
+        REQUIRE(v_exper[j] == v_theory[j]);
+      }
+    }
+  }
+
+  delete[] p_theory;
+  delete[] p_exper;
+  delete[] v_theory;
+  delete[] v_exper;
+}
+
 TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
 
@@ -149,11 +220,6 @@ TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
       recover_q_f90(nets, nete, kmass, n0, numelems,
                     p_theory);
       recover_q_c(nets, nete, kmass, n0, numelems, p_exper);
-      for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
-      }
-      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
-      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
       for(int j = 0; j < p_len; j++) {
         REQUIRE(p_exper[j] == p_theory[j]);
       }
@@ -197,11 +263,6 @@ TEST_CASE("loop6", "advance_nonstag_rk_cxx") {
       for(int j = 0; j < p_len; j++) {
         p_theory[j] = p_dist(engine);
         p_exper[j] = p_theory[j];
-      }
-      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
-      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
-      for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
       }
       loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
       loop6_c(nets, nete, kmass, n0, numelems, p_exper);
