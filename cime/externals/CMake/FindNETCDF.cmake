@@ -1,4 +1,5 @@
 
+MESSAGE("NETCDF__DIR: ${NETCDF_DIR}")
 
 find_path(Netcdf_INCLUDE_DIR
           NAMES netcdf.h
@@ -6,14 +7,16 @@ find_path(Netcdf_INCLUDE_DIR
           PATH_SUFFIXES include
           NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 
+MESSAGE("Netcdf_INCLUDE_DIR: ${Netcdf_INCLUDE_DIR}")
+
 find_library(Netcdf_LIBRARY
              NAMES libnetcdf.a netcdf
-             HINTS ${Netcdf_INCLUDE_DIR}/../lib
+             HINTS ${Netcdf_INCLUDE_DIR}/../lib ${Netcdf_INCLUDE_DIR}/../lib64
              NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 
 find_library(NetcdfF_LIBRARY
              NAMES libnetcdff.a netcdff
-             HINTS ${Netcdf_INCLUDE_DIR}/../lib
+             HINTS ${Netcdf_INCLUDE_DIR}/../lib ${Netcdf_INCLUDE_DIR}/../lib64
              NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 
 find_path(Netcdf_NC_CONFIG_BIN
