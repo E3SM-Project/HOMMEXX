@@ -52,24 +52,20 @@ void swirl_velocity(int ie, int n0, int k, real time,
   /* TODO: Implement this */
 }
 
-  real gradient_sphere(int ie, Energy &e,
+real gradient_sphere(int ie, Energy &e) {
+  /* TODO: Implement this */
+  return 0.0 / 0.0;
+}
 
-void team_parallel_ex(const int &nets,
-                      const int &nete,
-                      const int &n0,
-                      const int &nelemd,
-                      const real &pmean,
-                      const real &u0,
+void team_parallel_ex(const int &nets, const int &nete,
+                      const int &n0, const int &nelemd,
+                      const real &pmean, const real &u0,
                       const real &real_time,
                       const char *&topology,
-                      const char *&test_case,
-                      real *&d_ptr,
-                      real *&dinv_ptr,
-                      real *&fcor_ptr,
-                      real *&spheremp_ptr,
-                      real *&p_ptr,
-                      real *&ps_ptr,
-                      real *&v_ptr) {
+                      const char *&test_case, real *&d_ptr,
+                      real *&dinv_ptr, real *&fcor_ptr,
+                      real *&spheremp_ptr, real *&p_ptr,
+                      real *&ps_ptr, real *&v_ptr) {
   constexpr const unsigned dim = 2;
 
   D d(d_ptr, np, np, dim, dim, nelemd);
@@ -268,4 +264,4 @@ void team_parallel_ex(const int &nets,
   // end do
 }
 
-  }  // Homme
+}  // Homme
