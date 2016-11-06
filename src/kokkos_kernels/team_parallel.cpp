@@ -75,6 +75,7 @@ void team_parallel_ex(const int &nets, const int &nete,
   P p(p_ptr, np, np, nlev, timelevels, nelemd);
   PS ps(ps_ptr, np, np, nelemd);
   V v(v_ptr, np, np, dim, nlev, timelevels, nelemd);
+  Zeta zeta(np, np);
 
   for(int ie = nets - 1; ie < nete; ie++) {
     if(strcmp(topology, "cube") == 0) {
@@ -116,8 +117,61 @@ void team_parallel_ex(const int &nets, const int &nete,
         }
       }
 
+      // grade(np, np, dim)
+      Grade grade(np, np, dim);
       // TODO: Implement gradient_sphere
-      real grade = gradient_sphere(ie, e, deriv, dinv);
+      gradient_sphere(k, n0, ie, e, deriv, dinv, grade);
+      // TODO: Implement vorticity_sphere
+      // TODO: Change the elem parameter to a type we can
+      // actually use in C++
+      vorticity_sphere(ulatlon, deriv, elem(ie), zeta);
+      // latlon vector -> scalar
+      // gradh(np, np, dim)
+      GradH gradh(np, np, dim);
+      // div(np, np)
+      Div div(np, np);
+      if(tracer_advection_formulation == TRACERADV_UGRADQ) {
+        gradient_sphere(k, n0, ie, p, deriv, Dinv, gradh);
+        for(int j = 0; j < np; j++) {
+          for(int i = 0; i < np; i++) {
+            div(i, j) = ulatlon(i, j, 0) * gradh(i, j, 0) +
+                        ulatlon(i, j, 1) * gradh(i, j, 1);
+          }
+        }
+      } else {
+        // TODO: Implement divergence_sphere
+        // TODO: Change the elem parameter to a type we can
+        // actually use in C++
+        divergence_sphere(pv, deriv, elem, div);
+      }
+    }
+
+    // ==============================================
+    // Compute velocity tendency terms
+    // ==============================================
+    // accumulate all RHS terms
+    // vtens(np, np, dim, nlev, nelemd)
+    // ptens(np, np, nlev, nelemd)
+    for(int j = 0; j < np; j++) {
+      for(int i = 0; i < np; i++) {
+        vtens(i, j, 0, k, ie) =
+            vtens(i, j, 0, k, ie) +
+            (ulatlon(i, j, 1) * (fcor(i, j) + zeta(i, j)) -
+             grade(i, j, 0));
+        vtens(i, j, 1, k, ie) =
+            vtens(i, j, 1, k, ie) +
+            (-ulatlon(i, j, 0) * (fcor(i, j) + zeta(i, j)) -
+             grade(i, j, 1));
+        ptens(i, j, k, ie) = ptens(i, j, k, ie) - div(i, j);
+        // take the local element timestep
+        for(int h = 0; h < dim; h++) {
+          vtens(i, j, h, k, ie) =
+              ulatlon(i, j, h) +
+              dtstage * vtens(i, j, h, k, ie);
+        }
+        ptens(i, j, k, ie) = p(i, j, k, n0, ie) +
+                             dtstage * ptens(i, j, k, ie);
+      }
     }
   }
   // Fortran Implementation of the first team parallel loop
