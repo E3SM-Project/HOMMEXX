@@ -29,18 +29,25 @@ struct Spherical_Polar {
 
 using SphereP = HommeView<Kokkos::Array<real, 3> >;
 
-using ULatLong = Kokkos::View<real ***, Kokkos::LayoutLeft>;
-using Energy = Kokkos::View<real **, Kokkos::LayoutLeft>;
-using PV = Kokkos::View<real **, Kokkos::LayoutLeft>;
+template <typename T>
+using HommeLocal = Kokkos::View<T, Kokkos::LayoutLeft>;
+
+// Scalar fields are scalar values over the np x np
+// quadrature points
+using ScalarField = HommeLocal<real **>;
+
+// Vector fields are vector values over the np x np
+// quadrature points
+using VectorField = HommeLocal<real ***>;
 
 struct derivative_t {
   real Dvv[np][np];
-  real Dvv_diag[np][np]
-  real Dvv_twt[np][np]
-  real Mvv_twt[np][np]
-  real Mfvm[np][nc+1)
-  real Cfvm[np][nc]
-  real legdg[np][np]
+  real Dvv_diag[np][np];
+  real Dvv_twt[np][np];
+  real Mvv_twt[np][np];
+  real Mfvm[np][nc + 1];
+  real Cfvm[np][nc];
+  real legdg[np][np];
 };
 
 }  // namespace Homme
