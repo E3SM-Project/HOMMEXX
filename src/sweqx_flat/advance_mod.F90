@@ -261,6 +261,7 @@ contains
     ! real (kind=real_kind), dimension(np,np,nlev,tl,nets:nete) :: p
     ! TODO: Find out if the index base of an array can be changed
     ! without doing the computation by hand
+    
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelems])
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nelems])
     do ie=nets,nete
@@ -327,8 +328,6 @@ contains
     end do
   end subroutine loop9_f90
 
-!#define DONT_USE_KOKKOS
-!#ifdef DONT_USE_KOKKOS
 #if DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define CONTRATOLATLON contra2latlon_f90
@@ -634,19 +633,9 @@ contains
 !IKT, 10/21/16: local loop
     call t_startf('timer_advancerk_loop1')
 ! replace this with copy_timelevels
-       ptr_buf1 = c_loc(elem_state_p)
-       ptr_buf2 = c_loc(elem_state_v)
-       call COPY_TIMELEVELS(nets, nete, nelemd, n0, np1, ptr_buf1, ptr_buf2)
-!       do k=1,nlev
-!          do j=1,np
-!             do i=1,np
-!                elem(ie)%state%v(i,j,1,k,np1)  = elem(ie)%state%v(i,j,1,k,n0)
-!                elem(ie)%state%v(i,j,2,k,np1)  = elem(ie)%state%v(i,j,2,k,n0)
-!                elem(ie)%state%p(i,j,k, np1)   = elem(ie)%state%p(i,j,k,n0)
-!             end do
-!          end do
-!       end do
-!    enddo
+    ptr_buf1 = c_loc(elem_state_p)
+    ptr_buf2 = c_loc(elem_state_v)
+    call COPY_TIMELEVELS(nets, nete, nelemd, n0, np1, ptr_buf1, ptr_buf2)
     call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
@@ -666,60 +655,58 @@ contains
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
 !call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
 
-       call t_startf('timer_advancerk_minmax_loop1')
-       ptr_buf1 = c_loc(elem_state_p)
-       call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
-       call t_stopf('timer_advancerk_minmax_loop2')
+         call t_startf('timer_advancerk_minmax_loop1')
+         ptr_buf1 = c_loc(elem_state_p)
+         call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
+         call t_stopf('timer_advancerk_minmax_loop1')
 
-    ! create edge buffer for 3 fields
-    call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
+         ! create edge buffer for 3 fields
+         call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
 
-    ! compute p min, max
-    do ie=nets,nete
-       do k=1,nlev
-          Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
-          Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
-       enddo
-       call edgeVpack(edgebuf_mm,Qmax_mm,nlev,0,ie)
-       call edgeVpack(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
-    enddo
+         ! compute p min, max
+         do ie=nets,nete
+           do k=1,nlev
+             Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
+             Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
+           enddo
+           call edgeVpack(edgebuf_mm,Qmax_mm,nlev,0,ie)
+           call edgeVpack(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
+         enddo
 
-    call t_startf('nmm_bexchV')
-    call bndry_exchangeV(hybrid,edgebuf_mm)
-    call t_stopf('nmm_bexchV')
+         call t_startf('nmm_bexchV')
+         call bndry_exchangeV(hybrid,edgebuf_mm)
+         call t_stopf('nmm_bexchV')
 
-    do ie=nets,nete
-       do k=1,nlev
-          Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
-          Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
-       enddo
+         do ie=nets,nete
+           do k=1,nlev
+             Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
+             Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
+           enddo
 
 ! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-       call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
-       call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
-       do k=1,nlev
-          pmax(k,ie)=maxval(Qmax_mm(:,:,k))
-          pmin(k,ie)=minval(Qmin_mm(:,:,k))
-       enddo
+           call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
+           call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
+           do k=1,nlev
+             pmax(k,ie)=maxval(Qmax_mm(:,:,k))
+             pmin(k,ie)=minval(Qmin_mm(:,:,k))
+           enddo
 
-    end do
+         end do
 
-    call FreeEdgeBuffer(edgebuf_mm)
+         call FreeEdgeBuffer(edgebuf_mm)
 
-  if(kmass.ne.-1)then
-    do k=1,nlev
-       if(k.ne.kmass)then
-          do ie=nets,nete
-             elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)*&
-             elem(ie)%state%p(:,:,kmass,n0)
-          enddo
-       endif
-    enddo
-  endif
-!end subroutine neighb_minmax
-       endif
-
-
+         if(kmass.ne.-1)then
+           do k=1,nlev
+             if(k.ne.kmass)then
+               do ie=nets,nete
+                 elem(ie)%state%p(:,:,k,n0)=elem(ie)%state%p(:,:,k,n0)*&
+                 elem(ie)%state%p(:,:,kmass,n0)
+               enddo
+             endif
+           enddo
+         endif
+         !end subroutine neighb_minmax
+       endif !if limiter ==8 or limiter == 81
 
 
        if(Debug) print *,'homme: adv.._rk 1'

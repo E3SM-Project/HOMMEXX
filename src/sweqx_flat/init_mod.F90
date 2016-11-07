@@ -253,7 +253,6 @@ contains
 #endif
 
     allocate(elem(nelemd))
-print *, 'IN INIT, before setup sw pointers'
     call setup_element_pointers_sw(elem)
     call allocate_element_desc(elem)
     if (present(fvm)) then
