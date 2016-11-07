@@ -619,12 +619,6 @@ contains
 #if SW_USE_FLAT_ARRAYS
     integer :: ie
 
-print *, 'CALLING setup_element_pointers_sw'
-!!!!! I need to sort out what we do in pure advection!!!
-!    allocate( state_Qdp                (np,np,nlev,qsize,2,nelemd)            )
-!    allocate( derived_vn0              (np,np,2,nlev,nelemd)                  )
-!    allocate( derived_divdp            (np,np,nlev,nelemd)                    )
-
     allocate( elem_metdet              (np,np,nelemd)            )
     allocate( elem_rmetdet             (np,np,nelemd)            )
     allocate( elem_Dinv                (np,np,2,2,nelemd)        )
