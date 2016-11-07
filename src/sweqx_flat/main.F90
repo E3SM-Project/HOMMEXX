@@ -74,12 +74,6 @@ program main
   ! =====================================================
 
   if(par%masterproc) print *,"allocating state variables..."
-#if DONT_USE_KOKKOS
-  if(par%masterproc) print *, 'FORTRAN kernels only, DONT_USE_KOKKOS is set.'
-#else
-  if(par%masterproc) print *, 'C++ kernels only, DONT_USE_KOKKOS is not set.'
-#endif
-
 
   !JMD allocate(state(nelemd))
 
@@ -104,7 +98,12 @@ program main
 
   call syncmp(par)
 
+#if DONT_USE_KOKKOS
+  if(par%masterproc) print *, 'FORTRAN kernels only, DONT_USE_KOKKOS is set.'
+#else
+  if(par%masterproc) print *, 'C++ kernels only, DONT_USE_KOKKOS is not set.'
   call init_kokkos()
+#endif 
 
   ! =====================================
   ! Begin threaded region...
