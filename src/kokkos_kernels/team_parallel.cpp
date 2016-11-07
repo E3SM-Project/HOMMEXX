@@ -9,18 +9,14 @@ namespace Homme {
 
 #include <string.h>
 
-// tc1_velocity(ie, n0, k, spherep, d, v);
-// 0 <= k < nlev
-// 0 <= ie < nelemd
-// elem_state_v(:,:,:,k,n0,ie)=tc1_velocity(elem(ie)%spherep,elem(ie)%Dinv)
-// v(np, np, dim, nlev, timelevels, nelemd)
+using Array = Kokkos::Array;
+
 void tc1_velocity(int ie, int n0, int k, real u0,
                   SphereP &spherep, D &d, V &v) {
   constexpr const real alpha = 0.0;
   const real csalpha = std::cos(alpha);
   const real snalpha = std::sin(alpha);
-  Kokkos::Array<Kokkos::Array<real, np>, np> snlon, cslon,
-      snlat, cslat;
+  Array<Array<real, np>, np> snlon, cslon, snlat, cslat;
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       snlat[i][j] = std::sin(
@@ -41,7 +37,7 @@ void tc1_velocity(int ie, int n0, int k, real u0,
       V2 = -u0 * (snlon[h][i] * snalpha);
       for(int g = 0; g < dim; g++) {
         v(h, i, g, k, n0, ie) =
-            V1 * d(h, i, g, 0) + V2 * d(h, i, g, 1);
+            V1 * d(h, i, g, 0, ie) + V2 * d(h, i, g, 1, ie);
       }
     }
   }
@@ -52,9 +48,31 @@ void swirl_velocity(int ie, int n0, int k, real time,
   /* TODO: Implement this */
 }
 
-real gradient_sphere(int ie, Energy &e) {
-  /* TODO: Implement this */
-  return 0.0 / 0.0;
+void gradient_sphere(int ie, int e, const ScalarField &s,
+                     const derivative &deriv, const D &dinv,
+                     VectorField &grad) {
+  Array<real, dim> dsd;
+  Array<Array<Array<real, np>, np>, dim> v;
+  for(int j = 0; j < np; j++) {
+    for(int l = 0; l < np; l++) {
+      for(int k = 0; k < dim; k++) {
+        dsd[k] = 0.0;
+      }
+      for(int i = 0; i < np; i++) {
+        dsd[0] += deriv.Dvv[i][l] * s[i][j];
+      }
+      v[0][l][j] = dsd[0] * rrearth;
+      v[1][j][l] = dsd[1] * rrearth;
+    }
+  }
+  for(int j = 0; j < np; j++) {
+    for(int i = 0; i < np; i++) {
+      for(int h = 0; h < np; h++) {
+        grad(i, j, h) = dinv(i, j, 0, h, ie) * v[0][i][j] +
+                        dinv(i, j, 1, h, ie) * v[1][i][j];
+      }
+    }
+  }
 }
 
 void team_parallel_ex(const int &nets, const int &nete,
@@ -92,11 +110,11 @@ void team_parallel_ex(const int &nets, const int &nete,
 
     for(int k = 0; k < nlev; k++) {
       // ulatlon(np, np, dim), local variable
-      ULatLon ulatlon(np, np, dim);
+      VectorField ulatlon(np, np, dim);
       // E(np, np), local variable
-      Energy e(np.np);
+      ScalarField e(np, np);
       // pv(np, np, dim)
-      PV pv(np, np, dim);
+      VectorField pv(np, np, dim);
 
       for(int j = 0; j < np; j++) {
         for(int i = 0; i < np; i++) {
@@ -118,20 +136,20 @@ void team_parallel_ex(const int &nets, const int &nete,
       }
 
       // grade(np, np, dim)
-      Grade grade(np, np, dim);
+      VectorField grade(np, np, dim);
       // TODO: Implement gradient_sphere
-      gradient_sphere(k, n0, ie, e, deriv, dinv, grade);
+      gradient_sphere(ie, e, deriv, dinv, grade);
       // TODO: Implement vorticity_sphere
       // TODO: Change the elem parameter to a type we can
       // actually use in C++
       vorticity_sphere(ulatlon, deriv, elem(ie), zeta);
       // latlon vector -> scalar
       // gradh(np, np, dim)
-      GradH gradh(np, np, dim);
+      VectorField gradh(np, np, dim);
       // div(np, np)
       Div div(np, np);
       if(tracer_advection_formulation == TRACERADV_UGRADQ) {
-        gradient_sphere(k, n0, ie, p, deriv, Dinv, gradh);
+        gradient_sphere(ie, p, deriv, Dinv, gradh);
         for(int j = 0; j < np; j++) {
           for(int i = 0; i < np; i++) {
             div(i, j) = ulatlon(i, j, 0) * gradh(i, j, 0) +
@@ -139,183 +157,85 @@ void team_parallel_ex(const int &nets, const int &nete,
           }
         }
       } else {
-        // TODO: Implement divergence_sphere
-        // TODO: Change the elem parameter to a type we can
+        // TODO: Implement
+        // divergence_sphere
+        // TODO: Change the
+        // elem parameter to a
+        // type we can
         // actually use in C++
         divergence_sphere(pv, deriv, elem, div);
       }
-    }
 
-    // ==============================================
-    // Compute velocity tendency terms
-    // ==============================================
-    // accumulate all RHS terms
-    // vtens(np, np, dim, nlev, nelemd)
-    // ptens(np, np, nlev, nelemd)
-    for(int j = 0; j < np; j++) {
-      for(int i = 0; i < np; i++) {
-        vtens(i, j, 0, k, ie) =
-            vtens(i, j, 0, k, ie) +
-            (ulatlon(i, j, 1) * (fcor(i, j) + zeta(i, j)) -
-             grade(i, j, 0));
-        vtens(i, j, 1, k, ie) =
-            vtens(i, j, 1, k, ie) +
-            (-ulatlon(i, j, 0) * (fcor(i, j) + zeta(i, j)) -
-             grade(i, j, 1));
-        ptens(i, j, k, ie) = ptens(i, j, k, ie) - div(i, j);
-        // take the local element timestep
-        for(int h = 0; h < dim; h++) {
-          vtens(i, j, h, k, ie) =
-              ulatlon(i, j, h) +
-              dtstage * vtens(i, j, h, k, ie);
+      // ==============================================
+      // Compute velocity
+      // tendency terms
+      // ==============================================
+      // accumulate all RHS terms
+      // vtens(np, np, dim, nlev, nelemd)
+      // ptens(np, np, nlev, nelemd)
+      for(int j = 0; j < np; j++) {
+        for(int i = 0; i < np; i++) {
+          vtens(i, j, 0, k, ie) =
+              vtens(i, j, 0, k, ie) +
+              (ulatlon(i, j, 1) *
+                   (fcor(i, j) + zeta(i, j)) -
+               grade(i, j, 0));
+          vtens(i, j, 1, k, ie) =
+              vtens(i, j, 1, k, ie) +
+              (-ulatlon(i, j, 0) *
+                   (fcor(i, j) + zeta(i, j)) -
+               grade(i, j, 1));
+          // take the local element timestep
+          for(int h = 0; h < dim; h++) {
+            vtens(i, j, h, k, ie) =
+                ulatlon(i, j, h) +
+                dtstage * vtens(i, j, h, k, ie);
+          }
+          ptens(i, j, k, ie) +=
+              dtstage * ptens(i, j, k, ie);
         }
-        ptens(i, j, k, ie) = p(i, j, k, n0, ie) +
-                             dtstage * ptens(i, j, k, ie);
+      }
+      if(limiter_option == 8 || limiter_option == 81 ||
+         limiter_option == 84) {
+        if(limiter_option == 81) {
+          for(int i = 0; i < dim; i++) {
+            pmax(i, ie) = pmax( :, ie) + 9e19;
+          }
+        } else if(limiter_option == 84) {
+          for(int i = 0; i < dim; i++) {
+            pmin(i, ie) = 0.0;
+          }
+          if(strcmp(test_case, 'swirl') == 0) {
+            pmin(1, ie) = 0.1;
+            if(nlev >= 3) {
+              k = 3;
+              pmin(k, ie) = 0.1;
+            }
+          }
+          for(int i = 0; i < dim; i++) {
+            pmax(i, ie) = pmax(i, ie) + 9e19;
+          }
+        }
+        // TODO: Implement limiter_optim_wrap
+        limiter_optim_wrap(kmass, ie, ptens, spheremp, pmin,
+                           pmax);
+      } else if(limiter_option == 4) {
+        limiter2d_zero(kmass, ie, ptens, spheremp);
+      }
+      for(int k = 0; k < nlev; k++) {
+        for(int j = 0; j < np; j++) {
+          for(int i = 0; i < np; i++) {
+            ptens(i, j, k, ie) =
+                ptens(i, j, k, ie) * spheremp(i, j, ie);
+            vtens(i, j, 0, k, ie) =
+                vtens(i, j, 0, k, ie) * spheremp(i, j, ie);
+            vtens(i, j, 1, k, ie) =
+                vtens(i, j, 1, k, ie) * spheremp(i, j, ie);
+          }
+        }
       }
     }
   }
-  // Fortran Implementation of the first team parallel loop
-  //
-  // do ie=nets,nete
-  //   fcor   => elem(ie)%fcor
-  //   spheremp     => elem(ie)%spheremp
-  //
-  //   use control_mod, only :  topology, test_case
-  //   use element_mod, only : element_t
-  //   use dimensions_mod, only : nlev
-  //   use shallow_water_mod, only : tc1_velocity,
-  //   vortex_velocity, swirl_velocity
-  //   implicit none
-  //   type (element_t)     , intent(inout) :: elem
-  //   ! local
-  //   integer :: n0,k
-  //   real (kind=real_kind) :: time
-  //   if (topology == "cube" .and. test_case=="swtc1") then
-  //     do k=1,nlev
-  //       elem%state%v(:,:,:,k,n0)=tc1_velocity(elem%spherep,elem%Dinv)
-  //     end do
-
-  // IGNORE THIS!!!
-  //   else if (topology == "cube" .and.
-  //   test_case=="vortex") then
-  //     do k=1,nlev
-  //       elem%state%v(:,:,:,k,n0)=vortex_velocity(time,elem%spherep,elem%Dinv)
-  //     end do
-
-  //   else if (topology == "cube" .and. test_case=="swirl")
-  //   then
-  //     do k=1,nlev
-  //       elem%state%v(:,:,:,k,n0)=swirl_velocity(time,elem%spherep,elem%Dinv)
-  //     end do
-  //   end if
-  //
-  //   do k=1,nlev
-  //     ! ==============================================
-  //     ! Compute kinetic energy term
-  //     ! ==============================================
-  //     !IKT, 10/21/16: we wrote part of this code in
-  //     AdvanceRK.cpp
-  //     do j=1,np
-  //       do i=1,np
-  //         v1     = elem(ie)%state%v(i,j,1,k,n0)   !
-  //         contra
-  //         v2     = elem(ie)%state%v(i,j,2,k,n0)   !
-  //         contra
-  //         ulatlon(i,j,1)=elem(ie)%D(i,j,1,1)*v1 +
-  //         elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
-  //         ulatlon(i,j,2)=elem(ie)%D(i,j,2,1)*v1 +
-  //         elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
-  //         E(i,j) = 0.5D0*(ulatlon(i,j,1)**2 +
-  //         ulatlon(i,j,2)**2)  +&
-  //         elem(ie)%state%p(i,j,k,n0) +
-  //         elem(ie)%state%ps(i,j)
-  //         pv(i,j,1) =
-  //         ulatlon(i,j,1)*(pmean+elem(ie)%state%p(i,j,k,n0))
-  //         pv(i,j,2) =
-  //         ulatlon(i,j,2)*(pmean+elem(ie)%state%p(i,j,k,n0))
-  //       end do
-  //     end do
-  //     grade = gradient_sphere(E,deriv,elem(ie)%Dinv)
-  //     ! scalar -> latlon vector
-  //     zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) !
-  //     latlon vector -> scalar
-  //     if (tracer_advection_formulation==TRACERADV_UGRADQ)
-  //     then
-  //       gradh =
-  //       gradient_sphere(elem(ie)%state%p(:,:,k,n0),deriv,elem(ie)%Dinv)
-  //       div =
-  //       ulatlon(:,:,1)*gradh(:,:,1)+ulatlon(:,:,2)*gradh(:,:,2)
-  //     else
-  //       div = divergence_sphere(pv,deriv,elem(ie))      !
-  //       latlon vector -> scalar
-  //     endif
-  //     ! ==============================================
-  //     ! Compute velocity tendency terms
-  //     ! ==============================================
-  //     ! accumulate all RHS terms
-  //     vtens(:,:,1,k,ie)=vtens(:,:,1,k,ie) +
-  //     (ulatlon(:,:,2)*(fcor(:,:) + zeta(:,:))  -
-  //     grade(:,:,1))
-  //     vtens(:,:,2,k,ie)=vtens(:,:,2,k,ie) +
-  //     (-ulatlon(:,:,1)*(fcor(:,:) + zeta(:,:)) -
-  //     grade(:,:,2))
-  //     ptens(:,:,k,ie) = ptens(:,:,k,ie) - div(:,:)
-  //     ! take the local element timestep
-  //     vtens(:,:,:,k,ie)=ulatlon(:,:,:) +
-  //     dtstage*vtens(:,:,:,k,ie)
-  //     ptens(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0) +
-  //     dtstage*ptens(:,:,k,ie)
-  //   end do!end of loop over levels
-  //   if ((limiter_option == 8))then
-  //     call
-  //     limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
-  //                             pmin(:,ie),pmax(:,ie),kmass)
-  //   endif
-  //   if ((limiter_option == 81))then
-  //     pmax(:,ie)=pmax(:,ie)+9e19  ! disable max
-  //     constraint
-  //     call
-  //     limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
-  //                             pmin(:,ie),pmax(:,ie),kmass)
-  //   endif
-  //   if ((limiter_option == 84))then
-  // 	   pmin(:,ie)=0.0d0
-  //     if (test_case=='swirl') then
-  //       pmin(1,ie)=.1d0
-  //       if (nlev>=3) then
-  //         k=3; pmin(k,ie)=.1d0
-  //       endif
-  //     endif
-  //     pmax(:,ie)=pmax(:,ie)+9e19  ! disable max
-  //     constraint
-  //     call
-  //     limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
-  //     pmin(:,ie),pmax(:,ie),kmass)
-  //   endif
-  //   if ( (limiter_option == 4) ) then
-  //     call
-  //     limiter2d_zero(ptens(:,:,:,ie),elem(ie)%spheremp,
-  //     kmass)
-  //   endif
-  //   do k=1,nlev
-  //     ptens(:,:,k,ie) =
-  //     ptens(:,:,k,ie)*elem(ie)%spheremp(:,:)
-  //     vtens(:,:,1,k,ie) =
-  //     vtens(:,:,1,k,ie)*elem(ie)%spheremp(:,:)
-  //     vtens(:,:,2,k,ie) =
-  //     vtens(:,:,2,k,ie)*elem(ie)%spheremp(:,:)
-  //   enddo
-  //   ! ===================================================
-  //   ! Pack cube edges of tendencies, rotate velocities
-  //   ! ===================================================
-  //   kptr=0
-  //   !IKT, 10/21/16: packing needs to be pulled out
-  //   (separate loop)
-  //   call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
-  //   kptr=nlev
-  //   call
-  //   edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
-  // end do
 }
 
 }  // Homme
