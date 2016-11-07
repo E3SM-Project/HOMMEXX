@@ -265,7 +265,7 @@ contains
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nete - nets + 1])
     do ie=nets,nete
       do k=1,nlev
-        p(:,:,  k, nt_dest, ie - nets + 1) = p(:,:,  k, nt_src, ie - nets + 1) 
+        p(:,:,  k, nt_dest, ie - nets + 1) = p(:,:,  k, nt_src, ie - nets + 1)
         v(:,:,1,k, nt_dest, ie - nets + 1) = v(:,:,1,k, nt_src, ie - nets + 1)
         v(:,:,2,k, nt_dest, ie - nets + 1) = v(:,:,2,k, nt_src, ie - nets + 1)
       enddo
@@ -417,7 +417,7 @@ contains
     elseif (LFTfreq==1) then
        steptype=1
     else
-       steptype=2  
+       steptype=2
        if (mod(nstep,LFTfreq).ne.0) steptype=0
     endif
 
@@ -425,25 +425,25 @@ contains
     ! For RK methods we should remove bootstrap procedure
     if (nstep==0) steptype=0
 
-    if (steptype==0) then   
+    if (steptype==0) then
 
        ! Leapfrog timestep: u(np1) = u(nm1) + dt2*DSS [ RHS(u(n0)) ]
        call compute_and_apply_rhs(np1,nm1,n0,dt2,real_time,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete)
 
        ! ====================================================
-       ! apply viscosity  
+       ! apply viscosity
        ! ====================================================
        call advance_hypervis(edge3,elem,hybrid,deriv,vtens,ptens,np1,nets,nete,dt2)
 
     else if (steptype==1)  then
        if (smooth/=0) stop 'ERROR: smooth>0 only allowed for leapfrog'
        ! leapfrog+trapazoidal
-       ! 2x as expensive as LF, but 2nd order, no Robert filter needed, 
+       ! 2x as expensive as LF, but 2nd order, no Robert filter needed,
        ! dt sqrt(2) larger than LF
        ! u(*) = u(n-1) + 2dt F(u(n))   u(*) is at time level n+1
        ! u(n+1) = u(n) + dt [ F(u(n)) + F(u(*)) ] /2
-       
-       ! u(n+1) = u(n) + dt/2 F(u(n))   
+
+       ! u(n+1) = u(n) + dt/2 F(u(n))
        call compute_and_apply_rhs(np1,n0,n0,dt/2,real_time,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete)
 
        ! u(n-1) = u(n-1) + 4( u(n+1)-u(n))     u(*) above
@@ -454,7 +454,7 @@ contains
                4*(elem(ie)%state%p(:,:,:,np1)-elem(ie)%state%p(:,:,:,n0)  )
        enddo
 
-       ! u(n+1) = u(n+1) + dt/2 F(u(*))        
+       ! u(n+1) = u(n+1) + dt/2 F(u(*))
        call compute_and_apply_rhs(np1,np1,nm1,dt/2,real_time+dt,edge3,elem,pmean,hybrid,deriv,vtens,ptens,nets,nete)
        ! ====================================================
        ! apply viscosity  Note: use dt, not dt/2
@@ -523,7 +523,7 @@ contains
          hypervis_scaling, nu_div
     use bndry_mod,      only: bndry_exchangev
     use viscosity_mod,  only: neighbor_minmax, biharmonic_wk
-    !  FOR DEBUGING use only 
+    !  FOR DEBUGING use only
     !    use schedule_mod
     use global_norms_mod
     use types_mod,      only: rk_t
@@ -560,8 +560,8 @@ contains
 
     ! Thread private working set ...
 
-    real (kind=real_kind), allocatable, target :: vtens(:,:,:,:,:) 
-    real (kind=real_kind), allocatable, target :: ptens(:,:,:,:) 
+    real (kind=real_kind), allocatable, target :: vtens(:,:,:,:,:)
+    real (kind=real_kind), allocatable, target :: ptens(:,:,:,:)
     real (kind=real_kind), dimension(np,np,nlev,nets:nete)   :: ptens_dg
     real (kind=real_kind), dimension(0:np+1,0:np+1,nlev)     :: pedges
 
@@ -620,7 +620,7 @@ contains
           ! when we dont advect a seperate density, we only allow limiter=0 or 4
        else
           print *,'Error: limiter can only be applied for advection tests with kmass>0'
-          stop 
+          stop
        endif
     endif
 
@@ -630,7 +630,7 @@ contains
 
     ! We want to make this leap-frog compliant
     ! Copy u^n to u^n+1
-!IKT, 10/21/16: local loop 
+!IKT, 10/21/16: local loop
     call t_startf('timer_advancerk_loop1')
 ! replace this with copy_timelevels
        ptr_buf1 = c_loc(elem_state_p)
@@ -649,7 +649,7 @@ contains
     call t_stopf('timer_advancerk_loop1')
     real_time = dt*real(nstep,kind=real_kind)
 
-!IKT, 10/21/16: this loop stays in Fortran 
+!IKT, 10/21/16: this loop stays in Fortran
     do s=1,MyRk%Stages
        dtstage = dt*(MyRk%beta(s)/MyRk%alpha(s))
 
@@ -735,14 +735,14 @@ contains
 !applying viscosity to q field
 
 !IKT, 10/21/16: local loop ("recover q") - to refactor: does not need team
-!parallelism (b/c tightly nested loop, if take out if statement) 
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+!parallelism (b/c tightly nested loop, if take out if statement)
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
        call t_startf('timer_advancerk_loop2')
        ptr_buf1 = c_loc(elem_state_p)
        call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
        call t_stopf('timer_advancerk_loop2')
-!IKT, 10/21/16: local loop - to refactor 
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+!IKT, 10/21/16: local loop - to refactor
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
        call t_startf('timer_advancerk_loop3')
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
@@ -777,7 +777,7 @@ contains
                  T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
               enddo
             enddo
-        
+
             ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
             vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
               elem(ie),var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
@@ -796,7 +796,7 @@ contains
         call t_startf('biwk_bexchV')
         call bndry_exchangeV(hybrid,edge3)
         call t_stopf('biwk_bexchV')
-   
+
         do ie=nets,nete
           kptr=0
           call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
@@ -806,7 +806,7 @@ contains
 
 ! OG : local loop to refactor
         do ie = nets,nete
-          rspheremv_bh     => elem(ie)%rspheremp(:,:)      
+          rspheremv_bh     => elem(ie)%rspheremp(:,:)
           do k=1,nlev
             do j=1,np
               do i=1,np
@@ -822,7 +822,7 @@ contains
        enddo ! end ie loop
 ! OG : end of local loop to refactor
 
-!end biharmonic 
+!end biharmonic
 
         call t_stopf('timer_advancerk_biharmonic')
 
@@ -832,9 +832,9 @@ contains
        ptr_buf2 = c_loc(elem_state_v)
        call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
        call t_stopf('timer_advancerk_loop4')
-        
-!IKT, 10/21/16: local loop - to refactor 
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
+
+!IKT, 10/21/16: local loop - to refactor
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
        call t_startf('timer_advancerk_loop5')
        ptr_buf1 = c_loc(elem_spheremp)
        ptr_buf2 = c_loc(ptens)
@@ -842,16 +842,20 @@ contains
        call LOOP5(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3)
        call t_stopf('timer_advancerk_loop5')
 
-!IKT, 10/21/16: local loop - to refactor 
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy) 
-	if(kmass.ne.-1)then
-	!we do not apply viscosity to mass field
-	ptens(:,:,kmass,:)=0.0d0
-        call t_startf('timer_advancerk_loop6')
-        ptr_buf1 = c_loc(elem_state_p)
-        call LOOP6(nets, nete, kmass, n0, nelemd, ptr_buf1)
-        call t_stopf('timer_advancerk_loop6')
-	endif
+!IKT, 10/21/16: local loop - to refactor
+!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
+       if(kmass.ne.-1)then
+         !we do not apply viscosity to mass field
+         ptens(:,:,kmass,:)=0.0d0
+         call t_startf('timer_advancerk_loop6')
+         ptr_buf1 = c_loc(elem_state_p)
+         call LOOP6(nets, nete, kmass, n0, nelemd, ptr_buf1)
+         call t_stopf('timer_advancerk_loop6')
+       endif
+
+       do ie=nets,nete
+          call set_prescribed_velocity(elem(ie),n0,real_time)
+       enddo
 
 !IKT, 10/21/16: the following needs to be team policy --> call to
 !divergence_sphere
@@ -860,18 +864,16 @@ contains
           fcor   => elem(ie)%fcor
           spheremp     => elem(ie)%spheremp
 
-          call set_prescribed_velocity(elem(ie),n0,real_time)
-
           do k=1,nlev
              ! ==============================================
              ! Compute kinetic energy term
              ! ==============================================
-!IKT, 10/21/16: we wrote part of this code in AdvanceRK.cpp 
+!IKT, 10/21/16: we wrote part of this code in AdvanceRK.cpp
              do j=1,np
                 do i=1,np
 
                    v1     = elem(ie)%state%v(i,j,1,k,n0)   ! contra
-                   v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra 
+                   v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra
                    ulatlon(i,j,1)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
                    ulatlon(i,j,2)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
 
@@ -884,7 +886,7 @@ contains
              end do
              grade = gradient_sphere(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
              !grade = gradient_sphere_wk(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
-             zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar 
+             zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar
              if (tracer_advection_formulation==TRACERADV_UGRADQ) then
                 gradh = gradient_sphere(elem(ie)%state%p(:,:,k,n0),deriv,elem(ie)%Dinv)
                 div = ulatlon(:,:,1)*gradh(:,:,1)+ulatlon(:,:,2)*gradh(:,:,2)
@@ -904,8 +906,9 @@ contains
              vtens(:,:,:,k,ie)=ulatlon(:,:,:) + dtstage*vtens(:,:,:,k,ie)
              ptens(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0) + dtstage*ptens(:,:,k,ie)
           end do!end of loop over levels
+       end do
 
-          
+       do ie=nets,nete
           if ((limiter_option == 8))then
              call limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
                   pmin(:,ie),pmax(:,ie),kmass)
@@ -916,7 +919,7 @@ contains
              call limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
                   pmin(:,ie),pmax(:,ie),kmass)
           endif
-          
+
           if ((limiter_option == 84))then
 	     pmin(:,ie)=0.0d0
              if (test_case=='swirl') then
@@ -933,25 +936,25 @@ contains
           if ( (limiter_option == 4) ) then
              call limiter2d_zero(ptens(:,:,:,ie),elem(ie)%spheremp, kmass)
           endif
-          
+
           do k=1,nlev
              ptens(:,:,k,ie) = ptens(:,:,k,ie)*elem(ie)%spheremp(:,:)
              vtens(:,:,1,k,ie) = vtens(:,:,1,k,ie)*elem(ie)%spheremp(:,:)
              vtens(:,:,2,k,ie) = vtens(:,:,2,k,ie)*elem(ie)%spheremp(:,:)
           enddo
-          
+
           ! ===================================================
           ! Pack cube edges of tendencies, rotate velocities
           ! ===================================================
           kptr=0
-!IKT, 10/21/16: packing needs to be pulled out (separate loop) 
+!IKT, 10/21/16: packing needs to be pulled out (separate loop)
           call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
           kptr=nlev
           call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
 
        end do
        call t_stopf('timer_advancerk_loop7')
-!IKT, 10/21/16: end of team policy loop 
+!IKT, 10/21/16: end of team policy loop
 
        if(Debug) print *,'homme: adv.._rk 2'
 
@@ -966,7 +969,7 @@ contains
 #if (defined HORIZ_OPENMP)
        !$OMP BARRIER
 #endif
-       
+
        do ie=nets,nete
 
           rspheremp     => elem(ie)%rspheremp
@@ -975,7 +978,7 @@ contains
           ! Unpack the edges for vgradp and vtens
           ! ===========================================================
 !IKT, 10/21/16: initially put unpacking in separate loop; should be able to
-!unpack in parallel ultimately. 
+!unpack in parallel ultimately.
           kptr=0
           call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
 
@@ -986,7 +989,7 @@ contains
        ! ===========================================================
        ! Compute velocity and pressure tendencies for all levels
        ! ===========================================================
-!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
        call t_startf('timer_advancerk_loop8')
        ptr_buf1 = c_loc(elem_rspheremp)
        ptr_buf2 = c_loc(elem_Dinv)
@@ -995,7 +998,7 @@ contains
        call LOOP8(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
        call t_stopf('timer_advancerk_loop8')
 
-!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for 
+!IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
        call t_startf('timer_advancerk_loop9')
        ptr_buf1 = c_loc(elem_state_v)
        ptr_buf2 = c_loc(elem_state_p)
@@ -1010,7 +1013,7 @@ contains
 
        real_time =real_time + dtstage
 !this is only for output reasons, if velocities are prescribed
-!IKT, 10/21/16: set_prescribed_velocity will be parallel_for 
+!IKT, 10/21/16: set_prescribed_velocity will be parallel_for
       do ie=nets,nete
 	  call set_prescribed_velocity(elem(ie),n0,real_time)
       enddo
@@ -1027,8 +1030,8 @@ contains
 #if (defined HORIZ_OPENMP)
     !$OMP BARRIER
 #endif
-    deallocate(vtens) 
-    deallocate(ptens) 
+    deallocate(vtens)
+    deallocate(ptens)
   end subroutine advance_nonstag_rk
 
 !-----------------------------------------------------------------------------------------------
@@ -1059,9 +1062,9 @@ contains
 
   subroutine limiter2d_zero(Q,spheremp,kmass)
     !
-    ! mass conserving sign-preserving limiter (2D only). 
+    ! mass conserving sign-preserving limiter (2D only).
     ! uses specified global minimum
-    ! 
+    !
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use control_mod, only :  test_case
@@ -1114,11 +1117,11 @@ contains
       mass2 = mass - area*qmin
       Q(:,:)=Q(:,:)-qmin
 
-      ! negative mass.  so reduce all postive values to zero 
+      ! negative mass.  so reduce all postive values to zero
       ! then increase negative values as much as possible
-      if (mass2 < 0) Q(:,:)=-Q(:,:) 
+      if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
-      do j=1,np	
+      do j=1,np
 	  do i=1,np
 	    if (Q(i,j)<0) then
 		Q(i,j)=0
@@ -1129,7 +1132,7 @@ contains
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
-      if (mass2 < 0) Q(:,:)=-Q(:,:)         
+      if (mass2 < 0) Q(:,:)=-Q(:,:)
       Q(:,:)=Q(:,:)+qmin
     endif
 
@@ -1137,7 +1140,7 @@ contains
 
 !-------------------------------------------------------------------------------
   subroutine limiter2d_max_onelevel(Q,spheremp,qmax)
-  
+
     use kinds, only : real_kind
     use dimensions_mod, only : np
 
@@ -1156,12 +1159,12 @@ contains
        mass=sum( Q(:,:)*spheremp(:,:) )
        area=sum( spheremp(:,:) )
        mass2 = area*qmax - mass
-       
+
       Q(:,:)=qmax-Q(:,:)
 
-      if (mass2 < 0) Q(:,:)=-Q(:,:) 
+      if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
-      do j=1,np	
+      do j=1,np
 	  do i=1,np
 	    if (Q(i,j)<0) then
 		Q(i,j)=0
@@ -1172,7 +1175,7 @@ contains
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
-      if (mass2 < 0) Q(:,:)=-Q(:,:) 
+      if (mass2 < 0) Q(:,:)=-Q(:,:)
       Q(:,:)=qmax-Q(:,:)
     endif
 
@@ -1185,7 +1188,7 @@ contains
 
   subroutine advance_hypervis(edge3,elem,hybrid,deriv,vtens,ptens,nt,nets,nete,dt2)
     !
-    !  take one timestep of:  
+    !  take one timestep of:
     !          u(:,:,:,np) = u(:,:,:,np) +  dt2*nu*laplacian**order ( u )
     !          h(:,:,:,np) = h(:,:,:,np) +  dt2*nu_s*laplacian**order ( h )
     !
@@ -1241,7 +1244,7 @@ contains
           do j=1,np
              do i=1,np
                 v1     = elem(ie)%state%v(i,j,1,k,nt)   ! contra
-                v2     = elem(ie)%state%v(i,j,2,k,nt)   ! contra 
+                v2     = elem(ie)%state%v(i,j,2,k,nt)   ! contra
                 elem(ie)%state%v(i,j,1,k,nt)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
                 elem(ie)%state%v(i,j,2,k,nt)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
              enddo
@@ -1253,7 +1256,7 @@ contains
     dt=dt2/hypervis_subcycle
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !  regular viscosity  
+    !  regular viscosity
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (hypervis_order == 1) then
 
@@ -1265,7 +1268,7 @@ contains
              do k=1,nlev
                 ! filter surface height, not thickness
                 do j=1,np
-                   do i=1,np             
+                   do i=1,np
                       ptot(i,j)=elem(ie)%state%p(i,j,k,nt) + elem(ie)%state%ps(i,j)
                    enddo
                 enddo
@@ -1277,8 +1280,8 @@ contains
                 ! can time advance and then DSS.  this has the advantage of
                 ! not letting any discontinuties accumulate in p,v via tol
                 do j=1,np
-                   do i=1,np             
-                      elem(ie)%state%p(i,j,k,nt)=elem(ie)%state%p(i,j,k,nt)*spheremp(i,j)  +  dt*nu_s*lap_p(i,j) 
+                   do i=1,np
+                      elem(ie)%state%p(i,j,k,nt)=elem(ie)%state%p(i,j,k,nt)*spheremp(i,j)  +  dt*nu_s*lap_p(i,j)
                       elem(ie)%state%v(i,j,1,k,nt)=elem(ie)%state%v(i,j,1,k,nt)*spheremp(i,j) + dt*nu*lap_v(i,j,1)
                       elem(ie)%state%v(i,j,2,k,nt)=elem(ie)%state%v(i,j,2,k,nt)*spheremp(i,j) + dt*nu*lap_v(i,j,2)
                    enddo
@@ -1304,7 +1307,7 @@ contains
              ! apply inverse mass matrix
              do k=1,nlev
                 do j=1,np
-                   do i=1,np             
+                   do i=1,np
                       elem(ie)%state%p(i,j,k,nt)=rspheremp(i,j)*elem(ie)%state%p(i,j,k,nt)
                       elem(ie)%state%v(i,j,1,k,nt)=rspheremp(i,j)*elem(ie)%state%v(i,j,1,k,nt)
                       elem(ie)%state%v(i,j,2,k,nt)=rspheremp(i,j)*elem(ie)%state%v(i,j,2,k,nt)
@@ -1317,7 +1320,7 @@ contains
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !  hyper viscosity  
+    !  hyper viscosity
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (hypervis_order == 2) then
        do ic=1,hypervis_subcycle
@@ -1326,7 +1329,7 @@ contains
           do ie=nets,nete
              spheremp     => elem(ie)%spheremp
              do k=1,nlev
-                ! advace in time.  
+                ! advace in time.
                 ! note: DSS commutes with time stepping, so we can time advance and then DSS.
                 ! note: weak operators alreayd have mass matrix "included"
 
@@ -1386,8 +1389,8 @@ contains
 
 
     ! lat-lon conversion 1740  20%
-    ! opss+pack+mass     5937  68% 
-    ! unpack+mass_inv    1015  12%     
+    ! opss+pack+mass     5937  68%
+    ! unpack+mass_inv    1015  12%
     ! total 8692
   end subroutine advance_hypervis
 
@@ -1453,7 +1456,7 @@ contains
     real (kind=real_kind), dimension(np,np,2,nlev,nets:nete)  :: Ru
     real (kind=real_kind), dimension(np,np,2,nlev,nets:nete)  :: grad_dp
     real (kind=real_kind), dimension(np,np,nlev,nets:nete)    :: vgradp     ! v.grad(p) on velocity grid
-    real (kind=real_kind), dimension(np,np,nlev,nets:nete)    :: Rs   
+    real (kind=real_kind), dimension(np,np,nlev,nets:nete)    :: Rs
     real (kind=real_kind), dimension(np,np,nlev,nets:nete)    :: dp ! solution to Helmholtz equation
 
     real (kind=real_kind), dimension(np,np,2)    :: gradp      ! weak pressure gradient, time level (n  )
@@ -1603,9 +1606,9 @@ contains
 
           ! ==============================================
           !
-          ! Compute gradient of pressure field at time 
+          ! Compute gradient of pressure field at time
           ! level n-1 and n
-          ! 
+          !
           !   2 x {2.0*(np+np)*np*(2.0*np-1.0) + 2*np*np} Flops
           !
           ! ==============================================
@@ -1693,7 +1696,7 @@ contains
 
        ! ===================================================
        !
-       ! Pack cube edges of grad(p) and V.grad(V) 
+       ! Pack cube edges of grad(p) and V.grad(V)
        ! into edge buffer
        !
        ! ===================================================
@@ -1710,7 +1713,7 @@ contains
        !
        ! Rotate edges (if necessary, e.g. if we're on the cube)
        !
-       ! ============================================================= 
+       ! =============================================================
 
        !DBG print *,'advance_si: point #15.1'
     end do
@@ -1901,7 +1904,7 @@ contains
        Dinv => elem(ie)%Dinv
 
 
-       kptr=0      
+       kptr=0
 
        call edgeVunpack(edge2, grad_dp(1,1,1,1,ie), 2*nlev, kptr, ie)
 
@@ -1959,7 +1962,7 @@ contains
 !----------------------------------------------------------------------------------------
 
 
-!IKT, 10/21/16: can be done in parallel_for (vector notation => parallel_for)  
+!IKT, 10/21/16: can be done in parallel_for (vector notation => parallel_for)
   subroutine set_prescribed_velocity(elem,n0,time)
   use control_mod, only :  topology, test_case
   use element_mod, only : element_t
@@ -1977,11 +1980,11 @@ contains
      do k=1,nlev
         elem%state%v(:,:,:,k,n0)=tc1_velocity(elem%spherep,elem%Dinv)
      end do
-  else if (topology == "cube" .and. test_case=="vortex") then                
+  else if (topology == "cube" .and. test_case=="vortex") then
      do k=1,nlev
         elem%state%v(:,:,:,k,n0)=vortex_velocity(time,elem%spherep,elem%Dinv)
      end do
-  else if (topology == "cube" .and. test_case=="swirl") then                
+  else if (topology == "cube" .and. test_case=="swirl") then
      do k=1,nlev
         elem%state%v(:,:,:,k,n0)=swirl_velocity(time,elem%spherep,elem%Dinv)
      end do
@@ -2004,16 +2007,16 @@ contains
   ! take a forward euler step, overwriting the input with the output.
   !
   ! if  dt2=0, then the DSS'd RHS is returned in vtens,ptens
-  ! and u(np1) is not changed.  
+  ! and u(np1) is not changed.
   !
-  ! Combining the RHS and DSS pack operation in one routine 
+  ! Combining the RHS and DSS pack operation in one routine
   ! allows us to fuse these two loops for more cache reuse
   !
-  ! Combining the dt advance and DSS unpack operation in one routine 
+  ! Combining the dt advance and DSS unpack operation in one routine
   ! allows us to fuse these two loops for more cache reuse
   !
   ! note: for prescribed velocity case, velocity will be computed at
-  ! "real_time", which should be the time of timelevel n0.  
+  ! "real_time", which should be the time of timelevel n0.
   ! ===================================
   use kinds, only : real_kind
   use dimensions_mod, only : np, nlev
@@ -2042,7 +2045,7 @@ contains
   real (kind=real_kind), dimension(np,np,2)    :: pv      ! p*v lat-lon
   real (kind=real_kind), dimension(np,np)                     :: E          ! kinetic energy term
   real (kind=real_kind), dimension(np,np)                     :: zeta       ! relative vorticity
-  real (kind=real_kind), dimension(np,np)      :: div  
+  real (kind=real_kind), dimension(np,np)      :: div
   real (kind=real_kind), dimension(np,np,2)      :: ulatlon
 
   integer i,j,k,kptr,ie
@@ -2068,23 +2071,23 @@ contains
         ! ==============================================
         do j=1,np
            do i=1,np
-              
+
               v1     = elem(ie)%state%v(i,j,1,k,n0)   ! contra
-              v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra 
+              v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra
               ulatlon(i,j,1)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
               ulatlon(i,j,2)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
-              
+
               E(i,j) = 0.5D0*(ulatlon(i,j,1)**2 + ulatlon(i,j,2)**2)  +&
                    elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
-              
+
               pv(i,j,1) = ulatlon(i,j,1)*(pmean+elem(ie)%state%p(i,j,k,n0))
               pv(i,j,2) = ulatlon(i,j,2)*(pmean+elem(ie)%state%p(i,j,k,n0))
            end do
         end do
         grade = gradient_sphere(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
-        zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar 
-        div = divergence_sphere(pv,deriv,elem(ie))      ! latlon vector -> scalar 
-        
+        zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar
+        div = divergence_sphere(pv,deriv,elem(ie))      ! latlon vector -> scalar
+
         ! ==============================================
         ! Compute velocity tendency terms
         ! ==============================================
@@ -2097,7 +2100,7 @@ contains
            end do
         end do
      end do
-     
+
      ! ===================================================
      ! Pack cube edges of tendencies, rotate velocities
      ! ===================================================
@@ -2106,8 +2109,8 @@ contains
      kptr=nlev
      call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
   end do
-  
-  
+
+
 #if (defined HORIZ_OPENMP)
   !$OMP BARRIER
 #endif
@@ -2115,19 +2118,19 @@ contains
 #if (defined HORIZ_OPENMP)
   !$OMP BARRIER
 #endif
-  
+
   do ie=nets,nete
      rspheremp     => elem(ie)%rspheremp
-     
+
      ! ===========================================================
      ! Unpack the edges for vgradp and vtens
      ! ===========================================================
      kptr=0
      call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
-     
+
      kptr=nlev
      call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
-     
+
      ! ===========================================================
      ! Compute velocity and pressure tendencies for all levels
      ! ===========================================================
@@ -2137,14 +2140,14 @@ contains
               ptens(i,j,k,ie) = rspheremp(i,j)*ptens(i,j,k,ie)
               vtens1=rspheremp(i,j)*vtens(i,j,1,k,ie)
               vtens2=rspheremp(i,j)*vtens(i,j,2,k,ie)
-              
+
               ! lat-lon -> contra
               vtens(i,j,1,k,ie) = elem(ie)%Dinv(i,j,1,1)*vtens1 + elem(ie)%Dinv(i,j,1,2)*vtens2
               vtens(i,j,2,k,ie) = elem(ie)%Dinv(i,j,2,1)*vtens1 + elem(ie)%Dinv(i,j,2,2)*vtens2
            end do
         end do
      end do
-     
+
      if (dt2/=0) then
      do k=1,nlev
         ! ====================================================
@@ -2162,7 +2165,7 @@ contains
   end do
   call t_stopf('compute_and_apply_rhs')
   end subroutine compute_and_apply_rhs
-  
+
 
 
 
@@ -2256,7 +2259,7 @@ function adv_flux_term(elem,deriv,contrauv,si,si_neighbor) result(numflux)
     enddo
 
     !Flux integral along the element boundary
-    ! note: added metdet() below which is not used in DG code.  
+    ! note: added metdet() below which is not used in DG code.
     ! in CG code, all integrals used in weak formulation match physical integrals used
     ! to define mass and energy:
     ! ds (arc length)   =  metdet(i,j)*w(i)
@@ -2277,7 +2280,7 @@ end function adv_flux_term
 
 
 !==================================================================================!
-! Element-wise Max flux Jacobian for SW system 
+! Element-wise Max flux Jacobian for SW system
 ! from DG code, modified for CG velocity
 !----------------------------------------------------------------------------------
  Function sw_fjmax(contuv,si,si_neighbor,elem) result(fjmax)
@@ -2290,9 +2293,9 @@ end function adv_flux_term
  type (element_t) :: elem
 
  real (kind=real_kind),dimension(np,np) :: gh11,gh22,g11,g22
- real (kind=real_kind),dimension(np,4)  :: gh11_halo, gh22_halo 
+ real (kind=real_kind),dimension(np,4)  :: gh11_halo, gh22_halo
  real (kind=real_kind),dimension(4)   :: fjmax
- real (kind=real_kind):: alfa1,alfa2, ul,ur 
+ real (kind=real_kind):: alfa1,alfa2, ul,ur
  integer, parameter:: south=1,east=2,north=3,west=4
  integer:: i,j
 !========================================================
@@ -2328,7 +2331,7 @@ end function adv_flux_term
        ul = abs(contuv(i,1,2))      + sqrt(gh22(i,1))
        ur = abs(contuv(i,1,2))      + sqrt(gh22_halo(i,south))
        alfa1= max(alfa1,ul,ur)
-       
+
        ul = abs(contuv(i,np,2)) + sqrt(gh22_halo(i,north))
        ur = abs(contuv(i,np,2))     + sqrt(gh22(i,np))
        alfa2= max(alfa2,ul,ur)
@@ -2349,12 +2352,12 @@ end function adv_flux_term
     enddo
 
     fjmax(west) = alfa1
-    fjmax(east) = alfa2 
+    fjmax(east) = alfa2
 
-   End Function sw_fjmax  
+   End Function sw_fjmax
 !=======================================================================================!
 
-!=======================================================================================! 
+!=======================================================================================!
 subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
    use element_mod, only : element_t
    use derivative_mod, only : derivative_t
@@ -2373,7 +2376,7 @@ subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
    real (kind=real_kind), dimension(np)   :: lf_south,lf_north,lf_east,lf_west
    real(kind=real_kind) ::  left, right, f_left, f_right, s1,s2
 
-   integer i,j,eqn 
+   integer i,j,eqn
 
       mij(:,:) = 0.0D0
       mij(1,1) = 1.0D0
@@ -2381,7 +2384,7 @@ subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
 
     !For SW-system  (u1,u2,dp,pt) order   (4 equations)
 
-    fluxout(:,:,:) = 0.0D0 
+    fluxout(:,:,:) = 0.0D0
 
       do eqn = 1, numeqn
          ! convert from edgeDGVunpack variable to Ram's variables:
@@ -2389,20 +2392,20 @@ subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
          si_senw(:,north,eqn) = si_neighbor(1:np,np+1,eqn)
          si_senw(:,east,eqn) = si_neighbor(np+1,1:np,eqn)
          si_senw(:,west,eqn) = si_neighbor(0,1:np,eqn)
-         
+
 
            ! East & West   LF flux  (fjmax <- max of flux Jacobian)
 
          do j = 1, np
 
-                    left  = si_senw(j,west,eqn) 
-                   right  = si(1,j,eqn) 
+                    left  = si_senw(j,west,eqn)
+                   right  = si(1,j,eqn)
                   f_left  = uvcontra(1,j,1,eqn)*left
                   f_right = uvcontra(1,j,1,eqn)*right
                lf_west(j) = 0.5D0 *(f_left + f_right - fjmax(west)*(right - left))
 
-                    left  = si(np,j,eqn) 
-                   right  = si_senw(j,east,eqn) 
+                    left  = si(np,j,eqn)
+                   right  = si_senw(j,east,eqn)
                   f_left  = uvcontra(np,j,1,eqn)*left
                   f_right = uvcontra(np,j,1,eqn)*right
                lf_east(j) = 0.5D0 *(f_left + f_right - fjmax(east)*(right - left))
@@ -2413,14 +2416,14 @@ subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
 
          do i = 1, np
 
-                     left = si_senw(i,south,eqn) 
-                   right  = si(i,1,eqn) 
+                     left = si_senw(i,south,eqn)
+                   right  = si(i,1,eqn)
                    f_left = uvcontra(i,1,2,eqn)*left
                   f_right = uvcontra(i,1,2,eqn)*right
               lf_south(i) = 0.5D0 *(f_left + f_right - fjmax(south)*(right - left))
 
-                    left  = si(i,np,eqn) 
-                    right = si_senw(i,north,eqn) 
+                    left  = si(i,np,eqn)
+                    right = si_senw(i,north,eqn)
                   f_left  = uvcontra(i,np,2,eqn)*left
                   f_right = uvcontra(i,np,2,eqn)*right
               lf_north(i) = 0.5D0 *(f_left + f_right - fjmax(north)*(right - left))
@@ -2428,22 +2431,22 @@ subroutine swsys_flux(numeqn,elem,deriv,fjmax,si,si_neighbor,uvcontra,fluxout)
          end do
 
         !Flux integral along the element boundary
-        ! note: added metdet() below which is not used in DG code.  
+        ! note: added metdet() below which is not used in DG code.
         ! in CG code, all integrals used in weak formulation match physical integrals used
         ! to define mass and energy:
         ! v dot nhat ds (arc length)   =  ucontra * metdet(i,j)*w(i)
         ! dA (area measure)            =  metdet(i,j)*w(i)*w(j)
         do j = 1, np
         do i = 1, np
-            s1 = (lf_east(j) *mij(i,np) - lf_west(j) *mij(i,1) )* deriv%Mvv_twt(j,j) * elem%metdet(i,j) 
+            s1 = (lf_east(j) *mij(i,np) - lf_west(j) *mij(i,1) )* deriv%Mvv_twt(j,j) * elem%metdet(i,j)
             s2 = (lf_north(i)*mij(j,np) - lf_south(i)*mij(j,1) )* deriv%Mvv_twt(i,i) * elem%metdet(i,j)
             fluxout(i,j,eqn) = (s1 + s2) * rrearth
         end do
         end do
 
-    end do 
+    end do
 
- end subroutine  swsys_flux 
-!=======================================================================================================! 
+ end subroutine  swsys_flux
+!=======================================================================================================!
 
 end module advance_mod

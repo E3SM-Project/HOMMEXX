@@ -110,7 +110,6 @@ void contra2latlon_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  constexpr const int dim = 2;
   V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
   D d(d_ptr, np, np, dim, dim, nelems);
 
@@ -152,8 +151,6 @@ void loop5_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  constexpr const int dim = 2;
-
   SphereMP spheremp(spheremp_ptr, np, np, nelems);
   PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
   VTens vtens(vtens_ptr, np, np, dim, nlev,
@@ -227,8 +224,6 @@ void loop8_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  constexpr const int dim = 2;
-
   SphereMP rspheremp(rspheremp_ptr, np, np, numelems);
   D dinv(dinv_ptr, np, np, dim, dim, numelems);
   PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
@@ -277,8 +272,6 @@ void loop9_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  constexpr const int dim = 2;
-
   V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
   P p(p_ptr, np, np, nlev, timelevels, numelems);
   Alpha alpha0(alpha0_ptr, rkstages);
@@ -326,7 +319,6 @@ void copy_timelevels_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  constexpr const int dim = 2;
   // P p(p_ptr, np, np,    nlev, timelevels, nelems);
   // V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
   V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
