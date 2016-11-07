@@ -11,9 +11,6 @@ namespace Homme {
 constexpr const real rearth = 6.376E6;
 constexpr const real rrearth = 1.0 / rearth;
 
-template <typename T, int size>
-using Array = Kokkos::Array<T, size>;
-
 template <typename ScalarQP>
 void gradient_sphere(int ie, const ScalarQP &s,
                      const derivative &deriv, const D &dinv,
@@ -48,14 +45,16 @@ void vorticity_sphere(int ie, const VectorField &v,
                       const derivative &deriv, const D &d,
                       const MetDet &rmetdet,
                       ScalarField &vorticity) {
-  Array<real, dim> dvd;
-  Array<Array<Array<real, np>, np>, dim> vco;
-  Array<Array<real, np>, np> vtemp;
+  HommeLocal<real *> dvd("Velocity Spatial Derivatives",
+                         dim);
+  HommeLocal<real ***> vco("", np, np, dim);
+  HommeLocal<real **> vtemp("buffer for performance", np,
+                            np);
 
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       for(int h = 0; h < dim; h++) {
-        vco[h][j][i] = d(i, j, 0, h, ie) * v(i, j, 0) +
+        vco(i, j, h) = d(i, j, 0, h, ie) * v(i, j, 0) +
                        d(i, j, 1, h, ie) * v(i, j, 1);
       }
     }
@@ -64,20 +63,20 @@ void vorticity_sphere(int ie, const VectorField &v,
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int h = 0; h < dim; h++) {
-        dvd[h] = 0.0;
+        dvd(h) = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dvd[0] += deriv.Dvv[l][i] * vco[1][j][i];
-        dvd[1] += deriv.Dvv[l][i] * vco[0][i][j];
+        dvd(0) += deriv.Dvv[l][i] * vco(i, j, 1);
+        dvd(1) += deriv.Dvv[l][i] * vco(j, i, 0);
       }
-      vorticity(l, j) = dvd[0];
-      vorticity(j, l) = dvd[0];
+      vorticity(l, j) = dvd(0);
+      vtemp(j, l) = dvd(1);
     }
   }
 
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
-      vorticity(i, j) = (vorticity(i, j) - vtemp[j][i]) *
+      vorticity(i, j) = (vorticity(i, j) - vtemp(i, j)) *
                         (rmetdet(i, j, ie) * rrearth);
     }
   }
