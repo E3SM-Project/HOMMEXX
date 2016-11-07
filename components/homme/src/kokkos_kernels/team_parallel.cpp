@@ -1,120 +1,167 @@
 
-namespace Homme {
-
 #include <Types.hpp>
+
 #include <dimensions.hpp>
 #include <kinds.hpp>
 
 #include <cmath>
 
-#include <string.h>
+namespace Homme {
 
-using Array = Kokkos::Array;
+constexpr const real rearth = 6.376E6;
+constexpr const real rrearth = 1.0 / rearth;
 
-void tc1_velocity(int ie, int n0, int k, real u0,
-                  SphereP &spherep, D &d, V &v) {
-  constexpr const real alpha = 0.0;
-  const real csalpha = std::cos(alpha);
-  const real snalpha = std::sin(alpha);
-  Array<Array<real, np>, np> snlon, cslon, snlat, cslat;
-  for(int j = 0; j < np; j++) {
-    for(int i = 0; i < np; i++) {
-      snlat[i][j] = std::sin(
-          spherep(Spherical_Polar_e::Lat, i, j, ie));
-      cslat[i][j] = std::cos(
-          spherep(Spherical_Polar_e::Lat, i, j, ie));
-      snlon[i][j] = std::sin(
-          spherep(Spherical_Polar_e::Lon, i, j, ie));
-      cslon[i][j] = std::cos(
-          spherep(Spherical_Polar_e::Lon, i, j, ie));
-    }
-  }
-  real V1, V2;
-  for(int i = 0; i < np; i++) {
-    for(int h = 0; h < np; h++) {
-      V1 = u0 * (cslat[h][i] * csalpha +
-                 snlat[h][i] * cslon[h][i] * snalpha);
-      V2 = -u0 * (snlon[h][i] * snalpha);
-      for(int g = 0; g < dim; g++) {
-        v(h, i, g, k, n0, ie) =
-            V1 * d(h, i, g, 0, ie) + V2 * d(h, i, g, 1, ie);
-      }
-    }
-  }
-}
+template <typename T, int size>
+using Array = Kokkos::Array<T, size>;
 
-void swirl_velocity(int ie, int n0, int k, real time,
-                    SphereP &spherep, D &d, V &v) {
-  /* TODO: Implement this */
-}
-
-void gradient_sphere(int ie, int e, const ScalarField &s,
+template <typename ScalarQP>
+void gradient_sphere(int ie, const ScalarQP &s,
                      const derivative &deriv, const D &dinv,
                      VectorField &grad) {
-  Array<real, dim> dsd;
-  Array<Array<Array<real, np>, np>, dim> v;
+  HommeLocal<real *> dsd("Velocity Spatial Derivatives",
+                         dim);
+  HommeLocal<real ***> v("Velocity", np, np, dim);
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int k = 0; k < dim; k++) {
-        dsd[k] = 0.0;
+        dsd(k) = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dsd[0] += deriv.Dvv[i][l] * s[i][j];
+        dsd(0) += deriv.Dvv[i][l] * s(i, j);
+        dsd(1) += deriv.Dvv[i][l] * s(j, i);
       }
-      v[0][l][j] = dsd[0] * rrearth;
-      v[1][j][l] = dsd[1] * rrearth;
+      v(l, j, 0) = dsd(0) * rrearth;
+      v(j, l, 1) = dsd(1) * rrearth;
     }
   }
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       for(int h = 0; h < np; h++) {
-        grad(i, j, h) = dinv(i, j, 0, h, ie) * v[0][i][j] +
-                        dinv(i, j, 1, h, ie) * v[1][i][j];
+        grad(i, j, h) = dinv(i, j, 0, h, ie) * v(i, j, 0) +
+                        dinv(i, j, 1, h, ie) * v(i, j, 1);
       }
     }
   }
 }
 
-void team_parallel_ex(const int &nets, const int &nete,
-                      const int &n0, const int &nelemd,
-                      const real &pmean, const real &u0,
-                      const real &real_time,
-                      const char *&topology,
-                      const char *&test_case, real *&d_ptr,
-                      real *&dinv_ptr, real *&fcor_ptr,
-                      real *&spheremp_ptr, real *&p_ptr,
-                      real *&ps_ptr, real *&v_ptr) {
-  constexpr const unsigned dim = 2;
+void vorticity_sphere(int ie, const VectorField &v,
+                      const derivative &deriv, const D &d,
+                      const MetDet &rmetdet,
+                      ScalarField &vorticity) {
+  Array<real, dim> dvd;
+  Array<Array<Array<real, np>, np>, dim> vco;
+  Array<Array<real, np>, np> vtemp;
 
+  for(int j = 0; j < np; j++) {
+    for(int i = 0; i < np; i++) {
+      for(int h = 0; h < dim; h++) {
+        vco[h][j][i] = d(i, j, 0, h, ie) * v(i, j, 0) +
+                       d(i, j, 1, h, ie) * v(i, j, 1);
+      }
+    }
+  }
+
+  for(int j = 0; j < np; j++) {
+    for(int l = 0; l < np; l++) {
+      for(int h = 0; h < dim; h++) {
+        dvd[h] = 0.0;
+      }
+      for(int i = 0; i < np; i++) {
+        dvd[0] += deriv.Dvv[l][i] * vco[1][j][i];
+        dvd[1] += deriv.Dvv[l][i] * vco[0][i][j];
+      }
+      vorticity(l, j) = dvd[0];
+      vorticity(j, l) = dvd[0];
+    }
+  }
+
+  for(int j = 0; j < np; j++) {
+    for(int i = 0; i < np; i++) {
+      vorticity(i, j) = (vorticity(i, j) - vtemp[j][i]) *
+                        (rmetdet(i, j, ie) * rrearth);
+    }
+  }
+}
+
+void divergence_sphere(int ie, const VectorField &v,
+                       const derivative &deriv,
+                       const MetDet &metdet,
+                       const MetDet &rmetdet, const D &dinv,
+                       ScalarField &divergence) {
+  HommeLocal<real *> dvd("Positional Velocity Derivatives",
+                         dim);
+  HommeLocal<real ***> gv("Contravariant Form", np, np,
+                          dim);
+  HommeLocal<real **> vvtemp(
+      "Divergence Performance Buffer", np, np);
+
+  for(int j = 0; j < np; j++) {
+    for(int i = 0; i < np; i++) {
+      for(int h = 0; h < dim; h++) {
+        gv(i, j, h) = metdet(i, j, ie) *
+                      (dinv(i, j, h, 0, ie) * v(i, j, 0) +
+                       dinv(i, j, h, 1, ie) * v(i, j, 1));
+      }
+    }
+  }
+
+  for(int j = 0; j < np; j++) {
+    for(int l = 0; l < np; l++) {
+      for(int h = 0; h < dim; h++) {
+        dvd[h] = 0.0;
+      }
+      for(int i = 0; i < np; i++) {
+        dvd[0] += deriv.Dvv[l][i] * gv(i, j, 0);
+        dvd[1] += deriv.Dvv[l][i] * gv(j, i, 1);
+      }
+      divergence(l, j) = dvd(0);
+      vvtemp(j, l) = dvd(1);
+    }
+  }
+  for(int j = 0; j < np; j++) {
+    for(int i = 0; i < np; i++) {
+      divergence(i, j) = (divergence(i, j) + vvtemp(i, j)) *
+                         (rmetdet(i, j, ie) * rrearth);
+    }
+  }
+}
+
+void team_parallel_ex(
+    const int &nets, const int &nete, const int &n0,
+    const int &nelemd,
+    const int &tracer_advection_formulation,
+    const real &pmean, const derivative &deriv,
+    const real &dtstage, real *&d_ptr, real *&dinv_ptr,
+    real *&metdet_ptr, real *&rmetdet_ptr, real *&fcor_ptr,
+    real *&p_ptr, real *&ps_ptr, real *&v_ptr,
+    real *&ptens_ptr, real *&vtens_ptr) {
   D d(d_ptr, np, np, dim, dim, nelemd);
   D dinv(dinv_ptr, np, np, dim, dim, nelemd);
+  MetDet metdet(metdet_ptr, np, np, nelemd);
+  MetDet rmetdet(rmetdet_ptr, np, np, nelemd);
   FCor fcor(fcor_ptr, np, np, nelemd);
-  SphereMP spheremp(np, np, nelemd);
   P p(p_ptr, np, np, nlev, timelevels, nelemd);
   PS ps(ps_ptr, np, np, nelemd);
   V v(v_ptr, np, np, dim, nlev, timelevels, nelemd);
-  Zeta zeta(np, np);
+  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
+  VTens vtens(vtens_ptr, np, np, dim, nlev,
+              nete - nets + 1);
+
+  ScalarField zeta("Vorticity", np, np);
+
+  enum {
+    TRACERADV_UGRADQ = 0,
+    TRACERADV_TOTAL_DIVERGENCE = 1
+  };
 
   for(int ie = nets - 1; ie < nete; ie++) {
-    if(strcmp(topology, "cube") == 0) {
-      if(strcmp(test_case, "swtc1") == 0) {
-        for(int k = 0; k < nlev; k++) {
-          tc1_velocity(ie, n0, k, u0, spherep, d, v);
-        }
-      } else if(strcmp(test_case, "swirl") == 0) {
-        for(int k = 0; k < nlev; k++) {
-          swirl_velocity(ie, n0, k, time, spherep, dinv);
-        }
-      }
-    }
-
     for(int k = 0; k < nlev; k++) {
       // ulatlon(np, np, dim), local variable
-      VectorField ulatlon(np, np, dim);
+      VectorField ulatlon("ulatlon", np, np, dim);
       // E(np, np), local variable
-      ScalarField e(np, np);
+      ScalarField e("Energy", np, np);
       // pv(np, np, dim)
-      VectorField pv(np, np, dim);
+      VectorField pv("PV", np, np, dim);
 
       for(int j = 0; j < np; j++) {
         for(int i = 0; i < np; i++) {
@@ -122,8 +169,8 @@ void team_parallel_ex(const int &nets, const int &nete,
           real v2 = v(i, j, 1, k, n0, ie);
           e(i, j) = 0.0;
           for(int h = 0; h < dim; h++) {
-            ulatlon(i, j, h) =
-                d(i, j, h, 0) * v1 + d(i, j, h, 1) * v2;
+            ulatlon(i, j, h) = d(i, j, h, 0, ie) * v1 +
+                               d(i, j, h, 1, ie) * v2;
             e(i, j) += ulatlon(i, j, h) * ulatlon(i, j, h);
           }
           e(i, j) /= 2.0;
@@ -136,20 +183,21 @@ void team_parallel_ex(const int &nets, const int &nete,
       }
 
       // grade(np, np, dim)
-      VectorField grade(np, np, dim);
+      VectorField grade("Energy Gradient", np, np, dim);
       // TODO: Implement gradient_sphere
       gradient_sphere(ie, e, deriv, dinv, grade);
-      // TODO: Implement vorticity_sphere
-      // TODO: Change the elem parameter to a type we can
-      // actually use in C++
-      vorticity_sphere(ulatlon, deriv, elem(ie), zeta);
+      vorticity_sphere(ie, ulatlon, deriv, d, rmetdet,
+                       zeta);
       // latlon vector -> scalar
       // gradh(np, np, dim)
-      VectorField gradh(np, np, dim);
+      VectorField gradh("Pressure Gradient", np, np, dim);
       // div(np, np)
-      Div div(np, np);
+      ScalarField div("PV Divergence", np, np);
       if(tracer_advection_formulation == TRACERADV_UGRADQ) {
-        gradient_sphere(ie, p, deriv, Dinv, gradh);
+        auto p_slice = Kokkos::subview(
+            p, std::make_pair(0, np), std::make_pair(0, np),
+            k, n0, ie);
+        gradient_sphere(ie, p_slice, deriv, dinv, gradh);
         for(int j = 0; j < np; j++) {
           for(int i = 0; i < np; i++) {
             div(i, j) = ulatlon(i, j, 0) * gradh(i, j, 0) +
@@ -157,13 +205,8 @@ void team_parallel_ex(const int &nets, const int &nete,
           }
         }
       } else {
-        // TODO: Implement
-        // divergence_sphere
-        // TODO: Change the
-        // elem parameter to a
-        // type we can
-        // actually use in C++
-        divergence_sphere(pv, deriv, elem, div);
+        divergence_sphere(ie, pv, deriv, metdet, rmetdet,
+                          dinv, div);
       }
 
       // ==============================================
@@ -175,63 +218,24 @@ void team_parallel_ex(const int &nets, const int &nete,
       // ptens(np, np, nlev, nelemd)
       for(int j = 0; j < np; j++) {
         for(int i = 0; i < np; i++) {
-          vtens(i, j, 0, k, ie) =
-              vtens(i, j, 0, k, ie) +
+          vtens(i, j, 0, k, ie - nets + 1) =
+              vtens(i, j, 0, k, ie - nets + 1) +
               (ulatlon(i, j, 1) *
-                   (fcor(i, j) + zeta(i, j)) -
+                   (fcor(i, j, ie) + zeta(i, j)) -
                grade(i, j, 0));
-          vtens(i, j, 1, k, ie) =
-              vtens(i, j, 1, k, ie) +
+          vtens(i, j, 1, k, ie - nets + 1) =
+              vtens(i, j, 1, k, ie - nets + 1) +
               (-ulatlon(i, j, 0) *
-                   (fcor(i, j) + zeta(i, j)) -
+                   (fcor(i, j, ie) + zeta(i, j)) -
                grade(i, j, 1));
           // take the local element timestep
           for(int h = 0; h < dim; h++) {
-            vtens(i, j, h, k, ie) =
+            vtens(i, j, h, k, ie - nets + 1) =
                 ulatlon(i, j, h) +
-                dtstage * vtens(i, j, h, k, ie);
+                dtstage * vtens(i, j, h, k, ie - nets + 1);
           }
           ptens(i, j, k, ie) +=
               dtstage * ptens(i, j, k, ie);
-        }
-      }
-      if(limiter_option == 8 || limiter_option == 81 ||
-         limiter_option == 84) {
-        if(limiter_option == 81) {
-          for(int i = 0; i < dim; i++) {
-            pmax(i, ie) = pmax( :, ie) + 9e19;
-          }
-        } else if(limiter_option == 84) {
-          for(int i = 0; i < dim; i++) {
-            pmin(i, ie) = 0.0;
-          }
-          if(strcmp(test_case, 'swirl') == 0) {
-            pmin(1, ie) = 0.1;
-            if(nlev >= 3) {
-              k = 3;
-              pmin(k, ie) = 0.1;
-            }
-          }
-          for(int i = 0; i < dim; i++) {
-            pmax(i, ie) = pmax(i, ie) + 9e19;
-          }
-        }
-        // TODO: Implement limiter_optim_wrap
-        limiter_optim_wrap(kmass, ie, ptens, spheremp, pmin,
-                           pmax);
-      } else if(limiter_option == 4) {
-        limiter2d_zero(kmass, ie, ptens, spheremp);
-      }
-      for(int k = 0; k < nlev; k++) {
-        for(int j = 0; j < np; j++) {
-          for(int i = 0; i < np; i++) {
-            ptens(i, j, k, ie) =
-                ptens(i, j, k, ie) * spheremp(i, j, ie);
-            vtens(i, j, 0, k, ie) =
-                vtens(i, j, 0, k, ie) * spheremp(i, j, ie);
-            vtens(i, j, 1, k, ie) =
-                vtens(i, j, 1, k, ie) * spheremp(i, j, ie);
-          }
         }
       }
     }
