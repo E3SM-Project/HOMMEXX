@@ -5,10 +5,15 @@ SET(HOMME_TESTS
   swtc5.cmake
   swtc6.cmake
   swtc1_flat.cmake
+  swtc1_flat_c.cmake
   swtc2_flat.cmake
+  swtc2_flat_c.cmake
   swtc5_flat.cmake
+  swtc5_flat_c.cmake
   swtc6_flat.cmake
+  swtc6_flat_c.cmake
   swirl_flat.cmake
+  swirl_flat_c.cmake
   swimtc5.cmake
   baro2b.cmake
   baro2c.cmake

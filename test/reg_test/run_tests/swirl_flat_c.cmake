@@ -8,13 +8,13 @@
 ###############################################################
 
 # The name of this test (should be the basename of this file)
-SET(TEST_NAME swtc1_flat)
+SET(TEST_NAME swirl_flat_c)
 
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME swtcA_flat)
+SET(EXEC_NAME swtcA_flat_c)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swtc1.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swirl.nl)
 
-SET(NC_OUTPUT_FILES swtc11.nc)
+SET(NC_OUTPUT_FILES swirl1.nc)
