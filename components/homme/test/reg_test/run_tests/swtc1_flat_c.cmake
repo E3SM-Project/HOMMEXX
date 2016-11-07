@@ -8,10 +8,10 @@
 ###############################################################
 
 # The name of this test (should be the basename of this file)
-SET(TEST_NAME swtc1_flat)
+SET(TEST_NAME swtc1_flat_c)
 
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME swtcA_flat)
+SET(EXEC_NAME swtcA_flat_c)
 
 SET(NUM_CPUS 16)
 
