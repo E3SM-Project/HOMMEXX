@@ -58,6 +58,19 @@ program main
   integer ithr
   integer ierr
 
+  !Check which run this is: C++ kernels or Fortran?
+#if DONT_USE_KOKKOS
+  print *, 'FORTRAN kernels only, DONT_USE_KOKKOS is set.'
+#else
+  print *, 'C++ kernels only, DONT_USE_KOKKOS is not set.'
+#endif
+
+#if SW_USE_FLAT_ARRAYS
+  print *, 'SW_USE_FLAT_ARRAY is set'
+#else
+  print *, 'SW_USE_FLAT_ARRAY is NOT set.'
+#endif
+
   ! =====================================================
   ! Begin executable code set distributed memory world...
   ! =====================================================

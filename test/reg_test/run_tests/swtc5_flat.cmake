@@ -14,7 +14,7 @@ SET(EXEC_NAME swtcB_flat)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/${TEST_NAME}.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swtc5.nl)
 SET(NCL_FILES ${HOMME_ROOT}/test/reg_test/ncl/swtc5ref.ncl)
 
 SET(NC_OUTPUT_FILES swtc51.nc)

@@ -162,6 +162,8 @@ ENDIF()
 IF(${BUILD_HOMME_SWEQX_FLAT})
   ADD_SUBDIRECTORY(swtcA_flat)
   ADD_SUBDIRECTORY(swtcB_flat)
+  ADD_SUBDIRECTORY(swtcA_flat_c)
+  ADD_SUBDIRECTORY(swtcB_flat_c)
 ENDIF()
 
 # Add the test exec subdirs for the preqx executable

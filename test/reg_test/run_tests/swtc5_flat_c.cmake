@@ -1,20 +1,20 @@
 ###############################################################
-# RKSSP default benchmark (used to check nothing is broken)
+# Explicit leapfrog default benchmark
 ###############################################################
 #
-# Spectral Element -- swtc1
-# NE=10, dt=480, nu=0, limiter=4, filter_freq=0 NP=8
+# Spectral Element -- swtc5
+# NE=30, dt=90, nu=1.5e15, limiter=0, filter_freq=0, NP=4
 #
 ###############################################################
 
 # The name of this test (should be the basename of this file)
-SET(TEST_NAME swtc1_flat)
-
+SET(TEST_NAME swtc5_flat_c)
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME swtcA_flat)
+SET(EXEC_NAME swtcB_flat_c)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swtc1.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swtc5.nl)
+SET(NCL_FILES ${HOMME_ROOT}/test/reg_test/ncl/swtc5ref.ncl)
 
-SET(NC_OUTPUT_FILES swtc11.nc)
+SET(NC_OUTPUT_FILES swtc51.nc)

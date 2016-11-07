@@ -327,8 +327,9 @@ contains
     end do
   end subroutine loop9_f90
 
-#define DONT_USE_KOKKOS
-#ifdef DONT_USE_KOKKOS
+!#define DONT_USE_KOKKOS
+!#ifdef DONT_USE_KOKKOS
+#if DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define CONTRATOLATLON contra2latlon_f90
 #define LOOP5 loop5_f90
