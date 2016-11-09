@@ -1,9 +1,6 @@
 # Lists of test files for the HOMME regression tests
 SET(HOMME_TESTS 
-  swtc1.cmake
-  swtc2.cmake
-  swtc5.cmake
-  swtc6.cmake
+  swirl.cmake
   swtc1_flat.cmake
   swtc1_flat_c.cmake
   swtc2_flat.cmake
@@ -14,7 +11,6 @@ SET(HOMME_TESTS
   swtc6_flat_c.cmake
   swirl_flat.cmake
   swirl_flat_c.cmake
-  swimtc5.cmake
   baro2b.cmake
   baro2c.cmake
   baro2d.cmake
