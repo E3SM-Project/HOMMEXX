@@ -193,7 +193,7 @@ contains
     !    use schedule_mod
     use global_norms_mod
     use types_mod,      only: rk_t
-
+    use perf_mod,       only: t_startf, t_stopf
 
     implicit none
 
@@ -325,6 +325,9 @@ contains
 	enddo
 	endif
 
+
+
+        call t_startf('timer_advancerk_loop3')
         do ie=nets,nete
            do k=1,nlev
               ! contra -> latlon
@@ -338,6 +341,11 @@ contains
               enddo
            enddo
         enddo
+        call t_stopf('timer_advancerk_loop3')
+
+
+
+
 	call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
         ! convert lat-lon -> contra variant
         do ie=nets,nete
