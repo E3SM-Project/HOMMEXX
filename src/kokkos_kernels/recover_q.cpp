@@ -182,7 +182,7 @@ extern real nu FORTRAN_VAR(control_mod, nu);
 extern real nu_s FORTRAN_VAR(control_mod, nu_s);
 
 /* TODO: Give this a better name */
-void loop5_c(const int &nets, const int &nete,
+void add_hv_c(const int &nets, const int &nete,
              const int &nelems, real *const &spheremp_ptr,
              real *&ptens_ptr, real *&vtens_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -223,7 +223,7 @@ void loop5_c(const int &nets, const int &nete,
 }
 
 /* TODO: Give this a better name */
-void loop6_c(const int &nets, const int &nete,
+void recover_dpq_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
              const int &numelems, real *&p_ptr) {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
