@@ -3512,7 +3512,7 @@ contains
     elseif(level==13)then
 	p(:,:)=0.0d0 
     !this level is for observing limiter applied to level 3
-    elseif(level==14)then
+    elseif(level>=14)then
 	p(:,:)=0.0d0 
     endif
   end function swirl_init_tracer
