@@ -16,8 +16,9 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
   IF(${OPENMP_FOUND})
     MESSAGE(STATUS "Enabling Trilinos' OpenMP")
     SET(EXECUTION_SPACES ${EXECUTION_SPACES}
-        -DTrilinos_ENABLE_OpenMP=ON
-        -DKokkos_ENABLE_OpenMP=ON
+        -DTrilinos_ENABLE_OpenMP=OFF
+        -DKokkos_ENABLE_OpenMP=OFF
+        -DKokkos_ENABLE_Serial=ON
         -DTPL_ENABLE_Pthread=OFF
         -DKokkos_ENABLE_Pthread=OFF)
   ELSE()

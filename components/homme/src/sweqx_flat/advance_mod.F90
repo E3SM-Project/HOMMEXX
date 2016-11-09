@@ -731,11 +731,12 @@ contains
        call t_stopf('timer_advancerk_loop2')
 !IKT, 10/21/16: local loop - to refactor
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-       call t_startf('timer_advancerk_loop3')
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
+       call t_startf('timer_advancerk_loop3')
        call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
-       call t_stopf('timer_advancerk_loop3')
+        call t_stopf('timer_advancerk_loop3')
+
 
         call t_startf('timer_advancerk_biharmonic')
 !       call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
