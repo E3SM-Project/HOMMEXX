@@ -172,6 +172,12 @@ IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(baroCam)
 ENDIF()
 
+# Add the test exec subdirs for the preqx executable
+IF(${BUILD_HOMME_PREQX_FLAT})
+  ADD_SUBDIRECTORY(baroC_flat)
+#  ADD_SUBDIRECTORY(baroCam)
+ENDIF()
+
 # Add the test exec subdirs for the preqx-acc executable
 IF(${BUILD_HOMME_PREQX_ACC})
   ADD_SUBDIRECTORY(baroCam-acc)
