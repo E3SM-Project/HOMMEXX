@@ -254,8 +254,7 @@ void recover_dpq_c(const int &nets, const int &nete,
   }
 }
 
-/* TODO: Give this a better name */
-void loop8_c(const int &nets, const int &nete,
+void weighted_rhs_c(const int &nets, const int &nete,
              const int &numelems,
              real *const &rspheremp_ptr,
              real *const &dinv_ptr, real *&ptens_ptr,
@@ -303,7 +302,7 @@ void loop8_c(const int &nets, const int &nete,
   }
 }
 
-void loop9_c(const int &nets, const int &nete,
+void rk_stage_c(const int &nets, const int &nete,
              const int &n0, const int &np1, const int &s,
              const int &rkstages, const int &numelems,
              real *&v_ptr, real *&p_ptr,

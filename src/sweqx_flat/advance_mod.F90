@@ -50,7 +50,7 @@ module advance_mod
        type(c_ptr) :: p
      end subroutine recover_dpq_c
 
-     subroutine loop8_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
+     subroutine weighted_rhs_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                         ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
        integer (kind=c_int) :: nets
@@ -60,7 +60,7 @@ module advance_mod
        type(c_ptr) :: Dinv_ptr
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
-     end subroutine loop8_c
+     end subroutine weighted_rhs_c
 
      subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
                         p_ptr, v_ptr) bind(c)
@@ -75,7 +75,7 @@ module advance_mod
      end subroutine copy_timelevels_c
 
 
-     subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
+     subroutine rk_stage_c(nets, nete, n0, np1, s, rkstages, numelems, &
                         v_ptr, p_ptr, alpha0_ptr, &
                         alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
@@ -92,7 +92,7 @@ module advance_mod
        type(c_ptr) :: alpha_ptr
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
-     end subroutine loop9_c
+     end subroutine rk_stage_c
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
@@ -162,7 +162,7 @@ contains
   end subroutine contra2latlon_f90
 
   ! TODO: Give this a better name
-  !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
+  !DEC$ ATTRIBUTES NOINLINE :: add_hv_f90
   subroutine add_hv_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
@@ -189,7 +189,7 @@ contains
     enddo
   end subroutine add_hv_f90
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
+  !DEC$ ATTRIBUTES NOINLINE :: recover_dpq_f90
   subroutine recover_dpq_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
@@ -210,8 +210,8 @@ contains
     enddo
   end subroutine recover_dpq_f90
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
-  subroutine loop8_f90(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
+  !DEC$ ATTRIBUTES NOINLINE :: weighted_rhs_f90
+  subroutine weighted_rhs_f90(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                        ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
@@ -243,7 +243,7 @@ contains
         end do
       end do
     end do
-  end subroutine loop8_f90
+  end subroutine weighted_rhs_f90
 
   !DEC$ ATTRIBUTES NOINLINE :: copy_timelevels_f90
   subroutine copy_timelevels_f90(nets, nete, nelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
@@ -286,8 +286,8 @@ contains
   end subroutine copy_timelevels_f90
 
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop9_f90
-  subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
+  !DEC$ ATTRIBUTES NOINLINE :: rk_stage_f90
+  subroutine rk_stage_f90(nets, nete, n0, np1, s, rkstages, numelems, &
                        v_ptr, p_ptr, alpha0_ptr, &
                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
@@ -326,24 +326,24 @@ contains
         end do
       end do
     end do
-  end subroutine loop9_f90
+  end subroutine rk_stage_f90
 
 #if DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define CONTRATOLATLON contra2latlon_f90
 #define ADD_HV add_hv_f90
 #define RECOVER_DPQ recover_dpq_f90
-#define LOOP8 loop8_f90
+#define WEIGHTED_RHS weighted_rhs_f90
 #define COPY_TIMELEVELS copy_timelevels_f90
-#define LOOP9 loop9_f90
+#define RK_STAGE rk_stage_f90
 #else
 #define RECOVER_Q recover_q_c
 #define CONTRATOLATLON contra2latlon_c
 #define ADD_HV add_hv_c
 #define RECOVER_DPQ recover_dpq_c
-#define LOOP8 loop8_c
+#define WEIGHTED_RHS weighted_rhs_c
 #define COPY_TIMELEVELS copy_timelevels_c
-#define LOOP9 loop9_c
+#define RK_STAGE rk_stage_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -662,6 +662,7 @@ contains
          ! create edge buffer for 3 fields
          call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
 
+! This loop cannot yet be broken apart, Qmax_mm needs dependency on ie.
          ! compute p min, max
          do ie=nets,nete
            do k=1,nlev
@@ -672,52 +673,16 @@ contains
            call edgeVpack(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
          enddo
 
-
-
-!loop 'minmax_assign_qminqmax1'
-!         do ie=nets,nete
-!           do k=1,nlev
-!             Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
-!             Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
-!           enddo
-!         enddo
-!         do ie=nets,nete
-!           call edgeVpack(edgebuf_mm,Qmax_mm,nlev,0,ie)
-!           call edgeVpack(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
-!         enddo
-
          call t_startf('nmm_bexchV')
          call bndry_exchangeV(hybrid,edgebuf_mm)
          call t_stopf('nmm_bexchV')
 
-! loop 'minmax_assign_qminqmax2'
-!         do ie=nets,nete
-!           do k=1,nlev
-!             Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
-!             Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
-!           enddo
-!         enddo
-! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-!         do ie=nets,nete
-!           call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
-!           call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
-!         enddo
-!loop 'minmax_assign_pminpmax' 
-!         do ie=nets,nete
-!           do k=1,nlev
-!             pmax(k,ie)=maxval(Qmax_mm(:,:,k))
-!             pmin(k,ie)=minval(Qmin_mm(:,:,k))
-!           enddo
-!         end do
-
-
-
+! This loop cannot yet be broken apart, ie dependency is required.
          do ie=nets,nete
            do k=1,nlev
              Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
              Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
            enddo
-
 ! WARNING - edgeVunpackMin/Max take second argument as input/ouput
            call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
            call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
@@ -727,16 +692,6 @@ contains
            enddo
 
          end do
-
-
-
-
-
-
-
-
-
-
 
          call FreeEdgeBuffer(edgebuf_mm)
 
@@ -928,8 +883,8 @@ contains
              ptens(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0) + dtstage*ptens(:,:,k,ie)
           end do!end of loop over levels
 
-
           if ((limiter_option == 8))then
+!limiter needs refactoring
              call limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
                   pmin(:,ie),pmax(:,ie),kmass)
           endif
@@ -941,7 +896,7 @@ contains
           endif
 
           if ((limiter_option == 84))then
-	     pmin(:,ie)=0.0d0
+             pmin(:,ie)=0.0d0
              if (test_case=='swirl') then
                  pmin(1,ie)=.1d0
                  if (nlev>=3) then
@@ -1010,26 +965,27 @@ contains
        ! Compute velocity and pressure tendencies for all levels
        ! ===========================================================
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
-       call t_startf('timer_advancerk_loop8')
+! multiplying tendensies by 1/w and converting velocities to contra
        ptr_buf1 = c_loc(elem_rspheremp)
        ptr_buf2 = c_loc(elem_Dinv)
        ptr_buf3 = c_loc(ptens)
        ptr_buf4 = c_loc(vtens)
-       call LOOP8(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
-       call t_stopf('timer_advancerk_loop8')
+       call t_startf('advancerk_weighted_rhs_contra')
+       call WEIGHTED_RHS(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
+       call t_stopf('advancerk_weighted_rhs_contra')
 
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
-       call t_startf('timer_advancerk_loop9')
        ptr_buf1 = c_loc(elem_state_v)
        ptr_buf2 = c_loc(elem_state_p)
        ptr_buf3 = c_loc(MyRk%alpha0)
        ptr_buf4 = c_loc(MyRk%alpha)
        ptr_buf5 = c_loc(ptens)
        ptr_buf6 = c_loc(vtens)
-       call LOOP9(nets, nete, n0, np1, s, MyRk%stages, nelemd, &
+       call t_startf('advancerk_averaging_rk_stages')
+       call RK_STAGE(nets, nete, n0, np1, s, MyRk%stages, nelemd, &
                   ptr_buf1, ptr_buf2, ptr_buf3, &
                   ptr_buf4, ptr_buf5, ptr_buf6)
-       call t_stopf('timer_advancerk_loop9')
+       call t_stopf('advancerk_averaging_rk_stages')
 
        real_time =real_time + dtstage
 !this is only for output reasons, if velocities are prescribed
