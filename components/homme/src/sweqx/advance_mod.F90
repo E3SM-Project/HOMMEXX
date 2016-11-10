@@ -272,6 +272,8 @@ contains
 
     ! We want to make this leap-frog compliant
     ! Copy u^n to u^n+1
+
+    call t_startf('advancerk_copy_timelevels')
     do ie=nets,nete
        do k=1,nlev
           do j=1,np
@@ -283,6 +285,7 @@ contains
           end do
        end do
     enddo
+    call t_stopf('advancerk_copy_timelevels')
     real_time = dt*real(nstep,kind=real_kind)
 
     do s=1,MyRk%Stages
@@ -313,7 +316,7 @@ contains
        ! but to fit into structure below, remove it for now:
 
 !applying viscosity to q field
-
+        call t_startf('advancerk_bh_recoverq')
 	if(kmass.ne.-1)then
 	do ie=nets,nete
 	    do k=1,nlev
@@ -324,10 +327,10 @@ contains
 	    enddo
 	enddo
 	endif
+       call t_stopf('advancerk_bh_recoverq')
 
 
-
-        call t_startf('timer_advancerk_loop3')
+        call t_startf('advancerk_bh_contra2latlon')
         do ie=nets,nete
            do k=1,nlev
               ! contra -> latlon
@@ -341,13 +344,15 @@ contains
               enddo
            enddo
         enddo
-        call t_stopf('timer_advancerk_loop3')
+        call t_stopf('advancerk_bh_contra2latlon')
 
 
 
 
 	call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
         ! convert lat-lon -> contra variant
+
+       call t_startf('advancerk_after_bh_contra2latlon')
         do ie=nets,nete
            do k=1,nlev
               do j=1,np
@@ -360,8 +365,9 @@ contains
               enddo
            enddo
         enddo
-        
+       call t_stopf('advancerk_after_bh_contra2latlon')
 
+       call t_startf('advancerk_add_hv_to_rhs')
 	do ie=nets,nete
 	    spheremp     => elem(ie)%spheremp
 	    do k=1,nlev
@@ -370,10 +376,12 @@ contains
 	      vtens(:,:,2,k,ie) = -nu*vtens(:,:,2,k,ie)/spheremp(:,:)
 	    enddo
 	enddo
+       call t_stopf('advancerk_add_hv_to_rhs')
 
 	if(kmass.ne.-1)then
 	!we do not apply viscosity to mass field
 	ptens(:,:,kmass,:)=0.0d0
+        call t_startf('advancerk_after_bh_recover_dpQ')
 	do ie=nets,nete
 	    do k=1,nlev
 	      if(k.ne.kmass)then
@@ -382,6 +390,7 @@ contains
 	      endif
 	    enddo
 	enddo
+        call t_stopf('advancerk_after_bh_recover_dpQ')
 	endif
 
        do ie=nets,nete
