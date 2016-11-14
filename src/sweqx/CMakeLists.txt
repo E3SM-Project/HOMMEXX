@@ -88,6 +88,3 @@ SET(SWEQX_SRCS
 SET(EXEC_SOURCES ${SWEQX_SRCS} )
 
 endmacro(sweqx_setup)
-
-#sweqx_setup()
-#createTestExec(sweqx sweqx ${SWEQX_NP} ${SWEQX_NC} ${SWEQX_PLEV} ${SWEQX_USE_PIO} ${SWEQX_USE_ENERGY} ${QSIZE_D} Fortran)
