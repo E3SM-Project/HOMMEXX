@@ -170,17 +170,16 @@ ENDIF()
 IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(baroC)
   ADD_SUBDIRECTORY(baroCam)
+  ADD_SUBDIRECTORY(preqx-nlev20-interp)
+  ADD_SUBDIRECTORY(preqx-nlev20-native)
+  ADD_SUBDIRECTORY(preqx-nlev30-interp)
+  ADD_SUBDIRECTORY(preqx-nlev30-native)
+  ADD_SUBDIRECTORY(preqx-nlev60-interp)
+  ADD_SUBDIRECTORY(preqx-nlev60-native)
+  IF(${BUILD_HOMME_PREQX_ACC})
+    ADD_SUBDIRECTORY(baroCam-acc)
+  ENDIF()
 ENDIF()
-
-# Add the test exec subdirs for the preqx executable
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(baroC_flat)
-#  ADD_SUBDIRECTORY(baroCam)
-ENDIF()
-
-# Add the test exec subdirs for the preqx-acc executable
-IF(${BUILD_HOMME_PREQX_ACC})
-  ADD_SUBDIRECTORY(baroCam-acc)
 ENDIF()
 
 # Add the test exec subdirs for the prim executable
@@ -200,7 +199,7 @@ INCLUDE(${HOMME_SOURCE_DIR}/test/reg_test/run_tests/test-list.cmake)
 SET(TEST_DIR_LIST "")
 createTests(HOMME_TESTS)
 
-IF(${BUILD_HOMME_PREQX_ACC} AND ${BUILD_HOMME_PREQX})
+IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
   # add a test dependency here:
   set_property(TEST baroCamMoist-acc APPEND PROPERTY DEPENDS baroCamMoist)
 ENDIF()
