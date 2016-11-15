@@ -99,6 +99,11 @@ SET(SWEQX_FLAT_UT_SRCS
   ${UNIT_TEST_DIR}/advance_rk.cpp
   ${TARGET_DIR}/advance_mod.F90
   ${TARGET_DIR}/shallow_water_mod.F90
+  ${TARGET_DIR}/edge_mod.F90
+  ${TARGET_DIR}/bndry_mod.F90
+  ${TARGET_DIR}/derivative_mod.F90
+  ${TARGET_DIR}/viscosity_mod.F90
+  ${TARGET_DIR}/types_mod.F90
   ${SWEQX_FLAT_DEPS}
 )
 
@@ -107,28 +112,13 @@ SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
 SET(SW_USE_FLAT_ARRAYS TRUE)
 
-#MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${FORTRAN_LOOPS}")
-
 IF (${FORTRAN_LOOPS})
   SET (DONT_USE_KOKKOS TRUE)
-#  message(STATUS "true <<<<<")
-  MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${DONT_USE_KOKKOS}")
 ELSE ()
   SET (DONT_USE_KOKKOS FALSE)
-#  MESSAGE(STATUS "false <<<<")
-  MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${DONT_USE_KOKKOS}")
 ENDIF ()
 
+MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${DONT_USE_KOKKOS}")
 MESSAGE(STATUS "End of executing sweqx_flat_setup ------------")
 
 endmacro(sweqx_flat_setup)
-
-
-
-
-OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
-OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
-
-INCLUDE_DIRECTORIES(${SRC_BASE} ${SRC_SHARE} ${SRC_KERNELS_DIR})
-
-cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${SWEQX_FLAT_UT_SRCS}")
