@@ -1,9 +1,12 @@
 
-SET(TRILINOS_INSTALL_DIR "~/prefix" CACHE FILEPATH "Where to install Trilinos")
+SET(TRILINOS_INSTALL_DIR "${CMAKE_BINARY_DIR}/external/trilinos" CACHE FILEPATH "The base directory where to download, build and install Trilinos")
 
 FIND_PACKAGE(Trilinos QUIET PATHS ${TRILINOS_INSTALL_DIR}/lib/cmake/Trilinos)
 
 IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
+
+  MESSAGE (STATUS "Trilinos not found. A fresh repo will be cloned and installed in ${TRILINOS_INSTALL_DIR}")
+  MESSAGE (STATUS "If you already have an installation of trilinos, you can specify it in the variable 'TRILINOS_INSTALL_DIR'.")
 
   SET(PACKAGES -DTrilinos_ENABLE_Kokkos=ON
                -DTrilinos_ENABLE_KokkosAlgorithms=ON
@@ -42,9 +45,8 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
 
   # Set up Trilinos as an external project
   SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
-  SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
 
-  SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
+  SET(TRILINOS_CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
 
   INCLUDE(ExternalProject)
 
@@ -55,8 +57,7 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
     UPDATE_COMMAND ""
     PATCH_COMMAND ""
 
-    SOURCE_DIR ${TRILINOS_SRCDIR}
-
+    PREFIX ${TRILINOS_INSTALL_DIR}
     CMAKE_ARGS ${TRILINOS_CMAKE_ARGS}
   )
 
