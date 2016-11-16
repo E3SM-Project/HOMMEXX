@@ -96,3 +96,4 @@ macro(link_to_trilinos targetName)
     ADD_DEPENDENCIES(${targetName} Trilinos)
   ENDIF()
 endmacro(link_to_trilinos)
+

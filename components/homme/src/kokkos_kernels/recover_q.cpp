@@ -101,6 +101,10 @@ void recover_q_c(const int &nets, const int &nete,
   }
 }
 
+
+
+#if 0
+// kokkos version of the loop
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
                      real *const &d_ptr,
@@ -138,13 +142,47 @@ void contra2latlon_c(const int &nets, const int &nete,
     std::abort();
   }
 }
+#endif 
+
+
+void contra2latlon_c(const int &nets, const int &nete,
+                     const int &n0, const int &nelems,
+                     real *const &d_ptr,
+                     real *&v_ptr) noexcept {
+   constexpr const int dim = 2;
+   using V = Kokkos::View< real*[timelevels][nlev][dim][np][np], Kokkos::MemoryUnmanaged >;
+   V  v(v_ptr, nelems);
+   using D = Kokkos::View< real*[2][2][np][np], Kokkos::MemoryUnmanaged >;
+   D d(d_ptr, nelems);
+//To tell MD that dim in velocity is not the same as dim for 2x2 matrices.
+   const int ne = nelems;
+   #pragma vector always aligned
+   for( int ie=0; ie < ne; ++ie) {
+      #pragma vector always aligned
+      for( int k=0; k < nlev; ++k ) {
+         #pragma vector always aligned
+         for( int j = 0; j < np; ++j) {
+            #pragma vector always aligned
+            for( int i = 0; i < np; ++i) {
+               real v1 = v(ie, n0-1, k, 0, j, i);
+               real v2 = v(ie, n0-1, k, 1, j, i);
+               v(ie, n0-1, k, 0, j, i) = 
+               d(ie, 0, 0, j, i) * v1 + d(ie, 1, 0, j, i) * v2;
+               v(ie, n0-1, k, 1, j, i) = 
+               d(ie, 0, 1, j, i) * v1 + d(ie, 1, 1, j, i) * v2;
+            }
+         }
+      }
+   }
+}
+
 
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
 extern real nu_s FORTRAN_VAR(control_mod, nu_s);
 
 /* TODO: Give this a better name */
-void loop5_c(const int &nets, const int &nete,
+void add_hv_c(const int &nets, const int &nete,
              const int &nelems, real *const &spheremp_ptr,
              real *&ptens_ptr, real *&vtens_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -185,7 +223,7 @@ void loop5_c(const int &nets, const int &nete,
 }
 
 /* TODO: Give this a better name */
-void loop6_c(const int &nets, const int &nete,
+void recover_dpq_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
              const int &numelems, real *&p_ptr) {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -216,8 +254,7 @@ void loop6_c(const int &nets, const int &nete,
   }
 }
 
-/* TODO: Give this a better name */
-void loop8_c(const int &nets, const int &nete,
+void weighted_rhs_c(const int &nets, const int &nete,
              const int &numelems,
              real *const &rspheremp_ptr,
              real *const &dinv_ptr, real *&ptens_ptr,
@@ -265,7 +302,7 @@ void loop8_c(const int &nets, const int &nete,
   }
 }
 
-void loop9_c(const int &nets, const int &nete,
+void rk_stage_c(const int &nets, const int &nete,
              const int &n0, const int &np1, const int &s,
              const int &rkstages, const int &numelems,
              real *&v_ptr, real *&p_ptr,

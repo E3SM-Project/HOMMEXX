@@ -30,7 +30,7 @@ module advance_mod
        type(c_ptr) :: v
      end subroutine contra2latlon_c
 
-     subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
+     subroutine add_hv_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -38,9 +38,9 @@ module advance_mod
        type(c_ptr), intent(in) :: spheremp_ptr
        type(c_ptr), intent(in) :: ptens_ptr
        type(c_ptr), intent(in) :: vtens_ptr
-     end subroutine loop5_c
+     end subroutine add_hv_c
 
-     subroutine loop6_c(nets, nete, kmass, n0, numelems, p) bind(c)
+     subroutine recover_dpq_c(nets, nete, kmass, n0, numelems, p) bind(c)
        use iso_c_binding,  only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -48,9 +48,9 @@ module advance_mod
        integer (kind=c_int) :: n0
        integer (kind=c_int) :: numelems
        type(c_ptr) :: p
-     end subroutine loop6_c
+     end subroutine recover_dpq_c
 
-     subroutine loop8_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
+     subroutine weighted_rhs_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                         ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
        integer (kind=c_int) :: nets
@@ -60,7 +60,7 @@ module advance_mod
        type(c_ptr) :: Dinv_ptr
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
-     end subroutine loop8_c
+     end subroutine weighted_rhs_c
 
      subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
                         p_ptr, v_ptr) bind(c)
@@ -75,7 +75,7 @@ module advance_mod
      end subroutine copy_timelevels_c
 
 
-     subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
+     subroutine rk_stage_c(nets, nete, n0, np1, s, rkstages, numelems, &
                         v_ptr, p_ptr, alpha0_ptr, &
                         alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
@@ -92,7 +92,7 @@ module advance_mod
        type(c_ptr) :: alpha_ptr
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
-     end subroutine loop9_c
+     end subroutine rk_stage_c
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
@@ -162,8 +162,8 @@ contains
   end subroutine contra2latlon_f90
 
   ! TODO: Give this a better name
-  !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
-  subroutine loop5_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
+  !DEC$ ATTRIBUTES NOINLINE :: add_hv_f90
+  subroutine add_hv_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use control_mod, only: nu, nu_s
@@ -187,10 +187,10 @@ contains
         vtens(:,:,2,k,ie - nets + 1) = -nu*vtens(:,:,2,k,ie - nets + 1)/spheremp(:,:,ie)
       enddo
     enddo
-  end subroutine loop5_f90
+  end subroutine add_hv_f90
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
-  subroutine loop6_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
+  !DEC$ ATTRIBUTES NOINLINE :: recover_dpq_f90
+  subroutine recover_dpq_f90(nets, nete, kmass, n0, numelems, p_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod, only: timelevels
@@ -204,14 +204,14 @@ contains
     do ie=nets,nete
       do k=1,nlev
         if(k.ne.kmass)then
-	  p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
+          p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
         endif
       enddo
     enddo
-  end subroutine loop6_f90
+  end subroutine recover_dpq_f90
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop6_f90
-  subroutine loop8_f90(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
+  !DEC$ ATTRIBUTES NOINLINE :: weighted_rhs_f90
+  subroutine weighted_rhs_f90(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
                        ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
@@ -243,7 +243,7 @@ contains
         end do
       end do
     end do
-  end subroutine loop8_f90
+  end subroutine weighted_rhs_f90
 
   !DEC$ ATTRIBUTES NOINLINE :: copy_timelevels_f90
   subroutine copy_timelevels_f90(nets, nete, nelems, nt_src, nt_dest, p_ptr, v_ptr) bind(c)
@@ -286,8 +286,8 @@ contains
   end subroutine copy_timelevels_f90
 
 
-  !DEC$ ATTRIBUTES NOINLINE :: loop9_f90
-  subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
+  !DEC$ ATTRIBUTES NOINLINE :: rk_stage_f90
+  subroutine rk_stage_f90(nets, nete, n0, np1, s, rkstages, numelems, &
                        v_ptr, p_ptr, alpha0_ptr, &
                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
@@ -326,24 +326,24 @@ contains
         end do
       end do
     end do
-  end subroutine loop9_f90
+  end subroutine rk_stage_f90
 
 #if DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define CONTRATOLATLON contra2latlon_f90
-#define LOOP5 loop5_f90
-#define LOOP6 loop6_f90
-#define LOOP8 loop8_f90
+#define ADD_HV add_hv_f90
+#define RECOVER_DPQ recover_dpq_f90
+#define WEIGHTED_RHS weighted_rhs_f90
 #define COPY_TIMELEVELS copy_timelevels_f90
-#define LOOP9 loop9_f90
+#define RK_STAGE rk_stage_f90
 #else
 #define RECOVER_Q recover_q_c
 #define CONTRATOLATLON contra2latlon_c
-#define LOOP5 loop5_c
-#define LOOP6 loop6_c
-#define LOOP8 loop8_c
+#define ADD_HV add_hv_c
+#define RECOVER_DPQ recover_dpq_c
+#define WEIGHTED_RHS weighted_rhs_c
 #define COPY_TIMELEVELS copy_timelevels_c
-#define LOOP9 loop9_c
+#define RK_STAGE rk_stage_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -630,13 +630,12 @@ contains
 
     ! We want to make this leap-frog compliant
     ! Copy u^n to u^n+1
-!IKT, 10/21/16: local loop
-    call t_startf('timer_advancerk_loop1')
-! replace this with copy_timelevels
+!copy timelevels
     ptr_buf1 = c_loc(elem_state_p)
     ptr_buf2 = c_loc(elem_state_v)
+    call t_startf('advancerk_copy_timelevels')
     call COPY_TIMELEVELS(nets, nete, nelemd, n0, np1, ptr_buf1, ptr_buf2)
-    call t_stopf('timer_advancerk_loop1')
+    call t_stopf('advancerk_copy_timelevels')
     real_time = dt*real(nstep,kind=real_kind)
 
 !IKT, 10/21/16: this loop stays in Fortran
@@ -655,14 +654,15 @@ contains
        if (( limiter_option == 8 ).or.(limiter_option == 81 )) then
 !call neighbor_minmax(elem,hybrid,edge3,nets,nete,n0,pmin,pmax,kmass=kmass)
 
-         call t_startf('timer_advancerk_minmax_loop1')
          ptr_buf1 = c_loc(elem_state_p)
+         call t_startf('advancerk_minmax_recoverq_loop1')
          call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
-         call t_stopf('timer_advancerk_minmax_loop1')
+         call t_stopf('advancerk_minmax_recoverq_loop1')
 
          ! create edge buffer for 3 fields
          call initEdgeBuffer(hybrid%par,edgebuf_mm,elem,2*nlev)
 
+! This loop cannot yet be broken apart, Qmax_mm needs dependency on ie.
          ! compute p min, max
          do ie=nets,nete
            do k=1,nlev
@@ -677,12 +677,12 @@ contains
          call bndry_exchangeV(hybrid,edgebuf_mm)
          call t_stopf('nmm_bexchV')
 
+! This loop cannot yet be broken apart, ie dependency is required.
          do ie=nets,nete
            do k=1,nlev
              Qmin_mm(:,:,k)=minval(elem(ie)%state%p(:,:,k,n0))
              Qmax_mm(:,:,k)=maxval(elem(ie)%state%p(:,:,k,n0))
            enddo
-
 ! WARNING - edgeVunpackMin/Max take second argument as input/ouput
            call edgeVunpackMax(edgebuf_mm,Qmax_mm,nlev,0,ie)
            call edgeVunpackMin(edgebuf_mm,Qmin_mm,nlev,nlev,ie)
@@ -695,6 +695,7 @@ contains
 
          call FreeEdgeBuffer(edgebuf_mm)
 
+! loop 'minmax_recover_dpQ'
          if(kmass.ne.-1)then
            do k=1,nlev
              if(k.ne.kmass)then
@@ -704,14 +705,13 @@ contains
                enddo
              endif
            enddo
-         endif
+         endif ! endif kmass .ne. -1
+ 
          !end subroutine neighb_minmax
        endif !if limiter ==8 or limiter == 81
 
 
        if(Debug) print *,'homme: adv.._rk 1'
-
-
        ! ===================================
        ! construct v tendencies and v.grad(p)
        ! on the velocity grid...
@@ -722,25 +722,21 @@ contains
 
 !applying viscosity to q field
 
-!IKT, 10/21/16: local loop ("recover q") - to refactor: does not need team
-!parallelism (b/c tightly nested loop, if take out if statement)
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-       call t_startf('timer_advancerk_loop2')
+!applying biharmonic-----------------------------------------
        ptr_buf1 = c_loc(elem_state_p)
+       call t_startf('advancerk_bh_recoverq')
        call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
-       call t_stopf('timer_advancerk_loop2')
-!IKT, 10/21/16: local loop - to refactor
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-       call t_startf('timer_advancerk_loop3')
+       call t_stopf('advancerk_bh_recoverq')
+       
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
+       call t_startf('advancerk_bh_contra2latlon')
        call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
-       call t_stopf('timer_advancerk_loop3')
+       call t_stopf('advancerk_bh_contra2latlon')
 
-        call t_startf('timer_advancerk_biharmonic')
-!       call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
-!       subroutine
-!       biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
+!      call biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,n0,nets,nete)
+!      subroutine
+!      biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
 
         var_coef1_bh = .true.
         if(hypervis_scaling > 0)  var_coef1_bh = .false.
@@ -757,7 +753,7 @@ contains
            endif
         endif
 
-! OG : local loop to refactor
+!loop 'bh_compute_p_compute_laplace_1iter'
         do ie=nets,nete
           do k=1,nlev
             do j=1,np
@@ -765,21 +761,18 @@ contains
                  T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
               enddo
             enddo
-
             ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
             vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
               elem(ie),var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
           enddo
         enddo
-! OG : end local loop to refactor
 
         do ie = nets,nete
           kptr=0
           call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
           kptr=nlev
           call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,ie)
-        enddo ! end ie loop, dss
-
+        enddo ! end ie loop, packing
 
         call t_startf('biwk_bexchV')
         call bndry_exchangeV(hybrid,edge3)
@@ -790,9 +783,9 @@ contains
           call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
           kptr=nlev
           call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
-        enddo
+        enddo ! end ie loop, unpacking
 
-! OG : local loop to refactor
+!loop 'bh_compute_laplace_2iter'
         do ie = nets,nete
           rspheremv_bh     => elem(ie)%rspheremp(:,:)
           do k=1,nlev
@@ -807,42 +800,39 @@ contains
             vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
               nu_ratio=nu_ratio2_bh)
           enddo
-       enddo ! end ie loop
-! OG : end of local loop to refactor
+       enddo ! end ie loop for laplace
 
-!end biharmonic
-
-        call t_stopf('timer_advancerk_biharmonic')
+!end biharmonic -----------------------
 
        ! convert lat-lon -> contra variant
-       call t_startf('timer_advancerk_loop4')
        ptr_buf1 = c_loc(elem_Dinv)
        ptr_buf2 = c_loc(elem_state_v)
+       call t_startf('advancerk_after_bh_contra2latlon')
        call CONTRATOLATLON(nets, nete, n0, nelemd, ptr_buf1, ptr_buf2)
-       call t_stopf('timer_advancerk_loop4')
+       call t_stopf('advancerk_after_bh_contra2latlon')
 
-!IKT, 10/21/16: local loop - to refactor
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-       call t_startf('timer_advancerk_loop5')
        ptr_buf1 = c_loc(elem_spheremp)
        ptr_buf2 = c_loc(ptens)
        ptr_buf3 = c_loc(vtens)
-       call LOOP5(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3)
-       call t_stopf('timer_advancerk_loop5')
+! adds HV term to prens, vtens
+       call t_startf('advancerk_add_hv_to_rhs')
+       call ADD_HV(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3)
+       call t_stopf('advancerk_add_hv_to_rhs')
 
-!IKT, 10/21/16: local loop - to refactor
-!IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-	if(kmass.ne.-1)then
-	!we do not apply viscosity to mass field
-	ptens(:,:,kmass,:)=0.0d0
-        call t_startf('timer_advancerk_loop6')
-        ptr_buf1 = c_loc(elem_state_p)
-        call LOOP6(nets, nete, kmass, n0, nelemd, ptr_buf1)
-        call t_stopf('timer_advancerk_loop6')
-	endif
+       if(kmass.ne.-1)then
 
-!IKT, 10/21/16: the following needs to be team policy --> call to
-!divergence_sphere
+         !we do not apply viscosity to mass field
+! loop 'reset_kmass_rhs'
+         ptens(:,:,kmass,:)=0.0d0
+
+! loop 'recover_dpQ'
+         ptr_buf1 = c_loc(elem_state_p)
+         call t_startf('advancerk_after_bh_recover_dpQ')
+         call RECOVER_DPQ(nets, nete, kmass, n0, nelemd, ptr_buf1)
+         call t_stopf('advancerk_after_bh_recover_dpQ')
+       endif ! endif kmass != -1
+
+
        call t_startf('timer_advancerk_loop7')
        do ie=nets,nete
           fcor   => elem(ie)%fcor
@@ -893,8 +883,8 @@ contains
              ptens(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0) + dtstage*ptens(:,:,k,ie)
           end do!end of loop over levels
 
-
           if ((limiter_option == 8))then
+!limiter needs refactoring
              call limiter_optim_wrap(ptens(:,:,:,ie),elem(ie)%spheremp(:,:),&
                   pmin(:,ie),pmax(:,ie),kmass)
           endif
@@ -906,7 +896,7 @@ contains
           endif
 
           if ((limiter_option == 84))then
-	     pmin(:,ie)=0.0d0
+             pmin(:,ie)=0.0d0
              if (test_case=='swirl') then
                  pmin(1,ie)=.1d0
                  if (nlev>=3) then
@@ -975,26 +965,27 @@ contains
        ! Compute velocity and pressure tendencies for all levels
        ! ===========================================================
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
-       call t_startf('timer_advancerk_loop8')
+! multiplying tendensies by 1/w and converting velocities to contra
        ptr_buf1 = c_loc(elem_rspheremp)
        ptr_buf2 = c_loc(elem_Dinv)
        ptr_buf3 = c_loc(ptens)
        ptr_buf4 = c_loc(vtens)
-       call LOOP8(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
-       call t_stopf('timer_advancerk_loop8')
+       call t_startf('advancerk_weighted_rhs_contra')
+       call WEIGHTED_RHS(nets, nete, nelemd, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4)
+       call t_stopf('advancerk_weighted_rhs_contra')
 
 !IKT, 10/21/16: the following is tightly nested loop - regular parallel_for
-       call t_startf('timer_advancerk_loop9')
        ptr_buf1 = c_loc(elem_state_v)
        ptr_buf2 = c_loc(elem_state_p)
        ptr_buf3 = c_loc(MyRk%alpha0)
        ptr_buf4 = c_loc(MyRk%alpha)
        ptr_buf5 = c_loc(ptens)
        ptr_buf6 = c_loc(vtens)
-       call LOOP9(nets, nete, n0, np1, s, MyRk%stages, nelemd, &
+       call t_startf('advancerk_averaging_rk_stages')
+       call RK_STAGE(nets, nete, n0, np1, s, MyRk%stages, nelemd, &
                   ptr_buf1, ptr_buf2, ptr_buf3, &
                   ptr_buf4, ptr_buf5, ptr_buf6)
-       call t_stopf('timer_advancerk_loop9')
+       call t_stopf('advancerk_averaging_rk_stages')
 
        real_time =real_time + dtstage
 !this is only for output reasons, if velocities are prescribed
