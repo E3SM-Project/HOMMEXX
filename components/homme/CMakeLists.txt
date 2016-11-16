@@ -56,6 +56,7 @@ ENDIF ()
 OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" ON)
 OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" ON)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" OFF)
+OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
 OPTION(BUILD_HOMME_PREQX_ACC "Primitive equations FEM with OpenACC" OFF)
 OPTION(BUILD_HOMME_SWIM  "Shallow water equations implicit" OFF)
 OPTION(BUILD_HOMME_PRIM  "Primitive equations implicit" OFF)
@@ -169,6 +170,10 @@ IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(src/preqx)
 ENDIF()
 
+IF(${BUILD_HOMME_PREQX_FLAT})
+  ADD_SUBDIRECTORY(src/preqx_flat)
+ENDIF()
+
 IF(${BUILD_HOMME_PREQX_ACC})
   ADD_SUBDIRECTORY(src/preqx_acc)
 ENDIF()
@@ -192,3 +197,5 @@ ADD_CUSTOM_TARGET(clean-all
    COMMAND ${CMAKE_BUILD_TOOL} clean
    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/clean-cmake-files.cmake"
 )
+
+ADD_SUBDIRECTORY(dcmip_tests)

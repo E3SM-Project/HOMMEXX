@@ -13,6 +13,9 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
   SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
                        -DKokkos_ENABLE_MPI=ON)
 
+  SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscontainers;kokkoscore" PARENT_SCOPE)
+  SET(Kokkos_TPL_LIBRARIES "dl" PARENT_SCOPE)
+
   IF(${OPENMP_FOUND})
     MESSAGE(STATUS "Enabling Trilinos' OpenMP")
     SET(EXECUTION_SPACES ${EXECUTION_SPACES}
@@ -37,6 +40,7 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
           -DTPL_ENABLE_CUDA=ON
           -DKokkos_ENABLE_CUDA=ON
           -DKokkos_ENABLE_CUDA_UVM=ON)
+      SET(Kokkos_TPL_LIBRARIES "${Kokkos_TPL_LIBRARIES};cudart;cublas;cufft")
     ENDIF()
   ENDIF()
 
@@ -83,16 +87,13 @@ ELSE()
   MESSAGE("End of Trilinos details\n")
 ENDIF()
 
-
 macro(link_to_trilinos targetName)
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
-  TARGET_LINK_LIBRARIES(${targetName} dl pthread kokkoscore -L${TRILINOS_INSTALL_DIR}/lib)
+  TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
 
   IF(TARGET Trilinos)
     # In case we are building Trilinos with ExternalProject, we need to compile this after the fact
     ADD_DEPENDENCIES(${targetName} Trilinos)
   ENDIF()
 endmacro(link_to_trilinos)
-
-
 
