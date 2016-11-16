@@ -3,11 +3,14 @@
 
 #include <dimensions.hpp>
 #include <kinds.hpp>
+#include <PointersPool.hpp>
 
 #include <fortran_binding.hpp>
 
 #include <iostream>
 #include <stdexcept>
+
+#include <SphericalOperators.hpp>
 
 namespace Homme {
 
@@ -142,6 +145,84 @@ void contra2latlon_c(const int &nets, const int &nete,
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
 extern real nu_s FORTRAN_VAR(control_mod, nu_s);
+
+void loop_lapl_pre_bndry_ex_c (const int &nets, const int &nete,
+                               const int &nelems, const int& n0,
+                               const int& var_coef, const real& nu_ratio,
+                               real*& ptens_ptr, real*& vtens_ptr)
+{
+  Kokkos::LayoutStride layout_scalar(nelems,nlev,np,np);
+  Kokkos::LayoutStride layout_vector(nelems,nlev,2,np,np);
+
+  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
+
+  Kokkos::View<real*[nlev][np][np], Kokkos::LayoutStride>     T_bh  ("T_bh", layout_scalar);
+
+  Kokkos::View<real*[np][np]>                      elem_state_ps (get_pointers_pool_c()->elem_state_ps, nelems);
+  Kokkos::View<real*[timelevels][nlev][np][np]>    elem_state_p  (get_pointers_pool_c()->elem_state_p, nelems);
+  Kokkos::View<real*[timelevels][nlev][2][np][np]> elem_state_v  (get_pointers_pool_c()->elem_state_v, nelems);
+
+  Kokkos::parallel_for(
+    Kokkos::TeamPolicy<>(nets-nete,nlev),
+    KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+    {
+      const int ielem  = team_member.league_rank();
+      const int ilevel = team_member.team_rank();
+
+      for (int igp=0; igp<np; ++igp)
+      {
+        for (int jgp=0; jgp<np; ++jgp)
+        {
+            T_bh (ielem, ilevel,igp,jgp) = elem_state_p(ielem,ilevel,n0,igp,jgp) + elem_state_ps(ielem,igp,jgp);
+        }
+      }
+    }
+  );
+
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> elem_state_v_n0 = Kokkos::subview (elem_state_v, Kokkos::ALL(), n0, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+
+  laplace_sphere_wk_kokkos  (nets, nete, nelems, var_coef, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets, nete, nelems, var_coef, &nu_ratio, elem_state_v_n0, vtens);
+}
+
+void loop_lapl_post_bndry_ex_c (const int &nets, const int &nete,
+                                const int &nelems,const real& nu_ratio,
+                                real*& ptens_ptr, real*& vtens_ptr)
+{
+  Kokkos::LayoutStride layout_scalar(nelems,nlev,np,np);
+  Kokkos::LayoutStride layout_vector(nelems,nlev,2,np,np);
+
+  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
+
+  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh", layout_scalar);
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> v_bh  ("v_bh", layout_vector);
+
+  Kokkos::View<real*[np][np]> rspheremp (get_pointers_pool_c()->rspheremp, nelems);
+
+  Kokkos::parallel_for(
+    Kokkos::TeamPolicy<>(nets-nete,nlev),
+    KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+    {
+      const int ielem  = team_member.league_rank();
+      const int ilevel = team_member.team_rank();
+
+      for (int igp=0; igp<np; ++igp)
+      {
+        for (int jgp=0; jgp<np; ++jgp)
+        {
+            T_bh (ielem, ilevel, igp, jgp) = rspheremp (ielem, igp, jgp) * ptens(ielem, ilevel, igp, jgp);
+            v_bh (ielem, ilevel, 0, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 0, igp, jgp);
+            v_bh (ielem, ilevel, 1, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 1, igp, jgp);
+        }
+      }
+    }
+  );
+
+  laplace_sphere_wk_kokkos  (nets, nete, nelems, true, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets, nete, nelems, true, &nu_ratio, v_bh, vtens);
+}
 
 /* TODO: Give this a better name */
 void loop5_c(const int &nets, const int &nete,

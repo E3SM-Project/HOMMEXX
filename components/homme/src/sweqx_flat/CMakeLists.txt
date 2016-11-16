@@ -77,6 +77,10 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_SHARE}/time_mod.F90
   ${SRC_SHARE}/unit_tests_mod.F90
   ${SRC_SHARE}/viscosity_mod_base.F90
+  ${SRC_SHARE}/ControlParameters.cpp
+  ${SRC_SHARE}/Derivative.cpp
+  ${SRC_SHARE}/PhysicalConstants.cpp
+  ${SRC_SHARE}/PointersPool.cpp
   ${SRC_UTILS}/shr_file_mod.F90
   ${SRC_UTILS}/shr_kind_mod.F90
   ${SRC_UTILS}/shr_mpi_mod.F90
@@ -87,6 +91,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
   ${SRC_KERNELS_DIR}/recover_q.cpp
+  ${SRC_KERNELS_DIR}/SphericalOperators.cpp
   ${SRC_SHARE}/kokkos_init.cpp
 )
 

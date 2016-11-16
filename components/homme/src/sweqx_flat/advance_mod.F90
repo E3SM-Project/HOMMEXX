@@ -10,89 +10,116 @@ module advance_mod
   implicit none
 
   interface
-     subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
-       use iso_c_binding,  only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: kmass
-       integer (kind=c_int) :: n0
-       integer (kind=c_int) :: numelems
-       type(c_ptr) :: p
-     end subroutine recover_q_c
+    subroutine init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr,&
+                                     metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
+                                     rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
+      use iso_c_binding, only: c_ptr
+      type (c_ptr), intent(in) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr
+      type (c_ptr), intent(in) :: metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
+      type (c_ptr), intent(in) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
+    end subroutine init_pointers_pool_c
 
-     subroutine contra2latlon_c(nets, nete, n0, numelems, D, v) bind(c)
-       use iso_c_binding,  only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: n0
-       integer (kind=c_int) :: numelems
-       type(c_ptr) :: D
-       type(c_ptr) :: v
-     end subroutine contra2latlon_c
+    subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
+      use iso_c_binding,  only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: kmass
+      integer (kind=c_int) :: n0
+      integer (kind=c_int) :: numelems
+      type(c_ptr) :: p
+    end subroutine recover_q_c
 
-     subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
-       use iso_c_binding,  only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: numelems
-       type(c_ptr), intent(in) :: spheremp_ptr
-       type(c_ptr), intent(in) :: ptens_ptr
-       type(c_ptr), intent(in) :: vtens_ptr
-     end subroutine loop5_c
+    subroutine contra2latlon_c(nets, nete, n0, numelems, D, v) bind(c)
+      use iso_c_binding,  only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: n0
+      integer (kind=c_int) :: numelems
+      type(c_ptr) :: D
+      type(c_ptr) :: v
+    end subroutine contra2latlon_c
 
-     subroutine loop6_c(nets, nete, kmass, n0, numelems, p) bind(c)
-       use iso_c_binding,  only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: kmass
-       integer (kind=c_int) :: n0
-       integer (kind=c_int) :: numelems
-       type(c_ptr) :: p
-     end subroutine loop6_c
+    subroutine loop_lapl_pre_bndry_ex_c (nets, nete, nelems, n0, var_coef1_bh, nu_ratio1_bh, ptens_ptr, vtens_ptr) bind(c)
+      use iso_c_binding, only: c_ptr, c_int, c_bool
+      use kinds,         only: real_kind
+      integer (kind=c_int), intent(in) :: nets, nete, nelems, n0
+      logical (kind=c_bool), intent(in) :: var_coef1_bh
+      real (kind=real_kind), intent(in) :: nu_ratio1_bh
+      type (c_ptr), intent(inout) :: ptens_ptr
+      type (c_ptr), intent(inout) :: vtens_ptr
+    end subroutine loop_lapl_pre_bndry_ex_c
 
-     subroutine loop8_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
-                        ptens_ptr, vtens_ptr) bind(c)
-       use iso_c_binding, only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: numelems
-       type(c_ptr) :: rspheremp_ptr
-       type(c_ptr) :: Dinv_ptr
-       type(c_ptr) :: ptens_ptr
-       type(c_ptr) :: vtens_ptr
-     end subroutine loop8_c
+    subroutine loop_lapl_post_bndry_ex_c (nets, nete, nelems, nu_ratio2_bh, ptens_ptr, vtens_ptr) bind(c)
+      use iso_c_binding, only: c_ptr, c_int
+      use kinds,         only: real_kind
+      integer (kind=c_int), intent(in) :: nets, nete, nelems
+      real (kind=real_kind), intent(in) :: nu_ratio2_bh
+      type (c_ptr), intent(inout) :: ptens_ptr
+      type (c_ptr), intent(inout) :: vtens_ptr
+    end subroutine loop_lapl_post_bndry_ex_c
 
-     subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
-                        p_ptr, v_ptr) bind(c)
-       use iso_c_binding, only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: nt_src
-       integer (kind=c_int) :: nt_dest
-       integer (kind=c_int) :: nelems
-       type(c_ptr) :: v_ptr
-       type(c_ptr) :: p_ptr
-     end subroutine copy_timelevels_c
+    subroutine loop5_c(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
+      use iso_c_binding,  only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: numelems
+      type(c_ptr), intent(in) :: spheremp_ptr
+      type(c_ptr), intent(in) :: ptens_ptr
+      type(c_ptr), intent(in) :: vtens_ptr
+    end subroutine loop5_c
 
+    subroutine loop6_c(nets, nete, kmass, n0, numelems, p) bind(c)
+      use iso_c_binding,  only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: kmass
+      integer (kind=c_int) :: n0
+      integer (kind=c_int) :: numelems
+      type(c_ptr) :: p
+    end subroutine loop6_c
 
-     subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
-                        v_ptr, p_ptr, alpha0_ptr, &
-                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
-       use iso_c_binding, only: c_ptr, c_int
-       integer (kind=c_int) :: nets
-       integer (kind=c_int) :: nete
-       integer (kind=c_int) :: n0
-       integer (kind=c_int) :: np1
-       integer (kind=c_int) :: s
-       integer (kind=c_int) :: rkstages
-       integer (kind=c_int) :: numelems
-       type(c_ptr) :: v_ptr
-       type(c_ptr) :: p_ptr
-       type(c_ptr) :: alpha0_ptr
-       type(c_ptr) :: alpha_ptr
-       type(c_ptr) :: ptens_ptr
-       type(c_ptr) :: vtens_ptr
-     end subroutine loop9_c
+    subroutine loop8_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
+                       ptens_ptr, vtens_ptr) bind(c)
+      use iso_c_binding, only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: numelems
+      type(c_ptr) :: rspheremp_ptr
+      type(c_ptr) :: Dinv_ptr
+      type(c_ptr) :: ptens_ptr
+      type(c_ptr) :: vtens_ptr
+    end subroutine loop8_c
+
+    subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
+                       p_ptr, v_ptr) bind(c)
+      use iso_c_binding, only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: nt_src
+      integer (kind=c_int) :: nt_dest
+      integer (kind=c_int) :: nelems
+      type(c_ptr) :: v_ptr
+      type(c_ptr) :: p_ptr
+    end subroutine copy_timelevels_c
+
+    subroutine loop9_c(nets, nete, n0, np1, s, rkstages, numelems, &
+                       v_ptr, p_ptr, alpha0_ptr, &
+                       alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
+      use iso_c_binding, only: c_ptr, c_int
+      integer (kind=c_int) :: nets
+      integer (kind=c_int) :: nete
+      integer (kind=c_int) :: n0
+      integer (kind=c_int) :: np1
+      integer (kind=c_int) :: s
+      integer (kind=c_int) :: rkstages
+      integer (kind=c_int) :: numelems
+      type(c_ptr) :: v_ptr
+      type(c_ptr) :: p_ptr
+      type(c_ptr) :: alpha0_ptr
+      type(c_ptr) :: alpha_ptr
+      type(c_ptr) :: ptens_ptr
+      type(c_ptr) :: vtens_ptr
+    end subroutine loop9_c
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
@@ -161,6 +188,72 @@ contains
     enddo
   end subroutine contra2latlon_f90
 
+  subroutine loop_lapl_pre_bndry_ex_f90 (nets, nete, n0, elem, deriv, var_coef1_bh, nu_ratio1_bh, ptens, vtens)
+    use dimensions_mod, only: np, nlev
+    use derivative_mod, only: derivative_t, laplace_sphere_wk, vlaplace_sphere_wk
+    use element_mod,    only: element_t
+    use kinds,          only: real_kind
+    logical :: var_coef1_bh
+    integer, intent(in) :: nets, nete, n0
+    real (kind=real_kind), intent(in) :: nu_ratio1_bh
+    type(element_t), intent(in) :: elem(:)
+    type (derivative_t), intent(in) :: deriv
+
+    real (kind=real_kind), dimension(np,np,nlev) :: T_bh
+    real (kind=real_kind), intent(inout):: vtens(:, :, :, :, :), ptens(:, :, :, :)
+
+
+    integer :: ie, k, j, i
+
+    do ie=nets,nete
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+             T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
+          enddo
+        enddo
+
+        ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
+        vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,elem(ie),&
+                                             var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
+      enddo
+    enddo
+  end subroutine loop_lapl_pre_bndry_ex_f90
+
+  subroutine loop_lapl_post_bndry_ex_f90 (nets, nete, elem, deriv, nu_ratio2_bh, ptens, vtens)
+    use dimensions_mod, only: np, nlev
+    use derivative_mod, only: derivative_t, laplace_sphere_wk, vlaplace_sphere_wk
+    use element_mod,    only: element_t
+    use kinds,          only: real_kind
+    integer, intent(in) :: nets, nete
+    real (kind=real_kind), intent(in) :: nu_ratio2_bh
+    type (element_t), intent(in) :: elem(:)
+    type (derivative_t), intent(in) :: deriv
+
+    real (kind=real_kind), dimension(np,np,nlev) :: T_bh
+    real (kind=real_kind), intent(inout):: vtens(:, :, :, :, :), ptens(:, :, :, :)
+    real (kind=real_kind), dimension(:,:), pointer :: rspheremv_bh
+    real (kind=real_kind), dimension(np,np,2) :: v_bh
+
+    integer :: ie, k, j, i
+
+    do ie = nets,nete
+      rspheremv_bh     => elem(ie)%rspheremp(:,:)
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+            T_bh(i,j,k)=rspheremv_bh(i,j)*ptens(i,j,k,ie)
+            v_bh(i,j,1)=rspheremv_bh(i,j)*vtens(i,j,1,k,ie)
+            v_bh(i,j,2)=rspheremv_bh(i,j)*vtens(i,j,2,k,ie)
+          enddo
+        enddo
+        ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=.true.)
+        vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
+                                             nu_ratio=nu_ratio2_bh)
+      enddo
+    enddo ! end ie loop
+  end subroutine loop_lapl_post_bndry_ex_f90
+
   ! TODO: Give this a better name
   !DEC$ ATTRIBUTES NOINLINE :: loop5_f90
   subroutine loop5_f90(nets, nete, numelems, spheremp_ptr, ptens_ptr, vtens_ptr) bind(c)
@@ -204,7 +297,7 @@ contains
     do ie=nets,nete
       do k=1,nlev
         if(k.ne.kmass)then
-	  p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
+    p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
         endif
       enddo
     enddo
@@ -261,7 +354,7 @@ contains
     ! real (kind=real_kind), dimension(np,np,nlev,tl,nets:nete) :: p
     ! TODO: Find out if the index base of an array can be changed
     ! without doing the computation by hand
-    
+
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelems])
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nelems])
     do ie=nets,nete
@@ -284,7 +377,6 @@ contains
 !       end do
 !    enddo
   end subroutine copy_timelevels_f90
-
 
   !DEC$ ATTRIBUTES NOINLINE :: loop9_f90
   subroutine loop9_f90(nets, nete, n0, np1, s, rkstages, numelems, &
@@ -509,7 +601,10 @@ contains
 
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev, nelemd
-    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D, elem_Dinv, elem_spheremp, elem_rspheremp
+    use element_mod,    only: element_t, elem_state_ps, elem_state_p, elem_state_v, &
+                              elem_D, elem_Dinv, elem_spheremp, elem_rspheremp, &
+                              elem_vec_sphere2cart, elem_metdet, elem_rmetdet, &
+                              elem_metinv, elem_mp, elem_hyperviscosity, elem_tensorVisc
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack, &
                               initEdgeBuffer, edgevunpackmax, edgevunpackmin, freeedgebuffer
     use edgetype_mod,   only: EdgeBuffer_t
@@ -595,7 +690,7 @@ contains
     real (kind=real_kind), dimension(np,np,nlev) :: T_bh
     real (kind=real_kind), dimension(np,np,2) :: v_bh
     real (kind=real_kind) ::  nu_ratio1_bh,nu_ratio2_bh
-    logical var_coef1_bh
+    logical :: var_coef1_bh
 
     !local for neighbor_minmax
     real (kind=real_kind) :: Qmin_mm(np,np,nlev)
@@ -606,8 +701,42 @@ contains
     type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, &
                     ptr_buf4, ptr_buf5, ptr_buf6
 
+#if !DONT_USE_KOKKOS
+    type (c_ptr) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr
+    type (c_ptr) :: metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
+    type (c_ptr) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
+
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
+
+    elem_state_ps_cptr    = c_loc(elem_state_ps)
+    elem_state_p_cptr     = c_loc(elem_state_p)
+    elem_state_v_cptr     = c_loc(elem_state_v)
+    ptens_cptr            = c_loc(ptens)
+    vtens_cptr            = c_loc(vtens)
+
+    metdet_cptr           = c_loc(elem_metdet)
+    rmetdet_cptr          = c_loc(elem_rmetdet)
+    metinv_cptr           = c_loc(elem_metinv)
+    mp_cptr               = c_loc(elem_mp)
+    vec_sphere2cart_cptr  = c_loc(elem_vec_sphere2cart)
+    spheremp_cptr         = c_loc(elem_spheremp)
+
+    rspheremp_cptr        = c_loc(elem_rspheremp)
+    hypervisc_cptr        = c_loc(elem_hyperviscosity)
+    tensor_visc_cptr      = c_loc(elem_tensorVisc)
+    D_cptr                = c_loc(elem_D)
+    Dinv_cptr             = c_loc(elem_Dinv)
+
+    call init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr,&
+                               metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
+                               rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr)
+#else
+    allocate(vtens(np,np,2,nlev,nets:nete))
+    allocate(ptens(np,np,nlev,nets:nete))
+#endif
+
+
 
     ! shallow water test cases require conservation form of h equation
     if (tracer_advection_formulation==TRACERADV_UGRADQ) then
@@ -757,21 +886,15 @@ contains
            endif
         endif
 
-! OG : local loop to refactor
-        do ie=nets,nete
-          do k=1,nlev
-            do j=1,np
-              do i=1,np
-                 T_bh(i,j,k)=elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
-              enddo
-            enddo
-
-            ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=var_coef1_bh)
-            vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,n0),deriv,&
-              elem(ie),var_coef=var_coef1_bh,nu_ratio=nu_ratio1_bh)
-          enddo
-        enddo
-! OG : end local loop to refactor
+        call t_startf('timer_advancerk_lapl_loop_pre_bndry_ex')
+#if DONT_USE_KOKKOS
+        call loop_lapl_pre_bndry_ex_f90 (nets, nete, n0, elem, deriv, var_coef1_bh, nu_ratio1_bh, ptens, vtens)
+#else
+        ptr_buf1 = c_loc(ptens)
+        ptr_buf2 = c_loc(vtens)
+        call loop_lapl_pre_bndry_ex_c (nets, nete, nelemd, n0, LOGICAL(var_coef1_bh,1), nu_ratio1_bh, ptr_buf1, ptr_buf2)
+#endif
+        call t_stopf('timer_advancerk_lapl_loop_pre_bndry_ex')
 
         do ie = nets,nete
           kptr=0
@@ -792,23 +915,15 @@ contains
           call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
         enddo
 
-! OG : local loop to refactor
-        do ie = nets,nete
-          rspheremv_bh     => elem(ie)%rspheremp(:,:)
-          do k=1,nlev
-            do j=1,np
-              do i=1,np
-                T_bh(i,j,k)=rspheremv_bh(i,j)*ptens(i,j,k,ie)
-                v_bh(i,j,1)=rspheremv_bh(i,j)*vtens(i,j,1,k,ie)
-                v_bh(i,j,2)=rspheremv_bh(i,j)*vtens(i,j,2,k,ie)
-              enddo
-            enddo
-            ptens(:,:,k,ie)=laplace_sphere_wk(T_bh(:,:,k),deriv,elem(ie),var_coef=.true.)
-            vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v_bh(:,:,:),deriv,elem(ie),var_coef=.true.,&
-              nu_ratio=nu_ratio2_bh)
-          enddo
-       enddo ! end ie loop
-! OG : end of local loop to refactor
+        call t_startf('timer_advancerk_lapl_loop_post_bndry_ex')
+#if DONT_USE_KOKKOS
+        call loop_lapl_post_bndry_ex_f90 (nets, nete, elem, deriv, nu_ratio1_bh, ptens, vtens)
+#else
+        ptr_buf1 = c_loc(ptens)
+        ptr_buf2 = c_loc(vtens)
+        call loop_lapl_post_bndry_ex_c (nets, nete, nelemd, nu_ratio1_bh, ptr_buf1, ptr_buf2)
+#endif
+        call t_stopf('timer_advancerk_lapl_loop_post_bndry_ex')
 
 !end biharmonic
 
@@ -832,14 +947,14 @@ contains
 
 !IKT, 10/21/16: local loop - to refactor
 !IKT, 10/21/16: put C interface here with parallel_for (no team policy)
-	if(kmass.ne.-1)then
-	!we do not apply viscosity to mass field
-	ptens(:,:,kmass,:)=0.0d0
+  if(kmass.ne.-1)then
+  !we do not apply viscosity to mass field
+  ptens(:,:,kmass,:)=0.0d0
         call t_startf('timer_advancerk_loop6')
         ptr_buf1 = c_loc(elem_state_p)
         call LOOP6(nets, nete, kmass, n0, nelemd, ptr_buf1)
         call t_stopf('timer_advancerk_loop6')
-	endif
+  endif
 
 !IKT, 10/21/16: the following needs to be team policy --> call to
 !divergence_sphere
@@ -906,7 +1021,7 @@ contains
           endif
 
           if ((limiter_option == 84))then
-	     pmin(:,ie)=0.0d0
+       pmin(:,ie)=0.0d0
              if (test_case=='swirl') then
                  pmin(1,ie)=.1d0
                  if (nlev>=3) then
@@ -1000,7 +1115,7 @@ contains
 !this is only for output reasons, if velocities are prescribed
 !IKT, 10/21/16: set_prescribed_velocity will be parallel_for
       do ie=nets,nete
-	  call set_prescribed_velocity(elem(ie),n0,real_time)
+    call set_prescribed_velocity(elem(ie),n0,real_time)
       enddo
     enddo ! stage loop
 
@@ -1107,13 +1222,13 @@ contains
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+    do i=1,np
+      if (Q(i,j)<0) then
+    Q(i,j)=0
+      else
+    mass_added = mass_added + Q(i,j)*spheremp(i,j)
+      endif
+    enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1150,13 +1265,13 @@ contains
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+    do i=1,np
+      if (Q(i,j)<0) then
+    Q(i,j)=0
+      else
+    mass_added = mass_added + Q(i,j)*spheremp(i,j)
+      endif
+    enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1190,7 +1305,7 @@ contains
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use control_mod, only : nu, nu_s, hypervis_order, hypervis_subcycle, limiter_option,&
-	  test_case, kmass
+    test_case, kmass
     use hybrid_mod, only : hybrid_t
     use element_mod, only : element_t
     use derivative_mod, only : derivative_t, laplace_sphere_wk, vlaplace_sphere_wk
@@ -1582,8 +1697,8 @@ contains
        !JMD       TIMER_DETAIL_START(timer,2,st)
        !JMD metdet => elem(ie)%metdet
        !JMD if(TIMER_DETAIL(2,timer)) then
-       !JMD	 TIMER_START(et)
-       !JMD	 timer%pointers = timer%pointers + (et - st)
+       !JMD  TIMER_START(et)
+       !JMD  timer%pointers = timer%pointers + (et - st)
        !JMD       endif
 
        !DBG print *,'advance_si: point #11'
@@ -2155,7 +2270,7 @@ contains
 
 
 !=======================================================================================!
-!  Advection Flux Term							   		!
+!  Advection Flux Term                    !
 !  from DG code - modified for CG velocity
 !=======================================================================================!
 function adv_flux_term(elem,deriv,contrauv,si,si_neighbor) result(numflux)
