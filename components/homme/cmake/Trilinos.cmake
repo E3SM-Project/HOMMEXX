@@ -1,3 +1,4 @@
+cmake  -DTrilinos_ENABLE_Kokkos=ON -DTrilinos_ENABLE_KokkosAlgorithms=ON -DTrilinos_ENABLE_KokkosContainers=ON -DTrilinos_ENABLE_KokkosCore=ON -DTrilinos_ENABLE_KokkosExample=OFF -DTrilinos_ENABLE_OpenMP=ON -DKokkos_ENABLE_OpenMP=ON -DTPL_ENABLE_Pthread=OFF -DKokkos_ENABLE_Pthread=OFF -DTPL_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_CUDA_UVM=ON -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR} -DCMAKE_CXX_COMPILER
 
 SET(TRILINOS_INSTALL_DIR "~/prefix" CACHE FILEPATH "Where to install Trilinos")
 
