@@ -103,7 +103,7 @@ void recover_q_c(const int &nets, const int &nete,
 
 
 
-#if 0
+#if 1
 // kokkos version of the loop
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
@@ -142,9 +142,7 @@ void contra2latlon_c(const int &nets, const int &nete,
     std::abort();
   }
 }
-#endif 
-
-
+#else 
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
                      real *const &d_ptr,
@@ -162,7 +160,7 @@ void contra2latlon_c(const int &nets, const int &nete,
       for( int k=0; k < nlev; ++k ) {
          #pragma vector always aligned
          for( int j = 0; j < np; ++j) {
-            #pragma vector always aligned
+           #pragma vector always aligned
             for( int i = 0; i < np; ++i) {
                real v1 = v(ie, n0-1, k, 0, j, i);
                real v2 = v(ie, n0-1, k, 1, j, i);
@@ -175,7 +173,7 @@ void contra2latlon_c(const int &nets, const int &nete,
       }
    }
 }
-
+#endif
 
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
