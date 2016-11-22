@@ -44,6 +44,9 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
           -DKokkos_ENABLE_CUDA_UVM=ON
 	  -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR}
 	  -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER})
+      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+      MESSAGE("Adding --expt-extended-lambda to the C++ compiler flags")
+      MESSAGE("${CMAKE_CXX_FLAGS}")
     ENDIF()
   ENDIF()
 
@@ -87,8 +90,14 @@ ELSE()
   MESSAGE("   Trilinos_EXTRA_LD_FLAGS = ${Trilinos_EXTRA_LD_FLAGS}")
   MESSAGE("   Trilinos_AR = ${Trilinos_AR}")
   MESSAGE("End of Trilinos details\n")
-ENDIF()
 
+  IF(ENABLE_CUDA)
+    MESSAGE("CUDA Enabled")
+    IF(";${Trilinos_TPL_LIST};" MATCHES ";CUDA;")
+      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda")
+    ENDIF()
+  ENDIF()
+ENDIF()
 
 macro(link_to_trilinos targetName)
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
