@@ -158,6 +158,8 @@ void loop5_c(const int &nets, const int &nete,
   PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
   VTens vtens(vtens_ptr, np, np, dim, nlev,
               nete - nets + 1);
+  real _nu = nu;
+  real _nu_s = nu_s;
   try {
     Kokkos::Experimental::md_parallel_for(
         RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -165,11 +167,11 @@ void loop5_c(const int &nets, const int &nete,
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
               ptens(i, j, k, ie - nets + 1) =
-                  -nu_s * ptens(i, j, k, ie - nets + 1) /
+                  -_nu_s * ptens(i, j, k, ie - nets + 1) /
                   spheremp(i, j, ie);
               for(int h = 0; h < dim; h++) {
                 vtens(i, j, h, k, ie - nets + 1) =
-                    -nu * vtens(i, j, h, k, ie - nets + 1) /
+                    -_nu * vtens(i, j, h, k, ie - nets + 1) /
                     spheremp(i, j, ie);
               }
             }
