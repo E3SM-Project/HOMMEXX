@@ -201,13 +201,15 @@ contains
     real (kind=real_kind), pointer :: p(:, :, :, :, :)
     call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,numelems])
 
-    do ie=nets,nete
-      do k=1,nlev
-        if(k.ne.kmass)then
-          p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
-        endif
+    if (kmass .ne. -1) then
+      do ie=nets,nete
+        do k=1,nlev
+          if(k.ne.kmass)then
+            p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
+          endif
+        enddo
       enddo
-    enddo
+    endif
   end subroutine recover_dpq_f90
 
   !DEC$ ATTRIBUTES NOINLINE :: weighted_rhs_f90
@@ -261,7 +263,7 @@ contains
     ! real (kind=real_kind), dimension(np,np,nlev,tl,nets:nete) :: p
     ! TODO: Find out if the index base of an array can be changed
     ! without doing the computation by hand
-    
+
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, nelems])
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, nelems])
     do ie=nets,nete
@@ -706,7 +708,7 @@ contains
              endif
            enddo
          endif ! endif kmass .ne. -1
- 
+
          !end subroutine neighb_minmax
        endif !if limiter ==8 or limiter == 81
 
@@ -727,7 +729,7 @@ contains
        call t_startf('advancerk_bh_recoverq')
        call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
        call t_stopf('advancerk_bh_recoverq')
-       
+
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
        call t_startf('advancerk_bh_contra2latlon')
@@ -991,7 +993,7 @@ contains
 !this is only for output reasons, if velocities are prescribed
 !IKT, 10/21/16: set_prescribed_velocity will be parallel_for
       do ie=nets,nete
-	  call set_prescribed_velocity(elem(ie),n0,real_time)
+    call set_prescribed_velocity(elem(ie),n0,real_time)
       enddo
     enddo ! stage loop
 
@@ -1098,13 +1100,13 @@ contains
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+    do i=1,np
+      if (Q(i,j)<0) then
+    Q(i,j)=0
+      else
+    mass_added = mass_added + Q(i,j)*spheremp(i,j)
+      endif
+    enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1141,13 +1143,13 @@ contains
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+    do i=1,np
+      if (Q(i,j)<0) then
+    Q(i,j)=0
+      else
+    mass_added = mass_added + Q(i,j)*spheremp(i,j)
+      endif
+    enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1181,7 +1183,7 @@ contains
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use control_mod, only : nu, nu_s, hypervis_order, hypervis_subcycle, limiter_option,&
-	  test_case, kmass
+    test_case, kmass
     use hybrid_mod, only : hybrid_t
     use element_mod, only : element_t
     use derivative_mod, only : derivative_t, laplace_sphere_wk, vlaplace_sphere_wk
@@ -1573,8 +1575,8 @@ contains
        !JMD       TIMER_DETAIL_START(timer,2,st)
        !JMD metdet => elem(ie)%metdet
        !JMD if(TIMER_DETAIL(2,timer)) then
-       !JMD	 TIMER_START(et)
-       !JMD	 timer%pointers = timer%pointers + (et - st)
+       !JMD  TIMER_START(et)
+       !JMD  timer%pointers = timer%pointers + (et - st)
        !JMD       endif
 
        !DBG print *,'advance_si: point #11'
@@ -2146,7 +2148,7 @@ contains
 
 
 !=======================================================================================!
-!  Advection Flux Term							   		!
+!  Advection Flux Term                    !
 !  from DG code - modified for CG velocity
 !=======================================================================================!
 function adv_flux_term(elem,deriv,contrauv,si,si_neighbor) result(numflux)
