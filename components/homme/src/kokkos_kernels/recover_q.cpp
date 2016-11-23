@@ -142,7 +142,7 @@ void contra2latlon_c(const int &nets, const int &nete,
     std::abort();
   }
 }
-#else 
+#else
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
                      real *const &d_ptr,
@@ -164,9 +164,9 @@ void contra2latlon_c(const int &nets, const int &nete,
             for( int i = 0; i < np; ++i) {
                real v1 = v(ie, n0-1, k, 0, j, i);
                real v2 = v(ie, n0-1, k, 1, j, i);
-               v(ie, n0-1, k, 0, j, i) = 
+               v(ie, n0-1, k, 0, j, i) =
                d(ie, 0, 0, j, i) * v1 + d(ie, 1, 0, j, i) * v2;
-               v(ie, n0-1, k, 1, j, i) = 
+               v(ie, n0-1, k, 1, j, i) =
                d(ie, 0, 1, j, i) * v1 + d(ie, 1, 1, j, i) * v2;
             }
          }
@@ -230,25 +230,28 @@ void recover_dpq_c(const int &nets, const int &nete,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   P p(p_ptr, np, np, nlev, timelevels, numelems);
-  try {
-    Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
-        KOKKOS_LAMBDA(int k, int ie) {
-          if(k != kmass - 1) {
-            for(int j = 0; j < np; ++j) {
-              for(int i = 0; i < np; ++i) {
-                p(i, j, k, n0 - 1, ie) *=
-                    p(i, j, kmass - 1, n0 - 1, ie);
+  if (kmass != -1)
+  {
+    try {
+      Kokkos::Experimental::md_parallel_for(
+          RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+          KOKKOS_LAMBDA(int k, int ie) {
+            if(k != kmass - 1) {
+              for(int j = 0; j < np; ++j) {
+                for(int i = 0; i < np; ++i) {
+                  p(i, j, k, n0 - 1, ie) *=
+                      p(i, j, kmass - 1, n0 - 1, ie);
+                }
               }
             }
-          }
-        });
-  } catch(std::exception &e) {
-    std::cout << e.what() << std::endl;
-    std::abort();
-  } catch(...) {
-    std::cout << "Unknown exception" << std::endl;
-    std::abort();
+          });
+    } catch(std::exception &e) {
+      std::cout << e.what() << std::endl;
+      std::abort();
+    } catch(...) {
+      std::cout << "Unknown exception" << std::endl;
+      std::abort();
+    }
   }
 }
 
