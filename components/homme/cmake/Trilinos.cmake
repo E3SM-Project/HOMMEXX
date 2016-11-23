@@ -13,8 +13,8 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
   SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
                        -DKokkos_ENABLE_MPI=ON)
 
-  SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscontainers;kokkoscore" PARENT_SCOPE)
-  SET(Kokkos_TPL_LIBRARIES "dl" PARENT_SCOPE)
+  SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscontainers;kokkoscore")
+  SET(Kokkos_TPL_LIBRARIES "dl")
 
   IF(${OPENMP_FOUND})
     MESSAGE(STATUS "Enabling Trilinos' OpenMP")
