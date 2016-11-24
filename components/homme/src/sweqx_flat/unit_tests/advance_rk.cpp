@@ -5,9 +5,8 @@
 #include <iostream>
 #include <random>
 
-#include <dimensions.hpp>
+#include <Types.hpp>
 #include <fortran_binding.hpp>
-#include <kinds.hpp>
 
 using namespace Homme;
 
@@ -75,6 +74,35 @@ void loop9_c(const int &nets, const int &nete,
              real *const &vtens_ptr);
 }
 
+namespace Homme {
+template <typename ScalarQP>
+void gradient_sphere_c(int ie, const ScalarQP &s,
+                       const derivative &deriv,
+                       const D &dinv, VectorField &grad);
+
+void vorticity_sphere_c(int ie, const VectorField &v,
+                        const derivative &deriv, const D &d,
+                        const MetDet &rmetdet,
+                        ScalarField &grad);
+
+void divergence_sphere_c(int ie, const VectorField &v,
+                         const derivative &deriv,
+                         const MetDet &metdet,
+                         const MetDet &rmetdet,
+                         const D &dinv,
+                         ScalarField &divergence);
+
+void team_parallel_ex(
+    const int &nets, const int &nete, const int &n0,
+    const int &nelemd,
+    const int &tracer_advection_formulation,
+    const real &pmean, const derivative &deriv,
+    const real &dtstage, real *&d_ptr, real *&dinv_ptr,
+    real *&metdet_ptr, real *&rmetdet_ptr, real *&fcor_ptr,
+    real *&p_ptr, real *&ps_ptr, real *&v_ptr,
+    real *&ptens_ptr, real *&vtens_ptr);
+}
+
 template <typename rngAlg, typename dist, typename number>
 void genRandArray(number *arr, int arr_len, rngAlg &engine,
                   dist &pdf) {
@@ -112,7 +140,7 @@ void genRandTheoryExper(number *arr_theory,
 }
 
 TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
 
   // real elem_state_p (np,np,nlevel,timelevels,nelemd)
   constexpr const int p_len =
@@ -164,7 +192,7 @@ TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("loop6", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
 
   // real elem_state_p (np,np,nlevel,timelevels,nelemd)
   constexpr const int p_len =
@@ -215,7 +243,7 @@ TEST_CASE("loop6", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("contra2latlon", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
   constexpr const int dim = 2;
   // real elem_D (np,np,2,2,nelemd)
   // real elem_state_v (np,np,2,nlev,timelevels,nelemd)
@@ -265,7 +293,7 @@ TEST_CASE("contra2latlon", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
   constexpr const int spheremp_len = np * np * numelems;
@@ -337,7 +365,7 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
   constexpr const int rspheremp_len = np * np * numelems;
@@ -401,7 +429,7 @@ TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 100;
+  constexpr const int numelems = 10;
   constexpr const int dim = 2;
   constexpr const int rkstages = 5;
 
@@ -484,4 +512,63 @@ TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
   delete[] p_exper;
   delete[] v_theory;
   delete[] v_exper;
+}
+
+TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 10;
+  constexpr const int dim = 2;
+
+  VectorField v("Velocity", np, np, dim);
+
+  derivative deriv;
+
+  constexpr const int D_len =
+      np * np * dim * dim * numelems;
+  D d(new real[D_len], np, np, dim, dim, numelems);
+
+  constexpr const int rmetdet_len = np * np * numelems;
+  MetDet rmetdet(new real[rmetdet_len], np, np, numelems);
+
+  ScalarField vort_theory("Vorticity Theory", np, np);
+  ScalarField vort_exper("Vorticity Exper", np, np);
+
+  constexpr const int numRandTests = 10;
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      genRandArray(
+          d.ptr_on_device(), D_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          rmetdet.ptr_on_device(), rmetdet_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          vort_theory.ptr_on_device(),
+          vort_exper.ptr_on_device(), np * np * dim, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      for(int ie = 0; ie < numelems; ie++) {
+        genRandArray(
+            reinterpret_cast<real *>(&deriv),
+            sizeof(deriv) / sizeof(real), engine,
+            std::uniform_real_distribution<real>(0, 1.0));
+        genRandArray(
+            v.ptr_on_device(), np * np * dim, engine,
+            std::uniform_real_distribution<real>(0, 1.0));
+
+        vorticity_sphere_c(ie, v, deriv, d, rmetdet,
+                           vort_exper);
+        vorticity_sphere_c(ie, v, deriv, d, rmetdet,
+                           vort_theory);
+        for(int k = 0; k < np; k++) {
+          for(int l = 0; l < np; l++) {
+            REQUIRE(vort_exper(l, k) == vort_theory(l, k));
+          }
+        }
+      }
+    }
+  }
+  delete[] d.ptr_on_device();
+  delete[] rmetdet.ptr_on_device();
 }
