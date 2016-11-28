@@ -292,7 +292,7 @@ contains
     real (kind=real_kind), pointer :: p(:, :, :, :, :)
     call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,numelems])
 
-    if (kmass.ne.-1) then
+    if (kmass .ne. -1) then
       do ie=nets,nete
         do k=1,nlev
           if(k.ne.kmass)then
@@ -732,7 +732,6 @@ contains
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
-
 
     ! shallow water test cases require conservation form of h equation
     if (tracer_advection_formulation==TRACERADV_UGRADQ) then
@@ -1298,7 +1297,7 @@ contains
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use control_mod, only : nu, nu_s, hypervis_order, hypervis_subcycle, limiter_option,&
-                          test_case, kmass
+                            test_case, kmass
     use hybrid_mod, only : hybrid_t
     use element_mod, only : element_t
     use derivative_mod, only : derivative_t, laplace_sphere_wk, vlaplace_sphere_wk

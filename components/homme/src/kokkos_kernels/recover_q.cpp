@@ -163,7 +163,7 @@ void contra2latlon_c(const int &nets, const int &nete,
       for( int k=0; k < nlev; ++k ) {
          #pragma vector always aligned
          for( int j = 0; j < np; ++j) {
-            #pragma vector always aligned
+           #pragma vector always aligned
             for( int i = 0; i < np; ++i) {
                real v1 = v(ie, n0-1, k, 0, j, i);
                real v2 = v(ie, n0-1, k, 1, j, i);
@@ -330,14 +330,15 @@ void add_hv_c(const int &nets, const int &nete,
 /* TODO: Give this a better name */
 void recover_dpq_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
-             const int &numelems, real * const&p_ptr) {
+             const int &numelems, real *&p_ptr) {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   P p(p_ptr, np, np, nlev, timelevels, numelems);
-  if(kmass != -1) {
+  if (kmass != -1)
+  {
     try {
       Kokkos::Experimental::md_parallel_for(
           RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
