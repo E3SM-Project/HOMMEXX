@@ -14,7 +14,7 @@ void gradient_sphere_kokkos (const int& nets, const int& nete, const int& nelems
                              Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> grad_field);
 
 void divergence_sphere_wk_c (const int& nets, const int& nete, const int& nelems,
-                             real* const& vector_field_ptr, real* weak_div_field_ptr);
+                             real* const& vector_field_ptr, real*& weak_div_field_ptr);
 
 void divergence_sphere_wk_kokkos (const int& nets, const int& nete, const int& nelems,
                                   Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride>  vector_field,
@@ -22,7 +22,7 @@ void divergence_sphere_wk_kokkos (const int& nets, const int& nete, const int& n
 
 void laplace_sphere_wk_c (const int& nets, const int& nete, const int& nelems,
                           const int& variable_viscosity,
-                          real* const& scalar_field_ptr, real* weak_lapl_field_ptr);
+                          real* const& scalar_field_ptr, real*& weak_lapl_field_ptr);
 
 void laplace_sphere_wk_kokkos (const int& nets, const int& nete, const int& nelems,
                                const int& variable_viscosity,
@@ -30,7 +30,7 @@ void laplace_sphere_wk_kokkos (const int& nets, const int& nete, const int& nele
                                Kokkos::View<real*[nlev][np][np], Kokkos::LayoutStride>  weak_lapl_field);
 
 void vorticity_sphere_c (const int& nets, const int& nete, const int& nelems,
-                         real* const& vector_field_ptr, real* vorticity_field_ptr);
+                         real* const& vector_field_ptr, real*& vorticity_field_ptr);
 
 void vorticity_sphere_kokkos (const int& nets, const int& nete, const int& nelems,
                               Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vector_field,
