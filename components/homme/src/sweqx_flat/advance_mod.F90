@@ -10,12 +10,12 @@ module advance_mod
   implicit none
 
   interface
-    subroutine init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr,&
-                                     metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
+    subroutine init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+                                     rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
                                      rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
       use iso_c_binding, only: c_ptr
-      type (c_ptr), intent(in) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr
-      type (c_ptr), intent(in) :: metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
+      type (c_ptr), intent(in) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr
+      type (c_ptr), intent(in) :: rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
       type (c_ptr), intent(in) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
     end subroutine init_pointers_pool_c
 
@@ -40,20 +40,18 @@ module advance_mod
     end subroutine contra2latlon_c
 
     subroutine loop_lapl_pre_bndry_ex_c (nets, nete, nelems, n0, var_coef1_bh, nu_ratio1_bh, ptens_ptr, vtens_ptr) bind(c)
-      use iso_c_binding, only: c_ptr, c_int, c_bool
-      use kinds,         only: real_kind
+      use iso_c_binding, only: c_ptr, c_int, c_double, c_bool
       integer (kind=c_int), intent(in) :: nets, nete, nelems, n0
       logical (kind=c_bool), intent(in) :: var_coef1_bh
-      real (kind=real_kind), intent(in) :: nu_ratio1_bh
+      real (kind=c_double), intent(in) :: nu_ratio1_bh
       type (c_ptr), intent(inout) :: ptens_ptr
       type (c_ptr), intent(inout) :: vtens_ptr
     end subroutine loop_lapl_pre_bndry_ex_c
 
     subroutine loop_lapl_post_bndry_ex_c (nets, nete, nelems, nu_ratio2_bh, ptens_ptr, vtens_ptr) bind(c)
-      use iso_c_binding, only: c_ptr, c_int
-      use kinds,         only: real_kind
+      use iso_c_binding, only: c_ptr, c_double, c_int
       integer (kind=c_int), intent(in) :: nets, nete, nelems
-      real (kind=real_kind), intent(in) :: nu_ratio2_bh
+      real (kind=c_double), intent(in) :: nu_ratio2_bh
       type (c_ptr), intent(inout) :: ptens_ptr
       type (c_ptr), intent(inout) :: vtens_ptr
     end subroutine loop_lapl_post_bndry_ex_c
@@ -200,7 +198,7 @@ contains
     type (derivative_t), intent(in) :: deriv
 
     real (kind=real_kind), dimension(np,np,nlev) :: T_bh
-    real (kind=real_kind), intent(inout):: vtens(:, :, :, :, :), ptens(:, :, :, :)
+    real (kind=real_kind), intent(out):: vtens(:, :, :, :, :), ptens(:, :, :, :)
 
 
     integer :: ie, k, j, i
@@ -227,7 +225,7 @@ contains
     use kinds,          only: real_kind
     integer, intent(in) :: nets, nete
     real (kind=real_kind), intent(in) :: nu_ratio2_bh
-    type (element_t), intent(in) :: elem(:)
+    type (element_t), target, intent(in) :: elem(:)
     type (derivative_t), intent(in) :: deriv
 
     real (kind=real_kind), dimension(np,np,nlev) :: T_bh
@@ -294,13 +292,15 @@ contains
     real (kind=real_kind), pointer :: p(:, :, :, :, :)
     call c_f_pointer(p_ptr, p, [np,np,nlev,timelevels,numelems])
 
-    do ie=nets,nete
-      do k=1,nlev
-        if(k.ne.kmass)then
-          p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
-        endif
+    if (kmass.ne.-1) then
+      do ie=nets,nete
+        do k=1,nlev
+          if(k.ne.kmass)then
+            p(:,:,k,n0,ie)=p(:,:,k,n0,ie)*p(:,:,kmass,n0,ie)
+          endif
+        enddo
       enddo
-    enddo
+    endif
   end subroutine recover_dpq_f90
 
   !DEC$ ATTRIBUTES NOINLINE :: weighted_rhs_f90
@@ -706,9 +706,6 @@ contains
     type (c_ptr) :: metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
     type (c_ptr) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
 
-    allocate(vtens(np,np,2,nlev,nets:nete))
-    allocate(ptens(np,np,nlev,nets:nete))
-
     elem_state_ps_cptr    = c_loc(elem_state_ps)
     elem_state_p_cptr     = c_loc(elem_state_p)
     elem_state_v_cptr     = c_loc(elem_state_v)
@@ -728,14 +725,13 @@ contains
     D_cptr                = c_loc(elem_D)
     Dinv_cptr             = c_loc(elem_Dinv)
 
-    call init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, ptens_cptr, vtens_cptr,&
-                               metdet_cptr, rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
+    call init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+                               rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
                                rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr)
-#else
-    allocate(vtens(np,np,2,nlev,nets:nete))
-    allocate(ptens(np,np,nlev,nets:nete))
 #endif
 
+    allocate(vtens(np,np,2,nlev,nets:nete))
+    allocate(ptens(np,np,nlev,nets:nete))
 
 
     ! shallow water test cases require conservation form of h equation
@@ -835,7 +831,7 @@ contains
              endif
            enddo
          endif ! endif kmass .ne. -1
- 
+
          !end subroutine neighb_minmax
        endif !if limiter ==8 or limiter == 81
 
@@ -856,7 +852,7 @@ contains
        call t_startf('advancerk_bh_recoverq')
        call RECOVER_Q(nets, nete, kmass, n0, nelemd, ptr_buf1)
        call t_stopf('advancerk_bh_recoverq')
-       
+
        ptr_buf1 = c_loc(elem_D)
        ptr_buf2 = c_loc(elem_state_v)
        call t_startf('advancerk_bh_contra2latlon')
@@ -1112,7 +1108,7 @@ contains
 !this is only for output reasons, if velocities are prescribed
 !IKT, 10/21/16: set_prescribed_velocity will be parallel_for
       do ie=nets,nete
-	  call set_prescribed_velocity(elem(ie),n0,real_time)
+    call set_prescribed_velocity(elem(ie),n0,real_time)
       enddo
     enddo ! stage loop
 
@@ -1219,13 +1215,13 @@ contains
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+        do i=1,np
+          if (Q(i,j)<0) then
+            Q(i,j)=0
+          else
+            mass_added = mass_added + Q(i,j)*spheremp(i,j)
+          endif
+        enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1253,22 +1249,22 @@ contains
 
     ! max limiter
     if ( maxval(Q(:,:)) > qmax ) then
-       mass=sum( Q(:,:)*spheremp(:,:) )
-       area=sum( spheremp(:,:) )
-       mass2 = area*qmax - mass
+      mass=sum( Q(:,:)*spheremp(:,:) )
+      area=sum( spheremp(:,:) )
+      mass2 = area*qmax - mass
 
       Q(:,:)=qmax-Q(:,:)
 
       if (mass2 < 0) Q(:,:)=-Q(:,:)
       mass_added=0
       do j=1,np
-	  do i=1,np
-	    if (Q(i,j)<0) then
-		Q(i,j)=0
-	    else
-		mass_added = mass_added + Q(i,j)*spheremp(i,j)
-	    endif
-	  enddo
+        do i=1,np
+          if (Q(i,j)<0) then
+        Q(i,j)=0
+          else
+        mass_added = mass_added + Q(i,j)*spheremp(i,j)
+          endif
+        enddo
       enddo
       ! now scale the all positive values to restore mass
       if (mass_added>0) Q(:,:) = Q(:,:)*abs(mass2)/mass_added
@@ -1302,7 +1298,7 @@ contains
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use control_mod, only : nu, nu_s, hypervis_order, hypervis_subcycle, limiter_option,&
-	                        test_case, kmass
+                          test_case, kmass
     use hybrid_mod, only : hybrid_t
     use element_mod, only : element_t
     use derivative_mod, only : derivative_t, laplace_sphere_wk, vlaplace_sphere_wk
@@ -1694,8 +1690,8 @@ contains
        !JMD       TIMER_DETAIL_START(timer,2,st)
        !JMD metdet => elem(ie)%metdet
        !JMD if(TIMER_DETAIL(2,timer)) then
-       !JMD	 TIMER_START(et)
-       !JMD	 timer%pointers = timer%pointers + (et - st)
+       !JMD  TIMER_START(et)
+       !JMD  timer%pointers = timer%pointers + (et - st)
        !JMD       endif
 
        !DBG print *,'advance_si: point #11'

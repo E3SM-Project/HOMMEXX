@@ -106,7 +106,7 @@ void recover_q_c(const int &nets, const int &nete,
 
 
 
-#if 0
+#if 1
 // kokkos version of the loop
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
@@ -145,9 +145,7 @@ void contra2latlon_c(const int &nets, const int &nete,
     std::abort();
   }
 }
-#endif 
-
-
+#else
 void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
                      real *const &d_ptr,
@@ -169,16 +167,16 @@ void contra2latlon_c(const int &nets, const int &nete,
             for( int i = 0; i < np; ++i) {
                real v1 = v(ie, n0-1, k, 0, j, i);
                real v2 = v(ie, n0-1, k, 1, j, i);
-               v(ie, n0-1, k, 0, j, i) = 
+               v(ie, n0-1, k, 0, j, i) =
                d(ie, 0, 0, j, i) * v1 + d(ie, 1, 0, j, i) * v2;
-               v(ie, n0-1, k, 1, j, i) = 
+               v(ie, n0-1, k, 1, j, i) =
                d(ie, 0, 1, j, i) * v1 + d(ie, 1, 1, j, i) * v2;
             }
          }
       }
    }
 }
-
+#endif
 
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
@@ -189,77 +187,103 @@ void loop_lapl_pre_bndry_ex_c (const int &nets, const int &nete,
                                const int& var_coef, const real& nu_ratio,
                                real*& ptens_ptr, real*& vtens_ptr)
 {
-  Kokkos::LayoutStride layout_scalar(nelems,nlev,np,np);
-  Kokkos::LayoutStride layout_vector(nelems,nlev,2,np,np);
+  // Note: for each dimension, pass 'dim_length, dim_stride'
+  Kokkos::LayoutStride layout_scalar (nelems,nlev*np*np,
+                                      nlev,np*np,
+                                      np,np,
+                                      np,1);
+  Kokkos::LayoutStride layout_vector (nelems, nlev*2*np*np,
+                                      nlev,   2*np*np,
+                                      2,      np*np,
+                                      np,     np,
+                                      np,     1);
 
   Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
   Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
-
-  Kokkos::View<real*[nlev][np][np], Kokkos::LayoutStride>     T_bh  ("T_bh", layout_scalar);
+  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh",    layout_scalar);
 
   Kokkos::View<real*[np][np]>                      elem_state_ps (get_pointers_pool_c()->elem_state_ps, nelems);
   Kokkos::View<real*[timelevels][nlev][np][np]>    elem_state_p  (get_pointers_pool_c()->elem_state_p, nelems);
   Kokkos::View<real*[timelevels][nlev][2][np][np]> elem_state_v  (get_pointers_pool_c()->elem_state_v, nelems);
 
   Kokkos::parallel_for(
-    Kokkos::TeamPolicy<>(nets-nete,nlev),
+    Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
     KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
     {
-      const int ielem  = team_member.league_rank();
-      const int ilevel = team_member.team_rank();
+      const int ielem  = nets - 1 + team_member.league_rank();
+      //const int ilevel = team_member.team_rank();
 
-      for (int igp=0; igp<np; ++igp)
-      {
-        for (int jgp=0; jgp<np; ++jgp)
+      Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(team_member,nlev),
+        KOKKOS_LAMBDA (const unsigned int ilevel)
         {
-            T_bh (ielem, ilevel,igp,jgp) = elem_state_p(ielem,ilevel,n0,igp,jgp) + elem_state_ps(ielem,igp,jgp);
+          for (int igp=0; igp<np; ++igp)
+          {
+            for (int jgp=0; jgp<np; ++jgp)
+            {
+                T_bh (ielem, ilevel,igp,jgp) = elem_state_p(ielem,n0-1,ilevel,igp,jgp) + elem_state_ps(ielem,igp,jgp);
+            }
+          }
         }
-      }
+      );
     }
   );
 
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> elem_state_v_n0 = Kokkos::subview (elem_state_v, Kokkos::ALL(), n0, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> elem_state_v_n0 = Kokkos::subview (elem_state_v, Kokkos::ALL(), n0-1, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
 
-  laplace_sphere_wk_kokkos  (nets, nete, nelems, var_coef, T_bh, ptens);
-  vlaplace_sphere_wk_kokkos (nets, nete, nelems, var_coef, &nu_ratio, elem_state_v_n0, vtens);
+  laplace_sphere_wk_kokkos  (nets-1, nete, nelems, var_coef, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets-1, nete, nelems, var_coef, &nu_ratio, elem_state_v_n0, vtens);
 }
 
 void loop_lapl_post_bndry_ex_c (const int &nets, const int &nete,
                                 const int &nelems,const real& nu_ratio,
                                 real*& ptens_ptr, real*& vtens_ptr)
 {
-  Kokkos::LayoutStride layout_scalar(nelems,nlev,np,np);
-  Kokkos::LayoutStride layout_vector(nelems,nlev,2,np,np);
+  // Note: for each dimension, pass 'dim_length, dim_stride'
+  Kokkos::LayoutStride layout_scalar (nelems,nlev*np*np,
+                                      nlev,np*np,
+                                      np,np,
+                                      np,1);
+  Kokkos::LayoutStride layout_vector (nelems, nlev*2*np*np,
+                                      nlev,   2*np*np,
+                                      2,      np*np,
+                                      np,     np,
+                                      np,     1);
 
   Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
   Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
-
-  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh", layout_scalar);
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> v_bh  ("v_bh", layout_vector);
+  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh",    layout_scalar);
+  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> v_bh  ("v_bh",    layout_vector);
 
   Kokkos::View<real*[np][np]> rspheremp (get_pointers_pool_c()->rspheremp, nelems);
 
   Kokkos::parallel_for(
-    Kokkos::TeamPolicy<>(nets-nete,nlev),
+    Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
     KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
     {
-      const int ielem  = team_member.league_rank();
-      const int ilevel = team_member.team_rank();
+      const int ielem  = nets - 1 + team_member.league_rank();
+      //const int ilevel = team_member.team_rank();
 
-      for (int igp=0; igp<np; ++igp)
-      {
-        for (int jgp=0; jgp<np; ++jgp)
+      Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(team_member,nlev),
+        KOKKOS_LAMBDA (const unsigned int ilevel)
         {
-            T_bh (ielem, ilevel, igp, jgp) = rspheremp (ielem, igp, jgp) * ptens(ielem, ilevel, igp, jgp);
-            v_bh (ielem, ilevel, 0, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 0, igp, jgp);
-            v_bh (ielem, ilevel, 1, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 1, igp, jgp);
+          for (int igp=0; igp<np; ++igp)
+          {
+            for (int jgp=0; jgp<np; ++jgp)
+            {
+                T_bh (ielem, ilevel, igp, jgp) = rspheremp (ielem, igp, jgp) * ptens(ielem, ilevel, igp, jgp);
+                v_bh (ielem, ilevel, 0, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 0, igp, jgp);
+                v_bh (ielem, ilevel, 1, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 1, igp, jgp);
+            }
+          }
         }
-      }
+      );
     }
   );
 
-  laplace_sphere_wk_kokkos  (nets, nete, nelems, true, T_bh, ptens);
-  vlaplace_sphere_wk_kokkos (nets, nete, nelems, true, &nu_ratio, v_bh, vtens);
+  laplace_sphere_wk_kokkos  (nets-1, nete, nelems, true, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets-1, nete, nelems, true, &nu_ratio, v_bh, vtens);
 }
 
 /* TODO: Give this a better name */
@@ -306,32 +330,34 @@ void add_hv_c(const int &nets, const int &nete,
 /* TODO: Give this a better name */
 void recover_dpq_c(const int &nets, const int &nete,
              const int &kmass, const int &n0,
-             const int &numelems, real *&p_ptr) {
+             const int &numelems, real * const&p_ptr) {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
   P p(p_ptr, np, np, nlev, timelevels, numelems);
-  try {
-    Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
-        KOKKOS_LAMBDA(int k, int ie) {
-          if(k != kmass - 1) {
-            for(int j = 0; j < np; ++j) {
-              for(int i = 0; i < np; ++i) {
-                p(i, j, k, n0 - 1, ie) *=
-                    p(i, j, kmass - 1, n0 - 1, ie);
+  if(kmass != -1) {
+    try {
+      Kokkos::Experimental::md_parallel_for(
+          RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+          KOKKOS_LAMBDA(int k, int ie) {
+            if(k != kmass - 1) {
+              for(int j = 0; j < np; ++j) {
+                for(int i = 0; i < np; ++i) {
+                  p(i, j, k, n0 - 1, ie) *=
+                      p(i, j, kmass - 1, n0 - 1, ie);
+                }
               }
             }
-          }
-        });
-  } catch(std::exception &e) {
-    std::cout << e.what() << std::endl;
-    std::abort();
-  } catch(...) {
-    std::cout << "Unknown exception" << std::endl;
-    std::abort();
+          });
+    } catch(std::exception &e) {
+      std::cout << e.what() << std::endl;
+      std::abort();
+    } catch(...) {
+      std::cout << "Unknown exception" << std::endl;
+      std::abort();
+    }
   }
 }
 
