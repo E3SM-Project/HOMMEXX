@@ -546,7 +546,7 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
           std::uniform_real_distribution<real>(0, 1.0));
       genRandTheoryExper(
           vort_theory.ptr_on_device(),
-          vort_exper.ptr_on_device(), np * np * dim, engine,
+          vort_exper.ptr_on_device(), np * np, engine,
           std::uniform_real_distribution<real>(0, 1.0));
       for(int ie = 0; ie < numelems; ie++) {
         genRandArray(
