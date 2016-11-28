@@ -14,8 +14,6 @@ struct PointersPool
   real* elem_state_ps;
   real* elem_state_p;
   real* elem_state_v;
-  real* ptens;
-  real* vtens;
   real* metdet;
   real* rmetdet;
   real* metinv;
