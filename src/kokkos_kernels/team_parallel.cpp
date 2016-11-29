@@ -13,8 +13,8 @@ constexpr const real rrearth = 1.0 / rearth;
 
 template <typename ScalarQP>
 void gradient_sphere_c(int ie, const ScalarQP &s,
-                       const derivative &deriv,
-                       const D &dinv, VectorField &grad) {
+                       const Dvv &dvv, const D &dinv,
+                       VectorField &grad) {
   HommeLocal<real *> dsd("Velocity Spatial Derivatives",
                          dim);
   HommeLocal<real ***> v("Velocity", np, np, dim);
@@ -24,8 +24,8 @@ void gradient_sphere_c(int ie, const ScalarQP &s,
         dsd(k) = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dsd(0) += deriv.Dvv[i][l] * s(i, j);
-        dsd(1) += deriv.Dvv[i][l] * s(j, i);
+        dsd(0) += dvv(i, l) * s(i, j);
+        dsd(1) += dvv(i, l) * s(j, i);
       }
       v(l, j, 0) = dsd(0) * rrearth;
       v(j, l, 1) = dsd(1) * rrearth;
@@ -42,12 +42,13 @@ void gradient_sphere_c(int ie, const ScalarQP &s,
 }
 
 void vorticity_sphere_c(int ie, const VectorField &v,
-                        const derivative &deriv, const D &d,
+                        const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
                         ScalarField &vorticity) {
   HommeLocal<real *> dvd("Velocity Spatial Derivatives",
                          dim);
-  HommeLocal<real ***> vco("", np, np, dim);
+  HommeLocal<real ***> vco("buffer for metric adjustments",
+                           np, np, dim);
   HommeLocal<real **> vtemp("buffer for performance", np,
                             np);
 
@@ -66,8 +67,8 @@ void vorticity_sphere_c(int ie, const VectorField &v,
         dvd(h) = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dvd(0) += deriv.Dvv[l][i] * vco(i, j, 1);
-        dvd(1) += deriv.Dvv[l][i] * vco(j, i, 0);
+        dvd(0) += dvv(i, l) * vco(i, j, 1);
+        dvd(1) += dvv(i, l) * vco(j, i, 0);
       }
       vorticity(l, j) = dvd(0);
       vtemp(j, l) = dvd(1);
@@ -83,7 +84,7 @@ void vorticity_sphere_c(int ie, const VectorField &v,
 }
 
 void divergence_sphere_c(int ie, const VectorField &v,
-                         const derivative &deriv,
+                         const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
                          const D &dinv,
@@ -108,11 +109,11 @@ void divergence_sphere_c(int ie, const VectorField &v,
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int h = 0; h < dim; h++) {
-        dvd[h] = 0.0;
+        dvd(h) = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dvd[0] += deriv.Dvv[l][i] * gv(i, j, 0);
-        dvd[1] += deriv.Dvv[l][i] * gv(j, i, 1);
+        dvd(0) += dvv(i, l) * gv(i, j, 0);
+        dvd(1) += dvv(i, l) * gv(j, i, 1);
       }
       divergence(l, j) = dvd(0);
       vvtemp(j, l) = dvd(1);
@@ -130,11 +131,12 @@ void team_parallel_ex(
     const int &nets, const int &nete, const int &n0,
     const int &nelemd,
     const int &tracer_advection_formulation,
-    const real &pmean, const derivative &deriv,
-    const real &dtstage, real *&d_ptr, real *&dinv_ptr,
-    real *&metdet_ptr, real *&rmetdet_ptr, real *&fcor_ptr,
-    real *&p_ptr, real *&ps_ptr, real *&v_ptr,
-    real *&ptens_ptr, real *&vtens_ptr) {
+    const real &pmean, const real &dtstage, real *&dvv_ptr,
+    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
+    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
+    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
+    real *&vtens_ptr) {
+  Dvv dvv(dvv_ptr, np, np);
   D d(d_ptr, np, np, dim, dim, nelemd);
   D dinv(dinv_ptr, np, np, dim, dim, nelemd);
   MetDet metdet(metdet_ptr, np, np, nelemd);
@@ -184,8 +186,8 @@ void team_parallel_ex(
 
       // grade(np, np, dim)
       VectorField grade("Energy Gradient", np, np, dim);
-      gradient_sphere_c(ie, e, deriv, dinv, grade);
-      vorticity_sphere_c(ie, ulatlon, deriv, d, rmetdet,
+      gradient_sphere_c(ie, e, dvv, dinv, grade);
+      vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                          zeta);
       // latlon vector -> scalar
       // gradh(np, np, dim)
@@ -196,7 +198,7 @@ void team_parallel_ex(
         auto p_slice = Kokkos::subview(
             p, std::make_pair(0, np), std::make_pair(0, np),
             k, n0, ie);
-        gradient_sphere_c(ie, p_slice, deriv, dinv, gradh);
+        gradient_sphere_c(ie, p_slice, dvv, dinv, gradh);
         for(int j = 0; j < np; j++) {
           for(int i = 0; i < np; i++) {
             div(i, j) = ulatlon(i, j, 0) * gradh(i, j, 0) +
@@ -204,7 +206,7 @@ void team_parallel_ex(
           }
         }
       } else {
-        divergence_sphere_c(ie, pv, deriv, metdet, rmetdet,
+        divergence_sphere_c(ie, pv, dvv, metdet, rmetdet,
                             dinv, div);
       }
 

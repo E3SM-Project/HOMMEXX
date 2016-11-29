@@ -2,7 +2,9 @@
 #include <catch/catch.hpp>
 
 #include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <map>
 #include <random>
 
 #include <Types.hpp>
@@ -77,16 +79,16 @@ void loop9_c(const int &nets, const int &nete,
 namespace Homme {
 template <typename ScalarQP>
 void gradient_sphere_c(int ie, const ScalarQP &s,
-                       const derivative &deriv,
-                       const D &dinv, VectorField &grad);
+                       const Dvv &dvv, const D &dinv,
+                       VectorField &grad);
 
 void vorticity_sphere_c(int ie, const VectorField &v,
-                        const derivative &deriv, const D &d,
+                        const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
                         ScalarField &grad);
 
 void divergence_sphere_c(int ie, const VectorField &v,
-                         const derivative &deriv,
+                         const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
                          const D &dinv,
@@ -96,11 +98,11 @@ void team_parallel_ex(
     const int &nets, const int &nete, const int &n0,
     const int &nelemd,
     const int &tracer_advection_formulation,
-    const real &pmean, const derivative &deriv,
-    const real &dtstage, real *&d_ptr, real *&dinv_ptr,
-    real *&metdet_ptr, real *&rmetdet_ptr, real *&fcor_ptr,
-    real *&p_ptr, real *&ps_ptr, real *&v_ptr,
-    real *&ptens_ptr, real *&vtens_ptr);
+    const real &pmean, const real &dtstage, real *&dvv_ptr,
+    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
+    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
+    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
+    real *&vtens_ptr);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -136,6 +138,30 @@ void genRandTheoryExper(number *arr_theory,
   for(int i = 0; i < arr_len; i++) {
     arr_theory[i] = pdf(engine);
     arr_exper[i] = arr_theory[i];
+  }
+}
+
+template <typename input_type>
+void input_reader(std::map<std::string, input_type *> &data,
+                  std::istream &in) {
+  std::string varname;
+  while(std::getline(in, varname)) {
+    if(data.count(varname) > 0) {
+      input_type *values = data[varname];
+      int i = 0;
+      while(true) {
+        input_type buf;
+        std::istream::pos_type pos = in.tellg();
+        in >> buf;
+        if(in.fail()) {
+          in.clear();
+          in.seekg(pos);
+          break;
+        }
+        values[i] = buf;
+        i++;
+      }
+    }
   }
 }
 
@@ -515,60 +541,69 @@ TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
-  constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
-  VectorField v("Velocity", np, np, dim);
-
-  derivative deriv;
-
-  constexpr const int D_len =
-      np * np * dim * dim * numelems;
-  D d(new real[D_len], np, np, dim, dim, numelems);
-
-  constexpr const int rmetdet_len = np * np * numelems;
-  MetDet rmetdet(new real[rmetdet_len], np, np, numelems);
-
-  ScalarField vort_theory("Vorticity Theory", np, np);
-  ScalarField vort_exper("Vorticity Exper", np, np);
-
   constexpr const int numRandTests = 10;
-  SECTION("random_test") {
-    std::random_device rd;
-    using rngAlg = std::mt19937_64;
-    rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
-      genRandArray(
-          d.ptr_on_device(), D_len, engine,
-          std::uniform_real_distribution<real>(0, 1.0));
-      genRandArray(
-          rmetdet.ptr_on_device(), rmetdet_len, engine,
-          std::uniform_real_distribution<real>(0, 1.0));
-      genRandTheoryExper(
-          vort_theory.ptr_on_device(),
-          vort_exper.ptr_on_device(), np * np, engine,
-          std::uniform_real_distribution<real>(0, 1.0));
-      for(int ie = 0; ie < numelems; ie++) {
-        genRandArray(
-            reinterpret_cast<real *>(&deriv),
-            sizeof(deriv) / sizeof(real), engine,
-            std::uniform_real_distribution<real>(0, 1.0));
-        genRandArray(
-            v.ptr_on_device(), np * np * dim, engine,
-            std::uniform_real_distribution<real>(0, 1.0));
+#if NP == 4
+  constexpr const char *testinput =
+      "vorticity_sphere_np4.in";
+#endif  // NP == 4
+#if NP == 8
+  constexpr const char *testinput =
+      "vorticity_sphere_np8.in";
+#endif  // NP == 8
+  SECTION(testinput) {
+    int vort_np;
+    std::map<std::string, int *> intparams;
+    intparams.insert({std::string("np"), &vort_np});
+    std::ifstream input(testinput);
+    REQUIRE(input);
+    input_reader(intparams, input);
 
-        vorticity_sphere_c(ie, v, deriv, d, rmetdet,
-                           vort_exper);
-        vorticity_sphere_c(ie, v, deriv, d, rmetdet,
-                           vort_theory);
-        for(int k = 0; k < np; k++) {
-          for(int l = 0; l < np; l++) {
-            REQUIRE(vort_exper(l, k) == vort_theory(l, k));
-          }
-        }
+    input.clear();
+    input.seekg(std::ifstream::beg);
+
+    VectorField v("Velocity", vort_np, vort_np, dim);
+    std::map<std::string, real *> data;
+    data.insert({std::string("v"), v.ptr_on_device()});
+
+    const int Dvv_len = vort_np * vort_np;
+    Dvv dvv(new real[Dvv_len], vort_np, vort_np);
+    data.insert(
+        {std::string("deriv_Dvv"), dvv.ptr_on_device()});
+
+    constexpr const int numelems = 1;
+    const int D_len =
+        vort_np * vort_np * dim * dim * numelems;
+    D d(new real[D_len], vort_np, vort_np, dim, dim,
+        numelems);
+    data.insert({std::string("elem_D"), d.ptr_on_device()});
+
+    const int rmetdet_len = vort_np * vort_np * numelems;
+    MetDet rmetdet(new real[rmetdet_len], vort_np, vort_np,
+                   numelems);
+    data.insert({std::string("elem_rmetdet"),
+                 rmetdet.ptr_on_device()});
+
+    ScalarField vort_theory("Vorticity Theory", vort_np,
+                            vort_np);
+    data.insert({std::string("Vorticity Sphere result"),
+                 vort_theory.ptr_on_device()});
+    input_reader(data, input);
+
+    ScalarField vort_exper("Vorticity Exper", vort_np,
+                           vort_np);
+    vorticity_sphere_c(0, v, dvv, d, rmetdet, vort_exper);
+
+    for(int k = 0; k < vort_np; k++) {
+      for(int l = 0; l < vort_np; l++) {
+        REQUIRE(
+            std::fabs(vort_exper(l, k) -
+                      vort_theory(l, k)) <
+            (4.0 * std::numeric_limits<real>::epsilon()));
       }
     }
+    delete[] d.ptr_on_device();
+    delete[] rmetdet.ptr_on_device();
   }
-  delete[] d.ptr_on_device();
-  delete[] rmetdet.ptr_on_device();
 }

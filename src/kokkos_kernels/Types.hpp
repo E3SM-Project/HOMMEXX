@@ -14,6 +14,7 @@ using HommeView =
 
 using Alpha = HommeView<real *>;
 using D = HommeView<real *****>;
+using Dvv = HommeView<real **>;
 using P = HommeView<real *****>;
 using PS = HommeView<real ***>;
 using V = HommeView<real ******>;
@@ -43,15 +44,5 @@ using ScalarField = HommeLocal<real **>;
 // Vector fields are vector values over the np x np
 // quadrature points
 using VectorField = HommeLocal<real ***>;
-
-struct derivative {
-  real Dvv[np][np];
-  real Dvv_diag[np][np];
-  real Dvv_twt[np][np];
-  real Mvv_twt[np][np];
-  real Mfvm[np][nc + 1];
-  real Cfvm[np][nc];
-  real legdg[np][np];
-};
 
 }  // namespace Homme
