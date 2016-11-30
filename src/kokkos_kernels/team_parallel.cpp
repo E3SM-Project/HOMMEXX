@@ -33,13 +33,17 @@ void gradient_sphere_c(int ie, const ScalarQP &s,
   }
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
-      for(int h = 0; h < np; h++) {
+      for(int h = 0; h < dim; h++) {
         grad(i, j, h) = dinv(i, j, 0, h, ie) * v(i, j, 0) +
                         dinv(i, j, 1, h, ie) * v(i, j, 1);
       }
     }
   }
 }
+
+template void gradient_sphere_c(int, const ScalarField &,
+                                const Dvv &, const D &,
+                                VectorField &);
 
 void vorticity_sphere_c(int ie, const VectorField &v,
                         const Dvv &dvv, const D &d,
