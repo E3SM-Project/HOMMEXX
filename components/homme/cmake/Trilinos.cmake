@@ -32,21 +32,29 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
         -DKokkos_ENABLE_Pthread=ON)
   ENDIF()
 
+  SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
+
   FIND_PACKAGE(CUDA QUIET)
   IF(${CUDA_FOUND})
     OPTION(ENABLE_CUDA "Whether or not to enable CUDA" ON)
     IF(${ENABLE_CUDA})
+      SET(NVCC_WRAPPER ${TRILINOS_SRCDIR}/packages/kokkos/config/nvcc_wrapper)
+      SET(ENV{OMPI_CXX} ${NVCC_WRAPPER})
+      SET(ENV{NVCC_WRAPPER_DEFAULT_COMPILER} ${CMAKE_CXX_COMPILER})
       SET(EXECUTION_SPACES ${EXECUTION_SPACES}
           -DTPL_ENABLE_CUDA=ON
           -DKokkos_ENABLE_CUDA=ON
-          -DKokkos_ENABLE_CUDA_UVM=ON)
+          -DKokkos_ENABLE_CUDA_UVM=ON
+	  -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR}
+	  -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER})
+      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda")
+      MESSAGE("CUDA Enabled")
       SET(Kokkos_TPL_LIBRARIES "${Kokkos_TPL_LIBRARIES};cudart;cublas;cufft")
     ENDIF()
   ENDIF()
 
   # Set up Trilinos as an external project
   SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
-  SET(TRILINOS_SRCDIR "${CMAKE_SOURCE_DIR}/../../cime/externals/trilinos")
 
   SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
 
@@ -85,6 +93,11 @@ ELSE()
   MESSAGE("   Trilinos_EXTRA_LD_FLAGS = ${Trilinos_EXTRA_LD_FLAGS}")
   MESSAGE("   Trilinos_AR = ${Trilinos_AR}")
   MESSAGE("End of Trilinos details\n")
+
+  IF(";${Trilinos_TPL_LIST};" MATCHES ";CUDA;")
+    MESSAGE("CUDA Enabled")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda")
+  ENDIF()
 ENDIF()
 
 macro(link_to_trilinos targetName)
