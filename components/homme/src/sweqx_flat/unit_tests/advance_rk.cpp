@@ -540,18 +540,74 @@ TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
   delete[] v_exper;
 }
 
-TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
+TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
   constexpr const int dim = 2;
 
-  constexpr const int numRandTests = 10;
-#if NP == 4
   constexpr const char *testinput =
-      "vorticity_sphere_np4.in";
-#endif  // NP == 4
-#if NP == 8
+      np == 4 ? "gradient_sphere_np4.in"
+              : np == 8 ? "gradient_sphere_np8.in" : "";
+  SECTION(testinput) {
+    int grad_np;
+    std::map<std::string, int *> intparams;
+    intparams.insert({std::string("np"), &grad_np});
+    std::ifstream input(testinput);
+    REQUIRE(input);
+    input_reader(intparams, input);
+    REQUIRE(grad_np == np);
+
+    input.clear();
+    input.seekg(std::ifstream::beg);
+
+    ScalarField s("Scalars", grad_np, grad_np);
+    std::map<std::string, real *> data;
+    data.insert({std::string("s"), s.ptr_on_device()});
+
+    const int Dvv_len = grad_np * grad_np;
+    Dvv dvv(new real[Dvv_len], grad_np, grad_np);
+    data.insert(
+        {std::string("deriv_Dvv"), dvv.ptr_on_device()});
+
+    constexpr const int numelems = 1;
+    const int Dinv_len =
+        grad_np * grad_np * dim * dim * numelems;
+    D dinv(new real[Dinv_len], grad_np, grad_np, dim, dim,
+           numelems);
+    data.insert(
+        {std::string("elem_Dinv"), dinv.ptr_on_device()});
+
+    VectorField grad_theory("Gradient Theory", grad_np,
+                            grad_np, dim);
+    data.insert({std::string("Gradient Sphere result"),
+                 grad_theory.ptr_on_device()});
+    input_reader(data, input);
+
+    VectorField grad_exper("Gradient Exper", grad_np,
+                           grad_np, dim);
+    gradient_sphere_c(0, s, dvv, dinv, grad_exper);
+
+    for(int j = 0; j < dim; j++) {
+      for(int k = 0; k < grad_np; k++) {
+        for(int l = 0; l < grad_np; l++) {
+          real rel_err = std::fabs(
+              (grad_exper(l, k, j) - grad_theory(l, k, j)) /
+              grad_theory(l, k, j));
+          constexpr const real max_rel_err =
+              (4.0 * std::numeric_limits<real>::epsilon());
+          REQUIRE(rel_err < max_rel_err);
+        }
+      }
+    }
+    delete[] dvv.ptr_on_device();
+    delete[] dinv.ptr_on_device();
+  }
+}
+
+TEST_CASE("voritcity_sphere", "advance_nonstag_rk_cxx") {
+  constexpr const int dim = 2;
+
   constexpr const char *testinput =
-      "vorticity_sphere_np8.in";
-#endif  // NP == 8
+      np == 4 ? "vorticity_sphere_np4.in"
+              : np == 8 ? "vorticity_sphere_np8.in" : "";
   SECTION(testinput) {
     int vort_np;
     std::map<std::string, int *> intparams;
@@ -598,11 +654,13 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
     for(int k = 0; k < vort_np; k++) {
       for(int l = 0; l < vort_np; l++) {
         REQUIRE(
-            std::fabs(vort_exper(l, k) -
-                      vort_theory(l, k)) <
+            std::fabs(
+                (vort_exper(l, k) - vort_theory(l, k)) /
+                vort_theory(l, k)) <
             (4.0 * std::numeric_limits<real>::epsilon()));
       }
     }
+    delete[] dvv.ptr_on_device();
     delete[] d.ptr_on_device();
     delete[] rmetdet.ptr_on_device();
   }
