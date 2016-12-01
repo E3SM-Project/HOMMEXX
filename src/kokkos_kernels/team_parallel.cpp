@@ -131,16 +131,18 @@ void divergence_sphere_c(int ie, const VectorField &v,
   }
 }
 
+extern "C" {
+
 /* TODO: Give this a better name */
-void loop7_c(
-    const int &nets, const int &nete, const int &n0,
-    const int &nelemd,
-    const int &tracer_advection_formulation,
-    const real &pmean, const real &dtstage, real *&dvv_ptr,
-    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
-    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
-    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
-    real *&vtens_ptr) {
+void loop7_c(const int &nets, const int &nete,
+             const int &n0, const int &nelemd,
+             const int &tracer_advection_formulation,
+             const real &pmean, const real &dtstage,
+             real *&dvv_ptr, real *&d_ptr, real *&dinv_ptr,
+             real *&metdet_ptr, real *&rmetdet_ptr,
+             real *&fcor_ptr, real *&p_ptr, real *&ps_ptr,
+             real *&v_ptr, real *&ptens_ptr,
+             real *&vtens_ptr) {
   Dvv dvv(dvv_ptr, np, np);
   D d(d_ptr, np, np, dim, dim, nelemd);
   D dinv(dinv_ptr, np, np, dim, dim, nelemd);
@@ -161,48 +163,43 @@ void loop7_c(
     TRACERADV_TOTAL_DIVERGENCE = 1
   };
 
-  for(int ie = nets - 1; ie < nete; ie++) {
-    for(int k = 0; k < nlev; k++) {
-      // ulatlon(np, np, dim), local variable
+  for(int ie = nets - 1; ie < nete; ++ie) {
+    for(int k = 0; k < nlev; ++k) {
       VectorField ulatlon("ulatlon", np, np, dim);
-      // E(np, np), local variable
       ScalarField e("Energy", np, np);
-      // pv(np, np, dim)
       VectorField pv("PV", np, np, dim);
 
-      for(int j = 0; j < np; j++) {
-        for(int i = 0; i < np; i++) {
-          real v1 = v(i, j, 0, k, n0, ie);
-          real v2 = v(i, j, 1, k, n0, ie);
+      for(int j = 0; j < np; ++j) {
+        for(int i = 0; i < np; ++i) {
+          real v1 = v(i, j, 0, k, n0 - 1, ie);
+          real v2 = v(i, j, 1, k, n0 - 1, ie);
           e(i, j) = 0.0;
           for(int h = 0; h < dim; h++) {
             ulatlon(i, j, h) = d(i, j, h, 0, ie) * v1 +
                                d(i, j, h, 1, ie) * v2;
+            pv(i, j, h) = ulatlon(i, j, h) *
+                          (pmean + p(i, j, k, n0 - 1, ie));
             e(i, j) += ulatlon(i, j, h) * ulatlon(i, j, h);
           }
           e(i, j) /= 2.0;
-          e(i, j) += p(i, j, k, n0, ie) + ps(i, j, ie);
-          for(int h = 0; h < dim; h++) {
-            pv(i, j, h) = ulatlon(i, j, h) *
-                          (pmean + p(i, j, k, n0, ie));
-          }
+          e(i, j) += p(i, j, k, n0 - 1, ie) + ps(i, j, ie);
         }
       }
+      // Verified ulatlon, pv, and e up to this point
 
       // grade(np, np, dim)
       VectorField grade("Energy Gradient", np, np, dim);
       gradient_sphere_c(ie, e, dvv, dinv, grade);
       vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                          zeta);
-      // latlon vector -> scalar
-      // gradh(np, np, dim)
+      // Verified grade and zeta up to this point
+
       VectorField gradh("Pressure Gradient", np, np, dim);
-      // div(np, np)
       ScalarField div("PV Divergence", np, np);
       if(tracer_advection_formulation == TRACERADV_UGRADQ) {
         auto p_slice = Kokkos::subview(
             p, std::make_pair(0, np), std::make_pair(0, np),
-            k, n0, ie);
+            k, n0 - 1, ie);
         gradient_sphere_c(ie, p_slice, dvv, dinv, gradh);
         for(int j = 0; j < np; j++) {
           for(int i = 0; i < np; i++) {
@@ -214,38 +211,50 @@ void loop7_c(
         divergence_sphere_c(ie, pv, dvv, metdet, rmetdet,
                             dinv, div);
       }
-
+      // Verified gradh and div up to this point
       // ==============================================
       // Compute velocity
       // tendency terms
       // ==============================================
       // accumulate all RHS terms
-      // vtens(np, np, dim, nlev, nelemd)
-      // ptens(np, np, nlev, nelemd)
-      for(int j = 0; j < np; j++) {
-        for(int i = 0; i < np; i++) {
-          vtens(i, j, 0, k, ie - nets + 1) =
-              vtens(i, j, 0, k, ie - nets + 1) +
+      for(int j = 0; j < np; ++j) {
+        for(int i = 0; i < np; ++i) {
+          vtens(i, j, 0, k, ie - nets + 1) +=
               (ulatlon(i, j, 1) *
                    (fcor(i, j, ie) + zeta(i, j)) -
                grade(i, j, 0));
-          vtens(i, j, 1, k, ie - nets + 1) =
-              vtens(i, j, 1, k, ie - nets + 1) +
+
+          vtens(i, j, 1, k, ie - nets + 1) +=
               (-ulatlon(i, j, 0) *
                    (fcor(i, j, ie) + zeta(i, j)) -
                grade(i, j, 1));
+
+          ptens(i, j, k, ie - nets + 1) -= div(i, j);
+        }
+      }
+
+      // ulatlon, pv, e, grade, zeta, gradh, div, ptens,
+      // vtens are verified
+      // fcor, dtstage are untouched
+      // vtens, ulatlon, fcor, zeta, grade, ptens, div are
+      // needed
+      for(int j = 0; j < np; j++) {
+        for(int i = 0; i < np; i++) {
           // take the local element timestep
           for(int h = 0; h < dim; h++) {
             vtens(i, j, h, k, ie - nets + 1) =
                 ulatlon(i, j, h) +
                 dtstage * vtens(i, j, h, k, ie - nets + 1);
           }
-          ptens(i, j, k, ie) +=
-              dtstage * ptens(i, j, k, ie);
+          ptens(i, j, k, ie - nets + 1) =
+              p(i, j, k, n0 - 1, ie - nets + 1) +
+              dtstage * ptens(i, j, k, ie - nets + 1);
         }
       }
     }
   }
 }
+
+}  // extern "C"
 
 }  // Homme

@@ -51,7 +51,7 @@ module advance_mod
      end subroutine recover_dpq_c
 
      subroutine weighted_rhs_c(nets, nete, numelems, rspheremp_ptr, Dinv_ptr, &
-                        ptens_ptr, vtens_ptr) bind(c)
+                               ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -63,7 +63,7 @@ module advance_mod
      end subroutine weighted_rhs_c
 
      subroutine copy_timelevels_c(nets, nete, nelems, nt_src, nt_dest, &
-                        p_ptr, v_ptr) bind(c)
+                                  p_ptr, v_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -76,8 +76,8 @@ module advance_mod
 
 
      subroutine rk_stage_c(nets, nete, n0, np1, s, rkstages, numelems, &
-                        v_ptr, p_ptr, alpha0_ptr, &
-                        alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
+                           v_ptr, p_ptr, alpha0_ptr, &
+                           alpha_ptr, ptens_ptr, vtens_ptr) bind(c)
        use iso_c_binding, only: c_ptr, c_int
        integer (kind=c_int) :: nets
        integer (kind=c_int) :: nete
@@ -93,6 +93,32 @@ module advance_mod
        type(c_ptr) :: ptens_ptr
        type(c_ptr) :: vtens_ptr
      end subroutine rk_stage_c
+
+     subroutine loop7_c(nets, nete, n0, numelems, tracer_advection_formulation, &
+                        pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, &
+                        metdet_ptr, rmetdet_ptr, fcor_ptr, &
+                        p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr) bind(c)
+       use iso_c_binding, only: c_ptr, c_int
+       use kinds, only: real_kind
+       integer (kind=c_int), intent(in) :: nets
+       integer (kind=c_int), intent(in) :: nete
+       integer (kind=c_int), intent(in) :: n0
+       integer (kind=c_int), intent(in) :: numelems
+       integer (kind=c_int), intent(in) :: tracer_advection_formulation
+       real (kind=real_kind), intent(in) :: pmean
+       real (kind=real_kind), intent(in) :: dtstage
+       type(c_ptr), intent(in) :: dvv_ptr
+       type(c_ptr), intent(in) :: d_ptr
+       type(c_ptr), intent(in) :: dinv_ptr
+       type(c_ptr), intent(in) :: metdet_ptr
+       type(c_ptr), intent(in) :: rmetdet_ptr
+       type(c_ptr), intent(in) :: fcor_ptr
+       type(c_ptr), intent(in) :: p_ptr
+       type(c_ptr), intent(in) :: ps_ptr
+       type(c_ptr), intent(in) :: v_ptr
+       type(c_ptr), intent(in) :: ptens_ptr
+       type(c_ptr), intent(in) :: vtens_ptr
+     end subroutine loop7_c
   end interface
 
   ! semi-implicit needs to be re-initialized each time dt changes
@@ -322,11 +348,14 @@ contains
   subroutine loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, &
        pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, &
        metdet_ptr, rmetdet_ptr, fcor_ptr, &
-       p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem)
+       p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr) bind(c)
     use iso_c_binding, only: c_ptr, c_int, c_f_pointer
     use dimensions_mod, only: np, nlev
     use element_mod, only: element_t, timelevels
     use control_mod, only: TRACERADV_UGRADQ
+    use derivative_mod, only: derivative_t, gradient_sphere, &
+                              vorticity_sphere, divergence_sphere
+    use kinds, only: real_kind
 
     integer (kind=c_int), intent(in) :: nets, nete, n0, numelems, &
                                         tracer_advection_formulation
@@ -334,7 +363,6 @@ contains
     type(c_ptr), intent(in) :: dvv_ptr, d_ptr, dinv_ptr, &
                                metdet_ptr, rmetdet_ptr, fcor_ptr, &
                                p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr
-    type(element_t), intent(inout) :: elem
 
     integer :: i, j, k, ie
     real (kind=real_kind), pointer :: dvv(:, :), &
@@ -345,7 +373,12 @@ contains
                                       ptens(:, :, :, :), vtens(:, :, :, :, :), &
                                       v1, v2
 
-    real (kind=real_kind) :: ulatlon(np, np, 2), e(np, np), pv(np, np, 2), grade(np, np, 2), gradh(np, np, 2), zeta(np, np), div(np, np)
+    real (kind=real_kind) :: ulatlon(np, np, 2), e(np, np), &
+                             pv(np, np, 2), grade(np, np, 2), &
+                             gradh(np, np, 2), zeta(np, np), div(np, np)
+
+    type(element_t) :: elem
+    type(derivative_t) :: deriv
 
     call c_f_pointer(dvv_ptr, dvv, [np, np])
     call c_f_pointer(d_ptr, d, [np, np, 2, 2, numelems])
@@ -358,6 +391,8 @@ contains
     call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, numelems])
     call c_f_pointer(ptens_ptr, ptens, [np, np, nlev, nete - nets + 1])
     call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev, nete - nets + 1])
+
+    deriv%Dvv = dvv
 
     do ie=nets,nete
        do k=1,nlev
@@ -381,26 +416,29 @@ contains
              end do
           end do
           grade = gradient_sphere(E,deriv,Dinv(:,:,:,:,ie))       ! scalar -> latlon vector
-          !grade = gradient_sphere_wk(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
-          zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar
+          elem%D = d(:,:,:,:,ie)
+          elem%Dinv = dinv(:,:,:,:,ie)
+          elem%metdet = metdet(:,:,ie)
+          elem%rmetdet = rmetdet(:,:,ie)
+          zeta = vorticity_sphere(ulatlon,deriv,elem) ! latlon vector -> scalar
           if (tracer_advection_formulation==TRACERADV_UGRADQ) then
              gradh = gradient_sphere(p(:,:,k,n0,ie),deriv,Dinv(:,:,:,:,ie))
              div = ulatlon(:,:,1)*gradh(:,:,1)+ulatlon(:,:,2)*gradh(:,:,2)
           else
-             div = divergence_sphere(pv,deriv,elem(ie))      ! latlon vector -> scalar
+             div = divergence_sphere(pv,deriv,elem)      ! latlon vector -> scalar
           endif
 
           ! ==============================================
           ! Compute velocity tendency terms
           ! ==============================================
           ! accumulate all RHS terms
-          vtens(:,:,1,k,ie)=vtens(:,:,1,k,ie) + (ulatlon(:,:,2)*(fcor(:,:, ie) + zeta(:,:))  - grade(:,:,1))
-          vtens(:,:,2,k,ie)=vtens(:,:,2,k,ie) + (-ulatlon(:,:,1)*(fcor(:,:, ie) + zeta(:,:)) - grade(:,:,2))
-          ptens(:,:,k,ie) = ptens(:,:,k,ie) - div(:,:)
+          vtens(:,:,1,k,ie - nets + 1)=vtens(:,:,1,k,ie - nets + 1) + (ulatlon(:,:,2)*(fcor(:,:, ie) + zeta(:,:))  - grade(:,:,1))
+          vtens(:,:,2,k,ie - nets + 1)=vtens(:,:,2,k,ie - nets + 1) + (-ulatlon(:,:,1)*(fcor(:,:, ie) + zeta(:,:)) - grade(:,:,2))
+          ptens(:,:,k,ie - nets + 1) = ptens(:,:,k,ie - nets + 1) - div(:,:)
 
           ! take the local element timestep
-          vtens(:,:,:,k,ie)=ulatlon(:,:,:) + dtstage*vtens(:,:,:,k,ie)
-          ptens(:,:,k,ie) = p(:,:,k,n0,ie) + dtstage*ptens(:,:,k,ie)
+          vtens(:,:,:,k,ie - nets + 1)=ulatlon(:,:,:) + dtstage*vtens(:,:,:,k,ie - nets + 1)
+          ptens(:,:,k,ie - nets + 1) = p(:,:,k,n0,ie - nets + 1) + dtstage*ptens(:,:,k,ie - nets + 1)
        end do!end of loop over levels
     end do
   end subroutine loop7_f90
@@ -413,14 +451,7 @@ contains
 #define WEIGHTED_RHS weighted_rhs_f90
 #define COPY_TIMELEVELS copy_timelevels_f90
 #define RK_STAGE rk_stage_f90
-#define LOOP7(nets, nete, n0, numelems, tracer_advection_formulation, \
-              pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
-              metdet_ptr, rmetdet_ptr, fcor_ptr, \
-              p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem) \
-        loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, \
-                  pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
-                  metdet_ptr, rmetdet_ptr, fcor_ptr, \
-                  p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem)
+#define LOOP7 loop7_f90
 #else
 #define RECOVER_Q recover_q_c
 #define CONTRATOLATLON contra2latlon_c
@@ -429,14 +460,7 @@ contains
 #define WEIGHTED_RHS weighted_rhs_c
 #define COPY_TIMELEVELS copy_timelevels_c
 #define RK_STAGE rk_stage_c
-#define LOOP7(nets, nete, n0, numelems, tracer_advection_formulation, \
-              pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
-              metdet_ptr, rmetdet_ptr, fcor_ptr, \
-              p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem) \
-        loop7_c(nets, nete, n0, numelems, tracer_advection_formulation, \
-                pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
-                metdet_ptr, rmetdet_ptr, fcor_ptr, \
-                p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr)
+#define LOOP7 loop7_c
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -632,7 +656,7 @@ contains
     type (EdgeBuffer_t)  , intent(in) :: edge2
     type (EdgeBuffer_t)  , intent(inout) :: edge3
 
-    type (derivative_t)  , intent(in) :: deriv
+    type (derivative_t)  , intent(in), target :: deriv
 
     type (filter_t)                   :: flt
     type (hybrid_t)      , intent(in) :: hybrid
@@ -942,7 +966,7 @@ contains
        ptr_buf10 = c_loc(ptens)
        ptr_buf11 = c_loc(vtens)
        call t_startf('timer_advancerk_loop7')
-       call LOOP7(nets, nete, n0, nelemd, tracer_advection_formulation, pmean, dtstage, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4, ptr_buf5, ptr_buf6, ptr_buf7, ptr_buf8, ptr_buf9, ptr_buf10, ptr_buf11, elem)
+       call LOOP7(nets, nete, n0, nelemd, tracer_advection_formulation, pmean, dtstage, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4, ptr_buf5, ptr_buf6, ptr_buf7, ptr_buf8, ptr_buf9, ptr_buf10, ptr_buf11)
        call t_stopf('timer_advancerk_loop7')
 
        do ie=nets,nete
