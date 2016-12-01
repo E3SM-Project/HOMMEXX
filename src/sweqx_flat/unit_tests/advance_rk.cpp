@@ -86,6 +86,26 @@ void rk_stage_c(const int &nets, const int &nete,
                 real *const &alpha_ptr,
                 real *const &ptens_ptr,
                 real *const &vtens_ptr);
+
+void loop7_f90(
+    const int &nets, const int &nete, const int &n0,
+    const int &nelemd,
+    const int &tracer_advection_formulation,
+    const real &pmean, const real &dtstage, real *&dvv_ptr,
+    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
+    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
+    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
+    real *&vtens_ptr);
+
+void loop7_c(
+    const int &nets, const int &nete, const int &n0,
+    const int &nelemd,
+    const int &tracer_advection_formulation,
+    const real &pmean, const real &dtstage, real *&dvv_ptr,
+    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
+    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
+    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
+    real *&vtens_ptr);
 }
 
 namespace Homme {
@@ -827,4 +847,9 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
     delete[] rmetdet.ptr_on_device();
     delete[] metdet.ptr_on_device();
   }
+}
+
+/* TODO: Give this a better name */
+TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
+  
 }

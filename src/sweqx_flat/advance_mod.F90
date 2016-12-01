@@ -285,7 +285,7 @@ contains
     use element_mod, only: timelevels
 
     integer (kind=c_int), intent(in) :: nets, nete, n0, np1, s, rkstages, numelems
-    type(c_ptr), intent(in) ::v_ptr, p_ptr, alpha0_ptr, &
+    type(c_ptr), intent(in) :: v_ptr, p_ptr, alpha0_ptr, &
                               alpha_ptr, ptens_ptr, vtens_ptr
 
     integer :: k, j, i, h, ie
@@ -318,6 +318,93 @@ contains
     end do
   end subroutine rk_stage_f90
 
+  !DEC$ ATTRIBUTE NOINLINE :: loop7_f90
+  subroutine loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, &
+       pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, &
+       metdet_ptr, rmetdet_ptr, fcor_ptr, &
+       p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem)
+    use iso_c_binding, only: c_ptr, c_int, c_f_pointer
+    use dimensions_mod, only: np, nlev
+    use element_mod, only: element_t, timelevels
+    use control_mod, only: TRACERADV_UGRADQ
+
+    integer (kind=c_int), intent(in) :: nets, nete, n0, numelems, &
+                                        tracer_advection_formulation
+    real (kind=real_kind), intent(in) :: pmean, dtstage
+    type(c_ptr), intent(in) :: dvv_ptr, d_ptr, dinv_ptr, &
+                               metdet_ptr, rmetdet_ptr, fcor_ptr, &
+                               p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr
+    type(element_t), intent(inout) :: elem
+
+    integer :: i, j, k, ie
+    real (kind=real_kind), pointer :: dvv(:, :), &
+                                      d(:, :, :, :, :), dinv(:, :, :, :, :), &
+                                      metdet(:, :, :), rmetdet(:, :, :), &
+                                      fcor(:, :, :), p(:, :, :, :, :), ps(:, :, :), &
+                                      v(:, :, :, :, :, :), &
+                                      ptens(:, :, :, :), vtens(:, :, :, :, :), &
+                                      v1, v2
+
+    real (kind=real_kind) :: ulatlon(np, np, 2), e(np, np), pv(np, np, 2), grade(np, np, 2), gradh(np, np, 2), zeta(np, np), div(np, np)
+
+    call c_f_pointer(dvv_ptr, dvv, [np, np])
+    call c_f_pointer(d_ptr, d, [np, np, 2, 2, numelems])
+    call c_f_pointer(dinv_ptr, dinv, [np, np, 2, 2, numelems])
+    call c_f_pointer(metdet_ptr, metdet, [np, np, numelems])
+    call c_f_pointer(rmetdet_ptr, rmetdet, [np, np, numelems])
+    call c_f_pointer(fcor_ptr, fcor, [np, np, numelems])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, numelems])
+    call c_f_pointer(ps_ptr, ps, [np, np, numelems])
+    call c_f_pointer(v_ptr, v, [np, np, 2, nlev, timelevels, numelems])
+    call c_f_pointer(ptens_ptr, ptens, [np, np, nlev, nete - nets + 1])
+    call c_f_pointer(vtens_ptr, vtens, [np, np, 2, nlev, nete - nets + 1])
+
+    do ie=nets,nete
+       do k=1,nlev
+          ! ==============================================
+          ! Compute kinetic energy term
+          ! ==============================================
+          !IKT, 10/21/16: we wrote part of this code in AdvanceRK.cpp
+          do j=1,np
+             do i=1,np
+
+                v1     = v(i,j,1,k,n0,ie)   ! contra
+                v2     = v(i,j,2,k,n0,ie)   ! contra
+                ulatlon(i,j,1)=D(i,j,1,1,ie)*v1 + D(i,j,1,2,ie)*v2   ! contra->latlon
+                ulatlon(i,j,2)=D(i,j,2,1,ie)*v1 + D(i,j,2,2,ie)*v2   ! contra->latlon
+
+                E(i,j) = 0.5D0*(ulatlon(i,j,1)**2 + ulatlon(i,j,2)**2)  +&
+                     p(i,j,k,n0,ie) + ps(i,j,ie)
+
+                pv(i,j,1) = ulatlon(i,j,1)*(pmean+p(i,j,k,n0,ie))
+                pv(i,j,2) = ulatlon(i,j,2)*(pmean+p(i,j,k,n0,ie))
+             end do
+          end do
+          grade = gradient_sphere(E,deriv,Dinv(:,:,:,:,ie))       ! scalar -> latlon vector
+          !grade = gradient_sphere_wk(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
+          zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar
+          if (tracer_advection_formulation==TRACERADV_UGRADQ) then
+             gradh = gradient_sphere(p(:,:,k,n0,ie),deriv,Dinv(:,:,:,:,ie))
+             div = ulatlon(:,:,1)*gradh(:,:,1)+ulatlon(:,:,2)*gradh(:,:,2)
+          else
+             div = divergence_sphere(pv,deriv,elem(ie))      ! latlon vector -> scalar
+          endif
+
+          ! ==============================================
+          ! Compute velocity tendency terms
+          ! ==============================================
+          ! accumulate all RHS terms
+          vtens(:,:,1,k,ie)=vtens(:,:,1,k,ie) + (ulatlon(:,:,2)*(fcor(:,:, ie) + zeta(:,:))  - grade(:,:,1))
+          vtens(:,:,2,k,ie)=vtens(:,:,2,k,ie) + (-ulatlon(:,:,1)*(fcor(:,:, ie) + zeta(:,:)) - grade(:,:,2))
+          ptens(:,:,k,ie) = ptens(:,:,k,ie) - div(:,:)
+
+          ! take the local element timestep
+          vtens(:,:,:,k,ie)=ulatlon(:,:,:) + dtstage*vtens(:,:,:,k,ie)
+          ptens(:,:,k,ie) = p(:,:,k,n0,ie) + dtstage*ptens(:,:,k,ie)
+       end do!end of loop over levels
+    end do
+  end subroutine loop7_f90
+
 #if DONT_USE_KOKKOS
 #define RECOVER_Q recover_q_f90
 #define CONTRATOLATLON contra2latlon_f90
@@ -326,6 +413,14 @@ contains
 #define WEIGHTED_RHS weighted_rhs_f90
 #define COPY_TIMELEVELS copy_timelevels_f90
 #define RK_STAGE rk_stage_f90
+#define LOOP7(nets, nete, n0, numelems, tracer_advection_formulation, \
+              pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
+              metdet_ptr, rmetdet_ptr, fcor_ptr, \
+              p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem) \
+        loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, \
+                  pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
+                  metdet_ptr, rmetdet_ptr, fcor_ptr, \
+                  p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem)
 #else
 #define RECOVER_Q recover_q_c
 #define CONTRATOLATLON contra2latlon_c
@@ -334,6 +429,14 @@ contains
 #define WEIGHTED_RHS weighted_rhs_c
 #define COPY_TIMELEVELS copy_timelevels_c
 #define RK_STAGE rk_stage_c
+#define LOOP7(nets, nete, n0, numelems, tracer_advection_formulation, \
+              pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
+              metdet_ptr, rmetdet_ptr, fcor_ptr, \
+              p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr, elem) \
+        loop7_c(nets, nete, n0, numelems, tracer_advection_formulation, \
+                pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, \
+                metdet_ptr, rmetdet_ptr, fcor_ptr, \
+                p_ptr, ps_ptr, v_ptr, ptens_ptr, vtens_ptr)
 #endif
 
   subroutine advance_nonstag( elem, edge2,  edge3,  deriv,  flt,   hybrid,  &
@@ -499,7 +602,7 @@ contains
 
     use kinds,          only: real_kind
     use dimensions_mod, only: np, nlev, nelemd
-    use element_mod,    only: element_t, elem_state_p, elem_state_v, elem_D, elem_Dinv, elem_spheremp, elem_rspheremp
+    use element_mod,    only: element_t, elem_state_p, elem_state_ps, elem_state_v, elem_D, elem_Dinv, elem_spheremp, elem_rspheremp, elem_fcor, elem_metdet, elem_rmetdet
     use edge_mod,       only: edgevpack, edgevunpack, edgedgvunpack, &
                               initEdgeBuffer, edgevunpackmax, edgevunpackmin, freeedgebuffer
     use edgetype_mod,   only: EdgeBuffer_t
@@ -594,7 +697,9 @@ contains
 
     ! Temporary C pointer buffers for recoverq and loops
     type (c_ptr) :: ptr_buf1, ptr_buf2, ptr_buf3, &
-                    ptr_buf4, ptr_buf5, ptr_buf6
+                    ptr_buf4, ptr_buf5, ptr_buf6, &
+                    ptr_buf7, ptr_buf8, ptr_buf9, &
+                    ptr_buf10, ptr_buf11
 
     allocate(vtens(np,np,2,nlev,nets:nete))
     allocate(ptens(np,np,nlev,nets:nete))
@@ -825,54 +930,20 @@ contains
           call set_prescribed_velocity(elem(ie),n0,real_time)
        enddo
 
+       ptr_buf1 = c_loc(deriv%Dvv)
+       ptr_buf2 = c_loc(elem_D)
+       ptr_buf3 = c_loc(elem_Dinv)
+       ptr_buf4 = c_loc(elem_metdet)
+       ptr_buf5 = c_loc(elem_rmetdet)
+       ptr_buf6 = c_loc(elem_fcor)
+       ptr_buf7 = c_loc(elem_state_p)
+       ptr_buf8 = c_loc(elem_state_ps)
+       ptr_buf9 = c_loc(elem_state_v)
+       ptr_buf10 = c_loc(ptens)
+       ptr_buf11 = c_loc(vtens)
        call t_startf('timer_advancerk_loop7')
-       do ie=nets,nete
-          fcor   => elem(ie)%fcor
-          spheremp     => elem(ie)%spheremp
-
-          do k=1,nlev
-             ! ==============================================
-             ! Compute kinetic energy term
-             ! ==============================================
-!IKT, 10/21/16: we wrote part of this code in AdvanceRK.cpp
-             do j=1,np
-                do i=1,np
-
-                   v1     = elem(ie)%state%v(i,j,1,k,n0)   ! contra
-                   v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra
-                   ulatlon(i,j,1)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
-                   ulatlon(i,j,2)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
-
-                   E(i,j) = 0.5D0*(ulatlon(i,j,1)**2 + ulatlon(i,j,2)**2)  +&
-                        elem(ie)%state%p(i,j,k,n0) + elem(ie)%state%ps(i,j)
-
-                   pv(i,j,1) = ulatlon(i,j,1)*(pmean+elem(ie)%state%p(i,j,k,n0))
-                   pv(i,j,2) = ulatlon(i,j,2)*(pmean+elem(ie)%state%p(i,j,k,n0))
-                end do
-             end do
-             grade = gradient_sphere(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
-             !grade = gradient_sphere_wk(E,deriv,elem(ie)%Dinv)       ! scalar -> latlon vector
-             zeta = vorticity_sphere(ulatlon,deriv,elem(ie)) ! latlon vector -> scalar
-             if (tracer_advection_formulation==TRACERADV_UGRADQ) then
-                gradh = gradient_sphere(elem(ie)%state%p(:,:,k,n0),deriv,elem(ie)%Dinv)
-                div = ulatlon(:,:,1)*gradh(:,:,1)+ulatlon(:,:,2)*gradh(:,:,2)
-             else
-                div = divergence_sphere(pv,deriv,elem(ie))      ! latlon vector -> scalar
-             endif
-
-             ! ==============================================
-             ! Compute velocity tendency terms
-             ! ==============================================
-             ! accumulate all RHS terms
-             vtens(:,:,1,k,ie)=vtens(:,:,1,k,ie) + (ulatlon(:,:,2)*(fcor(:,:) + zeta(:,:))  - grade(:,:,1))
-             vtens(:,:,2,k,ie)=vtens(:,:,2,k,ie) + (-ulatlon(:,:,1)*(fcor(:,:) + zeta(:,:)) - grade(:,:,2))
-             ptens(:,:,k,ie) = ptens(:,:,k,ie) - div(:,:)
-
-             ! take the local element timestep
-             vtens(:,:,:,k,ie)=ulatlon(:,:,:) + dtstage*vtens(:,:,:,k,ie)
-             ptens(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0) + dtstage*ptens(:,:,k,ie)
-          end do!end of loop over levels
-       end do
+       call LOOP7(nets, nete, n0, nelemd, tracer_advection_formulation, pmean, dtstage, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4, ptr_buf5, ptr_buf6, ptr_buf7, ptr_buf8, ptr_buf9, ptr_buf10, ptr_buf11, elem)
+       call t_stopf('timer_advancerk_loop7')
 
        do ie=nets,nete
           if ((limiter_option == 8))then
@@ -920,7 +991,6 @@ contains
           call edgeVpack(edge3,vtens(1,1,1,1,ie),2*nlev,kptr,ie)
 
        end do
-       call t_stopf('timer_advancerk_loop7')
 !IKT, 10/21/16: end of team policy loop
 
        if(Debug) print *,'homme: adv.._rk 2'
