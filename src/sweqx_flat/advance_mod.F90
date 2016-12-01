@@ -268,9 +268,9 @@ contains
     call c_f_pointer(p_ptr, p, [np, np, nlev, timelevels, numelems])
     do ie=nets,nete
       do k=1,nlev
-        p(:,:,  k, nt_dest, ie - nets + 1) = p(:,:,  k, nt_src, ie - nets + 1)
-        v(:,:,1,k, nt_dest, ie - nets + 1) = v(:,:,1,k, nt_src, ie - nets + 1)
-        v(:,:,2,k, nt_dest, ie - nets + 1) = v(:,:,2,k, nt_src, ie - nets + 1)
+        p(:,:,  k, nt_dest, ie) = p(:,:,  k, nt_src, ie)
+        v(:,:,1,k, nt_dest, ie) = v(:,:,1,k, nt_src, ie)
+        v(:,:,2,k, nt_dest, ie) = v(:,:,2,k, nt_src, ie)
       enddo
     enddo
   end subroutine copy_timelevels_f90
