@@ -131,7 +131,8 @@ void divergence_sphere_c(int ie, const VectorField &v,
   }
 }
 
-void team_parallel_ex(
+/* TODO: Give this a better name */
+void loop7_c(
     const int &nets, const int &nete, const int &n0,
     const int &nelemd,
     const int &tracer_advection_formulation,
