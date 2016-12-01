@@ -87,26 +87,27 @@ void rk_stage_c(const int &nets, const int &nete,
                 real *const &ptens_ptr,
                 real *const &vtens_ptr);
 
-void loop7_f90(
-    const int &nets, const int &nete, const int &n0,
-    const int &nelemd,
-    const int &tracer_advection_formulation,
-    const real &pmean, const real &dtstage, real *&dvv_ptr,
-    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
-    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
-    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
-    real *&vtens_ptr);
+void loop7_f90(const int &nets, const int &nete,
+               const int &n0, const int &nelemd,
+               const int &tracer_advection_formulation,
+               const real &pmean, const real &dtstage,
+               real *&dvv_ptr, real *&d_ptr,
+               real *&dinv_ptr, real *&metdet_ptr,
+               real *&rmetdet_ptr, real *&fcor_ptr,
+               real *&p_ptr, real *&ps_ptr, real *&v_ptr,
+               real *&ptens_ptr, real *&vtens_ptr);
 
-void loop7_c(
-    const int &nets, const int &nete, const int &n0,
-    const int &nelemd,
-    const int &tracer_advection_formulation,
-    const real &pmean, const real &dtstage, real *&dvv_ptr,
-    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
-    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
-    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
-    real *&vtens_ptr);
-}
+void loop7_c(const int &nets, const int &nete,
+             const int &n0, const int &nelemd,
+             const int &tracer_advection_formulation,
+             const real &pmean, const real &dtstage,
+             real *&dvv_ptr, real *&d_ptr, real *&dinv_ptr,
+             real *&metdet_ptr, real *&rmetdet_ptr,
+             real *&fcor_ptr, real *&p_ptr, real *&ps_ptr,
+             real *&v_ptr, real *&ptens_ptr,
+             real *&vtens_ptr);
+
+}  // extern "C"
 
 namespace Homme {
 template <typename ScalarQP>
@@ -125,16 +126,6 @@ void divergence_sphere_c(int ie, const VectorField &v,
                          const MetDet &rmetdet,
                          const D &dinv,
                          ScalarField &divergence);
-
-void team_parallel_ex(
-    const int &nets, const int &nete, const int &n0,
-    const int &nelemd,
-    const int &tracer_advection_formulation,
-    const real &pmean, const real &dtstage, real *&dvv_ptr,
-    real *&d_ptr, real *&dinv_ptr, real *&metdet_ptr,
-    real *&rmetdet_ptr, real *&fcor_ptr, real *&p_ptr,
-    real *&ps_ptr, real *&v_ptr, real *&ptens_ptr,
-    real *&vtens_ptr);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -621,6 +612,126 @@ TEST_CASE("rk_stage", "advance_nonstag_rk_cxx") {
   delete[] v_exper;
 }
 
+/* TODO: Give this a better name */
+TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 10;
+  constexpr const int dim = 2;
+
+  constexpr const int dvv_len = np * np;
+  real *dvv = new real[dvv_len];
+  constexpr const int d_len =
+      np * np * dim * dim * numelems;
+  real *d = new real[d_len];
+  real *dinv = new real[d_len];
+  constexpr const int metdet_len = np * np * numelems;
+  real *metdet = new real[metdet_len];
+  real *rmetdet = new real[metdet_len];
+  constexpr const int fcor_len = np * np * numelems;
+  real *fcor = new real[fcor_len];
+  constexpr const int p_len =
+      np * np * nlev * timelevels * numelems;
+  real *p = new real[p_len];
+  constexpr const int ps_len = np * np * numelems;
+  real *ps = new real[ps_len];
+  constexpr const int v_len =
+      np * np * dim * nlev * timelevels * numelems;
+  real *v = new real[v_len];
+
+  constexpr const int numRandTests = 10;
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      const real pmean =
+          (std::uniform_real_distribution<real>(0, 1.0))(
+              engine);
+      const real dtstage =
+          (std::uniform_real_distribution<real>(0, 1.0))(
+              engine);
+      const int n0 = (std::uniform_int_distribution<int>(
+          1, timelevels))(engine);
+      const int tadv = (std::uniform_int_distribution<int>(
+          0, 1))(engine);
+      const int nets = (std::uniform_int_distribution<int>(
+          1, numelems - 1))(engine);
+      const int nete = (std::uniform_int_distribution<int>(
+          nets + 1, numelems))(engine);
+      const int ptens_len =
+          np * np * nlev * (nete - nets + 1);
+      real *ptens_theory = new real[ptens_len];
+      real *ptens_exper = new real[ptens_len];
+      const int vtens_len =
+          np * np * dim * nlev * (nete - nets + 1);
+      real *vtens_theory = new real[vtens_len];
+      real *vtens_exper = new real[vtens_len];
+
+      genRandArray(
+          dvv, dvv_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          d, d_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          dinv, d_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          metdet, metdet_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      for(int j = 0; j < metdet_len; j++) {
+        rmetdet[j] = 1.0 / metdet[j];
+      }
+      genRandArray(
+          fcor, fcor_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          p, p_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          ps, ps_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          v, v_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          ptens_theory, ptens_exper, ptens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          vtens_theory, vtens_exper, vtens_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+
+      loop7_f90(nets, nete, n0, numelems, tadv, pmean,
+                dtstage, dvv, d, dinv, metdet, rmetdet,
+                fcor, p, ps, v, ptens_theory, vtens_theory);
+      loop7_c(nets, nete, n0, numelems, tadv, pmean,
+              dtstage, dvv, d, dinv, metdet, rmetdet, fcor,
+              p, ps, v, ptens_exper, vtens_exper);
+
+      for(int j = 0; j < ptens_len; j++) {
+        REQUIRE(ptens_exper[j] == ptens_theory[j]);
+      }
+      for(int j = 0; j < vtens_len; j++) {
+        REQUIRE(vtens_exper[j] == vtens_theory[j]);
+      }
+
+      delete[] ptens_theory;
+      delete[] ptens_exper;
+      delete[] vtens_theory;
+      delete[] vtens_exper;
+    }
+  }
+
+  delete[] dvv;
+  delete[] d;
+  delete[] dinv;
+  delete[] metdet;
+  delete[] rmetdet;
+  delete[] fcor;
+  delete[] p;
+  delete[] ps;
+  delete[] v;
+}
+
 TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
   constexpr const int dim = 2;
 
@@ -847,9 +958,4 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
     delete[] rmetdet.ptr_on_device();
     delete[] metdet.ptr_on_device();
   }
-}
-
-/* TODO: Give this a better name */
-TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
-  
 }
