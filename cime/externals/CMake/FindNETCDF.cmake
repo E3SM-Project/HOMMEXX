@@ -1,5 +1,4 @@
 
-
 find_path(Netcdf_INCLUDE_DIR
           NAMES netcdf.h
           PATHS ${NETCDF_DIR}
@@ -8,12 +7,18 @@ find_path(Netcdf_INCLUDE_DIR
 
 find_library(Netcdf_LIBRARY
              NAMES libnetcdf.a netcdf
-             HINTS ${Netcdf_INCLUDE_DIR}/../lib
+             HINTS ${Netcdf_INCLUDE_DIR}/../lib ${Netcdf_INCLUDE_DIR}/../lib64
              NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+
+find_path(NetcdfF_INCLUDE_DIR
+          netcdf.mod
+          PATHS ${NETCDF_DIR} ${NETCDFF_DIR}
+          PATH_SUFFIXES include
+          NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 
 find_library(NetcdfF_LIBRARY
              NAMES libnetcdff.a netcdff
-             HINTS ${Netcdf_INCLUDE_DIR}/../lib
+             HINTS ${Netcdf_INCLUDE_DIR}/../lib ${Netcdf_INCLUDE_DIR}/../lib64 ${NetcdfF_INCLUDE_DIR}/../lib ${NetcdfF_INCLUDE_DIR}/../lib64
              NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 
 find_path(Netcdf_NC_CONFIG_BIN
@@ -24,6 +29,8 @@ find_path(Netcdf_NC_CONFIG_BIN
 find_file(NETCDF4_PAR_H netcdf_par.h
           HINTS ${Netcdf_INCLUDE_DIR}
           NO_DEFAULT_PATH )
+
+set(Netcdf_INCLUDE_DIR ${Netcdf_INCLUDE_DIR} ${NetcdfF_INCLUDE_DIR})
 
 if(NOT NETCDF4_PAR_H)
   set(NETCDF4_PARALLEL "no")

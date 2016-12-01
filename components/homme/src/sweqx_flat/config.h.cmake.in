@@ -38,3 +38,8 @@
 
 /* Pointers in SW */
 #cmakedefine01 SW_USE_FLAT_ARRAYS
+
+/* Fortran or C++ loops */
+#cmakedefine01 DONT_USE_KOKKOS
+
+

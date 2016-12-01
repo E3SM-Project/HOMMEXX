@@ -14,6 +14,17 @@ using namespace Homme;
 
 extern "C" {
 
+void copy_timelevels_f90(const int &nets, const int &nete,
+                         const int &numelems,
+                         const int &n_src,
+                         const int &n_dist, real *&p_ptr,
+                         real *&v_ptr);
+
+void copy_timelevels_c(const int &nets, const int &nete,
+                       const int &numelems,
+                       const int &n_src, const int &n_dist,
+                       real *&p_ptr, real *&v_ptr);
+
 void recover_q_f90(const int &nets, const int &nete,
                    const int &kmass, const int &n0,
                    const int &nelems, real *const &p);
@@ -30,50 +41,51 @@ void contra2latlon_c(const int &nets, const int &nete,
                      const int &n0, const int &nelems,
                      real *const &D, real *&v);
 
-void loop5_f90(const int &nets, const int &nete,
-               const int &nelems, real *const &spheremp,
-               real *&ptens, real *&vtens);
+void add_hv_f90(const int &nets, const int &nete,
+                const int &nelems, real *const &spheremp,
+                real *&ptens, real *&vtens);
 
-void loop5_c(const int &nets, const int &nete,
-             const int &nelems, real *const &spheremp,
-             real *&ptens, real *&vtens);
+void add_hv_c(const int &nets, const int &nete,
+              const int &nelems, real *const &spheremp,
+              real *&ptens, real *&vtens);
 
-void loop6_f90(const int &nets, const int &nete,
-               const int &kmass, const int &n0,
-               const int &nelems, real *const &p);
+void recover_dpq_f90(const int &nets, const int &nete,
+                     const int &kmass, const int &n0,
+                     const int &nelems, real *const &p);
 
-void loop6_c(const int &nets, const int &nete,
-             const int &kmass, const int &n0,
-             const int &nelems, real *const &p);
+void recover_dpq_c(const int &nets, const int &nete,
+                   const int &kmass, const int &n0,
+                   const int &nelems, real *const &p);
 
-void loop8_f90(const int &nets, const int &nete,
-               const int &numelems,
-               real *const &rspheremp_ptr,
-               real *const &dinv_ptr, real *&ptens_ptr,
-               real *&vtens_ptr);
+void weighted_rhs_f90(const int &nets, const int &nete,
+                      const int &numelems,
+                      real *const &rspheremp_ptr,
+                      real *const &dinv_ptr,
+                      real *&ptens_ptr, real *&vtens_ptr);
 
-void loop8_c(const int &nets, const int &nete,
-             const int &numelems,
-             real *const &rspheremp_ptr,
-             real *const &dinv_ptr, real *&ptens_ptr,
-             real *&vtens_ptr);
+void weighted_rhs_c(const int &nets, const int &nete,
+                    const int &numelems,
+                    real *const &rspheremp_ptr,
+                    real *const &dinv_ptr, real *&ptens_ptr,
+                    real *&vtens_ptr);
 
-void loop9_f90(const int &nets, const int &nete,
-               const int &n0, const int &np1, const int &s,
-               const int &rkstages, const int &numelems,
-               real *&v_ptr, real *&p_ptr,
-               real *const &alpha0_ptr,
-               real *const &alpha_ptr,
-               real *const &ptens_ptr,
-               real *const &vtens_ptr);
+void rk_stage_f90(const int &nets, const int &nete,
+                  const int &n0, const int &np1,
+                  const int &s, const int &rkstages,
+                  const int &numelems, real *&v_ptr,
+                  real *&p_ptr, real *const &alpha0_ptr,
+                  real *const &alpha_ptr,
+                  real *const &ptens_ptr,
+                  real *const &vtens_ptr);
 
-void loop9_c(const int &nets, const int &nete,
-             const int &n0, const int &np1, const int &s,
-             const int &rkstages, const int &numelems,
-             real *&v_ptr, real *&p_ptr,
-             real *const &alpha0_ptr,
-             real *const &alpha_ptr, real *const &ptens_ptr,
-             real *const &vtens_ptr);
+void rk_stage_c(const int &nets, const int &nete,
+                const int &n0, const int &np1, const int &s,
+                const int &rkstages, const int &numelems,
+                real *&v_ptr, real *&p_ptr,
+                real *const &alpha0_ptr,
+                real *const &alpha_ptr,
+                real *const &ptens_ptr,
+                real *const &vtens_ptr);
 }
 
 namespace Homme {
@@ -165,6 +177,63 @@ void input_reader(std::map<std::string, input_type *> &data,
   }
 }
 
+TEST_CASE("copy_timelevels", "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 100;
+  constexpr const int dim = 2;
+
+  constexpr const int p_len =
+      np * np * nlev * timelevels * numelems;
+  real *p_theory = new real[p_len];
+  real *p_exper = new real[p_len];
+  constexpr const int v_len =
+      np * np * dim * nlev * timelevels * numelems;
+  real *v_theory = new real[v_len];
+  real *v_exper = new real[v_len];
+
+  constexpr const int numRandTests = 10;
+  SECTION("random_test") {
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
+    for(int i = 0; i < numRandTests; i++) {
+      const int nets = (std::uniform_int_distribution<int>(
+          1, numelems - 1))(engine);
+      const int nete = (std::uniform_int_distribution<int>(
+          nets + 1, numelems))(engine);
+
+      genRandTheoryExper(
+          p_theory, p_exper, p_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+      genRandTheoryExper(
+          v_theory, v_exper, v_len, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
+
+      const int n_src = (std::uniform_int_distribution<int>(
+          1, timelevels))(engine);
+      const int n_dist =
+          (std::uniform_int_distribution<int>(
+              1, timelevels))(engine);
+
+      copy_timelevels_f90(nets, nete, numelems, n_src,
+                          n_dist, p_theory, v_theory);
+      copy_timelevels_c(nets, nete, numelems, n_src, n_dist,
+                        p_exper, v_exper);
+
+      for(int j = 0; j < p_len; j++) {
+        REQUIRE(p_exper[j] == p_theory[j]);
+      }
+      for(int j = 0; j < v_len; j++) {
+        REQUIRE(v_exper[j] == v_theory[j]);
+      }
+    }
+  }
+
+  delete[] p_theory;
+  delete[] p_exper;
+  delete[] v_theory;
+  delete[] v_exper;
+}
+
 TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
 
@@ -206,18 +275,13 @@ TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
       for(int j = 0; j < p_len; j++) {
         REQUIRE(p_exper[j] == p_theory[j]);
       }
-      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
-      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
-      for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
-      }
     }
   }
   delete[] p_exper;
   delete[] p_theory;
 }
 
-TEST_CASE("loop6", "advance_nonstag_rk_cxx") {
+TEST_CASE("recover_dpq", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
 
   // real elem_state_p (np,np,nlevel,timelevels,nelemd)
@@ -252,13 +316,10 @@ TEST_CASE("loop6", "advance_nonstag_rk_cxx") {
         p_theory[j] = p_dist(engine);
         p_exper[j] = p_theory[j];
       }
-      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
-      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
-      for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
-      }
-      loop6_f90(nets, nete, kmass, n0, numelems, p_theory);
-      loop6_c(nets, nete, kmass, n0, numelems, p_exper);
+      recover_dpq_f90(nets, nete, kmass, n0, numelems,
+                      p_theory);
+      recover_dpq_c(nets, nete, kmass, n0, numelems,
+                    p_exper);
       for(int j = 0; j < p_len; j++) {
         REQUIRE(p_exper[j] == p_theory[j]);
       }
@@ -318,7 +379,7 @@ TEST_CASE("contra2latlon", "advance_nonstag_rk_cxx") {
   delete[] D;
 }
 
-TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
+TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
@@ -367,10 +428,10 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
         spheremp[j] = spheremp_dist(engine);
       }
 
-      loop5_f90(nets, nete, numelems, spheremp,
-                ptens_theory, vtens_theory);
-      loop5_c(nets, nete, numelems, spheremp, ptens_exper,
-              vtens_exper);
+      add_hv_f90(nets, nete, numelems, spheremp,
+                 ptens_theory, vtens_theory);
+      add_hv_c(nets, nete, numelems, spheremp, ptens_exper,
+               vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
         if(ptens_exper[j] != ptens_theory[j]) {
           std::cout << ptens_exper[j] - ptens_theory[j];
@@ -390,7 +451,7 @@ TEST_CASE("loop5", "advance_nonstag_rk_cxx") {
   delete[] spheremp;
 }
 
-TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
+TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
@@ -432,10 +493,10 @@ TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
       genRandTheoryExper(
           vtens_theory, vtens_exper, vtens_len, engine,
           std::uniform_real_distribution<real>(0, 1.0));
-      loop8_f90(nets, nete, numelems, rspheremp, dinv,
-                ptens_theory, vtens_theory);
-      loop8_c(nets, nete, numelems, rspheremp, dinv,
-              ptens_exper, vtens_exper);
+      weighted_rhs_f90(nets, nete, numelems, rspheremp,
+                       dinv, ptens_theory, vtens_theory);
+      weighted_rhs_c(nets, nete, numelems, rspheremp, dinv,
+                     ptens_exper, vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
         REQUIRE(ptens_exper[j] == ptens_theory[j]);
       }
@@ -454,7 +515,7 @@ TEST_CASE("loop8", "advance_nonstag_rk_cxx") {
   delete[] dinv;
 }
 
-TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
+TEST_CASE("rk_stage", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
   constexpr const int dim = 2;
   constexpr const int rkstages = 5;
@@ -513,12 +574,12 @@ TEST_CASE("loop9", "advance_nonstag_rk_cxx") {
       const int s = (std::uniform_int_distribution<int>(
           1, rkstages))(engine);
 
-      loop9_f90(nets, nete, n0, np1, s, rkstages, numelems,
-                v_theory, p_theory, alpha0, alpha, ptens,
-                vtens);
-      loop9_c(nets, nete, n0, np1, s, rkstages, numelems,
-              v_exper, p_exper, alpha0, alpha, ptens,
-              vtens);
+      rk_stage_f90(nets, nete, n0, np1, s, rkstages,
+                   numelems, v_theory, p_theory, alpha0,
+                   alpha, ptens, vtens);
+      rk_stage_c(nets, nete, n0, np1, s, rkstages, numelems,
+                 v_exper, p_exper, alpha0, alpha, ptens,
+                 vtens);
 
       for(int j = 0; j < p_len; j++) {
         REQUIRE(p_exper[j] == p_theory[j]);
@@ -589,12 +650,21 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     for(int j = 0; j < dim; j++) {
       for(int k = 0; k < grad_np; k++) {
         for(int l = 0; l < grad_np; l++) {
-          const real rel_err = std::fabs(
-              (grad_exper(l, k, j) - grad_theory(l, k, j)));
-          const real max_rel_err =
-              (4.0 * std::numeric_limits<real>::epsilon() *
-               grad_theory(l, k, j));
-          REQUIRE(rel_err < max_rel_err);
+          if(grad_theory(l, k, j) == 0.0) {
+            /* Check the absolute error instead of the
+             * relative error
+             */
+            REQUIRE(std::fabs(grad_exper(l, k, j)) <
+                    std::numeric_limits<real>::epsilon());
+          } else {
+            const real rel_err =
+                std::fabs((grad_exper(l, k, j) -
+                           grad_theory(l, k, j)));
+            const real max_rel_err = std::fabs(
+                4.0 * std::numeric_limits<real>::epsilon() *
+                grad_theory(l, k, j));
+            REQUIRE(rel_err < max_rel_err);
+          }
         }
       }
     }
@@ -655,12 +725,20 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
 
     for(int k = 0; k < vort_np; k++) {
       for(int l = 0; l < vort_np; l++) {
-        REQUIRE(
-            std::fabs(
-                (vort_exper(l, k) - vort_theory(l, k))) <
-            std::fabs(4.0 *
+        if(vort_theory(l, k) == 0.0) {
+          /* Check the absolute error instead of the
+           * relative error
+           */
+          REQUIRE(std::fabs(vort_exper(l, k)) <
+                  std::numeric_limits<real>::epsilon());
+        } else {
+          REQUIRE(std::fabs((vort_exper(l, k) -
+                             vort_theory(l, k))) <
+                  std::fabs(
+                      4.0 *
                       std::numeric_limits<real>::epsilon() *
                       vort_theory(l, k)));
+        }
       }
     }
     delete[] dvv.ptr_on_device();
@@ -728,12 +806,20 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
 
     for(int k = 0; k < div_np; k++) {
       for(int l = 0; l < div_np; l++) {
-        REQUIRE(
-            std::fabs(
-                (div_exper(l, k) - div_theory(l, k))) <
-            std::fabs(4.0 *
+        if(div_theory(l, k) == 0.0) {
+          /* Check the absolute error instead of the
+           * relative error
+           */
+          REQUIRE(std::fabs(div_exper(l, k)) <
+                  std::numeric_limits<real>::epsilon());
+        } else {
+          REQUIRE(std::fabs(div_exper(l, k) -
+                            div_theory(l, k)) <
+                  std::fabs(
+                      4.0 *
                       std::numeric_limits<real>::epsilon() *
                       div_theory(l, k)));
+        }
       }
     }
     delete[] dvv.ptr_on_device();

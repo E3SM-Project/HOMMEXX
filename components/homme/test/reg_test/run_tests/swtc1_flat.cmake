@@ -15,6 +15,6 @@ SET(EXEC_NAME swtcA_flat)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/${TEST_NAME}.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/swtc1.nl)
 
 SET(NC_OUTPUT_FILES swtc11.nc)
