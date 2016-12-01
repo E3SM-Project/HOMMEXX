@@ -28,14 +28,15 @@ module advance_rk_unit_test
       type(c_ptr), intent(in) :: Mfvm, Cfvm, legdg
     end subroutine init_derivative_c
 
-    subroutine init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
-                                     rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
-                                     rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
-      use iso_c_binding, only: c_ptr
+    subroutine init_views_pool_c (numelems, elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+                                  rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
+                                  rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
+      use iso_c_binding, only: c_ptr, c_int
+      integer (kind=c_int), intent(in) :: numelems
       type (c_ptr), intent(in) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr
       type (c_ptr), intent(in) :: rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
       type (c_ptr), intent(in) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
-    end subroutine init_pointers_pool_c
+    end subroutine init_views_pool_c
 
     subroutine init_control_parameters_c (hypervisc_scaling, hypervisc_power) bind(c)
       use iso_c_binding, only: c_int, c_double
@@ -145,7 +146,7 @@ contains
       D_cptr                = c_loc(elem_D)
       Dinv_cptr             = c_loc(elem_Dinv)
 
-      call init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+      call init_views_pool_c (nelems, elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
                                  rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
                                  rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr)
     endif

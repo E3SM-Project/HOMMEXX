@@ -9,7 +9,7 @@
 #include <fortran_binding.hpp>
 #include <kinds.hpp>
 #include <ControlParameters.hpp>
-#include <PointersPool.hpp>
+#include <ViewsPool.hpp>
 
 using namespace Homme;
 
@@ -181,128 +181,6 @@ void genRandTheoryExper(number *arr_theory,
   }
 }
 
-template<typename data_type>
-void flip_array_np_np_nelems (const data_type* arr_f, data_type* arr_c, int nelems)
-{
-  // Note: each np x np block should not be flipped, that is,
-  //       (igp,jgp,ielem)_f -> (ielem,igp,jgp)_c
-  const int size    = np * np * nelems;
-  const int dim12   = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = (i / np) / np;
-
-    arr_c[ i3*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
-template<typename data_type>
-void flip_array_np_np_nlev_nelems (const data_type* arr_f, data_type* arr_c, int nelems)
-{
-  // Note: each np x np block should not be flipped, that is,
-  //       (igp,jgp,ilev,ielem)_f -> (ielem,ilev,igp,jgp)_c
-  const int size   = np * np * nlev * nelems;
-  const int dim123 = np * np * nlev;
-  const int dim12  = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = ( (i / np) / np ) % nlev;
-    const int i4 = ( (i / np) / np ) / nlev;
-
-    arr_c[ i4*dim123 + i3*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
-template<typename data_type>
-void flip_array_np_np_ndims_nlev_nelems (data_type*& arr_f, data_type*& arr_c, int nelems, int ndims)
-{
-  // Note: each np x np block should not be flipped, that is,
-  //       (igp,jgp,idim,ilev,ielem)_f -> (ielem,ilev,idim,igp,jgp)_c
-  const int size    = np * np * ndims * nlev * nelems;
-  const int dim1234 = np * np * ndims * nlev;
-  const int dim123  = np * np * ndims;
-  const int dim12   = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = ( (i / np) / np ) % ndims;
-    const int i4 = ( ( (i / np) / np ) / ndims ) % nlev;
-    const int i5 = ( ( (i / np) / np ) / ndims ) / nlev;
-
-    arr_c[ i5*dim1234 + i4*dim123 + i3*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
-template<typename data_type>
-void flip_array_np_np_ndims1_ndims2_nelems (data_type*& arr_f, data_type*& arr_c, int nelems, int ndims1, int ndims2)
-{
-  // Note: each np x np and dim1 x dim2 block should not be flipped, that is,
-  //       (igp,jgp,idim,jdim,ielem)_f -> (ielem,idim,jdim,igp,jgp)_c
-  const int size    = np * np * ndims1 * ndims2 * nelems;
-  const int dim1234 = np * np * ndims1 * ndims2;
-  const int dim124  = np * np * ndims2;
-  const int dim12   = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = ( (i / np) / np ) % ndims1;
-    const int i4 = ( ( (i / np) / np ) / ndims1 ) % ndims2;
-    const int i5 = ( ( (i / np) / np ) / ndims1 ) / ndims2;
-
-    arr_c[ i5*dim1234 + i3*dim124 + i4*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
-template<typename data_type>
-void flip_array_np_np_nlev_timelevels_nelems (data_type*& arr_f, data_type*& arr_c, int nelems)
-{
-  // Note: each np x np block should not be flipped, that is,
-  //       (igp,jgp,ilev,itlev,ielem)_f -> (ielem,itlev,ilev,igp,jgp)_c
-  const int size    = np * np * nlev * timelevels * nelems;
-  const int dim1234 = np * np * nlev * timelevels;
-  const int dim123  = np * np * nlev;
-  const int dim12   = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = ( (i / np) / np ) % nlev;
-    const int i4 = ( ( (i / np) / np ) / nlev ) % timelevels;
-    const int i5 = ( ( (i / np) / np ) / nlev ) / timelevels;
-
-    arr_c[ i5*dim1234 + i4*dim123 + i3*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
-template<typename data_type>
-void flip_array_np_np_ndims_nlev_timelevels_nelems (data_type*& arr_f, data_type*& arr_c, int nelems, int ndims)
-{
-  // Note: each np x np block should not be flipped, that is,
-  //       (igp,jgp,idim,ilev,itlev,ielem)_f -> (ielem,itlev,ilev,idim,igp,jgp)_c
-  const int size     = np * np * dim2d * nlev * timelevels * nelems;
-  const int dim12345 = np * np * dim2d * nlev * timelevels;
-  const int dim1234  = np * np * dim2d * nlev;
-  const int dim123   = np * np * dim2d;
-  const int dim12    = np * np;
-  for (int i=0; i<size; ++i)
-  {
-    const int i1 = i % np;
-    const int i2 = (i / np) % np;
-    const int i3 = ( (i / np) / np ) % dim2d;
-    const int i4 = ( ( (i / np) / np ) / dim2d ) % nlev;
-    const int i5 = ( ( ( (i / np) / np ) / dim2d ) / nlev ) % timelevels;
-    const int i6 = ( ( ( (i / np) / np ) / dim2d ) / nlev ) / timelevels;
-
-    arr_c[ i6*dim12345 + i5*dim1234 + i4*dim123 + i3*dim12 + i1*np + i2 ] = arr_f[i];
-  }
-}
-
 TEST_CASE("SETUP OF F90 STRUCTURES", "SETUP OF F90 STRUCTURES")
 {
   std::cout << "num elements  : " << numelems << "\n"
@@ -321,7 +199,7 @@ TEST_CASE("SETUP OF F90 STRUCTURES", "SETUP OF F90 STRUCTURES")
 
   // Setting up the fortran elem structure
   // This will also call the c function that initializes
-  // the Homme::PointersPool static instance
+  // the Homme::ViewsPool static instance
   init_elem_f90 (numelems);
 
   test_running = true;
@@ -532,12 +410,9 @@ TEST_CASE("laplace_sphere_wk", "advance_nonstag_rk_cxx")
   udi_type bernoulli(0,1);
   std::uniform_real_distribution<real> dreal (0,1);
 
-  real* tmp_ar;
-
   SECTION ("random test for laplace_sphere_wk")
   {
-    real* input_c    = new real[numelems*nlev*np*np];
-    real* input_f90  = new real[numelems*nlev*np*np];
+    real* input      = new real[numelems*nlev*np*np];
     real* output_c   = new real[numelems*nlev*np*np];
     real* output_f90 = new real[numelems*nlev*np*np];
 
@@ -558,58 +433,35 @@ TEST_CASE("laplace_sphere_wk", "advance_nonstag_rk_cxx")
       }
 
       // Randomize only the arrays that are used as inputs
-      genRandArray (input_f90,                        numelems*nlev*np*np,        engine, dreal);
-      genRandArray (get_pointers_pool_c()->hypervisc, numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->Dinv,      numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->spheremp,  numelems*np*np,             engine, dreal);
+      genRandArray (input,                                      np*np*nlev*numelems,        engine, dreal);
+      genRandArray (get_views_pool_c()->get_hypervisc().data(), np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_Dinv().data(),      np*np*dim2d*dim2d*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_spheremp().data(),  np*np*numelems,             engine, dreal);
 
       // Compute laplacian with fortran routines
-      test_laplace_sphere_wk_f90 (nets, nete, numelems, var_coef, input_f90, output_f90);
-
-      // Need to flip the input arrays, so that they represent the same data when read as c arrays
-      flip_array_np_np_nlev_nelems (input_f90, input_c, numelems);
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->hypervisc, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->hypervisc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->Dinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->Dinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->spheremp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->spheremp);
-      delete[] tmp_ar;
+      test_laplace_sphere_wk_f90 (nets, nete, numelems, var_coef, input, output_f90);
 
       // Compute laplacian with kokkos kernels
-      laplace_sphere_wk_c (nets-1, nete, numelems, var_coef, input_c, output_c);
+      laplace_sphere_wk_c (nets-1, nete, numelems, var_coef, input, output_c);
 
-      // Flip the f90 output array, so we can directly compare it with the C one
-      tmp_ar = new real[numelems*nlev*np*np];
-      flip_array_np_np_nlev_nelems (output_f90, tmp_ar, numelems);
-      for (int i=0; i<numelems*nlev*np*np; ++i)
+      // Check results
+      for (int i=0; i<np*np*nlev*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_c[i]-output_f90[i]) <= 1e-10*std::fabs(output_f90[i]) );
       }
-      delete[] tmp_ar;
 
     } // for numRandTests
 
-    delete[] input_c;
+    delete[] input;
     delete[] output_c;
-    delete[] input_f90;
     delete[] output_f90;
   } // SECTION
 
   SECTION ("random test for vlaplace_sphere_wk")
   {
-    real* input_c    = new real[numelems*nlev*dim2d*np*np];
-    real* input_f90  = new real[numelems*nlev*dim2d*np*np];
-    real* output_c   = new real[numelems*nlev*dim2d*np*np];
-    real* output_f90 = new real[numelems*nlev*dim2d*np*np];
+    real* input      = new real[np*np*dim2d*nlev*numelems];
+    real* output_c   = new real[np*np*dim2d*nlev*numelems];
+    real* output_f90 = new real[np*np*dim2d*nlev*numelems];
 
     std::random_device rd;
     using rngAlg = std::mt19937_64;
@@ -630,97 +482,39 @@ TEST_CASE("laplace_sphere_wk", "advance_nonstag_rk_cxx")
       const real nu_ratio = (get_control_parameters_c()->hypervisc_scaling && var_coef ? 1 : dreal(engine));
 
       // To avoid false checks on elements not actually processed in this random test.
-      for (int i=0; i<numelems*nlev*dim2d*np*np; ++i)
+      for (int i=0; i<np*np*dim2d*nlev*numelems; ++i)
       {
         output_c[i] = output_f90[i] = 0;
       }
 
       // Randomize all the arrays that can (possibly) be used as inputs
-      genRandArray (input_f90,                              numelems*nlev*dim2d*np*np,  engine, dreal);
-      genRandArray (get_pointers_pool_c()->hypervisc,       numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->D,               numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->Dinv,            numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->mp,              numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->spheremp,        numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->metinv,          numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->metdet,          numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->rmetdet,         numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->tensor_visc,     numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->vec_sphere2cart, numelems*dim3d*dim2d*np*np, engine, dreal);
+      genRandArray (input,                                            np*np*dim2d*nlev*numelems,  engine, dreal);
+      genRandArray (get_views_pool_c()->get_metdet().data(),          np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_rmetdet().data(),         np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_metinv().data(),          np*np*dim2d*dim2d*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_spheremp().data(),        np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_mp().data(),              np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_vec_sphere2cart().data(), np*np*dim3d*dim2d*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_hypervisc().data(),       np*np*numelems,             engine, dreal);
+      genRandArray (get_views_pool_c()->get_tensor_visc().data(),     np*np*dim2d*dim2d*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_D().data(),               np*np*dim2d*dim2d*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_Dinv().data(),            np*np*dim2d*dim2d*numelems, engine, dreal);
 
       // Compute laplacian with fortran routines
-      test_vlaplace_sphere_wk_f90 (nets, nete, numelems, var_coef, nu_ratio, input_f90, output_f90);
-
-      // Need to flip the input arrays, so that they represent the same data when read as c arrays
-      flip_array_np_np_ndims_nlev_nelems (input_f90, input_c, numelems, dim2d);
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->hypervisc, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->hypervisc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->D, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->D);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->Dinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->Dinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->mp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->mp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->spheremp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->spheremp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->metinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->metinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->metdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->metdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->rmetdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->rmetdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->tensor_visc, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->tensor_visc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim3d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->vec_sphere2cart, tmp_ar, numelems, dim3d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim3d*dim2d*np*np, get_pointers_pool_c()->vec_sphere2cart);
-      delete[] tmp_ar;
+      test_vlaplace_sphere_wk_f90 (nets, nete, numelems, var_coef, nu_ratio, input, output_f90);
 
       // Compute laplacian with kokkos kernels
-      vlaplace_sphere_wk_c (nets-1, nete, numelems, var_coef, nu_ratio, input_c, output_c);
+      vlaplace_sphere_wk_c (nets-1, nete, numelems, var_coef, nu_ratio, input, output_c);
 
-      // Flip the f90 output array, so we can directly compare it with the C one
-      tmp_ar = new real[numelems*nlev*dim2d*np*np];
-      flip_array_np_np_ndims_nlev_nelems (output_f90, tmp_ar, numelems, dim2d);
-      for (int i=0; i<numelems*nlev*dim2d*np*np; ++i)
+      // Check results
+      for (int i=0; i<np*np*dim2d*nlev*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_c[i]-output_f90[i]) <= 1e-10*std::fabs(output_f90[i]) );
       }
-      delete[] tmp_ar;
-
     } // for numRandTests
 
-    delete[] input_c;
+    delete[] input;
     delete[] output_c;
-    delete[] input_f90;
     delete[] output_f90;
   } // SECTION
 } // laplace_sphere_wk
@@ -734,18 +528,16 @@ TEST_CASE("lapl_loop_(pre/post)_bndry_ex", "advance_nonstag_rk_cxx")
   udi_type bernoulli(0,1);
   std::uniform_real_distribution<real> dreal (0,1);
 
-  real* tmp_ar;
-
   SECTION ("random test for loop_lapl_pre_bndry_ex")
   {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
 
-    real* output_p_f90 = new real[numelems*nlev*np*np];
-    real* output_v_f90 = new real[numelems*nlev*dim2d*np*np];
-    real* output_p_c   = new real[numelems*nlev*np*np];
-    real* output_v_c   = new real[numelems*nlev*dim2d*np*np];
+    real* output_p_f90 = new real[np*np*nlev*numelems];
+    real* output_p_c   = new real[np*np*nlev*numelems];
+    real* output_v_f90 = new real[np*np*dim2d*nlev*numelems];
+    real* output_v_c   = new real[np*np*dim2d*nlev*numelems];
 
     for(int i = 0; i < numRandTests; i++)
     {
@@ -773,108 +565,35 @@ TEST_CASE("lapl_loop_(pre/post)_bndry_ex", "advance_nonstag_rk_cxx")
       }
 
       // Randomize all the arrays that can (possibly) be used as inputs
-      genRandArray (get_pointers_pool_c()->elem_state_ps,   numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->elem_state_p,    numelems*timelevels*nlev*np*np,       engine, dreal);
-      genRandArray (get_pointers_pool_c()->elem_state_v,    numelems*timelevels*nlev*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->hypervisc,       numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->D,               numelems*dim2d*dim2d*np*np,           engine, dreal);
-      genRandArray (get_pointers_pool_c()->Dinv,            numelems*dim2d*dim2d*np*np,           engine, dreal);
-      genRandArray (get_pointers_pool_c()->mp,              numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->spheremp,        numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->metinv,          numelems*dim2d*dim2d*np*np,           engine, dreal);
-      genRandArray (get_pointers_pool_c()->metdet,          numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->rmetdet,         numelems*np*np,                       engine, dreal);
-      genRandArray (get_pointers_pool_c()->tensor_visc,     numelems*dim2d*dim2d*np*np,           engine, dreal);
-      genRandArray (get_pointers_pool_c()->vec_sphere2cart, numelems*dim2d*dim2d*np*np,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_elem_state_ps().data(),   np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_elem_state_p().data(),    np*np*nlev*timelevels*numelems,       engine, dreal);
+      genRandArray (get_views_pool_c()->get_elem_state_v().data(),    np*np*dim2d*nlev*timelevels*numelems, engine, dreal);
+      genRandArray (get_views_pool_c()->get_metdet().data(),          np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_rmetdet().data(),         np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_metinv().data(),          np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_spheremp().data(),        np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_mp().data(),              np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_vec_sphere2cart().data(), np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_hypervisc().data(),       np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_tensor_visc().data(),     np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_D().data(),               np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_Dinv().data(),            np*np*dim2d*dim2d*numelems,           engine, dreal);
 
       // Launch loop with fortran routine
       test_lapl_pre_bndry_ex_f90 (nets, nete, numelems, n0, var_coef, nu_ratio, output_p_f90, output_v_f90);
 
-      // Need to flip the input arrays, so that they represent the same data when read as c arrays
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->elem_state_ps, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->elem_state_ps);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*timelevels*nlev*np*np];
-      flip_array_np_np_nlev_timelevels_nelems (get_pointers_pool_c()->elem_state_p, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*timelevels*nlev*np*np, get_pointers_pool_c()->elem_state_p);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*timelevels*nlev*dim2d*np*np];
-      flip_array_np_np_ndims_nlev_timelevels_nelems (get_pointers_pool_c()->elem_state_v, tmp_ar, numelems, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*timelevels*nlev*dim2d*np*np, get_pointers_pool_c()->elem_state_v);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->hypervisc, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->hypervisc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->D, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->D);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->Dinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->Dinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->mp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->mp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->spheremp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->spheremp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->metinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->metinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->metdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->metdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->rmetdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->rmetdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->tensor_visc, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->tensor_visc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim3d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->vec_sphere2cart, tmp_ar, numelems, dim3d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim3d*dim2d*np*np, get_pointers_pool_c()->vec_sphere2cart);
-      delete[] tmp_ar;
-
       // Launch loop with c routine
       loop_lapl_pre_bndry_ex_c (nets, nete, numelems, n0, var_coef, nu_ratio, output_p_c, output_v_c);
 
-      // Flip the f90 output array, so we can directly compare it with the C one
-      tmp_ar = new real[numelems*nlev*np*np];
-      flip_array_np_np_nlev_nelems (output_p_f90, tmp_ar, numelems);
-      for (int i=0; i<numelems*nlev*np*np; ++i)
+      // Check results
+      for (int i=0; i<np*np*nlev*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_p_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_p_c[i]-output_p_f90[i]) <= 1e-10*std::fabs(output_p_f90[i]) );
       }
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*nlev*dim2d*np*np];
-      flip_array_np_np_ndims_nlev_nelems (output_v_f90, tmp_ar, numelems, dim2d);
-      for (int i=0; i<numelems*nlev*dim2d*np*np; ++i)
+      for (int i=0; i<np*np*dim2d*nlev*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_v_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_v_c[i]-output_v_f90[i]) <= 1e-10*std::fabs(output_v_f90[i]) );
       }
-      delete[] tmp_ar;
     } // for numRandTests
 
     delete[] output_p_f90;
@@ -889,12 +608,13 @@ TEST_CASE("lapl_loop_(pre/post)_bndry_ex", "advance_nonstag_rk_cxx")
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
 
-    real* input_p      = new real[numelems*nlev*np*np];
-    real* input_v      = new real[numelems*nlev*dim2d*np*np];
-    real* output_p_f90 = new real[numelems*nlev*np*np];
-    real* output_v_f90 = new real[numelems*nlev*dim2d*np*np];
-    real* output_p_c   = new real[numelems*nlev*np*np];
-    real* output_v_c   = new real[numelems*nlev*dim2d*np*np];
+    real* input_p      = new real[np*np*nlev*numelems];
+    real* output_p_f90 = new real[np*np*nlev*numelems];
+    real* output_p_c   = new real[np*np*nlev*numelems];
+
+    real* input_v      = new real[np*np*dim2d*nlev*numelems];
+    real* output_v_c   = new real[np*np*dim2d*nlev*numelems];
+    real* output_v_f90 = new real[np*np*dim2d*nlev*numelems];
 
     for(int i = 0; i < numRandTests; i++)
     {
@@ -906,103 +626,40 @@ TEST_CASE("lapl_loop_(pre/post)_bndry_ex", "advance_nonstag_rk_cxx")
       const real nu_ratio = get_control_parameters_c()->hypervisc_scaling ? 1 : dreal(engine);
 
       // Randomize all the arrays that can (possibly) be used as inputs
-      genRandArray (input_p,                                numelems*nlev*np*np,        engine, dreal);
-      genRandArray (input_v,                                numelems*nlev*dim2d*np*np,  engine, dreal);
-      genRandArray (get_pointers_pool_c()->hypervisc,       numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->D,               numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->Dinv,            numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->mp,              numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->spheremp,        numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->rspheremp,       numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->metinv,          numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->metdet,          numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->rmetdet,         numelems*np*np,             engine, dreal);
-      genRandArray (get_pointers_pool_c()->tensor_visc,     numelems*dim2d*dim2d*np*np, engine, dreal);
-      genRandArray (get_pointers_pool_c()->vec_sphere2cart, numelems*dim3d*dim2d*np*np, engine, dreal);
+      genRandArray (input_p, np*np*nlev*numelems,       engine, dreal);
+      genRandArray (input_v, np*np*dim2d*nlev*numelems, engine, dreal);
+
+      genRandArray (get_views_pool_c()->get_metdet().data(),          np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_rmetdet().data(),         np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_metinv().data(),          np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_spheremp().data(),        np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_rspheremp().data(),       np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_mp().data(),              np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_vec_sphere2cart().data(), np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_hypervisc().data(),       np*np*numelems,                       engine, dreal);
+      genRandArray (get_views_pool_c()->get_tensor_visc().data(),     np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_D().data(),               np*np*dim2d*dim2d*numelems,           engine, dreal);
+      genRandArray (get_views_pool_c()->get_Dinv().data(),            np*np*dim2d*dim2d*numelems,           engine, dreal);
 
       // Launch loop with fortran routine
-      std::copy (input_p, input_p+numelems*nlev*np*np,       output_p_f90);
-      std::copy (input_v, input_v+numelems*nlev*dim2d*np*np, output_v_f90);
+      std::copy (input_p, input_p+np*np*nlev*numelems,       output_p_f90);
+      std::copy (input_v, input_v+np*np*dim2d*nlev*numelems, output_v_f90);
       test_lapl_post_bndry_ex_f90 (nets, nete, numelems, nu_ratio, output_p_f90, output_v_f90);
 
-      // Need to flip the input arrays, so that they represent the same data when read as c arrays
-      flip_array_np_np_nlev_nelems       (input_p, output_p_c, numelems);
-      flip_array_np_np_ndims_nlev_nelems (input_v, output_v_c, numelems, dim2d);
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->hypervisc, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->hypervisc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->D, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->D);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->Dinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->Dinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->mp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->mp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->spheremp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->spheremp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->rspheremp, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->rspheremp);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->metinv, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->metinv);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->metdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->metdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*np*np];
-      flip_array_np_np_nelems (get_pointers_pool_c()->rmetdet, tmp_ar, numelems);
-      std::copy(tmp_ar, tmp_ar+numelems*np*np, get_pointers_pool_c()->rmetdet);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim2d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->tensor_visc, tmp_ar, numelems, dim2d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim2d*dim2d*np*np, get_pointers_pool_c()->tensor_visc);
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*dim3d*dim2d*np*np];
-      flip_array_np_np_ndims1_ndims2_nelems (get_pointers_pool_c()->vec_sphere2cart, tmp_ar, numelems, dim3d, dim2d);
-      std::copy(tmp_ar, tmp_ar+numelems*dim3d*dim2d*np*np, get_pointers_pool_c()->vec_sphere2cart);
-      delete[] tmp_ar;
-
       // Launch loop with c routine
+      std::copy (input_p, input_p+np*np*nlev*numelems,       output_p_c);
+      std::copy (input_v, input_v+np*np*dim2d*nlev*numelems, output_v_c);
       loop_lapl_post_bndry_ex_c (nets, nete, numelems, nu_ratio, output_p_c, output_v_c);
 
-      // Flip the f90 output array, so we can directly compare it with the C one
-      tmp_ar = new real[numelems*nlev*np*np];
-      flip_array_np_np_nlev_nelems (output_p_f90, tmp_ar, numelems);
-      for (int i=0; i<numelems*nlev*np*np; ++i)
+      // Check results
+      for (int i=0; i<np*np*nlev*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_p_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_p_c[i]-output_p_f90[i]) <= 1e-10*std::fabs(output_p_f90[i]) );
       }
-      delete[] tmp_ar;
-
-      tmp_ar = new real[numelems*nlev*2*np*np];
-      flip_array_np_np_ndims_nlev_nelems (output_v_f90, tmp_ar, numelems, dim2d);
-      for (int i=0; i<numelems*nlev*dim2d*np*np; ++i)
+      for (int i=0; i<np*np*nlev*dim2d*numelems; ++i)
       {
-        REQUIRE ( std::fabs(output_v_c[i]-tmp_ar[i]) <= 1e-10*std::fabs(tmp_ar[i]) );
+        REQUIRE ( std::fabs(output_v_c[i]-output_v_f90[i]) <= 1e-10*std::fabs(output_v_f90[i]) );
       }
-      delete[] tmp_ar;
     } // for numRandTests
 
     delete[] input_p;

@@ -80,7 +80,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_SHARE}/ControlParameters.cpp
   ${SRC_SHARE}/Derivative.cpp
   ${SRC_SHARE}/PhysicalConstants.cpp
-  ${SRC_SHARE}/PointersPool.cpp
+  ${SRC_SHARE}/ViewsPool.cpp
   ${SRC_UTILS}/shr_file_mod.F90
   ${SRC_UTILS}/shr_kind_mod.F90
   ${SRC_UTILS}/shr_mpi_mod.F90

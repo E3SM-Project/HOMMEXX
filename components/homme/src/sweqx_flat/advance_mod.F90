@@ -10,14 +10,15 @@ module advance_mod
   implicit none
 
   interface
-    subroutine init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
-                                     rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
-                                     rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
-      use iso_c_binding, only: c_ptr
+    subroutine init_views_pool_c (numelems, elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+                                  rmetdet_cptr, metinv_cptr, mp_cptr,vec_sphere2cart_cptr, spheremp_cptr,&
+                                  rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr) bind (c)
+      use iso_c_binding, only: c_ptr, c_int
+      integer (kind=c_int), intent(in) :: numelems
       type (c_ptr), intent(in) :: elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr
       type (c_ptr), intent(in) :: rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr
       type (c_ptr), intent(in) :: rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr
-    end subroutine init_pointers_pool_c
+    end subroutine init_views_pool_c
 
     subroutine recover_q_c(nets, nete, kmass, n0, numelems, p) bind(c)
       use iso_c_binding,  only: c_ptr, c_int
@@ -725,9 +726,9 @@ contains
     D_cptr                = c_loc(elem_D)
     Dinv_cptr             = c_loc(elem_Dinv)
 
-    call init_pointers_pool_c (elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
-                               rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
-                               rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr)
+    call init_views_pool_c (nelemd, elem_state_ps_cptr, elem_state_p_cptr, elem_state_v_cptr, metdet_cptr,&
+                            rmetdet_cptr, metinv_cptr, mp_cptr, vec_sphere2cart_cptr, spheremp_cptr,&
+                            rspheremp_cptr, hypervisc_cptr, tensor_visc_cptr, D_cptr, Dinv_cptr)
 #endif
 
     allocate(vtens(np,np,2,nlev,nets:nete))

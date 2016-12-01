@@ -3,7 +3,7 @@
 
 #include <dimensions.hpp>
 #include <kinds.hpp>
-#include <PointersPool.hpp>
+#include <ViewsPool.hpp>
 
 #include <fortran_binding.hpp>
 
@@ -187,24 +187,14 @@ void loop_lapl_pre_bndry_ex_c (const int &nets, const int &nete,
                                const int& var_coef, const real& nu_ratio,
                                real*& ptens_ptr, real*& vtens_ptr)
 {
-  // Note: for each dimension, pass 'dim_length, dim_stride'
-  Kokkos::LayoutStride layout_scalar (nelems,nlev*np*np,
-                                      nlev,np*np,
-                                      np,np,
-                                      np,1);
-  Kokkos::LayoutStride layout_vector (nelems, nlev*2*np*np,
-                                      nlev,   2*np*np,
-                                      2,      np*np,
-                                      np,     np,
-                                      np,     1);
+  HommeView4D<KMU> ptens           (ptens_ptr,         np, np, nlev, nelems);
+  HommeView5D<KMU> vtens           (vtens_ptr,         np, np, 2, nlev, nelems);
+  HommeView4D<KMM> T_bh            ("T_bh",            np, np, nlev, nelems);
+  HommeView5D<KMM> elem_state_v_n0 ("elem_state_v_n0", np, np, 2, nlev, nelems);
 
-  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
-  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh",    layout_scalar);
-
-  Kokkos::View<real*[np][np]>                      elem_state_ps (get_pointers_pool_c()->elem_state_ps, nelems);
-  Kokkos::View<real*[timelevels][nlev][np][np]>    elem_state_p  (get_pointers_pool_c()->elem_state_p, nelems);
-  Kokkos::View<real*[timelevels][nlev][2][np][np]> elem_state_v  (get_pointers_pool_c()->elem_state_v, nelems);
+  HommeView3D<KMU> elem_state_ps = get_views_pool_c()->get_elem_state_ps();
+  HommeView5D<KMU> elem_state_p  = get_views_pool_c()->get_elem_state_p();
+  HommeView6D<KMU> elem_state_v  = get_views_pool_c()->get_elem_state_v();
 
   Kokkos::parallel_for(
     Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
@@ -221,15 +211,15 @@ void loop_lapl_pre_bndry_ex_c (const int &nets, const int &nete,
           {
             for (int jgp=0; jgp<np; ++jgp)
             {
-                T_bh (ielem, ilevel,igp,jgp) = elem_state_p(ielem,n0-1,ilevel,igp,jgp) + elem_state_ps(ielem,igp,jgp);
+                T_bh (igp, jgp, ilevel, ielem) = elem_state_p(igp,jgp,ilevel,n0-1,ielem) + elem_state_ps(igp,jgp,ielem);
+                elem_state_v_n0(igp, jgp, 0, ilevel, ielem) = elem_state_v(igp, jgp, 0, ilevel, n0-1, ielem);
+                elem_state_v_n0(igp, jgp, 1, ilevel, ielem) = elem_state_v(igp, jgp, 1, ilevel, n0-1, ielem);
             }
           }
         }
       );
     }
   );
-
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> elem_state_v_n0 = Kokkos::subview (elem_state_v, Kokkos::ALL(), n0-1, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
 
   laplace_sphere_wk_kokkos  (nets-1, nete, nelems, var_coef, T_bh, ptens);
   vlaplace_sphere_wk_kokkos (nets-1, nete, nelems, var_coef, &nu_ratio, elem_state_v_n0, vtens);
@@ -239,23 +229,12 @@ void loop_lapl_post_bndry_ex_c (const int &nets, const int &nete,
                                 const int &nelems,const real& nu_ratio,
                                 real*& ptens_ptr, real*& vtens_ptr)
 {
-  // Note: for each dimension, pass 'dim_length, dim_stride'
-  Kokkos::LayoutStride layout_scalar (nelems,nlev*np*np,
-                                      nlev,np*np,
-                                      np,np,
-                                      np,1);
-  Kokkos::LayoutStride layout_vector (nelems, nlev*2*np*np,
-                                      nlev,   2*np*np,
-                                      2,      np*np,
-                                      np,     np,
-                                      np,     1);
+  HommeView4D<KMU> ptens (ptens_ptr, np, np, nlev, nelems);
+  HommeView5D<KMU> vtens (vtens_ptr, np, np, 2, nlev, nelems);
+  HommeView4D<KMM> T_bh  ("T_bh",    np, np, nlev, nelems);
+  HommeView5D<KMM> v_bh  ("v_bh",    np, np, 2, nlev, nelems);
 
-  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> ptens (ptens_ptr, layout_scalar);
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> vtens (vtens_ptr, layout_vector);
-  Kokkos::View<real*[nlev][np][np],    Kokkos::LayoutStride> T_bh  ("T_bh",    layout_scalar);
-  Kokkos::View<real*[nlev][2][np][np], Kokkos::LayoutStride> v_bh  ("v_bh",    layout_vector);
-
-  Kokkos::View<real*[np][np]> rspheremp (get_pointers_pool_c()->rspheremp, nelems);
+  HommeView3D<KMU> rspheremp = get_views_pool_c()->get_rspheremp();
 
   Kokkos::parallel_for(
     Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
@@ -272,9 +251,9 @@ void loop_lapl_post_bndry_ex_c (const int &nets, const int &nete,
           {
             for (int jgp=0; jgp<np; ++jgp)
             {
-                T_bh (ielem, ilevel, igp, jgp) = rspheremp (ielem, igp, jgp) * ptens(ielem, ilevel, igp, jgp);
-                v_bh (ielem, ilevel, 0, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 0, igp, jgp);
-                v_bh (ielem, ilevel, 1, igp, jgp) = rspheremp (ielem, igp, jgp) * vtens(ielem, ilevel, 1, igp, jgp);
+                T_bh (igp, jgp, ilevel, ielem)    = rspheremp (igp, jgp, ielem) * ptens(igp, jgp, ilevel, ielem);
+                v_bh (igp, jgp, 0, ilevel, ielem) = rspheremp (igp, jgp, ielem) * vtens(igp, jgp, 0, ilevel, ielem);
+                v_bh (igp, jgp, 1, ilevel, ielem) = rspheremp (igp, jgp, ielem) * vtens(igp, jgp, 1, ilevel, ielem);
             }
           }
         }
