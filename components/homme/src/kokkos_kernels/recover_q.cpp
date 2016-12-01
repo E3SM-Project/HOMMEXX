@@ -394,5 +394,5 @@ void copy_timelevels_c(const int &nets, const int &nete,
 }
 
 #endif
-}
+}  // extern "C"
 }  // namespace Homme
