@@ -1,4 +1,4 @@
-sweqx_flat_setup()
+sweqx_flat_setup(1)
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE

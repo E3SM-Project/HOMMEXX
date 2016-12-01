@@ -2,7 +2,9 @@
 # holding source files needed for building the library
 # and executable sweqx_flat.
 
-macro(sweqx_flat_setup)
+macro(sweqx_flat_setup FORTRAN_LOOPS)
+
+MESSAGE(STATUS "Executing sweqx_flat_setup -------------")
 
 SET(TARGET_DIR        ${HOMME_SOURCE_DIR}/src/sweqx_flat)
 SET(SRC_BASE          ${HOMME_SOURCE_DIR}/src)
@@ -98,46 +100,26 @@ SET(SWEQX_FLAT_UT_SRCS
   ${UNIT_TEST_DIR}/advance_rk.cpp
   ${TARGET_DIR}/advance_mod.F90
   ${TARGET_DIR}/shallow_water_mod.F90
+  ${TARGET_DIR}/edge_mod.F90
+  ${TARGET_DIR}/bndry_mod.F90
+  ${TARGET_DIR}/derivative_mod.F90
+  ${TARGET_DIR}/viscosity_mod.F90
+  ${TARGET_DIR}/types_mod.F90
   ${SWEQX_FLAT_DEPS}
 )
 
 SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
-# Set up defaults
-IF (NOT SWEQX_FLAT_NP)
-  SET (SWEQX_FLAT_NP 8)
-ENDIF ()
-IF (NOT SWEQX_FLAT_PLEV)
-  SET (SWEQX_FLAT_PLEV 4)
-ENDIF ()
-IF (NOT SWEQX_FLAT_USE_PIO)
-  SET (SWEQX_FLAT_USE_PIO FALSE)
-ENDIF ()
-IF (NOT SWEQX_FLAT_USE_ENERGY)
-  SET (SWEQX_FLAT_USE_ENERGY FALSE)
-ENDIF ()
-IF (NOT SWEQX_FLAT_NC)
-  SET (SWEQX_FLAT_NC 4)
-ENDIF ()
-IF (NOT QSIZE_D)
-  SET (QSIZE_D 4)
-ENDIF ()
 
 SET(SW_USE_FLAT_ARRAYS TRUE)
 
+IF (${FORTRAN_LOOPS})
+  SET (DONT_USE_KOKKOS TRUE)
+ELSE ()
+  SET (DONT_USE_KOKKOS FALSE)
+ENDIF ()
+
+MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${DONT_USE_KOKKOS}")
+MESSAGE(STATUS "End of executing sweqx_flat_setup ------------")
+
 endmacro(sweqx_flat_setup)
-
-############################################################################
-# createTestExec execName  execType  macroNP macroNC macroPLEV
-#                macroUSE_PIO macroWITH_ENERGY macroQSIZE_D linkLang)
-############################################################################
-
-sweqx_flat_setup()
-createTestExec(sweqx_flat sweqx_flat ${SWEQX_FLAT_NP} ${SWEQX_FLAT_NC} ${SWEQX_FLAT_PLEV} ${SWEQX_FLAT_USE_PIO} ${SWEQX_FLAT_USE_ENERGY} ${QSIZE_D} Fortran)
-
-OPTION(SWEQX_FLAT_TESTS_OPENMP OFF)
-OPTION(SWEQX_FLAT_TESTS_CUDA OFF)
-
-INCLUDE_DIRECTORIES(${SRC_BASE} ${SRC_SHARE} ${SRC_KERNELS_DIR})
-
-cxx_unit_test(sweqx_flat_ut ${SWEQX_FLAT_TESTS_OPENMP} ${SWEQX_FLAT_TESTS_CUDA} "${SWEQX_FLAT_UT_SRCS}")

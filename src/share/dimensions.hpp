@@ -1,12 +1,12 @@
 
+#ifdef HAVE_CONFIG_H
+#include "config.h.c"
+#endif
+
 #ifndef _DIMENSIONS_HPP_
 #define _DIMENSIONS_HPP_
 
 namespace Homme {
-
-#ifdef HAVE_CONFIG_H
-#include "config.h.c"
-#endif
 
 constexpr const int np = NP;
 constexpr const int npsq = np * np;
