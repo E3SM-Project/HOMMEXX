@@ -24,7 +24,7 @@ TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${TRILINOS_INSTALL_DIR}/include
 # Variables required for the configuration
 SET(CONFIG_DEFINES -DPIO_INTERP -DNC=4 -DNP=4 -DPLEV=5 -DQSIZE_D=1 -DTIMING=1 -D_MPI=1 -D_PRESTART=1 -D_WK_GRAD=1 -DHOMME_QUAD_PREC=1 -DSW_USE_FLAT_ARRAYS=1)
 
-SET (UT_DEBUG_FLAGS "-g O0" CACHE STRING "User defined debug flags for unit tests")
+SET (UT_DEBUG_FLAGS "-g" CACHE STRING "User defined debug flags for unit tests")
 SET (UT_RELEASE_FLAGS "-O3" CACHE STRING "User defined release flags for unit tests")
 
 IF (${CMAKE_BUILD_TYPE} MATCHES "DEBUG")
