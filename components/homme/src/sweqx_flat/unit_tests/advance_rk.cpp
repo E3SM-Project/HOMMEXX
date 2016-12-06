@@ -756,17 +756,17 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     data.insert({std::string("s"), s_host.ptr_on_device()});
 
     Dvv_Host dvv_host("dvv", np, np);
-    data.insert(
-        {std::string("deriv_Dvv"), dvv_host.ptr_on_device()});
+    data.insert({std::string("deriv_Dvv"),
+                 dvv_host.ptr_on_device()});
 
     constexpr const int numelems = 1;
     D_Host dinv_host("dinv_host", np, np, dim, dim,
-           numelems);
-    data.insert(
-        {std::string("elem_Dinv"), dinv_host.ptr_on_device()});
+                     numelems);
+    data.insert({std::string("elem_Dinv"),
+                 dinv_host.ptr_on_device()});
 
-    Homme_View_Host<real ***> grad_theory("Gradient Theory", np,
-                             np, dim);
+    Homme_View_Host<real ***> grad_theory("Gradient Theory",
+                                          np, np, dim);
     data.insert({std::string("Gradient Sphere result"),
                  grad_theory.ptr_on_device()});
     input_reader(data, input);
@@ -780,10 +780,11 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     D dinv("dinv", np, np, dim, dim, numelems);
     Kokkos::deep_copy(dinv, dinv_host);
 
-    Vector_Field grad_exper_device("Gradient Exper", np,
-                            np, dim);
+    Vector_Field grad_exper_device("Gradient Exper", np, np,
+                                   dim);
     gradient_sphere_c(0, s, dvv, dinv, grad_exper_device);
-    Vector_Field_Host grad_exper("Gradient Exper", np, np, dim);
+    Vector_Field_Host grad_exper("Gradient Exper", np, np,
+                                 dim);
     Kokkos::deep_copy(grad_exper, grad_exper_device);
 
     for(int j = 0; j < dim; j++) {
@@ -835,16 +836,15 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
     data.insert({std::string("v"), v_host.ptr_on_device()});
 
     Dvv_Host dvv_host("dvv", np, np);
-    data.insert(
-        {std::string("deriv_Dvv"), dvv_host.ptr_on_device()});
+    data.insert({std::string("deriv_Dvv"),
+                 dvv_host.ptr_on_device()});
 
     constexpr const int num_elems = 1;
-    D_Host d_host("d", np, np, dim, dim,
-        num_elems);
-    data.insert({std::string("elem_D"), d_host.ptr_on_device()});
+    D_Host d_host("d", np, np, dim, dim, num_elems);
+    data.insert(
+        {std::string("elem_D"), d_host.ptr_on_device()});
 
-    MetDet_Host rmetdet_host("rmetdet", np, np,
-                   num_elems);
+    MetDet_Host rmetdet_host("rmetdet", np, np, num_elems);
     data.insert({std::string("elem_rmetdet"),
                  rmetdet_host.ptr_on_device()});
 
@@ -867,8 +867,9 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
     Kokkos::deep_copy(rmetdet, rmetdet_host);
 
     Scalar_Field vort_exper_device("Vorticity Exper", np,
-                            np);
-    vorticity_sphere_c(0, v, dvv, d, rmetdet, vort_exper_device);
+                                   np);
+    vorticity_sphere_c(0, v, dvv, d, rmetdet,
+                       vort_exper_device);
     Scalar_Field_Host vort_exper("Vorticity Exper", np, np);
     Kokkos::deep_copy(vort_exper, vort_exper_device);
 
@@ -912,8 +913,7 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    Vector_Field_Host v_host("Velocity", np, np,
-                                     dim);
+    Vector_Field_Host v_host("Velocity", np, np, dim);
     std::map<std::string, real *> data;
     data.insert({std::string("v"), v_host.ptr_on_device()});
 
@@ -935,8 +935,8 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
     data.insert({std::string("elem_metdet"),
                  metdet_host.ptr_on_device()});
 
-    Scalar_Field_Host div_theory("Divergence Theory",
-                                        np, np);
+    Scalar_Field_Host div_theory("Divergence Theory", np,
+                                 np);
     data.insert({std::string("Divergence Sphere result"),
                  div_theory.ptr_on_device()});
     input_reader(data, input);
