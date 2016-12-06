@@ -142,18 +142,51 @@ void loop7_c(const int &nets, const int &nete,
              real *&fcor_ptr, real *&p_ptr, real *&ps_ptr,
              real *&v_ptr, real *&ptens_ptr,
              real *&vtens_ptr) {
-  Dvv dvv(dvv_ptr, np, np);
-  D d(d_ptr, np, np, dim, dim, nelemd);
-  D dinv(dinv_ptr, np, np, dim, dim, nelemd);
-  MetDet metdet(metdet_ptr, np, np, nelemd);
-  MetDet rmetdet(rmetdet_ptr, np, np, nelemd);
-  FCor fcor(fcor_ptr, np, np, nelemd);
-  P p(p_ptr, np, np, nlev, timelevels, nelemd);
-  PS ps(ps_ptr, np, np, nelemd);
-  V v(v_ptr, np, np, dim, nlev, timelevels, nelemd);
-  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
-  VTens vtens(vtens_ptr, np, np, dim, nlev,
+  Dvv_Host dvv_host(dvv_ptr, np, np);
+  Dvv dvv("dvv", np, np);
+  Kokkos::deep_copy(dvv, dvv_host);
+
+  D_Host d_host(d_ptr, np, np, dim, dim, nelemd);
+  D d("d", np, np, dim, dim, nelemd);
+  Kokkos::deep_copy(d, d_host);
+
+  D_Host dinv_host(dinv_ptr, np, np, dim, dim, nelemd);
+  D dinv("dinv", np, np, dim, dim, nelemd);
+  Kokkos::deep_copy(dinv, dinv_host);
+
+  MetDet_Host metdet_host(metdet_ptr, np, np, nelemd);
+  MetDet metdet("metdet", np, np, nelemd);
+  Kokkos::deep_copy(metdet, metdet_host);
+
+  MetDet_Host rmetdet_host(rmetdet_ptr, np, np, nelemd);
+  MetDet rmetdet("rmetdet", np, np, nelemd);
+  Kokkos::deep_copy(rmetdet, rmetdet_host);
+
+  FCor_Host fcor_host(fcor_ptr, np, np, nelemd);
+  FCor fcor("fcor", np, np, nelemd);
+  Kokkos::deep_copy(fcor, fcor_host);
+
+  P_Host p_host(p_ptr, np, np, nlev, timelevels, nelemd);
+  P p("p", np, np, nlev, timelevels, nelemd);
+  Kokkos::deep_copy(p, p_host);
+
+  PS_Host ps_host(ps_ptr, np, np, nelemd);
+  PS ps("ps", np, np, nelemd);
+  Kokkos::deep_copy(ps, ps_host);
+
+  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels, nelemd);
+  V v("Lateral velocity", np, np, dim, nlev, timelevels, nelemd);
+  Kokkos::deep_copy(v, v_host);
+
+  PTens_Host ptens_host(ptens_ptr, np, np, nlev, nete - nets + 1);
+  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  Kokkos::deep_copy(ptens, ptens_host);
+
+  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
               nete - nets + 1);
+  VTens vtens("vtens", np, np, dim, nlev,
+              nete - nets + 1);
+  Kokkos::deep_copy(vtens, vtens_host);
 
   Scalar_Field zeta("Vorticity", np, np);
 
@@ -184,14 +217,11 @@ void loop7_c(const int &nets, const int &nete,
           e(i, j) += p(i, j, k, n0 - 1, ie) + ps(i, j, ie);
         }
       }
-      // Verified ulatlon, pv, and e up to this point
 
-      // grade(np, np, dim)
       Vector_Field grade("Energy Gradient", np, np, dim);
       gradient_sphere_c(ie, e, dvv, dinv, grade);
       vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                          zeta);
-      // Verified grade and zeta up to this point
 
       Vector_Field gradh("Pressure Gradient", np, np, dim);
       Scalar_Field div("PV Divergence", np, np);
@@ -210,7 +240,7 @@ void loop7_c(const int &nets, const int &nete,
         divergence_sphere_c(ie, pv, dvv, metdet, rmetdet,
                             dinv, div);
       }
-      // Verified gradh and div up to this point
+
       // ==============================================
       // Compute velocity
       // tendency terms
@@ -252,6 +282,8 @@ void loop7_c(const int &nets, const int &nete,
       }
     }
   }
+  Kokkos::deep_copy(ptens_host, ptens);
+  Kokkos::deep_copy(vtens_host, vtens);
 }
 
 }  // extern "C"
