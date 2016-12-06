@@ -12,7 +12,7 @@ IF(UNIX AND NOT APPLE)
   TARGET_LINK_LIBRARIES(${targetname} rt)
 ENDIF()
 
-TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${SRC_SHARE};${SRC_BASE};${SRC_KERNELS_DIR};;${UNITTESTER_DIR}")
+TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${SRC_SHARE};${SRC_BASE};${SRC_KERNELS_DIR};${UNITTESTER_DIR}")
 TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${PIO_INCLUDE_DIRS};${UTILS_TIMING_DIR}")
 TARGET_INCLUDE_DIRECTORIES(${targetname} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
 
@@ -24,3 +24,15 @@ TARGET_COMPILE_OPTIONS(${targetname} PUBLIC -Wall -g -O0 ${CONFIG_DEFINES})
 link_to_trilinos(${targetname})
 
 endmacro(cxx_unit_test)
+
+macro(add_input_files target srcdir inputfiles)
+  FOREACH(f ${inputfiles})
+    MESSAGE("Installing ${f} as a custom target")
+    ADD_CUSTOM_TARGET(
+      "${f}"
+      COMMAND ${CMAKE_COMMAND} -E copy "${srcdir}/${f}" "${f}"
+      COMMENT "Copying ${f} for ${target}"
+      )
+    ADD_DEPENDENCIES("${target}" "${f}")
+  ENDFOREACH()
+endmacro(add_input_files)
