@@ -63,9 +63,11 @@ using Homme_Local = Kokkos::View<T, Layout>;
 // Scalar fields are scalar values over the np x np
 // quadrature points
 using Scalar_Field = Homme_Local<real **>;
+using Scalar_Field_Host = Homme_View_Host<real **>;
 
 // Vector fields are vector values over the np x np
 // quadrature points
 using Vector_Field = Homme_Local<real ***>;
+using Vector_Field_Host = Homme_View_Host<real ***>;
 
 }  // namespace Homme
