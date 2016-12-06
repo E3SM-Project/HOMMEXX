@@ -370,12 +370,13 @@ contains
                                       metdet(:, :, :), rmetdet(:, :, :), &
                                       fcor(:, :, :), p(:, :, :, :, :), ps(:, :, :), &
                                       v(:, :, :, :, :, :), &
-                                      ptens(:, :, :, :), vtens(:, :, :, :, :), &
-                                      v1, v2
+                                      ptens(:, :, :, :), vtens(:, :, :, :, :)
 
     real (kind=real_kind) :: ulatlon(np, np, 2), e(np, np), &
                              pv(np, np, 2), grade(np, np, 2), &
                              gradh(np, np, 2), zeta(np, np), div(np, np)
+
+    real (kind=real_kind) :: v1, v2
 
     type(element_t) :: elem
     type(derivative_t) :: deriv
