@@ -12,15 +12,15 @@
 namespace Homme {
 
 extern "C" {
+
 #if 0
-// temporary until we have views in - column major
-// multiplication with right dimensions
+
 #define P_IDX(i, j, k, tl, ie) \
   (i + np * (j + np * (k + nlev * (tl + timelevels * ie))))
 
 void recover_q_c(const int &nets, const int &nete,
                  const int &kmass, const int &n0,
-                 const int &nelems, real *&p) noexcept {
+                 const int &num_elems, real *&p) noexcept {
   if(kmass != -1) {
     for(int ie = nets - 1; ie < nete; ++ie) {
       for(int k = 0; k < nlev; ++k) {
@@ -47,7 +47,7 @@ void recover_q_c(const int &nets, const int &nete,
   (i + np * (j + np * (m + 2 * (n + 2 * ie))))
 
 void contra2latlon_c(const int &nets, const int &nete,
-                     const int &n0, const int &nelems,
+                     const int &n0, const int &num_elems,
                      real *const &D, real *&v) noexcept {
   for(int ie = nets - 1; ie < nete; ++ie) {
     for(int k = 0; k < nlev; k++) {
@@ -70,14 +70,19 @@ void contra2latlon_c(const int &nets, const int &nete,
 
 void recover_q_c(const int &nets, const int &nete,
                  const int &kmass, const int &n0,
-                 const int &nelems, real *&p_ptr) noexcept {
-  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
-      Kokkos::Experimental::Rank<
-          2, Kokkos::Experimental::Iterate::Left,
-          Kokkos::Experimental::Iterate::Left>,
-      Kokkos::IndexType<int> >;
-  P p(p_ptr, np, np, nlev, timelevels, nelems);
+                 const int &num_elems,
+                 real *&p_ptr) noexcept {
   if(kmass != -1) {
+    using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+        Kokkos::Experimental::Rank<
+            2, Kokkos::Experimental::Iterate::Left,
+            Kokkos::Experimental::Iterate::Left>,
+        Kokkos::IndexType<int> >;
+    P_Host p_host(p_ptr, np, np, nlev, timelevels,
+                  num_elems);
+    /* TODO: Improve name of p and it's label */
+    P p("p", np, np, nlev, timelevels, num_elems);
+    Kokkos::deep_copy(p, p_host);
     try {
       Kokkos::Experimental::md_parallel_for(
           RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -98,13 +103,12 @@ void recover_q_c(const int &nets, const int &nete,
       std::cout << "Unknown exception" << std::endl;
       std::abort();
     }
+    Kokkos::deep_copy(p_host, p);
   }
 }
 
-#if 1
-// kokkos version of the loop
 void contra2latlon_c(const int &nets, const int &nete,
-                     const int &n0, const int &nelems,
+                     const int &n0, const int &num_elems,
                      real *const &d_ptr,
                      real *&v_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -112,8 +116,16 @@ void contra2latlon_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
-  D d(d_ptr, np, np, dim, dim, nelems);
+  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
+                num_elems);
+  V v("Lateral velocity", np, np, dim, nlev, timelevels,
+      num_elems);
+  Kokkos::deep_copy(v, v_host);
+
+  /* TODO: Improve name of d and it's label */
+  D_Host d_host(d_ptr, np, np, dim, dim, num_elems);
+  D d("d", np, np, dim, dim, num_elems);
+  Kokkos::deep_copy(d, d_host);
 
   try {
     Kokkos::Experimental::md_parallel_for(
@@ -138,45 +150,8 @@ void contra2latlon_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+  Kokkos::deep_copy(v_host, v);
 }
-#else
-void contra2latlon_c(const int &nets, const int &nete,
-                     const int &n0, const int &nelems,
-                     real *const &d_ptr,
-                     real *&v_ptr) noexcept {
-  constexpr const int dim = 2;
-  using V =
-      Kokkos::View<real * [timelevels][nlev][dim][np][np],
-                   Kokkos::MemoryUnmanaged>;
-  V v(v_ptr, nelems);
-  using D = Kokkos::View<real * [2][2][np][np],
-                         Kokkos::MemoryUnmanaged>;
-  D d(d_ptr, nelems);
-  // To tell MD that dim in velocity is not the same as dim
-  // for 2x2 matrices.
-  const int ne = nelems;
-#pragma vector always aligned
-  for(int ie = 0; ie < ne; ++ie) {
-#pragma vector always aligned
-    for(int k = 0; k < nlev; ++k) {
-#pragma vector always aligned
-      for(int j = 0; j < np; ++j) {
-#pragma vector always aligned
-        for(int i = 0; i < np; ++i) {
-          real v1 = v(ie, n0 - 1, k, 0, j, i);
-          real v2 = v(ie, n0 - 1, k, 1, j, i);
-          v(ie, n0 - 1, k, 0, j, i) =
-              d(ie, 0, 0, j, i) * v1 +
-              d(ie, 1, 0, j, i) * v2;
-          v(ie, n0 - 1, k, 1, j, i) =
-              d(ie, 0, 1, j, i) * v1 +
-              d(ie, 1, 1, j, i) * v2;
-        }
-      }
-    }
-  }
-}
-#endif
 
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
@@ -184,17 +159,32 @@ extern real nu_s FORTRAN_VAR(control_mod, nu_s);
 
 /* TODO: Give this a better name */
 void add_hv_c(const int &nets, const int &nete,
-              const int &nelems, real *const &spheremp_ptr,
-              real *&ptens_ptr, real *&vtens_ptr) noexcept {
+              const int &num_elems,
+              real *const &sphere_mp_ptr, real *&ptens_ptr,
+              real *&vtens_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
       Kokkos::Experimental::Rank<
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  SphereMP spheremp(spheremp_ptr, np, np, nelems);
-  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
-  VTens vtens(vtens_ptr, np, np, dim, nlev,
-              nete - nets + 1);
+  /* TODO: Improve name of sphere_mp and it's label */
+  Sphere_MP_Host sphere_mp_host(sphere_mp_ptr, np, np,
+                                num_elems);
+  Sphere_MP sphere_mp("sphere_mp", np, np, num_elems);
+  Kokkos::deep_copy(sphere_mp, sphere_mp_host);
+
+  /* TODO: Improve name of ptens and it's label */
+  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
+                        nete - nets + 1);
+  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  Kokkos::deep_copy(ptens, ptens_host);
+
+  /* TODO: Improve name of vtens and it's label */
+  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
+                        nete - nets + 1);
+  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  Kokkos::deep_copy(vtens, vtens_host);
+
   real _nu = nu;
   real _nu_s = nu_s;
   try {
@@ -205,12 +195,12 @@ void add_hv_c(const int &nets, const int &nete,
             for(int i = 0; i < np; i++) {
               ptens(i, j, k, ie - nets + 1) =
                   -_nu_s * ptens(i, j, k, ie - nets + 1) /
-                  spheremp(i, j, ie);
+                  sphere_mp(i, j, ie);
               for(int h = 0; h < dim; h++) {
                 vtens(i, j, h, k, ie - nets + 1) =
                     -_nu *
                     vtens(i, j, h, k, ie - nets + 1) /
-                    spheremp(i, j, ie);
+                    sphere_mp(i, j, ie);
               }
             }
           }
@@ -222,19 +212,25 @@ void add_hv_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+  Kokkos::deep_copy(ptens_host, ptens);
+  Kokkos::deep_copy(vtens_host, vtens);
 }
 
 /* TODO: Give this a better name */
 void recover_dpq_c(const int &nets, const int &nete,
                    const int &kmass, const int &n0,
-                   const int &numelems, real *&p_ptr) {
-  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
-      Kokkos::Experimental::Rank<
-          2, Kokkos::Experimental::Iterate::Left,
-          Kokkos::Experimental::Iterate::Left>,
-      Kokkos::IndexType<int> >;
-  P p(p_ptr, np, np, nlev, timelevels, numelems);
+                   const int &num_elems, real *&p_ptr) {
   if(kmass != -1) {
+    using RangePolicy = Kokkos::Experimental::MDRangePolicy<
+        Kokkos::Experimental::Rank<
+            2, Kokkos::Experimental::Iterate::Left,
+            Kokkos::Experimental::Iterate::Left>,
+        Kokkos::IndexType<int> >;
+    /* TODO: Improve name of p and it's label */
+    P_Host p_host(p_ptr, np, np, nlev, timelevels,
+                  num_elems);
+    P p("p", np, np, nlev, timelevels, num_elems);
+    Kokkos::deep_copy(p, p_host);
     try {
       Kokkos::Experimental::md_parallel_for(
           RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -255,12 +251,13 @@ void recover_dpq_c(const int &nets, const int &nete,
       std::cout << "Unknown exception" << std::endl;
       std::abort();
     }
+    Kokkos::deep_copy(p_host, p);
   }
 }
 
 void weighted_rhs_c(const int &nets, const int &nete,
-                    const int &numelems,
-                    real *const &rspheremp_ptr,
+                    const int &num_elems,
+                    real *const &rsphere_mp_ptr,
                     real *const &dinv_ptr, real *&ptens_ptr,
                     real *&vtens_ptr) noexcept {
   using RangePolicy = Kokkos::Experimental::MDRangePolicy<
@@ -268,11 +265,29 @@ void weighted_rhs_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  SphereMP rspheremp(rspheremp_ptr, np, np, numelems);
-  D dinv(dinv_ptr, np, np, dim, dim, numelems);
-  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
-  VTens vtens(vtens_ptr, np, np, dim, nlev,
-              nete - nets + 1);
+  /* TODO: Improve name of rsphere_mp and it's label */
+  Sphere_MP_Host rsphere_mp_host(rsphere_mp_ptr, np, np,
+                                 num_elems);
+  Sphere_MP rsphere_mp("rsphere_mp", np, np, num_elems);
+  Kokkos::deep_copy(rsphere_mp, rsphere_mp_host);
+
+  /* TODO: Improve name of dinv and it's label */
+  D_Host dinv_host(dinv_ptr, np, np, dim, dim, num_elems);
+  D dinv("dinv", np, np, dim, dim, num_elems);
+  Kokkos::deep_copy(dinv, dinv_host);
+
+  /* TODO: Improve name of ptens and it's label */
+  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
+                        nete - nets + 1);
+  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  Kokkos::deep_copy(ptens, ptens_host);
+
+  /* TODO: Improve name of vtens and it's label */
+  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
+                        nete - nets + 1);
+  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  Kokkos::deep_copy(vtens, vtens_host);
+
   try {
     Kokkos::Experimental::md_parallel_for(
         RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -280,12 +295,12 @@ void weighted_rhs_c(const int &nets, const int &nete,
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
               ptens(i, j, k, ie - nets + 1) *=
-                  rspheremp(i, j, ie);
+                  rsphere_mp(i, j, ie);
               real vtens1 =
-                  rspheremp(i, j, ie) *
+                  rsphere_mp(i, j, ie) *
                   vtens(i, j, 0, k, ie - nets + 1);
               real vtens2 =
-                  rspheremp(i, j, ie) *
+                  rsphere_mp(i, j, ie) *
                   vtens(i, j, 1, k, ie - nets + 1);
               for(int h = 0; h < dim; h++) {
                 vtens(i, j, h, k, ie - nets + 1) =
@@ -302,11 +317,13 @@ void weighted_rhs_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+  Kokkos::deep_copy(ptens_host, ptens);
+  Kokkos::deep_copy(vtens_host, vtens);
 }
 
 void rk_stage_c(const int &nets, const int &nete,
                 const int &n0, const int &np1, const int &s,
-                const int &rkstages, const int &numelems,
+                const int &rkstages, const int &num_elems,
                 real *&v_ptr, real *&p_ptr,
                 real *const &alpha0_ptr,
                 real *const &alpha_ptr,
@@ -317,13 +334,38 @@ void rk_stage_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
-  P p(p_ptr, np, np, nlev, timelevels, numelems);
-  Alpha alpha0(alpha0_ptr, rkstages);
-  Alpha alpha(alpha_ptr, rkstages);
-  PTens ptens(ptens_ptr, np, np, nlev, nete - nets + 1);
-  VTens vtens(vtens_ptr, np, np, dim, nlev,
-              nete - nets + 1);
+  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
+                num_elems);
+  V v("Lateral velocity", np, np, dim, nlev, timelevels,
+      num_elems);
+  Kokkos::deep_copy(v, v_host);
+
+  /* TODO: Improve name of p and it's label */
+  P_Host p_host(p_ptr, np, np, nlev, timelevels, num_elems);
+  P p("p", np, np, nlev, timelevels, num_elems);
+  Kokkos::deep_copy(p, p_host);
+
+  /* TODO: Improve name of alpha0 and it's label */
+  Alpha_Host alpha0_host(alpha0_ptr, rkstages);
+  Alpha alpha0("alpha0", rkstages);
+  Kokkos::deep_copy(alpha0, alpha0_host);
+
+  /* TODO: Improve name of alpha and it's label */
+  Alpha_Host alpha_host(alpha_ptr, rkstages);
+  Alpha alpha("alpha", rkstages);
+  Kokkos::deep_copy(alpha, alpha_host);
+
+  /* TODO: Improve name of ptens and it's label */
+  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
+                        nete - nets + 1);
+  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  Kokkos::deep_copy(ptens, ptens_host);
+
+  /* TODO: Improve name of vtens and it's label */
+  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
+                        nete - nets + 1);
+  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  Kokkos::deep_copy(vtens, vtens_host);
 
   try {
     Kokkos::Experimental::md_parallel_for(
@@ -352,10 +394,12 @@ void rk_stage_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+  Kokkos::deep_copy(p_host, p);
+  Kokkos::deep_copy(v_host, v);
 }
 
 void copy_timelevels_c(const int &nets, const int &nete,
-                       const int &numelems,
+                       const int &num_elems,
                        const int &n_src, const int &n_dist,
                        real *&p_ptr,
                        real *&v_ptr) noexcept {
@@ -364,10 +408,17 @@ void copy_timelevels_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  // P p(p_ptr, np, np,    nlev, timelevels, nelems);
-  // V v(v_ptr, np, np, dim, nlev, timelevels, nelems);
-  V v(v_ptr, np, np, dim, nlev, timelevels, numelems);
-  P p(p_ptr, np, np, nlev, timelevels, numelems);
+  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
+                num_elems);
+  V v("Lateral velocity", np, np, dim, nlev, timelevels,
+      num_elems);
+  Kokkos::deep_copy(v, v_host);
+
+  /* TODO: Improve name of p and it's label */
+  P_Host p_host(p_ptr, np, np, nlev, timelevels, num_elems);
+  P p("p", np, np, nlev, timelevels, num_elems);
+  Kokkos::deep_copy(p, p_host);
+
   try {
     Kokkos::Experimental::md_parallel_for(
         RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
@@ -391,6 +442,8 @@ void copy_timelevels_c(const int &nets, const int &nete,
               << std::endl;
     std::abort();
   }
+  Kokkos::deep_copy(v_host, v);
+  Kokkos::deep_copy(p_host, p);
 }
 
 #endif

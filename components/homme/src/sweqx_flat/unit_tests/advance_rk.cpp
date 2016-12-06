@@ -42,11 +42,11 @@ void contra2latlon_c(const int &nets, const int &nete,
                      real *const &D, real *&v);
 
 void add_hv_f90(const int &nets, const int &nete,
-                const int &nelems, real *const &spheremp,
+                const int &nelems, real *const &sphere_mp,
                 real *&ptens, real *&vtens);
 
 void add_hv_c(const int &nets, const int &nete,
-              const int &nelems, real *const &spheremp,
+              const int &nelems, real *const &sphere_mp,
               real *&ptens, real *&vtens);
 
 void recover_dpq_f90(const int &nets, const int &nete,
@@ -59,13 +59,13 @@ void recover_dpq_c(const int &nets, const int &nete,
 
 void weighted_rhs_f90(const int &nets, const int &nete,
                       const int &numelems,
-                      real *const &rspheremp_ptr,
+                      real *const &rsphere_mp_ptr,
                       real *const &dinv_ptr,
                       real *&ptens_ptr, real *&vtens_ptr);
 
 void weighted_rhs_c(const int &nets, const int &nete,
                     const int &numelems,
-                    real *const &rspheremp_ptr,
+                    real *const &rsphere_mp_ptr,
                     real *const &dinv_ptr, real *&ptens_ptr,
                     real *&vtens_ptr);
 
@@ -113,19 +113,19 @@ namespace Homme {
 template <typename ScalarQP>
 void gradient_sphere_c(int ie, const ScalarQP &s,
                        const Dvv &dvv, const D &dinv,
-                       VectorField &grad);
+                       Vector_Field &grad);
 
-void vorticity_sphere_c(int ie, const VectorField &v,
+void vorticity_sphere_c(int ie, const Vector_Field &v,
                         const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
-                        ScalarField &grad);
+                        Scalar_Field &grad);
 
-void divergence_sphere_c(int ie, const VectorField &v,
+void divergence_sphere_c(int ie, const Vector_Field &v,
                          const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
                          const D &dinv,
-                         ScalarField &divergence);
+                         Scalar_Field &divergence);
 }
 
 template <typename rngAlg, typename dist, typename number>
@@ -394,8 +394,8 @@ TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
-  constexpr const int spheremp_len = np * np * numelems;
-  real *spheremp = new real[spheremp_len];
+  constexpr const int sphere_mp_len = np * np * numelems;
+  real *sphere_mp = new real[sphere_mp_len];
 
   constexpr const int numRandTests = 10;
 
@@ -433,15 +433,15 @@ TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
         vtens_exper[j] = vtens_theory[j];
       }
 
-      std::uniform_real_distribution<real> spheremp_dist(
+      std::uniform_real_distribution<real> sphere_mp_dist(
           0, 1.0);
-      for(int j = 0; j < spheremp_len; j++) {
-        spheremp[j] = spheremp_dist(engine);
+      for(int j = 0; j < sphere_mp_len; j++) {
+        sphere_mp[j] = sphere_mp_dist(engine);
       }
 
-      add_hv_f90(nets, nete, numelems, spheremp,
+      add_hv_f90(nets, nete, numelems, sphere_mp,
                  ptens_theory, vtens_theory);
-      add_hv_c(nets, nete, numelems, spheremp, ptens_exper,
+      add_hv_c(nets, nete, numelems, sphere_mp, ptens_exper,
                vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
         if(ptens_exper[j] != ptens_theory[j]) {
@@ -459,15 +459,15 @@ TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
       delete[] vtens_exper;
     }
   }
-  delete[] spheremp;
+  delete[] sphere_mp;
 }
 
 TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 10;
   constexpr const int dim = 2;
 
-  constexpr const int rspheremp_len = np * np * numelems;
-  real *rspheremp = new real[rspheremp_len];
+  constexpr const int rsphere_mp_len = np * np * numelems;
+  real *rsphere_mp = new real[rsphere_mp_len];
   constexpr const int dinv_len =
       np * np * dim * dim * numelems;
   real *dinv = new real[dinv_len];
@@ -493,7 +493,7 @@ TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
       real *vtens_exper = new real[vtens_len];
 
       genRandArray(
-          rspheremp, rspheremp_len, engine,
+          rsphere_mp, rsphere_mp_len, engine,
           std::uniform_real_distribution<real>(0, 1.0));
       genRandArray(
           dinv, dinv_len, engine,
@@ -504,9 +504,9 @@ TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
       genRandTheoryExper(
           vtens_theory, vtens_exper, vtens_len, engine,
           std::uniform_real_distribution<real>(0, 1.0));
-      weighted_rhs_f90(nets, nete, numelems, rspheremp,
+      weighted_rhs_f90(nets, nete, numelems, rsphere_mp,
                        dinv, ptens_theory, vtens_theory);
-      weighted_rhs_c(nets, nete, numelems, rspheremp, dinv,
+      weighted_rhs_c(nets, nete, numelems, rsphere_mp, dinv,
                      ptens_exper, vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
         REQUIRE(ptens_exper[j] == ptens_theory[j]);
@@ -522,7 +522,7 @@ TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
     }
   }
 
-  delete[] rspheremp;
+  delete[] rsphere_mp;
   delete[] dinv;
 }
 
@@ -751,7 +751,7 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    ScalarField s("Scalars", grad_np, grad_np);
+    Scalar_Field s("Scalars", grad_np, grad_np);
     std::map<std::string, real *> data;
     data.insert({std::string("s"), s.ptr_on_device()});
 
@@ -768,14 +768,14 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     data.insert(
         {std::string("elem_Dinv"), dinv.ptr_on_device()});
 
-    VectorField grad_theory("Gradient Theory", grad_np,
-                            grad_np, dim);
+    Vector_Field grad_theory("Gradient Theory", grad_np,
+                             grad_np, dim);
     data.insert({std::string("Gradient Sphere result"),
                  grad_theory.ptr_on_device()});
     input_reader(data, input);
 
-    VectorField grad_exper("Gradient Exper", grad_np,
-                           grad_np, dim);
+    Vector_Field grad_exper("Gradient Exper", grad_np,
+                            grad_np, dim);
     gradient_sphere_c(0, s, dvv, dinv, grad_exper);
 
     for(int j = 0; j < dim; j++) {
@@ -822,7 +822,7 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    VectorField v("Velocity", vort_np, vort_np, dim);
+    Vector_Field v("Velocity", vort_np, vort_np, dim);
     std::map<std::string, real *> data;
     data.insert({std::string("v"), v.ptr_on_device()});
 
@@ -844,14 +844,14 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
     data.insert({std::string("elem_rmetdet"),
                  rmetdet.ptr_on_device()});
 
-    ScalarField vort_theory("Vorticity Theory", vort_np,
-                            vort_np);
+    Scalar_Field vort_theory("Vorticity Theory", vort_np,
+                             vort_np);
     data.insert({std::string("Vorticity Sphere result"),
                  vort_theory.ptr_on_device()});
     input_reader(data, input);
 
-    ScalarField vort_exper("Vorticity Exper", vort_np,
-                           vort_np);
+    Scalar_Field vort_exper("Vorticity Exper", vort_np,
+                            vort_np);
     vorticity_sphere_c(0, v, dvv, d, rmetdet, vort_exper);
 
     for(int k = 0; k < vort_np; k++) {
@@ -892,59 +892,69 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
     std::ifstream input(testinput);
     REQUIRE(input);
     input_reader(intparams, input);
+    REQUIRE(np == np);
 
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    VectorField v("Velocity", div_np, div_np, dim);
+    Homme_View_Host<real ***> v_host("Velocity", np, np,
+                                     dim);
     std::map<std::string, real *> data;
-    data.insert({std::string("v"), v.ptr_on_device()});
+    data.insert({std::string("v"), v_host.ptr_on_device()});
 
-    const int Dvv_len = div_np * div_np;
-    Dvv dvv(new real[Dvv_len], div_np, div_np);
-    data.insert(
-        {std::string("deriv_Dvv"), dvv.ptr_on_device()});
+    Dvv_Host dvv_host("dvv", np, np);
+    data.insert({std::string("deriv_Dvv"),
+                 dvv_host.ptr_on_device()});
 
     constexpr const int numelems = 1;
-    const int Dinv_len =
-        div_np * div_np * dim * dim * numelems;
-    D dinv(new real[Dinv_len], div_np, div_np, dim, dim,
-           numelems);
-    data.insert(
-        {std::string("elem_Dinv"), dinv.ptr_on_device()});
+    D_Host dinv_host("dinv_host", np, np, dim, dim,
+                     numelems);
+    data.insert({std::string("elem_Dinv"),
+                 dinv_host.ptr_on_device()});
 
-    const int metdet_len = div_np * div_np * numelems;
-    MetDet rmetdet(new real[metdet_len], div_np, div_np,
-                   numelems);
+    MetDet_Host rmetdet_host("rmetdet", np, np, numelems);
     data.insert({std::string("elem_rmetdet"),
-                 rmetdet.ptr_on_device()});
+                 rmetdet_host.ptr_on_device()});
 
-    MetDet metdet(new real[metdet_len], div_np, div_np,
-                  numelems);
+    MetDet_Host metdet_host("metdet", np, np, numelems);
     data.insert({std::string("elem_metdet"),
-                 metdet.ptr_on_device()});
+                 metdet_host.ptr_on_device()});
 
-    ScalarField div_theory("Divergence Theory", div_np,
-                           div_np);
+    Homme_View_Host<real **> div_theory("Divergence Theory",
+                                        np, np);
     data.insert({std::string("Divergence Sphere result"),
                  div_theory.ptr_on_device()});
     input_reader(data, input);
 
-    ScalarField div_exper("Divergence Exper", div_np,
-                          div_np);
+    Vector_Field v("Velocity", np, np, dim);
+    Kokkos::deep_copy(v, v_host);
+    Dvv dvv("dvv", np, np);
+    Kokkos::deep_copy(dvv, dvv_host);
+    D dinv("dinv", np, np, dim, dim, numelems);
+    Kokkos::deep_copy(dinv, dinv_host);
+    MetDet metdet("metdet", np, np, numelems);
+    Kokkos::deep_copy(metdet, metdet_host);
+
+    MetDet rmetdet("rmetdet", np, np, numelems);
+    Kokkos::deep_copy(rmetdet, rmetdet_host);
+
+    Scalar_Field div_exper("Divergence Exper", np, np);
     divergence_sphere_c(0, v, dvv, metdet, rmetdet, dinv,
                         div_exper);
+    Homme_View_Host<real **> div_exper_host(
+        "Divergence Exper", np, np);
+    Kokkos::deep_copy(div_exper_host, div_exper);
 
-    for(int k = 0; k < div_np; k++) {
-      for(int l = 0; l < div_np; l++) {
+    for(int k = 0; k < np; k++) {
+      for(int l = 0; l < np; l++) {
         if(div_theory(l, k) == 0.0) {
           /* Check the absolute error instead of the
            * relative error
            */
-          REQUIRE(std::fabs(div_exper(l, k)) <
+          REQUIRE(std::fabs(div_exper_host(l, k)) <
                   std::numeric_limits<real>::epsilon());
         } else {
-          REQUIRE(std::fabs(div_exper(l, k) -
+          REQUIRE(std::fabs(div_exper_host(l, k) -
                             div_theory(l, k)) <
                   std::fabs(
                       4.0 *
@@ -953,9 +963,5 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
         }
       }
     }
-    delete[] dvv.ptr_on_device();
-    delete[] dinv.ptr_on_device();
-    delete[] rmetdet.ptr_on_device();
-    delete[] metdet.ptr_on_device();
   }
 }

@@ -14,10 +14,10 @@ constexpr const real rrearth = 1.0 / rearth;
 template <typename ScalarQP>
 void gradient_sphere_c(int ie, const ScalarQP &s,
                        const Dvv &dvv, const D &dinv,
-                       VectorField &grad) {
-  HommeLocal<real *> dsd("Velocity Spatial Derivatives",
-                         dim);
-  HommeLocal<real ***> v("Velocity", np, np, dim);
+                       Vector_Field &grad) {
+  Homme_Local<real *> dsd("Velocity Spatial Derivatives",
+                          dim);
+  Homme_Local<real ***> v("Velocity", np, np, dim);
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int k = 0; k < dim; k++) {
@@ -41,20 +41,16 @@ void gradient_sphere_c(int ie, const ScalarQP &s,
   }
 }
 
-template void gradient_sphere_c(int, const ScalarField &,
-                                const Dvv &, const D &,
-                                VectorField &);
-
-void vorticity_sphere_c(int ie, const VectorField &v,
+void vorticity_sphere_c(int ie, const Vector_Field &v,
                         const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
-                        ScalarField &vorticity) {
-  HommeLocal<real *> dvd("Velocity Spatial Derivatives",
-                         dim);
-  HommeLocal<real ***> vco("buffer for metric adjustments",
-                           np, np, dim);
-  HommeLocal<real **> vtemp("buffer for performance", np,
-                            np);
+                        Scalar_Field &vorticity) {
+  Homme_Local<real *> dvd("Velocity Spatial Derivatives",
+                          dim);
+  Homme_Local<real ***> vco("buffer for metric adjustments",
+                            np, np, dim);
+  Homme_Local<real **> vtemp("buffer for performance", np,
+                             np);
 
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
@@ -87,17 +83,17 @@ void vorticity_sphere_c(int ie, const VectorField &v,
   }
 }
 
-void divergence_sphere_c(int ie, const VectorField &v,
+void divergence_sphere_c(int ie, const Vector_Field &v,
                          const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
                          const D &dinv,
-                         ScalarField &divergence) {
-  HommeLocal<real *> dvd("Positional Velocity Derivatives",
-                         dim);
-  HommeLocal<real ***> gv("Contravariant Form", np, np,
+                         Scalar_Field &divergence) {
+  Homme_Local<real *> dvd("Positional Velocity Derivatives",
                           dim);
-  HommeLocal<real **> vvtemp(
+  Homme_Local<real ***> gv("Contravariant Form", np, np,
+                           dim);
+  Homme_Local<real **> vvtemp(
       "Divergence Performance Buffer", np, np);
 
   for(int j = 0; j < np; j++) {
@@ -156,7 +152,7 @@ void loop7_c(const int &nets, const int &nete,
   VTens vtens(vtens_ptr, np, np, dim, nlev,
               nete - nets + 1);
 
-  ScalarField zeta("Vorticity", np, np);
+  Scalar_Field zeta("Vorticity", np, np);
 
   enum {
     TRACERADV_UGRADQ = 0,
@@ -165,9 +161,9 @@ void loop7_c(const int &nets, const int &nete,
 
   for(int ie = nets - 1; ie < nete; ++ie) {
     for(int k = 0; k < nlev; ++k) {
-      VectorField ulatlon("ulatlon", np, np, dim);
-      ScalarField e("Energy", np, np);
-      VectorField pv("PV", np, np, dim);
+      Vector_Field ulatlon("ulatlon", np, np, dim);
+      Scalar_Field e("Energy", np, np);
+      Vector_Field pv("PV", np, np, dim);
 
       for(int j = 0; j < np; ++j) {
         for(int i = 0; i < np; ++i) {
@@ -188,14 +184,14 @@ void loop7_c(const int &nets, const int &nete,
       // Verified ulatlon, pv, and e up to this point
 
       // grade(np, np, dim)
-      VectorField grade("Energy Gradient", np, np, dim);
+      Vector_Field grade("Energy Gradient", np, np, dim);
       gradient_sphere_c(ie, e, dvv, dinv, grade);
       vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                          zeta);
       // Verified grade and zeta up to this point
 
-      VectorField gradh("Pressure Gradient", np, np, dim);
-      ScalarField div("PV Divergence", np, np);
+      Vector_Field gradh("Pressure Gradient", np, np, dim);
+      Scalar_Field div("PV Divergence", np, np);
       if(tracer_advection_formulation == TRACERADV_UGRADQ) {
         auto p_slice = Kokkos::subview(
             p, std::make_pair(0, np), std::make_pair(0, np),
