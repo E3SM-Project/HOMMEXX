@@ -44,11 +44,12 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c_impl(
   }
 }
 
-/* This version should never be called from within a Kokkos functor */
+/* This version should never be called from within a Kokkos
+ * functor */
 template <typename Scalar_QP, typename Vector_QP>
-void gradient_sphere_c(
-    int ie, const Scalar_QP &s, const Dvv &dvv,
-    const D &dinv, Vector_QP &grad) {
+void gradient_sphere_c(int ie, const Scalar_QP &s,
+                       const Dvv &dvv, const D &dinv,
+                       Vector_QP &grad) {
   Vector_Field scratch("scratch", np, np, dim);
   gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
 }
@@ -63,9 +64,9 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
   gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
 }
 
-template void gradient_sphere_c(
-    int, const Scalar_Field &, const Dvv &, const D &,
-    Vector_Field &);
+template void gradient_sphere_c(int, const Scalar_Field &,
+                                const Dvv &, const D &,
+                                Vector_Field &);
 
 template <typename Scalar_QP, typename Scalar_QP_Scratch,
           typename Vector_QP_Scratch, typename Vector_QP>
@@ -110,9 +111,10 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c_impl(
 }
 
 template <typename Scalar_QP, typename Vector_QP>
-void vorticity_sphere_c(
-    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
-    const MetDet &rmetdet, Scalar_QP &vorticity) {
+void vorticity_sphere_c(int ie, const Vector_QP &v,
+                        const Dvv &dvv, const D &d,
+                        const MetDet &rmetdet,
+                        Scalar_QP &vorticity) {
   Vector_Field scratch_buffer("contravariant scratch space",
                               np, np, dim);
   Scalar_Field scratch_cache("scratch cache", np, np);
@@ -126,17 +128,19 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
     int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
     const MetDet &rmetdet, const Team_State &team,
     Scalar_QP &vorticity) {
-  Vector_Field_Scratch scratch_buffer(team.team_scratch(0), np, np,
-                              dim);
-  Scalar_Field_Scratch scratch_cache(team.team_scratch(0), np, np);
+  Vector_Field_Scratch scratch_buffer(team.team_scratch(0),
+                                      np, np, dim);
+  Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
+                                     np, np);
   vorticity_sphere_c_impl(ie, v, dvv, d, rmetdet,
                           scratch_buffer, scratch_cache,
                           vorticity);
 }
 
-template void vorticity_sphere_c(
-    int, const Vector_Field &, const Dvv &, const D &,
-    const MetDet &, Scalar_Field &);
+template void vorticity_sphere_c(int, const Vector_Field &,
+                                 const Dvv &, const D &,
+                                 const MetDet &,
+                                 Scalar_Field &);
 
 template <typename Scalar_QP, typename Vector_QP_Scratch,
           typename Scalar_QP_Scratch, typename Vector_QP>
@@ -182,10 +186,12 @@ KOKKOS_INLINE_FUNCTION void divergence_sphere_c_impl(
 }
 
 template <typename Scalar_QP, typename Vector_QP>
-void divergence_sphere_c(
-    int ie, const Vector_QP &v, const Dvv &dvv,
-    const MetDet &metdet, const MetDet &rmetdet,
-    const D &dinv, Scalar_QP &divergence) {
+void divergence_sphere_c(int ie, const Vector_QP &v,
+                         const Dvv &dvv,
+                         const MetDet &metdet,
+                         const MetDet &rmetdet,
+                         const D &dinv,
+                         Scalar_QP &divergence) {
   Vector_Field scratch_contra("contravariant scratch space",
                               np, np, dim);
   Scalar_Field scratch_cache("scratch cache", np, np);
@@ -209,9 +215,11 @@ KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
                            scratch_cache, divergence);
 }
 
-template void divergence_sphere_c(
-    int, const Vector_Field &, const Dvv &, const MetDet &,
-    const MetDet &, const D &, Scalar_Field &);
+template void divergence_sphere_c(int, const Vector_Field &,
+                                  const Dvv &,
+                                  const MetDet &,
+                                  const MetDet &, const D &,
+                                  Scalar_Field &);
 
 template <int>
 struct loop7_functors;
@@ -278,7 +286,8 @@ struct loop7_functor_base {
 
 template <>
 struct loop7_functors<1> : public loop7_functor_base {
-  KOKKOS_INLINE_FUNCTION void operator()(const int &index) const {
+  KOKKOS_INLINE_FUNCTION void operator()(
+      const int &index) const {
     const int j = index / np;
     const int i = index % np;
     real v1 = v_m(i, j, 0, k_m, n0_m - 1, ie_m);
@@ -300,7 +309,8 @@ struct loop7_functors<1> : public loop7_functor_base {
 
 template <>
 struct loop7_functors<2> : public loop7_functor_base {
-  KOKKOS_INLINE_FUNCTION void operator()(const int &index) const {
+  KOKKOS_INLINE_FUNCTION void operator()(
+      const int &index) const {
     const int j = index / np;
     const int i = index % np;
     vtens_m(i, j, 0, k_m, ie_m - nets_m + 1) +=
@@ -399,7 +409,7 @@ void loop7_c(const int &nets, const int &nete,
   const int scalar_mem_needed =
       Scalar_Field_Scratch::shmem_size(np, np);
   const int mem_needed =
-      4 * vector_mem_needed + 3 * scalar_mem_needed;
+      7 * vector_mem_needed + 5 * scalar_mem_needed;
   Kokkos::TeamPolicy<> policy(league_size, team_size);
 
   Kokkos::parallel_for(
@@ -439,8 +449,8 @@ void loop7_c(const int &nets, const int &nete,
 
           gradient_sphere_c(ie, e, dvv, dinv, team, grade);
 
-          vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet, team,
-                             zeta);
+          vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
+                             team, zeta);
 
           if(tracer_advection_formulation ==
              TRACERADV_UGRADQ) {
