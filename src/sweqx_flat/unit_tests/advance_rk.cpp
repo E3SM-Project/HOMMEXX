@@ -110,22 +110,24 @@ void loop7_c(const int &nets, const int &nete,
 }  // extern "C"
 
 namespace Homme {
-template <typename ScalarQP>
-void gradient_sphere_c(int ie, const ScalarQP &s,
+template <typename Scalar_QP, typename Vector_QP>
+void gradient_sphere_c(int ie, const Scalar_QP &s,
                        const Dvv &dvv, const D &dinv,
-                       Vector_Field &grad);
+                       Vector_QP &grad);
 
-void vorticity_sphere_c(int ie, const Vector_Field &v,
+template <typename Scalar_QP, typename Vector_QP>
+void vorticity_sphere_c(int ie, const Vector_QP &v,
                         const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
-                        Scalar_Field &grad);
+                        Scalar_QP &grad);
 
-void divergence_sphere_c(int ie, const Vector_Field &v,
+template <typename Scalar_QP, typename Vector_QP>
+void divergence_sphere_c(int ie, const Vector_QP &v,
                          const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
                          const D &dinv,
-                         Scalar_Field &divergence);
+                         Scalar_QP &divergence);
 }
 
 template <typename rngAlg, typename dist, typename number>

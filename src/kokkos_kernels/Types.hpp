@@ -6,6 +6,12 @@
 
 namespace Homme {
 
+using Team_State = Kokkos::TeamPolicy<>::member_type;
+using Scratch_Space =
+    Kokkos::DefaultExecutionSpace::scratch_memory_space;
+
+// View types
+
 using Layout = Kokkos::LayoutLeft;
 
 template <typename T>
@@ -64,10 +70,16 @@ using Homme_Local = Kokkos::View<T, Layout>;
 // quadrature points
 using Scalar_Field = Homme_Local<real **>;
 using Scalar_Field_Host = Homme_View_Host<real **>;
+using Scalar_Field_Scratch =
+    Kokkos::View<real **, Layout, Scratch_Space,
+                 Kokkos::MemoryUnmanaged>;
 
 // Vector fields are vector values over the np x np
 // quadrature points
 using Vector_Field = Homme_Local<real ***>;
 using Vector_Field_Host = Homme_View_Host<real ***>;
+using Vector_Field_Scratch =
+    Kokkos::View<real ***, Layout, Scratch_Space,
+                 Kokkos::MemoryUnmanaged>;
 
 }  // namespace Homme
