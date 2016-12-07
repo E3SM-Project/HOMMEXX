@@ -212,6 +212,138 @@ template KOKKOS_FUNCTION void divergence_sphere_c(
     int, const Vector_Field &, const Dvv &, const MetDet &,
     const MetDet &, const D &, Scalar_Field &);
 
+template <int>
+struct loop7_functors;
+
+struct loop7_functor_base {
+  /* This struct provides all of the members needed by
+   * functors used by loop7
+   * No member variables should be added to inheriting
+   * structures
+   */
+  const V v_m;
+  const Scalar_Field_Scratch e_m;
+  const Vector_Field_Scratch ulatlon_m;
+  const D d_m;
+  const Vector_Field_Scratch pv_m;
+  const P p_m;
+  const PS ps_m;
+  const PTens ptens_m;
+  const VTens vtens_m;
+  const FCor &fcor_m;
+  const Scalar_Field_Scratch &zeta_m;
+  const Vector_Field_Scratch &grade_m;
+  const Scalar_Field_Scratch &div_m;
+
+  const int k_m;
+  const int n0_m;
+  const int nets_m;
+  const int ie_m;
+  const real pmean_m;
+
+  loop7_functor_base(
+      const V &v, const Scalar_Field_Scratch &e,
+      const Vector_Field_Scratch &ulatlon, const D &d,
+      const Vector_Field_Scratch &pv, const P &p,
+      const PS &ps, const PTens &ptens, const VTens &vtens,
+      const FCor &fcor, const Scalar_Field_Scratch &zeta,
+      const Vector_Field_Scratch &grade,
+      const Scalar_Field_Scratch &div, int k, int n0,
+      int nets, int ie, real pmean)
+      : v_m(v),
+        e_m(e),
+        ulatlon_m(ulatlon),
+        d_m(d),
+        pv_m(pv),
+        p_m(p),
+        ps_m(ps),
+        ptens_m(ptens),
+        vtens_m(vtens),
+        fcor_m(fcor),
+        zeta_m(zeta),
+        grade_m(grade),
+        div_m(div),
+        k_m(k),
+        n0_m(n0),
+        nets_m(nets),
+        ie_m(ie),
+        pmean_m(pmean) {}
+
+  template <int ftype>
+  operator loop7_functors<ftype>() {
+    return *static_cast<loop7_functors<ftype> *>(this);
+  }
+};
+
+template <>
+struct loop7_functors<1> : public loop7_functor_base {
+  loop7_functors(const V &v, const Scalar_Field_Scratch &e,
+                 const Vector_Field_Scratch &ulatlon,
+                 const D &d, const Vector_Field_Scratch &pv,
+                 const P &p, const PS &ps,
+                 const PTens &ptens, const VTens &vtens,
+                 const FCor &fcor,
+                 const Scalar_Field_Scratch &zeta,
+                 const Vector_Field_Scratch &grade,
+                 const Scalar_Field_Scratch &div, int k,
+                 int n0, int nets, int ie, real pmean)
+      : loop7_functor_base(v, e, ulatlon, d, pv, p, ps,
+                           ptens, vtens, fcor, zeta, grade,
+                           div, k, n0, nets, ie, pmean) {}
+
+  void operator()(const int &index) const {
+    const int j = index / np;
+    const int i = index % np;
+    real v1 = v_m(i, j, 0, k_m, n0_m - 1, ie_m);
+    real v2 = v_m(i, j, 1, k_m, n0_m - 1, ie_m);
+    e_m(i, j) = 0.0;
+    for(int h = 0; h < dim; h++) {
+      ulatlon_m(i, j, h) = d_m(i, j, h, 0, ie_m) * v1 +
+                           d_m(i, j, h, 1, ie_m) * v2;
+      pv_m(i, j, h) =
+          ulatlon_m(i, j, h) *
+          (pmean_m + p_m(i, j, k_m, n0_m - 1, ie_m));
+      e_m(i, j) += ulatlon_m(i, j, h) * ulatlon_m(i, j, h);
+    }
+    e_m(i, j) /= 2.0;
+    e_m(i, j) +=
+        p_m(i, j, k_m, n0_m - 1, ie_m) + ps_m(i, j, ie_m);
+  }
+};
+
+template <>
+struct loop7_functors<2> : public loop7_functor_base {
+  loop7_functors(const V &v, const Scalar_Field_Scratch &e,
+                 const Vector_Field_Scratch &ulatlon,
+                 const D &d, const Vector_Field_Scratch &pv,
+                 const P &p, const PS &ps,
+                 const PTens &ptens, const VTens &vtens,
+                 const FCor &fcor,
+                 const Scalar_Field_Scratch &zeta,
+                 const Vector_Field_Scratch &grade,
+                 const Scalar_Field_Scratch &div, int k,
+                 int n0, int nets, int ie, real pmean)
+      : loop7_functor_base(v, e, ulatlon, d, pv, p, ps,
+                           ptens, vtens, fcor, zeta, grade,
+                           div, k, n0, nets, ie, pmean) {}
+
+  void operator()(const int &index) const {
+    const int j = index / np;
+    const int i = index % np;
+    vtens_m(i, j, 0, k_m, ie_m - nets_m + 1) +=
+        (ulatlon_m(i, j, 1) *
+             (fcor_m(i, j, ie_m) + zeta_m(i, j)) -
+         grade_m(i, j, 0));
+
+    vtens_m(i, j, 1, k_m, ie_m - nets_m + 1) +=
+        (-ulatlon_m(i, j, 0) *
+             (fcor_m(i, j, ie_m) + zeta_m(i, j)) -
+         grade_m(i, j, 1));
+
+    ptens_m(i, j, k_m, ie_m - nets_m + 1) -= div_m(i, j);
+  }
+};
+
 extern "C" {
 
 /* TODO: Give this a better name */
@@ -312,44 +444,31 @@ void loop7_c(const int &nets, const int &nete,
           Vector_Field_Scratch pv(team.team_scratch(0), np,
                                   np, dim);
 
-          Kokkos::parallel_for(
-              Kokkos::TeamThreadRange(team, np * np),
-              KOKKOS_LAMBDA(const int index) {
-                const int j = index / np;
-                const int i = index % np;
-                real v1 = v(i, j, 0, k, n0 - 1, ie);
-                real v2 = v(i, j, 1, k, n0 - 1, ie);
-                e(i, j) = 0.0;
-                for(int h = 0; h < dim; h++) {
-                  ulatlon(i, j, h) =
-                      d(i, j, h, 0, ie) * v1 +
-                      d(i, j, h, 1, ie) * v2;
-                  pv(i, j, h) =
-                      ulatlon(i, j, h) *
-                      (pmean + p(i, j, k, n0 - 1, ie));
-                  e(i, j) +=
-                      ulatlon(i, j, h) * ulatlon(i, j, h);
-                }
-                e(i, j) /= 2.0;
-                e(i, j) +=
-                    p(i, j, k, n0 - 1, ie) + ps(i, j, ie);
-              });
-
-          team.team_barrier();
-
           Vector_Field_Scratch grade(team.team_scratch(0),
                                      np, np, dim);
-          gradient_sphere_c(ie, e, dvv, dinv, grade);
-
           Scalar_Field_Scratch zeta(team.team_scratch(0),
                                     np, np);
-          vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
-                             zeta);
-
           Vector_Field_Scratch gradh(team.team_scratch(0),
                                      np, np, dim);
           Scalar_Field_Scratch div(team.team_scratch(0), np,
                                    np);
+
+          loop7_functor_base f(v, e, ulatlon, d, pv, p, ps,
+                               ptens, vtens, fcor, zeta,
+                               grade, div, k, n0, nets, ie,
+                               pmean);
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team, np * np),
+              static_cast<loop7_functors<1> >(f));
+
+          team.team_barrier();
+
+          gradient_sphere_c(ie, e, dvv, dinv, grade);
+
+          vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
+                             zeta);
+
           if(tracer_advection_formulation ==
              TRACERADV_UGRADQ) {
             auto p_slice = Kokkos::subview(
@@ -378,21 +497,7 @@ void loop7_c(const int &nets, const int &nete,
           // accumulate all RHS terms
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange(team, np * np),
-              KOKKOS_LAMBDA(const int index) {
-                const int j = index / np;
-                const int i = index % np;
-                vtens(i, j, 0, k, ie - nets + 1) +=
-                    (ulatlon(i, j, 1) *
-                         (fcor(i, j, ie) + zeta(i, j)) -
-                     grade(i, j, 0));
-
-                vtens(i, j, 1, k, ie - nets + 1) +=
-                    (-ulatlon(i, j, 0) *
-                         (fcor(i, j, ie) + zeta(i, j)) -
-                     grade(i, j, 1));
-
-                ptens(i, j, k, ie - nets + 1) -= div(i, j);
-              });
+              static_cast<loop7_functors<2> >(f));
 
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
