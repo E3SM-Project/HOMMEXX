@@ -370,7 +370,8 @@ contains
                                       metdet(:, :, :), rmetdet(:, :, :), &
                                       fcor(:, :, :), p(:, :, :, :, :), ps(:, :, :), &
                                       v(:, :, :, :, :, :), &
-                                      ptens(:, :, :, :), vtens(:, :, :, :, :)
+                                      ptens(:, :, :, :), vtens(:, :, :, :, :), &
+                                      d_elem_ptr(:, :, :, :)
 
     real (kind=real_kind) :: ulatlon(np, np, 2), e(np, np), &
                              pv(np, np, 2), grade(np, np, 2), &
@@ -380,6 +381,13 @@ contains
 
     type(element_t) :: elem
     type(derivative_t) :: deriv
+
+#if SW_USE_FLAT_ARRAYS
+    allocate(elem%D(np,np,2,2))
+    allocate(elem%Dinv(np,np,2,2))
+    allocate(elem%metdet(np,np))
+    allocate(elem%rmetdet(np,np))
+#endif
 
     call c_f_pointer(dvv_ptr, dvv, [np, np])
     call c_f_pointer(d_ptr, d, [np, np, 2, 2, numelems])
@@ -442,6 +450,12 @@ contains
           ptens(:,:,k,ie - nets + 1) = p(:,:,k,n0,ie - nets + 1) + dtstage*ptens(:,:,k,ie - nets + 1)
        end do!end of loop over levels
     end do
+#if SW_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%Dinv)
+    deallocate(elem%metdet)
+    deallocate(elem%rmetdet)
+#endif
   end subroutine loop7_f90
 
 #if DONT_USE_KOKKOS
@@ -967,7 +981,9 @@ contains
        ptr_buf10 = c_loc(ptens)
        ptr_buf11 = c_loc(vtens)
        call t_startf('timer_advancerk_loop7')
-       call LOOP7(nets, nete, n0, nelemd, tracer_advection_formulation, pmean, dtstage, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4, ptr_buf5, ptr_buf6, ptr_buf7, ptr_buf8, ptr_buf9, ptr_buf10, ptr_buf11)
+       call LOOP7(nets, nete, n0, nelemd, tracer_advection_formulation,&
+            pmean, dtstage, ptr_buf1, ptr_buf2, ptr_buf3, ptr_buf4, ptr_buf5,&
+            ptr_buf6, ptr_buf7, ptr_buf8, ptr_buf9, ptr_buf10, ptr_buf11)
        call t_stopf('timer_advancerk_loop7')
 
        do ie=nets,nete
