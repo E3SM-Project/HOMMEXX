@@ -11,11 +11,12 @@ namespace Homme {
 constexpr const real rearth = 6.376E6;
 constexpr const real rrearth = 1.0 / rearth;
 
-template <typename Scalar_QP, typename Vector_QP>
-void gradient_sphere_c(int ie, const Scalar_QP &s,
-                       const Dvv &dvv, const D &dinv,
-                       Vector_QP &scratch,
-                       Vector_QP &grad) {
+template <typename Scalar_QP, typename Vector_QP_Scratch,
+          typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void gradient_sphere_c_impl(
+    int ie, const Scalar_QP &s, const Dvv &dvv,
+    const D &dinv, Vector_QP_Scratch &scratch,
+    Vector_QP &grad) {
   real dsd[2];
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
@@ -43,18 +44,36 @@ void gradient_sphere_c(int ie, const Scalar_QP &s,
   }
 }
 
-template void gradient_sphere_c(int, const Scalar_Field &,
-                                const Dvv &, const D &,
-                                Vector_Field &,
-                                Vector_Field &);
+template <typename Scalar_QP, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
+    int ie, const Scalar_QP &s, const Dvv &dvv,
+    const D &dinv, Vector_QP &grad) {
+  Vector_Field scratch("scratch", np, np, dim);
+  gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
+}
 
 template <typename Scalar_QP, typename Vector_QP>
-void vorticity_sphere_c(int ie, const Vector_QP &v,
-                        const Dvv &dvv, const D &d,
-                        const MetDet &rmetdet,
-                        Vector_QP &scratch_buffer,
-                        Scalar_QP &scratch_cache,
-                        Scalar_QP &vorticity) {
+KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
+    int ie, const Scalar_QP &s, const Dvv &dvv,
+    const D &dinv, const Team_State &team,
+    Vector_QP &grad) {
+  Vector_Field_Scratch scratch(team.team_scratch(0), np, np,
+                               dim);
+  gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
+}
+
+template KOKKOS_FUNCTION void gradient_sphere_c(
+    int, const Scalar_Field &, const Dvv &, const D &,
+    Vector_Field &);
+
+template <typename Scalar_QP, typename Scalar_QP_Scratch,
+          typename Vector_QP_Scratch, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void vorticity_sphere_c_impl(
+    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
+    const MetDet &rmetdet,
+    Vector_QP_Scratch &scratch_buffer,
+    Scalar_QP_Scratch &scratch_cache,
+    Scalar_QP &vorticity) {
   real dvd[dim];
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
@@ -89,19 +108,43 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
   }
 }
 
-template void vorticity_sphere_c(int, const Vector_Field &,
-                                 const Dvv &dvv, const D &d,
-                                 const MetDet &rmetdet,
-                                 Vector_QP &scratch_buffer,
-                                 Scalar_QP &scratch_cache,
-                                 Scalar_QP &vorticity);
+template <typename Scalar_QP, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
+    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
+    const MetDet &rmetdet, Scalar_QP &vorticity) {
+  Vector_Field scratch_buffer("contravariant scratch space",
+                              np, np, dim);
+  Scalar_Field scratch_cache("scratch cache", np, np);
+  vorticity_sphere_c_impl(ie, v, dvv, d, rmetdet,
+                          scratch_buffer, scratch_cache,
+                          vorticity);
+}
 
 template <typename Scalar_QP, typename Vector_QP>
-void divergence_sphere_c(
+KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
+    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
+    const MetDet &rmetdet, const Team_State &team,
+    Scalar_QP &vorticity) {
+  Vector_Field scratch_buffer(team.team_scratch(0), np, np,
+                              dim);
+  Scalar_Field scratch_cache(team.team_scratch(0), np, np);
+  vorticity_sphere_c_impl(ie, v, dvv, d, rmetdet,
+                          scratch_buffer, scratch_cache,
+                          vorticity);
+}
+
+template KOKKOS_FUNCTION void vorticity_sphere_c(
+    int, const Vector_Field &, const Dvv &, const D &,
+    const MetDet &, Scalar_Field &);
+
+template <typename Scalar_QP, typename Vector_QP_Scratch,
+          typename Scalar_QP_Scratch, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void divergence_sphere_c_impl(
     int ie, const Vector_QP &v, const Dvv &dvv,
     const MetDet &metdet, const MetDet &rmetdet,
-    const D &dinv, Vector_QP &scratch_contra,
-    Scalar_QP &scratch_cache, Scalar_QP &divergence) {
+    const D &dinv, Vector_QP_Scratch &scratch_contra,
+    Scalar_QP_Scratch &scratch_cache,
+    Scalar_QP &divergence) {
   real dvd[dim];
 
   for(int j = 0; j < np; j++) {
@@ -137,12 +180,37 @@ void divergence_sphere_c(
   }
 }
 
-template void divergence_sphere_c(int, const Vector_Field &,
-                                  const Dvv &,
-                                  const MetDet &,
-                                  const MetDet &, const D &,
-                                  Vector_QP &, Scalar_QP &,
-                                  Scalar_QP &);
+template <typename Scalar_QP, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
+    int ie, const Vector_QP &v, const Dvv &dvv,
+    const MetDet &metdet, const MetDet &rmetdet,
+    const D &dinv, Scalar_QP &divergence) {
+  Vector_Field scratch_contra("contravariant scratch space",
+                              np, np, dim);
+  Scalar_Field scratch_cache("scratch cache", np, np);
+  divergence_sphere_c_impl(ie, v, dvv, metdet, rmetdet,
+                           dinv, scratch_contra,
+                           scratch_cache, divergence);
+}
+
+template <typename Scalar_QP, typename Vector_QP>
+KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
+    int ie, const Vector_QP &v, const Dvv &dvv,
+    const MetDet &metdet, const MetDet &rmetdet,
+    const D &dinv, const Team_State &team,
+    Scalar_QP &divergence) {
+  Vector_Field_Scratch scratch_contra(team.team_scratch(0),
+                                      np, np, dim);
+  Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
+                                     np, np);
+  divergence_sphere_c_impl(ie, v, dvv, metdet, rmetdet,
+                           dinv, scratch_contra,
+                           scratch_cache, divergence);
+}
+
+template KOKKOS_FUNCTION void divergence_sphere_c(
+    int, const Vector_Field &, const Dvv &, const MetDet &,
+    const MetDet &, const D &, Scalar_Field &);
 
 extern "C" {
 
@@ -239,9 +307,9 @@ void loop7_c(const int &nets, const int &nete,
         if(ie < nete) {
           Vector_Field_Scratch ulatlon(team.team_scratch(0),
                                        np, np, dim);
-          Scalar_Field_Scratch e(team.team_scratch(1), np,
+          Scalar_Field_Scratch e(team.team_scratch(0), np,
                                  np);
-          Vector_Field_Scratch pv(team.team_scratch(2), np,
+          Vector_Field_Scratch pv(team.team_scratch(0), np,
                                   np, dim);
 
           Kokkos::parallel_for(
@@ -269,18 +337,18 @@ void loop7_c(const int &nets, const int &nete,
 
           team.team_barrier();
 
-          Vector_Field_Scratch grade(team.team_scratch(3),
+          Vector_Field_Scratch grade(team.team_scratch(0),
                                      np, np, dim);
           gradient_sphere_c(ie, e, dvv, dinv, grade);
 
-          Scalar_Field_Scratch zeta(team.team_scratch(4),
+          Scalar_Field_Scratch zeta(team.team_scratch(0),
                                     np, np);
           vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                              zeta);
 
-          Vector_Field_Scratch gradh(team.team_scratch(5),
+          Vector_Field_Scratch gradh(team.team_scratch(0),
                                      np, np, dim);
-          Scalar_Field_Scratch div(team.team_scratch(6), np,
+          Scalar_Field_Scratch div(team.team_scratch(0), np,
                                    np);
           if(tracer_advection_formulation ==
              TRACERADV_UGRADQ) {
