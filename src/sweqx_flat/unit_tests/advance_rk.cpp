@@ -113,7 +113,7 @@ namespace Homme {
 template <typename Scalar_QP, typename Vector_QP>
 void gradient_sphere_c(int ie, const Scalar_QP &s,
                        const Dvv &dvv, const D &dinv,
-                       Vector_QP &grad);
+                       Vector_QP &scratch, Vector_QP &grad);
 
 template <typename Scalar_QP, typename Vector_QP>
 void vorticity_sphere_c(int ie, const Vector_QP &v,
@@ -122,11 +122,12 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
                         Scalar_QP &grad);
 
 template <typename Scalar_QP, typename Vector_QP>
-void divergence_sphere_c(int ie, const Vector_QP &v,
+void divergence_sphere_c(int ie, const Vector_Field &v,
                          const Dvv &dvv,
                          const MetDet &metdet,
                          const MetDet &rmetdet,
-                         const D &dinv,
+                         const D &dinv, Vector_QP &s1,
+                         Scalar_QP &s2,
                          Scalar_QP &divergence);
 }
 

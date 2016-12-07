@@ -14,30 +14,29 @@ constexpr const real rrearth = 1.0 / rearth;
 template <typename Scalar_QP, typename Vector_QP>
 void gradient_sphere_c(int ie, const Scalar_QP &s,
                        const Dvv &dvv, const D &dinv,
+                       Vector_QP &scratch,
                        Vector_QP &grad) {
-  Homme_Local<real *> dsd("Velocity Spatial Derivatives",
-                          dim);
-  Homme_Local<real ***> v("Velocity", np, np, dim);
+  real dsd[2];
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int k = 0; k < dim; k++) {
-        dsd(k) = 0.0;
+        dsd[k] = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dsd(0) += dvv(i, l) * s(i, j);
-        dsd(1) += dvv(i, l) * s(j, i);
+        dsd[0] += dvv(i, l) * s(i, j);
+        dsd[1] += dvv(i, l) * s(j, i);
       }
-      v(l, j, 0) = dsd(0) * rrearth;
-      v(j, l, 1) = dsd(1) * rrearth;
+      scratch(l, j, 0) = dsd[0] * rrearth;
+      scratch(j, l, 1) = dsd[1] * rrearth;
     }
   }
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       for(int h = 0; h < dim; h++) {
         real di1 = dinv(i, j, 0, h, ie);
-        real v1 = v(i, j, 0);
+        real v1 = scratch(i, j, 0);
         real di2 = dinv(i, j, 1, h, ie);
-        real v2 = v(i, j, 1);
+        real v2 = scratch(i, j, 1);
         grad(i, j, h) = di1 * v1 + di2 * v2;
       }
     }
@@ -46,25 +45,23 @@ void gradient_sphere_c(int ie, const Scalar_QP &s,
 
 template void gradient_sphere_c(int, const Scalar_Field &,
                                 const Dvv &, const D &,
+                                Vector_Field &,
                                 Vector_Field &);
 
 template <typename Scalar_QP, typename Vector_QP>
 void vorticity_sphere_c(int ie, const Vector_QP &v,
                         const Dvv &dvv, const D &d,
                         const MetDet &rmetdet,
+                        Vector_QP &scratch_buffer,
+                        Scalar_QP &scratch_cache,
                         Scalar_QP &vorticity) {
-  Homme_Local<real *> dvd("Velocity Spatial Derivatives",
-                          dim);
-  Homme_Local<real ***> vco("buffer for metric adjustments",
-                            np, np, dim);
-  Homme_Local<real **> vtemp("buffer for performance", np,
-                             np);
-
+  real dvd[dim];
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       for(int h = 0; h < dim; h++) {
-        vco(i, j, h) = d(i, j, 0, h, ie) * v(i, j, 0) +
-                       d(i, j, 1, h, ie) * v(i, j, 1);
+        scratch_buffer(i, j, h) =
+            d(i, j, 0, h, ie) * v(i, j, 0) +
+            d(i, j, 1, h, ie) * v(i, j, 1);
       }
     }
   }
@@ -72,50 +69,48 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int h = 0; h < dim; h++) {
-        dvd(h) = 0.0;
+        dvd[h] = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dvd(0) += dvv(i, l) * vco(i, j, 1);
-        dvd(1) += dvv(i, l) * vco(j, i, 0);
+        dvd[0] += dvv(i, l) * scratch_buffer(i, j, 1);
+        dvd[1] += dvv(i, l) * scratch_buffer(j, i, 0);
       }
-      vorticity(l, j) = dvd(0);
-      vtemp(j, l) = dvd(1);
+      vorticity(l, j) = dvd[0];
+      scratch_cache(j, l) = dvd[1];
     }
   }
 
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
-      vorticity(i, j) = (vorticity(i, j) - vtemp(i, j)) *
-                        (rmetdet(i, j, ie) * rrearth);
+      vorticity(i, j) =
+          (vorticity(i, j) - scratch_cache(i, j)) *
+          (rmetdet(i, j, ie) * rrearth);
     }
   }
 }
 
 template void vorticity_sphere_c(int, const Vector_Field &,
-                                 const Dvv &, const D &,
-                                 const MetDet &,
-                                 Scalar_Field &);
+                                 const Dvv &dvv, const D &d,
+                                 const MetDet &rmetdet,
+                                 Vector_QP &scratch_buffer,
+                                 Scalar_QP &scratch_cache,
+                                 Scalar_QP &vorticity);
 
 template <typename Scalar_QP, typename Vector_QP>
-void divergence_sphere_c(int ie, const Vector_QP &v,
-                         const Dvv &dvv,
-                         const MetDet &metdet,
-                         const MetDet &rmetdet,
-                         const D &dinv,
-                         Scalar_QP &divergence) {
-  Homme_Local<real *> dvd("Positional Velocity Derivatives",
-                          dim);
-  Homme_Local<real ***> gv("Contravariant Form", np, np,
-                           dim);
-  Homme_Local<real **> vvtemp(
-      "Divergence Performance Buffer", np, np);
+void divergence_sphere_c(
+    int ie, const Vector_QP &v, const Dvv &dvv,
+    const MetDet &metdet, const MetDet &rmetdet,
+    const D &dinv, Vector_QP &scratch_contra,
+    Scalar_QP &scratch_cache, Scalar_QP &divergence) {
+  real dvd[dim];
 
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
       for(int h = 0; h < dim; h++) {
-        gv(i, j, h) = metdet(i, j, ie) *
-                      (dinv(i, j, h, 0, ie) * v(i, j, 0) +
-                       dinv(i, j, h, 1, ie) * v(i, j, 1));
+        scratch_contra(i, j, h) =
+            metdet(i, j, ie) *
+            (dinv(i, j, h, 0, ie) * v(i, j, 0) +
+             dinv(i, j, h, 1, ie) * v(i, j, 1));
       }
     }
   }
@@ -123,20 +118,21 @@ void divergence_sphere_c(int ie, const Vector_QP &v,
   for(int j = 0; j < np; j++) {
     for(int l = 0; l < np; l++) {
       for(int h = 0; h < dim; h++) {
-        dvd(h) = 0.0;
+        dvd[h] = 0.0;
       }
       for(int i = 0; i < np; i++) {
-        dvd(0) += dvv(i, l) * gv(i, j, 0);
-        dvd(1) += dvv(i, l) * gv(j, i, 1);
+        dvd[0] += dvv(i, l) * scratch_contra(i, j, 0);
+        dvd[1] += dvv(i, l) * scratch_contra(j, i, 1);
       }
-      divergence(l, j) = dvd(0);
-      vvtemp(j, l) = dvd(1);
+      divergence(l, j) = dvd[0];
+      scratch_cache(j, l) = dvd[1];
     }
   }
   for(int j = 0; j < np; j++) {
     for(int i = 0; i < np; i++) {
-      divergence(i, j) = (divergence(i, j) + vvtemp(i, j)) *
-                         (rmetdet(i, j, ie) * rrearth);
+      divergence(i, j) =
+          (divergence(i, j) + scratch_cache(i, j)) *
+          (rmetdet(i, j, ie) * rrearth);
     }
   }
 }
@@ -145,7 +141,8 @@ template void divergence_sphere_c(int, const Vector_Field &,
                                   const Dvv &,
                                   const MetDet &,
                                   const MetDet &, const D &,
-                                  Scalar_Field &);
+                                  Vector_QP &, Scalar_QP &,
+                                  Scalar_QP &);
 
 extern "C" {
 
