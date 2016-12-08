@@ -11,38 +11,60 @@ namespace Homme {
 constexpr const real rearth = 6.376E6;
 constexpr const real rrearth = 1.0 / rearth;
 
-template <typename Scalar_QP, typename Vector_QP_Scratch,
-          typename Vector_QP>
-KOKKOS_INLINE_FUNCTION void gradient_sphere_c_impl(
-    int ie, const Scalar_QP &s, const Dvv &dvv,
-    const D &dinv, Vector_QP_Scratch &scratch,
-    Vector_QP &grad) {
-  real dsd[2];
-  for(int j = 0; j < np; j++) {
-    for(int l = 0; l < np; l++) {
-      for(int k = 0; k < dim; k++) {
-        dsd[k] = 0.0;
-      }
-      for(int i = 0; i < np; i++) {
-        dsd[0] += dvv(i, l) * s(i, j);
-        dsd[1] += dvv(i, l) * s(j, i);
-      }
-      scratch(l, j, 0) = dsd[0] * rrearth;
-      scratch(j, l, 1) = dsd[1] * rrearth;
-    }
+template <int grad_loop, typename Scalar_QP_Scratch, typename Vector_QP, typename Vector_QP_Scratch>
+struct gradient_sphere_loop;
+
+template <typename Scalar_QP, typename Vector_QP, typename Vector_QP_Scratch>
+struct gradient_sphere_base {
+  int ie_m;
+  const Scalar_QP s_m;
+  const Dvv dvv_m;
+  const D dinv_m;
+  const Vector_QP_Scratch scratch_m;
+  const Vector_QP grad_m;
+
+  KOKKOS_INLINE_FUNCTION gradient_sphere_base(int ie, const Scalar_QP s, const Dvv &dvv, const D &dinv, const Vector_QP_Scratch &scratch, const Vector_QP &grad) :
+    ie_m(ie), s_m(s), dvv_m(dvv), dinv_m(dinv), scratch_m(scratch), grad_m(grad)
+  {}
+
+  template <int loop>
+  KOKKOS_INLINE_FUNCTION operator gradient_sphere_loop<loop, Scalar_QP, Vector_QP, Vector_QP_Scratch>() {
+    return *static_cast<gradient_sphere_loop<loop, Scalar_QP, Vector_QP, Vector_QP_Scratch>* >(this);
   }
-  for(int j = 0; j < np; j++) {
+};
+
+template <typename Scalar_QP, typename Vector_QP, typename Vector_QP_Scratch>
+struct gradient_sphere_loop<1, Scalar_QP, Vector_QP, Vector_QP_Scratch> : gradient_sphere_base<Scalar_QP, Vector_QP, Vector_QP_Scratch> {
+  KOKKOS_INLINE_FUNCTION void operator() (int idx) const {
+    real dsd[2];
+    const int j = idx / np;
+    const int l = idx % np;
+    for(int k = 0; k < dim; k++) {
+      dsd[k] = 0.0;
+    }
     for(int i = 0; i < np; i++) {
-      for(int h = 0; h < dim; h++) {
-        real di1 = dinv(i, j, 0, h, ie);
-        real v1 = scratch(i, j, 0);
-        real di2 = dinv(i, j, 1, h, ie);
-        real v2 = scratch(i, j, 1);
-        grad(i, j, h) = di1 * v1 + di2 * v2;
-      }
+      dsd[0] += this->dvv_m(i, l) * this->s_m(i, j);
+      dsd[1] += this->dvv_m(i, l) * this->s_m(j, i);
+    }
+    this->scratch_m(l, j, 0) = dsd[0] * rrearth;
+    this->scratch_m(j, l, 1) = dsd[1] * rrearth;
+  }
+};
+
+template <typename Scalar_QP, typename Vector_QP, typename Vector_QP_Scratch>
+struct gradient_sphere_loop<2, Scalar_QP, Vector_QP, Vector_QP_Scratch> : gradient_sphere_base<Scalar_QP, Vector_QP, Vector_QP_Scratch> {
+  KOKKOS_INLINE_FUNCTION void operator() (int idx) const {
+    const int j = idx / np;
+    const int i = idx % np;
+    for(int h = 0; h < dim; h++) {
+      real di1 = this->dinv_m(i, j, 0, h, this->ie_m);
+      real v1 = this->scratch_m(i, j, 0);
+      real di2 = this->dinv_m(i, j, 1, h, this->ie_m);
+      real v2 = this->scratch_m(i, j, 1);
+      this->grad_m(i, j, h) = di1 * v1 + di2 * v2;
     }
   }
-}
+};
 
 /* This version should never be called from within a Kokkos
  * functor */
@@ -51,7 +73,9 @@ void gradient_sphere_c(int ie, const Scalar_QP &s,
                        const Dvv &dvv, const D &dinv,
                        Vector_QP &grad) {
   Vector_Field scratch("scratch", np, np, dim);
-  gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
+  gradient_sphere_base<Scalar_QP, Vector_QP, Vector_Field> f(ie, s, dvv, dinv, scratch, grad);
+  Kokkos::parallel_for(np * np, static_cast<gradient_sphere_loop<1, Scalar_QP, Vector_QP, Vector_Field> >(f));
+  Kokkos::parallel_for(np * np, static_cast<gradient_sphere_loop<2, Scalar_QP, Vector_QP, Vector_Field> >(f));
 }
 
 template <typename Scalar_QP, typename Vector_QP>
@@ -61,54 +85,86 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
     Vector_QP &grad) {
   Vector_Field_Scratch scratch(team.team_scratch(0), np, np,
                                dim);
-  gradient_sphere_c_impl(ie, s, dvv, dinv, scratch, grad);
+  gradient_sphere_base<Scalar_QP, Vector_QP, Vector_Field_Scratch> f(ie, s, dvv, dinv, scratch, grad);
+  auto range(Kokkos::TeamThreadRange(team, np * np));
+  Kokkos::parallel_for(range, static_cast<gradient_sphere_loop<1, Scalar_QP, Vector_QP, Vector_Field_Scratch> >(f));
+  team.team_barrier();
+  Kokkos::parallel_for(range, static_cast<gradient_sphere_loop<2, Scalar_QP, Vector_QP, Vector_Field_Scratch> >(f));
 }
 
 template void gradient_sphere_c(int, const Scalar_Field &,
                                 const Dvv &, const D &,
                                 Vector_Field &);
 
+template <int loop, typename Scalar_QP, typename Scalar_QP_Scratch,
+          typename Vector_QP, typename Vector_QP_Scratch>
+struct vorticity_sphere_loop;
+
 template <typename Scalar_QP, typename Scalar_QP_Scratch,
-          typename Vector_QP_Scratch, typename Vector_QP>
-KOKKOS_INLINE_FUNCTION void vorticity_sphere_c_impl(
-    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
-    const MetDet &rmetdet,
-    Vector_QP_Scratch &scratch_buffer,
-    Scalar_QP_Scratch &scratch_cache,
-    Scalar_QP &vorticity) {
-  real dvd[dim];
-  for(int j = 0; j < np; j++) {
-    for(int i = 0; i < np; i++) {
-      for(int h = 0; h < dim; h++) {
-        scratch_buffer(i, j, h) =
-            d(i, j, 0, h, ie) * v(i, j, 0) +
-            d(i, j, 1, h, ie) * v(i, j, 1);
-      }
-    }
-  }
+          typename Vector_QP, typename Vector_QP_Scratch>
+struct vorticity_sphere_base {
+  int ie_m;
+  const Vector_QP v_m;
+  const Dvv dvv_m;
+  const D d_m;
+  const MetDet rmetdet_m;
+  const Vector_QP_Scratch scratch_buffer_m;
+  const Scalar_QP_Scratch scratch_cache_m;
+  const Scalar_QP vorticity_m;
 
-  for(int j = 0; j < np; j++) {
-    for(int l = 0; l < np; l++) {
-      for(int h = 0; h < dim; h++) {
-        dvd[h] = 0.0;
-      }
-      for(int i = 0; i < np; i++) {
-        dvd[0] += dvv(i, l) * scratch_buffer(i, j, 1);
-        dvd[1] += dvv(i, l) * scratch_buffer(j, i, 0);
-      }
-      vorticity(l, j) = dvd[0];
-      scratch_cache(j, l) = dvd[1];
-    }
-  }
+  KOKKOS_INLINE_FUNCTION vorticity_sphere_base(int ie, const Vector_QP &v, const Dvv &dvv, const D &d, const MetDet &rmetdet, const Vector_QP_Scratch &scratch_buffer, const Scalar_QP_Scratch &scratch_cache, const Scalar_QP &vorticity)
+    : ie_m(ie), v_m(v), dvv_m(dvv), d_m(d), rmetdet_m(rmetdet), scratch_buffer_m(scratch_buffer), scratch_cache_m(scratch_cache), vorticity_m(vorticity)
+  {}
 
-  for(int j = 0; j < np; j++) {
-    for(int i = 0; i < np; i++) {
-      vorticity(i, j) =
-          (vorticity(i, j) - scratch_cache(i, j)) *
-          (rmetdet(i, j, ie) * rrearth);
-    }
+  template <int loop>
+  KOKKOS_INLINE_FUNCTION operator vorticity_sphere_loop<loop, Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch>() {
+    return *static_cast<vorticity_sphere_loop<loop, Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch>* >(this);
   }
-}
+};
+
+template <typename Scalar_QP, typename Scalar_QP_Scratch,
+          typename Vector_QP, typename Vector_QP_Scratch>
+struct vorticity_sphere_loop<1, Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> : vorticity_sphere_base<Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> {
+  KOKKOS_INLINE_FUNCTION void operator() (int idx) const {
+    const int j = idx / dim / np;
+    const int i = idx / dim % np;
+    const int h = idx % dim;
+    this->scratch_buffer_m(i, j, h) =
+      this->d_m(i, j, 0, h, this->ie_m) * this->v_m(i, j, 0) +
+      this->d_m(i, j, 1, h, this->ie_m) * this->v_m(i, j, 1);
+  }
+};
+
+template <typename Scalar_QP, typename Scalar_QP_Scratch,
+          typename Vector_QP, typename Vector_QP_Scratch>
+struct vorticity_sphere_loop<2, Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> : vorticity_sphere_base<Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> {
+  KOKKOS_INLINE_FUNCTION void operator() (int idx) const {
+    const int j = idx / np;
+    const int l = idx % np;
+    real dvd[dim];
+    for(int h = 0; h < dim; h++) {
+      dvd[h] = 0.0;
+    }
+    for(int i = 0; i < np; i++) {
+      dvd[0] += this->dvv_m(i, l) * this->scratch_buffer_m(i, j, 1);
+      dvd[1] += this->dvv_m(i, l) * this->scratch_buffer_m(j, i, 0);
+    }
+    this->vorticity_m(l, j) = dvd[0];
+    this->scratch_cache_m(j, l) = dvd[1];
+  }
+};
+
+template <typename Scalar_QP, typename Scalar_QP_Scratch,
+          typename Vector_QP, typename Vector_QP_Scratch>
+struct vorticity_sphere_loop<3, Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> : vorticity_sphere_base<Scalar_QP, Scalar_QP_Scratch, Vector_QP, Vector_QP_Scratch> {
+  KOKKOS_INLINE_FUNCTION void operator() (int idx) const {
+    const int j = idx / np;
+    const int i = idx % np;
+    this->vorticity_m(i, j) =
+      (this->vorticity_m(i, j) - this->scratch_cache_m(i, j)) *
+      (this->rmetdet_m(i, j, this->ie_m) * rrearth);
+  }
+};
 
 template <typename Scalar_QP, typename Vector_QP>
 void vorticity_sphere_c(int ie, const Vector_QP &v,
@@ -118,9 +174,12 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
   Vector_Field scratch_buffer("contravariant scratch space",
                               np, np, dim);
   Scalar_Field scratch_cache("scratch cache", np, np);
-  vorticity_sphere_c_impl(ie, v, dvv, d, rmetdet,
-                          scratch_buffer, scratch_cache,
-                          vorticity);
+
+  vorticity_sphere_base<Scalar_QP, Scalar_Field, Vector_QP, Vector_Field> f(ie, v, dvv, d, rmetdet,
+			  scratch_buffer, scratch_cache, vorticity);
+  Kokkos::parallel_for(np * np * dim, static_cast<vorticity_sphere_loop<1, Scalar_QP, Scalar_Field, Vector_QP, Vector_Field> >(f));
+  Kokkos::parallel_for(np * np, static_cast<vorticity_sphere_loop<2, Scalar_QP, Scalar_Field, Vector_QP, Vector_Field> >(f));
+  Kokkos::parallel_for(np * np, static_cast<vorticity_sphere_loop<3, Scalar_QP, Scalar_Field, Vector_QP, Vector_Field> >(f));
 }
 
 template <typename Scalar_QP, typename Vector_QP>
@@ -132,9 +191,15 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
                                       np, np, dim);
   Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
                                      np, np);
-  vorticity_sphere_c_impl(ie, v, dvv, d, rmetdet,
-                          scratch_buffer, scratch_cache,
-                          vorticity);
+  vorticity_sphere_base<Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch> f(ie, v, dvv, d, rmetdet,
+			  scratch_buffer, scratch_cache, vorticity);
+  auto range_np_dim(Kokkos::TeamThreadRange(team, np * np * dim));
+  Kokkos::parallel_for(range_np_dim, static_cast<vorticity_sphere_loop<1, Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch> >(f));
+  auto range_np(Kokkos::TeamThreadRange(team, np * np));
+  team.team_barrier();
+  Kokkos::parallel_for(range_np, static_cast<vorticity_sphere_loop<2, Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch> >(f));
+  team.team_barrier();
+  Kokkos::parallel_for(range_np, static_cast<vorticity_sphere_loop<3, Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch> >(f));
 }
 
 template void vorticity_sphere_c(int, const Vector_Field &,
