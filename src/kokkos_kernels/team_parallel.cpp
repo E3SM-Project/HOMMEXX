@@ -11,7 +11,8 @@ namespace Homme {
 constexpr const real rearth = 6.376E6;
 constexpr const real rrearth = 1.0 / rearth;
 
-template <typename Scalar_QP, typename Vector_QP, typename Vector_QP_Scratch>
+template <typename Scalar_QP, typename Vector_QP,
+          typename Vector_QP_Scratch>
 struct gradient_sphere {
   int ie_m;
   const Scalar_QP s_m;
@@ -20,15 +21,23 @@ struct gradient_sphere {
   const Vector_QP_Scratch scratch_m;
   const Vector_QP grad_m;
 
-  KOKKOS_INLINE_FUNCTION gradient_sphere(int ie, const Scalar_QP s, const Dvv &dvv, const D &dinv, const Vector_QP_Scratch &scratch, const Vector_QP &grad) :
-    ie_m(ie), s_m(s), dvv_m(dvv), dinv_m(dinv), scratch_m(scratch), grad_m(grad)
-  {}
+  KOKKOS_INLINE_FUNCTION gradient_sphere(
+      int ie, const Scalar_QP s, const Dvv &dvv,
+      const D &dinv, const Vector_QP_Scratch &scratch,
+      const Vector_QP &grad)
+      : ie_m(ie),
+        s_m(s),
+        dvv_m(dvv),
+        dinv_m(dinv),
+        scratch_m(scratch),
+        grad_m(grad) {}
 
   /* TODO: Rename these */
   struct loop1_tag {};
   struct loop2_tag {};
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop1_tag, int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(const loop1_tag,
+                                         int idx) const {
     real dsd[2];
     const int j = idx / np;
     const int l = idx % np;
@@ -43,7 +52,8 @@ struct gradient_sphere {
     this->scratch_m(j, l, 1) = dsd[1] * rrearth;
   }
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop2_tag, int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(const loop2_tag,
+                                         int idx) const {
     const int j = idx / np;
     const int i = idx % np;
     for(int h = 0; h < dim; h++) {
@@ -56,16 +66,24 @@ struct gradient_sphere {
   }
 };
 
-/* This version should never be called from a Kokkos functor */
+/* This version should never be called from a Kokkos functor
+ */
 template <typename Scalar_QP, typename Vector_QP>
 void gradient_sphere_c(int ie, const Scalar_QP &s,
                        const Dvv &dvv, const D &dinv,
                        Vector_QP &grad) {
   Vector_Field scratch("scratch", np, np, dim);
-  using functor = gradient_sphere<Scalar_QP, Vector_QP, Vector_Field>;
+  using functor =
+      gradient_sphere<Scalar_QP, Vector_QP, Vector_Field>;
   functor f(ie, s, dvv, dinv, scratch, grad);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop1_tag>(0, np * np), f);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop2_tag>(0, np * np), f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop1_tag>(
+          0, np * np),
+      f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop2_tag>(
+          0, np * np),
+      f);
 }
 
 template <typename Scalar_QP, typename Vector_QP>
@@ -75,14 +93,18 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
     Vector_QP &grad) {
   Vector_Field_Scratch scratch(team.team_scratch(0), np, np,
                                dim);
-  using functor = gradient_sphere<Scalar_QP, Vector_QP, Vector_Field_Scratch>;
+  using functor = gradient_sphere<Scalar_QP, Vector_QP,
+                                  Vector_Field_Scratch>;
   functor f(ie, s, dvv, dinv, scratch, grad);
-  /* Somewhat hacky solution to lack of tag support for TeamThreadRange */
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np * np), KOKKOS_LAMBDA(const int idx) {
-      f(typename functor::loop1_tag(), idx);
-      team.team_barrier();
-      f(typename functor::loop2_tag(), idx);
-    });
+  /* Somewhat hacky solution to lack of tag support for
+   * TeamThreadRange */
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
+        f(typename functor::loop1_tag(), idx);
+        team.team_barrier();
+        f(typename functor::loop2_tag(), idx);
+      });
 }
 
 template void gradient_sphere_c(int, const Scalar_Field &,
@@ -105,20 +127,35 @@ struct vorticity_sphere {
   struct loop2_tag {};
   struct loop3_tag {};
 
-  KOKKOS_INLINE_FUNCTION vorticity_sphere(int ie, const Vector_QP &v, const Dvv &dvv, const D &d, const MetDet &rmetdet, const Vector_QP_Scratch &scratch_buffer, const Scalar_QP_Scratch &scratch_cache, const Scalar_QP &vorticity)
-    : ie_m(ie), v_m(v), dvv_m(dvv), d_m(d), rmetdet_m(rmetdet), scratch_buffer_m(scratch_buffer), scratch_cache_m(scratch_cache), vorticity_m(vorticity)
-  {}
+  KOKKOS_INLINE_FUNCTION vorticity_sphere(
+      int ie, const Vector_QP &v, const Dvv &dvv,
+      const D &d, const MetDet &rmetdet,
+      const Vector_QP_Scratch &scratch_buffer,
+      const Scalar_QP_Scratch &scratch_cache,
+      const Scalar_QP &vorticity)
+      : ie_m(ie),
+        v_m(v),
+        dvv_m(dvv),
+        d_m(d),
+        rmetdet_m(rmetdet),
+        scratch_buffer_m(scratch_buffer),
+        scratch_cache_m(scratch_cache),
+        vorticity_m(vorticity) {}
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop1_tag &, int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(const loop1_tag &,
+                                         int idx) const {
     const int j = idx / dim / np;
     const int i = idx / dim % np;
     const int h = idx % dim;
     this->scratch_buffer_m(i, j, h) =
-      this->d_m(i, j, 0, h, this->ie_m) * this->v_m(i, j, 0) +
-      this->d_m(i, j, 1, h, this->ie_m) * this->v_m(i, j, 1);
+        this->d_m(i, j, 0, h, this->ie_m) *
+            this->v_m(i, j, 0) +
+        this->d_m(i, j, 1, h, this->ie_m) *
+            this->v_m(i, j, 1);
   }
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop2_tag &, int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(const loop2_tag &,
+                                         int idx) const {
     const int j = idx / np;
     const int l = idx % np;
     real dvd[dim];
@@ -126,19 +163,23 @@ struct vorticity_sphere {
       dvd[h] = 0.0;
     }
     for(int i = 0; i < np; i++) {
-      dvd[0] += this->dvv_m(i, l) * this->scratch_buffer_m(i, j, 1);
-      dvd[1] += this->dvv_m(i, l) * this->scratch_buffer_m(j, i, 0);
+      dvd[0] += this->dvv_m(i, l) *
+                this->scratch_buffer_m(i, j, 1);
+      dvd[1] += this->dvv_m(i, l) *
+                this->scratch_buffer_m(j, i, 0);
     }
     this->vorticity_m(l, j) = dvd[0];
     this->scratch_cache_m(j, l) = dvd[1];
   }
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop3_tag &, int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(const loop3_tag &,
+                                         int idx) const {
     const int j = idx / np;
     const int i = idx % np;
     this->vorticity_m(i, j) =
-      (this->vorticity_m(i, j) - this->scratch_cache_m(i, j)) *
-      (this->rmetdet_m(i, j, this->ie_m) * rrearth);
+        (this->vorticity_m(i, j) -
+         this->scratch_cache_m(i, j)) *
+        (this->rmetdet_m(i, j, this->ie_m) * rrearth);
   }
 };
 
@@ -151,11 +192,22 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
                               np, np, dim);
   Scalar_Field scratch_cache("scratch cache", np, np);
 
-  using functor = vorticity_sphere<Scalar_QP, Scalar_Field, Vector_QP, Vector_Field>;
-  functor f(ie, v, dvv, d, rmetdet, scratch_buffer, scratch_cache, vorticity);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop1_tag>(0, np * np * dim), f);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop2_tag>(0, np * np), f);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop3_tag>(0, np * np), f);
+  using functor = vorticity_sphere<Scalar_QP, Scalar_Field,
+                                   Vector_QP, Vector_Field>;
+  functor f(ie, v, dvv, d, rmetdet, scratch_buffer,
+            scratch_cache, vorticity);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop1_tag>(
+          0, np * np * dim),
+      f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop2_tag>(
+          0, np * np),
+      f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop3_tag>(
+          0, np * np),
+      f);
 }
 
 template <typename Scalar_QP, typename Vector_QP>
@@ -167,18 +219,24 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
                                       np, np, dim);
   Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
                                      np, np);
-  using functor = vorticity_sphere<Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch>;
-  functor f(ie, v, dvv, d, rmetdet, scratch_buffer, scratch_cache, vorticity);
-  /* Somewhat hacky solution to lack of tag support for TeamThreadRange */
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np * np), KOKKOS_LAMBDA(const int idx) {
-      for(int i = 0; i < dim; i++) {
-	f(typename functor::loop1_tag(), idx * dim + i);
-      }
-      team.team_barrier();
-      f(typename functor::loop2_tag(), idx);
-      team.team_barrier();
-      f(typename functor::loop3_tag(), idx);
-    });
+  using functor =
+      vorticity_sphere<Scalar_QP, Scalar_Field_Scratch,
+                       Vector_QP, Vector_Field_Scratch>;
+  functor f(ie, v, dvv, d, rmetdet, scratch_buffer,
+            scratch_cache, vorticity);
+  /* Somewhat hacky solution to lack of tag support for
+   * TeamThreadRange */
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
+        for(int i = 0; i < dim; i++) {
+          f(typename functor::loop1_tag(), idx * dim + i);
+        }
+        team.team_barrier();
+        f(typename functor::loop2_tag(), idx);
+        team.team_barrier();
+        f(typename functor::loop3_tag(), idx);
+      });
 }
 
 template void vorticity_sphere_c(int, const Vector_Field &,
@@ -187,7 +245,7 @@ template void vorticity_sphere_c(int, const Vector_Field &,
                                  Scalar_Field &);
 
 template <typename Scalar_QP, typename Scalar_QP_Scratch,
-	  typename Vector_QP, typename Vector_QP_Scratch>
+          typename Vector_QP, typename Vector_QP_Scratch>
 struct divergence_sphere {
   int ie_m;
   const Vector_QP &v_m;
@@ -199,28 +257,39 @@ struct divergence_sphere {
   Scalar_QP_Scratch &scratch_cache_m;
   Scalar_QP &divergence_m;
 
-KOKKOS_INLINE_FUNCTION divergence_sphere(
-    int ie, const Vector_QP &v, const Dvv &dvv,
-    const MetDet &metdet, const MetDet &rmetdet,
-    const D &dinv, Vector_QP_Scratch &scratch_contra,
-    Scalar_QP_Scratch &scratch_cache,
-    Scalar_QP &divergence) : ie_m(ie), v_m(v), dvv_m(dvv), metdet_m(metdet), rmetdet_m(rmetdet), dinv_m(dinv), scratch_contra_m(scratch_contra), scratch_cache_m(scratch_cache), divergence_m(divergence) {}
+  KOKKOS_INLINE_FUNCTION divergence_sphere(
+      int ie, const Vector_QP &v, const Dvv &dvv,
+      const MetDet &metdet, const MetDet &rmetdet,
+      const D &dinv, Vector_QP_Scratch &scratch_contra,
+      Scalar_QP_Scratch &scratch_cache,
+      Scalar_QP &divergence)
+      : ie_m(ie),
+        v_m(v),
+        dvv_m(dvv),
+        metdet_m(metdet),
+        rmetdet_m(rmetdet),
+        dinv_m(dinv),
+        scratch_contra_m(scratch_contra),
+        scratch_cache_m(scratch_cache),
+        divergence_m(divergence) {}
 
   struct loop1_tag {};
   struct loop2_tag {};
   struct loop3_tag {};
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop1_tag &, const int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(
+      const loop1_tag &, const int idx) const {
     const int j = idx / dim / np;
     const int i = (idx / dim) % np;
-    const int h = idx % np;
+    const int h = idx % dim;
     scratch_contra_m(i, j, h) =
-      metdet_m(i, j, ie_m) *
-      (dinv_m(i, j, h, 0, ie_m) * v_m(i, j, 0) +
-       dinv_m(i, j, h, 1, ie_m) * v_m(i, j, 1));
+        metdet_m(i, j, ie_m) *
+        (dinv_m(i, j, h, 0, ie_m) * v_m(i, j, 0) +
+         dinv_m(i, j, h, 1, ie_m) * v_m(i, j, 1));
   }
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop2_tag &, const int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(
+      const loop2_tag &, const int idx) const {
     const int j = idx / np;
     const int l = idx % np;
     real dvd[dim];
@@ -235,12 +304,13 @@ KOKKOS_INLINE_FUNCTION divergence_sphere(
     scratch_cache_m(j, l) = dvd[1];
   }
 
-  KOKKOS_INLINE_FUNCTION void operator() (const loop3_tag &, const int idx) const {
+  KOKKOS_INLINE_FUNCTION void operator()(
+      const loop3_tag &, const int idx) const {
     const int j = idx / np;
     const int i = idx % np;
     divergence_m(i, j) =
-      (divergence_m(i, j) + scratch_cache_m(i, j)) *
-      (rmetdet_m(i, j, ie_m) * rrearth);
+        (divergence_m(i, j) + scratch_cache_m(i, j)) *
+        (rmetdet_m(i, j, ie_m) * rrearth);
   }
 };
 
@@ -254,13 +324,23 @@ void divergence_sphere_c(int ie, const Vector_QP &v,
   Vector_Field scratch_contra("contravariant scratch space",
                               np, np, dim);
   Scalar_Field scratch_cache("scratch cache", np, np);
-  using functor = divergence_sphere<Scalar_QP, Scalar_Field, Vector_QP, Vector_Field>;
-  functor f(ie, v, dvv, metdet, rmetdet,
-	    dinv, scratch_contra,
-	    scratch_cache, divergence);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop1_tag>(0, np * np * dim), f);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop2_tag>(0, np * np), f);
-  Kokkos::parallel_for(Kokkos::RangePolicy<typename functor::loop3_tag>(0, np * np), f);
+  using functor =
+      divergence_sphere<Scalar_QP, Scalar_Field, Vector_QP,
+                        Vector_Field>;
+  functor f(ie, v, dvv, metdet, rmetdet, dinv,
+            scratch_contra, scratch_cache, divergence);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop1_tag>(
+          0, np * np * dim),
+      f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop2_tag>(
+          0, np * np),
+      f);
+  Kokkos::parallel_for(
+      Kokkos::RangePolicy<typename functor::loop3_tag>(
+          0, np * np),
+      f);
 }
 
 template <typename Scalar_QP, typename Vector_QP>
@@ -273,20 +353,24 @@ KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
                                       np, np, dim);
   Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
                                      np, np);
-  using functor = divergence_sphere<Scalar_QP, Scalar_Field_Scratch, Vector_QP, Vector_Field_Scratch>;
-  functor f(ie, v, dvv, metdet, rmetdet,
-	    dinv, scratch_contra,
-	    scratch_cache, divergence);
-  /* Somewhat hacky solution to lack of tag support for TeamThreadRange */
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np * np), KOKKOS_LAMBDA(const int idx) {
-      for(int i = 0; i < dim; i++) {
-	f(typename functor::loop1_tag(), idx * dim + i);
-      }
-      team.team_barrier();
-      f(typename functor::loop2_tag(), idx);
-      team.team_barrier();
-      f(typename functor::loop3_tag(), idx);
-    });
+  using functor =
+      divergence_sphere<Scalar_QP, Scalar_Field_Scratch,
+                        Vector_QP, Vector_Field_Scratch>;
+  functor f(ie, v, dvv, metdet, rmetdet, dinv,
+            scratch_contra, scratch_cache, divergence);
+  /* Somewhat hacky solution to lack of tag support for
+   * TeamThreadRange */
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
+        for(int i = 0; i < dim; i++) {
+          f(typename functor::loop1_tag(), idx * dim + i);
+        }
+        team.team_barrier();
+        f(typename functor::loop2_tag(), idx);
+        team.team_barrier();
+        f(typename functor::loop3_tag(), idx);
+      });
 }
 
 template void divergence_sphere_c(int, const Vector_Field &,
