@@ -402,7 +402,6 @@ void loop7_c(const int &nets, const int &nete,
    * Team size must fit in the hardware constraints
    */
   const int league_size = (nete - nets + 1) * nlev;
-  const int team_size = 32;  // arbitrarily chosen for now
 
   const int vector_mem_needed =
       Vector_Field_Scratch::shmem_size(np, np, dim);
@@ -410,7 +409,9 @@ void loop7_c(const int &nets, const int &nete,
       Scalar_Field_Scratch::shmem_size(np, np);
   const int mem_needed =
       7 * vector_mem_needed + 5 * scalar_mem_needed;
-  Kokkos::TeamPolicy<> policy(league_size, team_size);
+  Kokkos::TeamPolicy<> policy(league_size, 1);
+  // Let Kokkos choose the team size with Kokkos::AUTO
+  // Need to use Kokkos::single somewhere to protect something
 
   Kokkos::parallel_for(
       policy.set_scratch_size(0,
