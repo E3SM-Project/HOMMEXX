@@ -8,8 +8,6 @@
 
 #include <assert.h>
 
-#include <cuda.h>
-
 namespace Homme {
 
 constexpr const real rearth = 6.376E6;
@@ -302,7 +300,6 @@ struct divergence_sphere {
     const int l = idx % np;
     assert(j < np);
     assert(l < np);
-    assert(false);
     real dvd[dim];
     for(int h = 0; h < dim; h++) {
       dvd[h] = 0.0;
