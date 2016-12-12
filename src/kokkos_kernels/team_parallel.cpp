@@ -8,8 +8,6 @@
 
 #include <assert.h>
 
-#include <cuda.h>
-
 namespace Homme {
 
 constexpr const real rearth = 6.376E6;
