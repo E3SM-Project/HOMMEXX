@@ -252,14 +252,14 @@ template <typename Scalar_QP, typename Scalar_QP_Scratch,
           typename Vector_QP, typename Vector_QP_Scratch>
 struct divergence_sphere {
   int ie_m;
-  const Vector_QP &v_m;
-  const Dvv &dvv_m;
-  const MetDet &metdet_m;
-  const MetDet &rmetdet_m;
-  const D &dinv_m;
-  Vector_QP_Scratch &scratch_contra_m;
-  Scalar_QP_Scratch &scratch_cache_m;
-  Scalar_QP &divergence_m;
+  const Vector_QP v_m;
+  const Dvv dvv_m;
+  const MetDet metdet_m;
+  const MetDet rmetdet_m;
+  const D dinv_m;
+  const Vector_QP_Scratch scratch_contra_m;
+  const Scalar_QP_Scratch scratch_cache_m;
+  const Scalar_QP divergence_m;
 
   KOKKOS_INLINE_FUNCTION divergence_sphere(
       int ie, const Vector_QP &v, const Dvv &dvv,
@@ -302,7 +302,6 @@ struct divergence_sphere {
     const int l = idx % np;
     assert(j < np);
     assert(l < np);
-    assert(false);
     real dvd[dim];
     for(int h = 0; h < dim; h++) {
       dvd[h] = 0.0;
