@@ -4,11 +4,12 @@
 SET(NETCDF_DIR $ENV{NETCDF_ROOT} CACHE FILEPATH "")
 SET(PNETCDF_DIR $ENV{PNETCDF_ROOT} CACHE FILEPATH "")
 
-SET(NETCDF_PREFIX /home/mdeakin/prefix)
+SET(NETCDF_Fortran_DIR $ENV{NETCDFF_ROOT} CACHE FILEPATH "")
+SET(NETCDFF_DIR $ENV{NETCDFF_ROOT} CACHE FILEPATH "")
 
 # Hacky way of ensuring needed libraries are linked in the proper order
-SET(NetcdfF_LIBRARY ${NETCDF_PREFIX}/lib64/libnetcdff.so -lhdf5_hl -lhdf5 -ldl CACHE LIST "")
-SET(NetcdfF_INCLUDE_DIR ${NETCDF_PREFIX}/include CACHE FILEPATH "")
+SET(NetcdfF_LIBRARY $ENV{NETCDFF_ROOT}/lib/libnetcdff.a -lnetcdf -lhdf5_hl -lhdf5 -ldl -lz CACHE LIST "")
+SET(ZLIB_DIR $ENV{ZLIB_ROOT} CACHE FILEPATH "")
 
 SET(HOMME_FIND_BLASLAPACK TRUE CACHE BOOL "")
 
