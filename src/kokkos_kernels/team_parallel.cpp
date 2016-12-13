@@ -104,7 +104,11 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
       Kokkos::TeamThreadRange(team, np * np),
       KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop1_tag(), idx);
-        team.team_barrier();
+      });
+  team.team_barrier();
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop2_tag(), idx);
       });
 }
@@ -229,14 +233,20 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
   /* Somewhat hacky solution to lack of tag support for
    * TeamThreadRange */
   Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np * dim),
+      KOKKOS_LAMBDA(const int idx) {
+        f(typename functor::loop1_tag(), idx);
+      });
+  team.team_barrier();
+  Kokkos::parallel_for(
       Kokkos::TeamThreadRange(team, np * np),
       KOKKOS_LAMBDA(const int idx) {
-        for(int i = 0; i < dim; i++) {
-          f(typename functor::loop1_tag(), idx * dim + i);
-        }
-        team.team_barrier();
         f(typename functor::loop2_tag(), idx);
-        team.team_barrier();
+      });
+  team.team_barrier();
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop3_tag(), idx);
       });
 }
@@ -374,9 +384,17 @@ KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
         for(int i = 0; i < dim; i++) {
           f(typename functor::loop1_tag(), idx * dim + i);
         }
-        team.team_barrier();
+      });
+  team.team_barrier();
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop2_tag(), idx);
-        team.team_barrier();
+      });
+  team.team_barrier();
+  Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(team, np * np),
+      KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop3_tag(), idx);
       });
 }
@@ -452,12 +470,6 @@ void loop7_c(const int &nets, const int &nete,
     TRACERADV_TOTAL_DIVERGENCE = 1
   };
 
-  using RangePolicy = Kokkos::Experimental::MDRangePolicy<
-      Kokkos::Experimental::Rank<
-          2, Kokkos::Experimental::Iterate::Left,
-          Kokkos::Experimental::Iterate::Left>,
-      Kokkos::IndexType<int> >;
-
   /* League size is arbitrary
    * Team size must fit in the hardware constraints
    */
@@ -471,7 +483,8 @@ void loop7_c(const int &nets, const int &nete,
       7 * vector_mem_needed + 5 * scalar_mem_needed;
   Kokkos::TeamPolicy<> policy(league_size, 1);
   // Let Kokkos choose the team size with Kokkos::AUTO
-  // Need to use Kokkos::single somewhere to protect something
+  // Need to use Kokkos::single somewhere to protect
+  // something
 
   Kokkos::parallel_for(
       policy.set_scratch_size(0,
@@ -480,7 +493,7 @@ void loop7_c(const int &nets, const int &nete,
         const int ie =
             (team.league_rank() / nlev) + nets - 1;
         const int k = team.league_rank() % nlev;
-	assert(ie < nelemd);
+        assert(ie < nelemd);
         if(ie < nete) {
           Vector_Field_Scratch ulatlon(team.team_scratch(0),
                                        np, np, dim);
@@ -498,31 +511,42 @@ void loop7_c(const int &nets, const int &nete,
           Scalar_Field_Scratch div(team.team_scratch(0), np,
                                    np);
 
+          team.team_barrier();
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange(team, np * np),
-	      [&](const int index) {
-		const int j = index / np;
-		const int i = index % np;
-		real v1 = v(i, j, 0, k, n0 - 1, ie);
-		real v2 = v(i, j, 1, k, n0 - 1, ie);
-		e(i, j) = 0.0;
-		for(int h = 0; h < dim; h++) {
-		  ulatlon(i, j, h) = d(i, j, h, 0, ie) * v1 +
-		    d(i, j, h, 1, ie) * v2;
-		  pv(i, j, h) =
-		    ulatlon(i, j, h) *
-		    (pmean + p(i, j, k, n0 - 1, ie));
-		  e(i, j) += ulatlon(i, j, h) * ulatlon(i, j, h);
-		}
-		e(i, j) /= 2.0;
-		e(i, j) +=
-		  p(i, j, k, n0 - 1, ie) + ps(i, j, ie);
-	      });
+              [&](const int index) {
+                const int j = index / np;
+                const int i = index % np;
+                real v1 = v(i, j, 0, k, n0 - 1, ie);
+                real v2 = v(i, j, 1, k, n0 - 1, ie);
+                e(i, j) = 0.0;
+                for(int h = 0; h < dim; h++) {
+                  ulatlon(i, j, h) =
+                      d(i, j, h, 0, ie) * v1 +
+                      d(i, j, h, 1, ie) * v2;
+                  pv(i, j, h) =
+                      ulatlon(i, j, h) *
+                      (pmean + p(i, j, k, n0 - 1, ie));
+                  // e(i, j) +=
+                  //     ulatlon(i, j, h) * ulatlon(i, j,
+                  //     h);
+                }
+                e(i, j) = 0.5 * (ulatlon(i, j, 0) *
+                                     ulatlon(i, j, 0) +
+                                 ulatlon(i, j, 1) *
+                                     ulatlon(i, j, 1)) +
+                          p(i, j, k, n0 - 1, ie) +
+                          ps(i, j, ie);
+                // e(i, j) /= 2.0;
+                // e(i, j) +=
+                //     p(i, j, k, n0 - 1, ie) + ps(i, j,
+                //     ie);
+              });
 
           team.team_barrier();
-
           gradient_sphere_c(ie, e, dvv, dinv, team, grade);
 
+          team.team_barrier();
           vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
                              team, zeta);
 
@@ -531,16 +555,21 @@ void loop7_c(const int &nets, const int &nete,
             auto p_slice = Kokkos::subview(
                 p, std::make_pair(0, np),
                 std::make_pair(0, np), k, n0 - 1, ie);
+            team.team_barrier();
             gradient_sphere_c(ie, p_slice, dvv, dinv, team,
                               gradh);
-            for(int j = 0; j < np; j++) {
-              for(int i = 0; i < np; i++) {
-                div(i, j) =
-                    ulatlon(i, j, 0) * gradh(i, j, 0) +
-                    ulatlon(i, j, 1) * gradh(i, j, 1);
-              }
-            }
+            team.team_barrier();
+            Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(team, np * np),
+                [&](const int index) {
+                  const int j = index / np;
+                  const int i = index % np;
+                  div(i, j) =
+                      ulatlon(i, j, 0) * gradh(i, j, 0) +
+                      ulatlon(i, j, 1) * gradh(i, j, 1);
+                });
           } else {
+            team.team_barrier();
             divergence_sphere_c(ie, pv, dvv, metdet,
                                 rmetdet, dinv, team, div);
           }
@@ -554,36 +583,40 @@ void loop7_c(const int &nets, const int &nete,
           // accumulate all RHS terms
           Kokkos::parallel_for(
               Kokkos::TeamThreadRange(team, np * np),
-	      [&](const int index) {
-		const int j = index / np;
-		const int i = index % np;
-		vtens(i, j, 0, k, ie - nets + 1) +=
-		  (ulatlon(i, j, 1) *
-		   (fcor(i, j, ie) + zeta(i, j)) -
-		   grade(i, j, 0));
+              [&](const int index) {
+                const int j = index / np;
+                const int i = index % np;
+                vtens(i, j, 0, k, ie - nets + 1) +=
+                    (ulatlon(i, j, 1) *
+                         (fcor(i, j, ie) + zeta(i, j)) -
+                     grade(i, j, 0));
 
-		vtens(i, j, 1, k, ie - nets + 1) +=
-		  (-ulatlon(i, j, 0) *
-		   (fcor(i, j, ie) + zeta(i, j)) -
-		   grade(i, j, 1));
+                vtens(i, j, 1, k, ie - nets + 1) +=
+                    (-ulatlon(i, j, 0) *
+                         (fcor(i, j, ie) + zeta(i, j)) -
+                     grade(i, j, 1));
 
-		ptens(i, j, k, ie - nets + 1) -= div(i, j);
-	      });
+                ptens(i, j, k, ie - nets + 1) -= div(i, j);
+              });
 
-          for(int j = 0; j < np; j++) {
-            for(int i = 0; i < np; i++) {
-              // take the local element timestep
-              for(int h = 0; h < dim; h++) {
-                vtens(i, j, h, k, ie - nets + 1) =
-                    ulatlon(i, j, h) +
-                    dtstage *
-                        vtens(i, j, h, k, ie - nets + 1);
-              }
-              ptens(i, j, k, ie - nets + 1) =
-                  p(i, j, k, n0 - 1, ie - nets + 1) +
-                  dtstage * ptens(i, j, k, ie - nets + 1);
-            }
-          }
+          team.team_barrier();
+
+          Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(team, np * np),
+              [&](const int index) {
+                const int j = index / np;
+                const int i = index % np;
+                // take the local element timestep
+                for(int h = 0; h < dim; h++) {
+                  vtens(i, j, h, k, ie - nets + 1) =
+                      ulatlon(i, j, h) +
+                      dtstage *
+                          vtens(i, j, h, k, ie - nets + 1);
+                }
+                ptens(i, j, k, ie - nets + 1) =
+                    p(i, j, k, n0 - 1, ie - nets + 1) +
+                    dtstage * ptens(i, j, k, ie - nets + 1);
+              });
         }
       });
   Kokkos::deep_copy(ptens_host, ptens);
