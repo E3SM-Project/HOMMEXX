@@ -191,23 +191,23 @@ void input_reader(std::map<std::string, input_type *> &data,
 }
 
 #if defined(KOKKOS_HAVE_DEFAULT_DEVICE_TYPE_CUDA)
+constexpr const real epsilon = std::numeric_limits<real>::epsilon();
 real check_answer(real theory, real exper,
                   real epsilon_coeff = 4.0) {
   if(epsilon_coeff == 0.0) {
     epsilon_coeff = 1.0;
   }
   if(theory == 0.0) {
-    const max_abs_err =
-        std::fabs(epsilon_coeff *
-                  std::numeric_limits<real>::epsilon());
-    if(std::fabs(exper) > max_abs_err) {
-      return std::fabs(exper);
+    const real max_abs_err =
+        fabs(epsilon_coeff * epsilon);
+    if(fabs(exper) > max_abs_err) {
+      return fabs(exper);
     }
   } else {
-    const max_abs_err = std::fabs(
+    const real max_abs_err = fabs(
         epsilon_coeff *
-        std::numeric_limits<real>::epsilon() * theory);
-    const abs_err = std::fabs(theory - exper);
+        epsilon * theory);
+    const real abs_err = fabs(theory - exper);
     if(abs_err > max_abs_err) {
       return abs_err;
     }
