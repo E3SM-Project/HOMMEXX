@@ -1,0 +1,10 @@
+<Project name="HOMMEXX">
+  <SubProject name="SkybridgeTrilinosSerial">
+  </SubProject>
+  <SubProject name="SkybridgeTrilinosOpenMP">
+  </SubProject>
+  <SubProject name="SkybridgeHOMMEXXSerial">
+  </SubProject>
+  <SubProject name="SkybridgeHOMMEXXOpenMP">
+  </SubProject>
+</Project>
