@@ -190,6 +190,37 @@ void input_reader(std::map<std::string, input_type *> &data,
   }
 }
 
+#if defined(KOKKOS_HAVE_DEFAULT_DEVICE_TYPE_CUDA)
+constexpr const real epsilon = std::numeric_limits<real>::epsilon();
+real check_answer(real theory, real exper,
+                  real epsilon_coeff = 4.0) {
+  if(epsilon_coeff == 0.0) {
+    epsilon_coeff = 1.0;
+  }
+  if(theory == 0.0) {
+    const real max_abs_err =
+        fabs(epsilon_coeff * epsilon);
+    if(fabs(exper) > max_abs_err) {
+      return fabs(exper);
+    }
+  } else {
+    const real max_abs_err = fabs(
+        epsilon_coeff *
+        epsilon * theory);
+    const real abs_err = fabs(theory - exper);
+    if(abs_err > max_abs_err) {
+      return abs_err;
+    }
+  }
+  return 0.0;
+}
+#else
+real check_answer(real theory, real exper,
+                  real epsilon_coeff = 0.0) {
+  return std::fabs(theory - exper);
+}
+#endif
+
 TEST_CASE("copy_timelevels", "advance_nonstag_rk_cxx") {
   constexpr const int numelems = 100;
   constexpr const int dim = 2;
@@ -233,10 +264,12 @@ TEST_CASE("copy_timelevels", "advance_nonstag_rk_cxx") {
                         p_exper, v_exper);
 
       for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
+        REQUIRE(check_answer(p_theory[j], p_exper[j]) ==
+                0.0);
       }
       for(int j = 0; j < v_len; j++) {
-        REQUIRE(v_exper[j] == v_theory[j]);
+        REQUIRE(check_answer(v_theory[j], v_exper[j]) ==
+                0.0);
       }
     }
   }
@@ -286,7 +319,8 @@ TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
                     p_theory);
       recover_q_c(nets, nete, kmass, n0, numelems, p_exper);
       for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
+        REQUIRE(check_answer(p_theory[j], p_exper[j]) ==
+                0.0);
       }
     }
   }
@@ -334,7 +368,8 @@ TEST_CASE("recover_dpq", "advance_nonstag_rk_cxx") {
       recover_dpq_c(nets, nete, kmass, n0, numelems,
                     p_exper);
       for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
+        REQUIRE(check_answer(p_theory[j], p_exper[j]) ==
+                0.0);
       }
     }
   }
@@ -383,7 +418,8 @@ TEST_CASE("contra2latlon", "advance_nonstag_rk_cxx") {
                         v_theory);
       contra2latlon_c(nets, nete, n0, numelems, D, v_exper);
       for(int j = 0; j < v_len; j++) {
-        REQUIRE(v_exper[j] == v_theory[j]);
+        REQUIRE(check_answer(v_theory[j], v_exper[j]) ==
+                0.0);
       }
     }
   }
@@ -446,13 +482,12 @@ TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
       add_hv_c(nets, nete, numelems, sphere_mp, ptens_exper,
                vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
-        if(ptens_exper[j] != ptens_theory[j]) {
-          std::cout << ptens_exper[j] - ptens_theory[j];
-        }
-        REQUIRE(ptens_exper[j] - ptens_theory[j] == 0.0);
+        REQUIRE(check_answer(ptens_theory[j],
+                             ptens_exper[j]) == 0.0);
       }
       for(int j = 0; j < vtens_len; j++) {
-        REQUIRE(vtens_exper[j] - vtens_theory[j] == 0.0);
+        REQUIRE(check_answer(vtens_theory[j],
+                             vtens_exper[j]) == 0.0);
       }
 
       delete[] ptens_theory;
@@ -511,10 +546,12 @@ TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
       weighted_rhs_c(nets, nete, numelems, rsphere_mp, dinv,
                      ptens_exper, vtens_exper);
       for(int j = 0; j < ptens_len; j++) {
-        REQUIRE(ptens_exper[j] == ptens_theory[j]);
+        REQUIRE(check_answer(ptens_theory[j],
+                             ptens_exper[j]) == 0.0);
       }
       for(int j = 0; j < vtens_len; j++) {
-        REQUIRE(vtens_exper[j] == vtens_theory[j]);
+        REQUIRE(check_answer(vtens_theory[j],
+                             vtens_exper[j]) == 0.0);
       }
 
       delete[] ptens_theory;
@@ -595,10 +632,12 @@ TEST_CASE("rk_stage", "advance_nonstag_rk_cxx") {
                  vtens);
 
       for(int j = 0; j < p_len; j++) {
-        REQUIRE(p_exper[j] == p_theory[j]);
+        REQUIRE(check_answer(p_theory[j], p_exper[j]) ==
+                0.0);
       }
       for(int j = 0; j < v_len; j++) {
-        REQUIRE(v_exper[j] == v_theory[j]);
+        REQUIRE(check_answer(v_theory[j], v_exper[j]) ==
+                0.0);
       }
 
       delete[] ptens;
@@ -710,10 +749,12 @@ TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
               p, ps, v, ptens_exper, vtens_exper);
 
       for(int j = 0; j < ptens_len; j++) {
-        REQUIRE(ptens_exper[j] == ptens_theory[j]);
+        REQUIRE(check_answer(ptens_theory[j],
+                             ptens_exper[j]) == 0.0);
       }
       for(int j = 0; j < vtens_len; j++) {
-        REQUIRE(vtens_exper[j] == vtens_theory[j]);
+        REQUIRE(check_answer(vtens_theory[j],
+                             vtens_exper[j]) == 0.0);
       }
 
       delete[] ptens_theory;
@@ -792,21 +833,8 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     for(int j = 0; j < dim; j++) {
       for(int k = 0; k < np; k++) {
         for(int l = 0; l < np; l++) {
-          if(grad_theory(l, k, j) == 0.0) {
-            /* Check the absolute error instead of the
-             * relative error
-             */
-            REQUIRE(std::fabs(grad_exper(l, k, j)) <
-                    std::numeric_limits<real>::epsilon());
-          } else {
-            const real rel_err =
-                std::fabs((grad_exper(l, k, j) -
-                           grad_theory(l, k, j)));
-            const real max_rel_err = std::fabs(
-                4.0 * std::numeric_limits<real>::epsilon() *
-                grad_theory(l, k, j));
-            REQUIRE(rel_err < max_rel_err);
-          }
+          REQUIRE(check_answer(grad_theory(l, k, j),
+                               grad_exper(l, k, j)) == 0.0);
         }
       }
     }
@@ -877,20 +905,8 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
 
     for(int k = 0; k < np; k++) {
       for(int l = 0; l < np; l++) {
-        if(vort_theory(l, k) == 0.0) {
-          /* Check the absolute error instead of the
-           * relative error
-           */
-          REQUIRE(std::fabs(vort_exper(l, k)) <
-                  std::numeric_limits<real>::epsilon());
-        } else {
-          REQUIRE(std::fabs((vort_exper(l, k) -
-                             vort_theory(l, k))) <
-                  std::fabs(
-                      4.0 *
-                      std::numeric_limits<real>::epsilon() *
-                      vort_theory(l, k)));
-        }
+        REQUIRE(check_answer(vort_theory(l, k),
+                             vort_exper(l, k)) == 0.0);
       }
     }
   }
@@ -964,20 +980,8 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
 
     for(int k = 0; k < np; k++) {
       for(int l = 0; l < np; l++) {
-        if(div_theory(l, k) == 0.0) {
-          /* Check the absolute error instead of the
-           * relative error
-           */
-          REQUIRE(std::fabs(div_exper_host(l, k)) <
-                  std::numeric_limits<real>::epsilon());
-        } else {
-          REQUIRE(std::fabs(div_exper_host(l, k) -
-                            div_theory(l, k)) <
-                  std::fabs(
-                      4.0 *
-                      std::numeric_limits<real>::epsilon() *
-                      div_theory(l, k)));
-        }
+        REQUIRE(check_answer(div_theory(l, k),
+                             div_exper_host(l, k)) == 0.0);
       }
     }
   }
