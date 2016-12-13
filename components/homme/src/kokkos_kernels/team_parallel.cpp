@@ -56,15 +56,14 @@ struct gradient_sphere {
 
   KOKKOS_INLINE_FUNCTION void operator()(const loop2_tag,
                                          int idx) const {
-    const int j = idx / np;
-    const int i = idx % np;
-    for(int h = 0; h < dim; h++) {
-      real di1 = this->dinv_m(i, j, 0, h, this->ie_m);
-      real v1 = this->scratch_m(i, j, 0);
-      real di2 = this->dinv_m(i, j, 1, h, this->ie_m);
-      real v2 = this->scratch_m(i, j, 1);
-      this->grad_m(i, j, h) = di1 * v1 + di2 * v2;
-    }
+    const int j = idx / dim / np;
+    const int i = (idx / dim) % np;
+    const int h = idx % dim;
+    real di1 = this->dinv_m(i, j, 0, h, this->ie_m);
+    real v1 = this->scratch_m(i, j, 0);
+    real di2 = this->dinv_m(i, j, 1, h, this->ie_m);
+    real v2 = this->scratch_m(i, j, 1);
+    this->grad_m(i, j, h) = di1 * v1 + di2 * v2;
   }
 };
 
@@ -82,9 +81,10 @@ void gradient_sphere_c(int ie, const Scalar_QP &s,
       Kokkos::RangePolicy<typename functor::loop1_tag>(
           0, np * np),
       f);
+
   Kokkos::parallel_for(
       Kokkos::RangePolicy<typename functor::loop2_tag>(
-          0, np * np),
+          0, np * np * dim),
       f);
 }
 
@@ -107,7 +107,7 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
       });
   team.team_barrier();
   Kokkos::parallel_for(
-      Kokkos::TeamThreadRange(team, np * np),
+      Kokkos::TeamThreadRange(team, np * np * dim),
       KOKKOS_LAMBDA(const int idx) {
         f(typename functor::loop2_tag(), idx);
       });
