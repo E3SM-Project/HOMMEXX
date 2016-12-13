@@ -107,6 +107,11 @@ void loop7_c(const int &nets, const int &nete,
              real *&v_ptr, real *&ptens_ptr,
              real *&vtens_ptr);
 
+void gradient_sphere_c_callable(real *s,
+                                real *dvv,
+                                real *dinv,
+                                real *grad);
+
 }  // extern "C"
 
 namespace Homme {
@@ -191,22 +196,24 @@ void input_reader(std::map<std::string, input_type *> &data,
 }
 
 #if defined(KOKKOS_HAVE_DEFAULT_DEVICE_TYPE_CUDA)
-constexpr const real epsilon = std::numeric_limits<real>::epsilon();
 real check_answer(real theory, real exper,
                   real epsilon_coeff = 4.0) {
-  if(epsilon_coeff == 0.0) {
-    epsilon_coeff = 1.0;
-  }
   if(theory == 0.0) {
+    if(epsilon_coeff == 0.0) {
+      epsilon_coeff = 1.0;
+    }
     const real max_abs_err =
-        fabs(epsilon_coeff * epsilon);
+        fabs(epsilon_coeff * std::numeric_limits<real>::epsilon());
     if(fabs(exper) > max_abs_err) {
       return fabs(exper);
     }
   } else {
+    if(epsilon_coeff == 0.0) {
+      epsilon_coeff = 1.0 / theory;
+    }
     const real max_abs_err = fabs(
         epsilon_coeff *
-        epsilon * theory);
+        std::numeric_limits<real>::epsilon() * theory);
     const real abs_err = fabs(theory - exper);
     if(abs_err > max_abs_err) {
       return abs_err;
@@ -776,69 +783,70 @@ TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
 }
 
 TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
-  constexpr const int dim = 2;
+  SECTION("random test") {
+    constexpr const int numelems = 10;
+    constexpr const int dim = 2;
 
-  constexpr const char *testinput =
-      np == 4
-          ? "gradient_sphere_np4.in"
-          : np == 8 ? "gradient_sphere_np8.in" : nullptr;
-  SECTION(testinput) {
-    int grad_np;
-    std::map<std::string, int *> intparams;
-    intparams.insert({std::string("np"), &grad_np});
-    std::ifstream input(testinput);
-    REQUIRE(input);
-    input_reader(intparams, input);
-    REQUIRE(grad_np == np);
+    constexpr const int numRandTests = 10;
 
-    input.clear();
-    input.seekg(std::ifstream::beg);
+    std::random_device rd;
+    using rngAlg = std::mt19937_64;
+    rngAlg engine(rd());
 
-    Scalar_Field_Host s_host("Scalars", np, np);
-    std::map<std::string, real *> data;
-    data.insert({std::string("s"), s_host.ptr_on_device()});
+    Scalar_Field_Host s_fortran("", np, np);
+    Scalar_Field s_kokkos("", np, np);
 
-    Dvv_Host dvv_host("dvv", np, np);
-    data.insert({std::string("deriv_Dvv"),
-                 dvv_host.ptr_on_device()});
+    Dvv_Host dvv_fortran("", np, np);
+    Dvv dvv_kokkos("", np, np);
 
-    constexpr const int numelems = 1;
-    D_Host dinv_host("dinv_host", np, np, dim, dim,
-                     numelems);
-    data.insert({std::string("elem_Dinv"),
-                 dinv_host.ptr_on_device()});
+    D_Host dinv_fortran("", np, np, dim, dim, numelems);
+    D dinv_kokkos("", np, np, dim, dim, numelems);
 
-    Homme_View_Host<real ***> grad_theory("Gradient Theory",
-                                          np, np, dim);
-    data.insert({std::string("Gradient Sphere result"),
-                 grad_theory.ptr_on_device()});
-    input_reader(data, input);
+    Vector_Field_Host grad_theory("", np, np, dim);
+    Vector_Field grad_exper("", np, np, dim);
+    Vector_Field_Host grad_exper_host("", np, np, dim);
 
-    Scalar_Field s("Scalar Values", np, np);
-    Kokkos::deep_copy(s, s_host);
+    for(int i = 0; i < numRandTests; i++) {
+      genRandArray(s_fortran.ptr_on_device(),
+		   np * np, engine,
+		   std::uniform_real_distribution<real>(0, 1.0));
+      Kokkos::deep_copy(s_kokkos, s_fortran);
 
-    Dvv dvv("dvv", np, np);
-    Kokkos::deep_copy(dvv, dvv_host);
+      genRandArray(dvv_fortran.ptr_on_device(),
+		   np * np, engine,
+		   std::uniform_real_distribution<real>(0, 1.0));
+      Kokkos::deep_copy(dvv_kokkos, dvv_fortran);
 
-    D dinv("dinv", np, np, dim, dim, numelems);
-    Kokkos::deep_copy(dinv, dinv_host);
+      genRandArray(dinv_fortran.ptr_on_device(),
+		   np * np * dim * numelems,
+		   engine,
+		   std::uniform_real_distribution<real>(0, 1.0));
+      Kokkos::deep_copy(dinv_kokkos, dinv_fortran);
 
-    Vector_Field grad_exper_device("Gradient Exper", np, np,
-                                   dim);
-    gradient_sphere_c(0, s, dvv, dinv, grad_exper_device);
-    Vector_Field_Host grad_exper("Gradient Exper", np, np,
-                                 dim);
-    Kokkos::deep_copy(grad_exper, grad_exper_device);
-
-    for(int j = 0; j < dim; j++) {
-      for(int k = 0; k < np; k++) {
-        for(int l = 0; l < np; l++) {
-          REQUIRE(check_answer(grad_theory(l, k, j),
-                               grad_exper(l, k, j)) == 0.0);
-        }
+      for(int ie = 0; ie < numelems; ie++) {
+        real *offset_dinv = &dinv_fortran(0, 0, 0, 0, ie);
+        gradient_sphere_c_callable(s_fortran.ptr_on_device(),
+                                   dvv_fortran.ptr_on_device(),
+                                   offset_dinv,
+                                   grad_theory.ptr_on_device());
+        gradient_sphere_c(ie, s_kokkos,
+                          dvv_kokkos,
+                          dinv_kokkos,
+                          grad_exper);
+	Kokkos::deep_copy(grad_exper_host, grad_exper);
+	for(int k = 0; k < dim; k++) {
+	  for(int j = 0; j < np; j++) {
+	    for(int i = 0; i < np; i++) {
+	      REQUIRE(check_answer(grad_theory(i, j, k), grad_exper_host(i, j, k)) ==
+		      0.0);
+	    }
+	  }
+	}
       }
+
     }
   }
+
 }
 
 TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {

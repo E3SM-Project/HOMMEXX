@@ -1279,8 +1279,24 @@ end do
        enddo
     enddo
 
-    end function gradient_sphere
+  end function gradient_sphere
 
+  subroutine gradient_sphere_c_callable(s, dvv, dinv, grad) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use derivative_mod, only: derivative_t, gradient_sphere
+    real(kind=real_kind), intent(in) :: s(np, np)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(out) :: grad(np, np, 2)
+
+    type(derivative_t) :: deriv
+
+    deriv%dvv = dvv
+
+    grad = gradient_sphere(s, deriv, dinv)
+
+  end subroutine gradient_sphere_c_callable
 
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)
 !
