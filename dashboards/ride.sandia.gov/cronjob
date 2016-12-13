@@ -1,0 +1,6 @@
+#this cronjob is run on ride12 
+
+01 00 * * 1-5  cd /ascldap/users/ikalash/nightlyHOMMEXXCDash; bash -c -l "bsub -q rhel7G < hommexxCUDA_lsf.batch"
+00 02 * * 1-5  cd /ascldap/users/ikalash/nightlyHOMMEXXCDash; bash process_results_ctest_cuda.sh
+01 02 * * 1-5  cd /ascldap/users/ikalash/nightlyHOMMEXXCDash; scp nightly_log_rideHOMMEXXcuda.txt ikalash@mockba.ca.sandia.gov:nightlyRideHOMMEXXCDash/
+02 02 * * 1-5  cd /ascldap/users/ikalash/nightlyHOMMEXXCDash; scp results_hommexx_cuda ikalash@mockba.ca.sandia.gov:nightlyRideHOMMEXXCDash/
