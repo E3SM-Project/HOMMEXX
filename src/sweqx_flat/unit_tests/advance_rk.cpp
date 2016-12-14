@@ -115,6 +115,10 @@ void divergence_sphere_c_callable(real *v, real *dvv,
 void gradient_sphere_c_callable(real *s, real *dvv,
                                 real *dinv, real *grad);
 
+void vorticity_sphere_c_callable(real *v, real *dvv,
+                                 real *rmetdet, real *dinv,
+                                 real *vort);
+
 }  // extern "C"
 
 namespace Homme {
@@ -786,7 +790,8 @@ TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
   delete[] v;
 }
 
-TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
+TEST_CASE("gradient_sphere_random",
+          "advance_nonstag_rk_cxx") {
   SECTION("random test") {
     constexpr const int numelems = 10;
     constexpr const int dim = 2;
@@ -831,7 +836,8 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
         real *offset_dinv = &dinv_fortran(0, 0, 0, 0, ie);
         gradient_sphere_c_callable(
             s_fortran.ptr_on_device(),
-            dvv_fortran.ptr_on_device(), offset_dinv,
+            dvv_fortran.ptr_on_device(),
+            &dinv_fortran(0, 0, 0, 0, ie),
             grad_theory.ptr_on_device());
         gradient_sphere_c(ie, s_kokkos, dvv_kokkos,
                           dinv_kokkos, grad_exper);
@@ -916,6 +922,79 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
       for(int l = 0; l < np; l++) {
         REQUIRE(check_answer(vort_theory(l, k),
                              vort_exper(l, k)) == 0.0);
+      }
+    }
+  }
+}
+
+TEST_CASE("vorticity_sphere_random",
+          "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 10;
+  constexpr const int dim = 2;
+
+  constexpr const int numRandTests = 10;
+
+  std::random_device rd;
+  using rngAlg = std::mt19937_64;
+  rngAlg engine(rd());
+
+  Vector_Field_Host v_fortran("", np, np, dim);
+  Vector_Field v_kokkos("", np, np, dim);
+
+  Dvv_Host dvv_fortran("", np, np);
+  Dvv dvv_kokkos("", np, np);
+
+  D_Host d_fortran("", np, np, dim, dim, numelems);
+  D d_kokkos("", np, np, dim, dim, numelems);
+
+  MetDet_Host rmetdet_fortran("", np, np, numelems);
+  MetDet rmetdet_kokkos("", np, np, numelems);
+
+  Scalar_Field_Host vort_theory("", np, np);
+  Scalar_Field vort_exper("", np, np);
+  Scalar_Field_Host vort_exper_host("", np, np);
+
+  for(int i = 0; i < numRandTests; i++) {
+    genRandArray(
+        v_fortran.ptr_on_device(), np * np * dim, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(v_kokkos, v_fortran);
+
+    genRandArray(
+        dvv_fortran.ptr_on_device(), np * np, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(dvv_kokkos, dvv_fortran);
+
+    genRandArray(
+        d_fortran.ptr_on_device(),
+        np * np * dim * dim * numelems, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(d_kokkos, d_fortran);
+
+    genRandArray(
+        rmetdet_fortran.ptr_on_device(), np * np * numelems,
+        engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(rmetdet_kokkos, rmetdet_fortran);
+
+    for(int ie = 0; ie < numelems; ie++) {
+      vorticity_sphere_c_callable(
+          v_fortran.ptr_on_device(),
+          dvv_fortran.ptr_on_device(),
+          &rmetdet_fortran(0, 0, ie),
+          &d_fortran(0, 0, 0, 0, ie),
+          vort_theory.ptr_on_device());
+      vorticity_sphere_c(ie, v_kokkos, dvv_kokkos, d_kokkos,
+                         rmetdet_kokkos, vort_exper);
+      Kokkos::deep_copy(vort_exper_host, vort_exper);
+      for(int k = 0; k < dim; k++) {
+        for(int j = 0; j < np; j++) {
+          for(int i = 0; i < np; i++) {
+            REQUIRE(check_answer(
+                        vort_theory(i, j, k),
+                        vort_exper_host(i, j, k)) == 0.0);
+          }
+        }
       }
     }
   }
