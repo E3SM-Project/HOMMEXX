@@ -1,4 +1,6 @@
 <Project name="HOMMEXX">
+  <SubProject name="RideTrilinosCuda">
+  </SubProject>
   <SubProject name="RideHOMMEXXCuda">
   </SubProject>
 </Project>
