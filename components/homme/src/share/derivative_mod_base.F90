@@ -1904,6 +1904,37 @@ end do
 
   end function vorticity_sphere
 
+  subroutine vorticity_sphere_c_callable(v, dvv, rmetdet, d, vort) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use derivative_mod, only: derivative_t, vorticity_sphere
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: v(np, np, 2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: d(np, np, 2, 2)
+    real(kind=real_kind), intent(out) :: vort(np, np)
+
+    type(derivative_t) :: deriv
+    type(element_t) :: elem
+
+    deriv%dvv = dvv
+
+#if SW_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%rmetdet(np, np))
+#endif
+    elem%D = d
+    elem%rmetdet = rmetdet
+
+    vort = vorticity_sphere(v, deriv, elem)
+
+#if SW_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%rmetdet)
+#endif
+  end subroutine vorticity_sphere_c_callable
+
   function vorticity_sphere_diag(v,deriv,elem) result(vort)
   !
   !   input:  v = velocity in lat-lon coordinates
