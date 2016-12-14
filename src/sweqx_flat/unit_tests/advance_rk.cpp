@@ -107,10 +107,8 @@ void loop7_c(const int &nets, const int &nete,
              real *&v_ptr, real *&ptens_ptr,
              real *&vtens_ptr);
 
-void gradient_sphere_c_callable(real *s,
-                                real *dvv,
-                                real *dinv,
-                                real *grad);
+void gradient_sphere_c_callable(real *s, real *dvv,
+                                real *dinv, real *grad);
 
 }  // extern "C"
 
@@ -203,7 +201,8 @@ real check_answer(real theory, real exper,
       epsilon_coeff = 1.0;
     }
     const real max_abs_err =
-        fabs(epsilon_coeff * std::numeric_limits<real>::epsilon());
+        fabs(epsilon_coeff *
+             std::numeric_limits<real>::epsilon());
     if(fabs(exper) > max_abs_err) {
       return fabs(exper);
     }
@@ -211,9 +210,9 @@ real check_answer(real theory, real exper,
     if(epsilon_coeff == 0.0) {
       epsilon_coeff = 1.0 / theory;
     }
-    const real max_abs_err = fabs(
-        epsilon_coeff *
-        std::numeric_limits<real>::epsilon() * theory);
+    const real max_abs_err =
+        fabs(epsilon_coeff *
+             std::numeric_limits<real>::epsilon() * theory);
     const real abs_err = fabs(theory - exper);
     if(abs_err > max_abs_err) {
       return abs_err;
@@ -807,46 +806,43 @@ TEST_CASE("gradient_sphere", "advance_nonstag_rk_cxx") {
     Vector_Field_Host grad_exper_host("", np, np, dim);
 
     for(int i = 0; i < numRandTests; i++) {
-      genRandArray(s_fortran.ptr_on_device(),
-		   np * np, engine,
-		   std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          s_fortran.ptr_on_device(), np * np, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
       Kokkos::deep_copy(s_kokkos, s_fortran);
 
-      genRandArray(dvv_fortran.ptr_on_device(),
-		   np * np, engine,
-		   std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          dvv_fortran.ptr_on_device(), np * np, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
       Kokkos::deep_copy(dvv_kokkos, dvv_fortran);
 
-      genRandArray(dinv_fortran.ptr_on_device(),
-		   np * np * dim * numelems,
-		   engine,
-		   std::uniform_real_distribution<real>(0, 1.0));
+      genRandArray(
+          dinv_fortran.ptr_on_device(),
+          np * np * dim * numelems, engine,
+          std::uniform_real_distribution<real>(0, 1.0));
       Kokkos::deep_copy(dinv_kokkos, dinv_fortran);
 
       for(int ie = 0; ie < numelems; ie++) {
         real *offset_dinv = &dinv_fortran(0, 0, 0, 0, ie);
-        gradient_sphere_c_callable(s_fortran.ptr_on_device(),
-                                   dvv_fortran.ptr_on_device(),
-                                   offset_dinv,
-                                   grad_theory.ptr_on_device());
-        gradient_sphere_c(ie, s_kokkos,
-                          dvv_kokkos,
-                          dinv_kokkos,
-                          grad_exper);
-	Kokkos::deep_copy(grad_exper_host, grad_exper);
-	for(int k = 0; k < dim; k++) {
-	  for(int j = 0; j < np; j++) {
-	    for(int i = 0; i < np; i++) {
-	      REQUIRE(check_answer(grad_theory(i, j, k), grad_exper_host(i, j, k)) ==
-		      0.0);
-	    }
-	  }
-	}
+        gradient_sphere_c_callable(
+            s_fortran.ptr_on_device(),
+            dvv_fortran.ptr_on_device(), offset_dinv,
+            grad_theory.ptr_on_device());
+        gradient_sphere_c(ie, s_kokkos, dvv_kokkos,
+                          dinv_kokkos, grad_exper);
+        Kokkos::deep_copy(grad_exper_host, grad_exper);
+        for(int k = 0; k < dim; k++) {
+          for(int j = 0; j < np; j++) {
+            for(int i = 0; i < np; i++) {
+              REQUIRE(check_answer(
+                          grad_theory(i, j, k),
+                          grad_exper_host(i, j, k)) == 0.0);
+            }
+          }
+        }
       }
-
     }
   }
-
 }
 
 TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
