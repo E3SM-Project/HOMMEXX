@@ -1295,7 +1295,6 @@ end do
     deriv%dvv = dvv
 
     grad = gradient_sphere(s, deriv, dinv)
-
   end subroutine gradient_sphere_c_callable
 
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)
@@ -2010,6 +2009,40 @@ end do
     
   end function divergence_sphere
 
+  subroutine divergence_sphere_c_callable(v, dvv, metdet, rmetdet, dinv, div) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use derivative_mod, only: derivative_t, divergence_sphere
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: v(np, np, 2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(out) :: div(np, np)
+
+    type(derivative_t) :: deriv
+    type(element_t) :: elem
+
+    deriv%dvv = dvv
+
+#if SW_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+    allocate(elem%rmetdet(np, np))
+#endif
+    elem%Dinv = dinv
+    elem%metdet = metdet
+    elem%rmetdet = rmetdet
+
+    div = divergence_sphere(v, deriv, elem)
+
+#if SW_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%metdet)
+    deallocate(elem%rmetdet)
+#endif
+  end subroutine divergence_sphere_c_callable
 
 !DIR$ ATTRIBUTES FORCEINLINE :: laplace_sphere_wk
   function laplace_sphere_wk(s,deriv,elem,var_coef) result(laplace)

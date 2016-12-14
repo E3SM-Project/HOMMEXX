@@ -107,6 +107,11 @@ void loop7_c(const int &nets, const int &nete,
              real *&v_ptr, real *&ptens_ptr,
              real *&vtens_ptr);
 
+void divergence_sphere_c_callable(real *v, real *dvv,
+                                  real *metdet,
+                                  real *rmetdet, real *dinv,
+                                  real *div);
+
 void gradient_sphere_c_callable(real *s, real *dvv,
                                 real *dinv, real *grad);
 
@@ -916,7 +921,8 @@ TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
   }
 }
 
-TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
+TEST_CASE("divergence_sphere_input",
+          "advance_nonstag_rk_cxx") {
   constexpr const int dim = 2;
 
   constexpr const char *testinput =
@@ -986,6 +992,90 @@ TEST_CASE("divergence_sphere", "advance_nonstag_rk_cxx") {
       for(int l = 0; l < np; l++) {
         REQUIRE(check_answer(div_theory(l, k),
                              div_exper_host(l, k)) == 0.0);
+      }
+    }
+  }
+}
+
+TEST_CASE("divergence_sphere_random",
+          "advance_nonstag_rk_cxx") {
+  constexpr const int numelems = 10;
+  constexpr const int dim = 2;
+
+  constexpr const int numRandTests = 10;
+
+  std::random_device rd;
+  using rngAlg = std::mt19937_64;
+  rngAlg engine(rd());
+
+  Vector_Field_Host v_fortran("", np, np, dim);
+  Vector_Field v_kokkos("", np, np, dim);
+
+  Dvv_Host dvv_fortran("", np, np);
+  Dvv dvv_kokkos("", np, np);
+
+  D_Host dinv_fortran("", np, np, dim, dim, numelems);
+  D dinv_kokkos("", np, np, dim, dim, numelems);
+
+  MetDet_Host metdet_fortran("", np, np, numelems);
+  MetDet metdet_kokkos("", np, np, numelems);
+  MetDet_Host rmetdet_fortran("", np, np, numelems);
+  MetDet rmetdet_kokkos("", np, np, numelems);
+
+  Scalar_Field_Host div_theory("", np, np);
+  Scalar_Field div_exper("", np, np);
+  Scalar_Field_Host div_exper_host("", np, np);
+
+  for(int i = 0; i < numRandTests; i++) {
+    genRandArray(
+        v_fortran.ptr_on_device(), np * np * dim, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(v_kokkos, v_fortran);
+
+    genRandArray(
+        dvv_fortran.ptr_on_device(), np * np, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(dvv_kokkos, dvv_fortran);
+
+    genRandArray(
+        dinv_fortran.ptr_on_device(),
+        np * np * dim * dim * numelems, engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(dinv_kokkos, dinv_fortran);
+
+    genRandArray(
+        metdet_fortran.ptr_on_device(), np * np * numelems,
+        engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(metdet_kokkos, metdet_fortran);
+
+    genRandArray(
+        rmetdet_fortran.ptr_on_device(), np * np * numelems,
+        engine,
+        std::uniform_real_distribution<real>(0, 1.0));
+    Kokkos::deep_copy(rmetdet_kokkos, rmetdet_fortran);
+
+    for(int ie = 0; ie < numelems; ie++) {
+      real *offset_dinv = &dinv_fortran(0, 0, 0, 0, ie);
+      divergence_sphere_c_callable(
+          v_fortran.ptr_on_device(),
+          dvv_fortran.ptr_on_device(),
+          &metdet_fortran(0, 0, ie),
+          &rmetdet_fortran(0, 0, ie),
+          &dinv_fortran(0, 0, 0, 0, ie),
+          div_theory.ptr_on_device());
+      divergence_sphere_c(ie, v_kokkos, dvv_kokkos,
+                          metdet_kokkos, rmetdet_kokkos,
+                          dinv_kokkos, div_exper);
+      Kokkos::deep_copy(div_exper_host, div_exper);
+      for(int k = 0; k < dim; k++) {
+        for(int j = 0; j < np; j++) {
+          for(int i = 0; i < np; i++) {
+            REQUIRE(check_answer(div_theory(i, j, k),
+                                 div_exper_host(i, j, k)) ==
+                    0.0);
+          }
+        }
       }
     }
   }
