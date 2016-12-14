@@ -47,6 +47,8 @@ find_program (CTEST_GIT_COMMAND NAMES git)
 
 set (HOMMEXX_REPOSITORY_LOCATION git@github.com:ACME-Climate/HOMMEXX.git)
 set (Trilinos_REPOSITORY_LOCATION git@github.com:trilinos/Trilinos.git)
+set (NVCC_WRAPPER /ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper)
+set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44) 
 
 if (CLEAN_BUILD)
   # Initial cache info
@@ -123,13 +125,13 @@ ctest_start(${CTEST_TEST_TYPE})
 # Set the common Trilinos config options & build Trilinos
 # 
 
-if (BUILD_TRILINOS_SERIAL) 
-  message ("ctest state: BUILD_TRILINOS_SERIAL")
+if (BUILD_TRILINOS_CUDA) 
+  message ("ctest state: BUILD_TRILINOS_CUDA")
   #
   # Configure the Trilinos build
   #
-  set_property (GLOBAL PROPERTY SubProject SkybridgeTrilinosSerial)
-  set_property (GLOBAL PROPERTY Label SkybridgeTrilinosSerial)
+  set_property (GLOBAL PROPERTY SubProject RideTrilinosCuda)
+  set_property (GLOBAL PROPERTY Label RideTrilinosCuda)
 
   set (CONFIGURE_OPTIONS
     "-DCMAKE_INSTALL_PREFIX:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
@@ -142,8 +144,15 @@ if (BUILD_TRILINOS_SERIAL)
     "-DTrilinos_ENABLE_KokkosExample=OFF"
     "-DTPL_ENABLE_MPI=ON"
     "-DKokkos_ENABLE_MPI=ON"
-    "-DKokkos_LIBRARIES='kokkosalgorithms;kokkoscontainers;kokkoscore'"
-    "-DKokkos_TPL_LIBRARIES='dl'"
+    "-DTrilinos_ENABLE_OpenMP=ON"
+    "-DKokkos_ENABLE_OpenMP=ON"
+    "-DTPL_ENABLE_Pthread=OFF"
+    "-DKokkos_ENABLE_Pthread=OFF"
+    "-DTPL_ENABLE_CUDA=ON"
+    "-DKokkos_ENABLE_Cuda=ON"
+    "-DKokkos_ENABLE_Cuda_UVM=ON"
+    "-DCUDA_TOOLKIT_ROOT_DIR=${CUDA_ROOT}"
+    "-DCMAKE_CXX_COMPILER=${NVCC_WRAPPER}"
   )
 
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/TriBuild")
@@ -175,8 +184,8 @@ if (BUILD_TRILINOS_SERIAL)
   # Build the rest of Trilinos and install everything
   #
 
-  set_property (GLOBAL PROPERTY SubProject SkybridgeTrilinosSerial)
-  set_property (GLOBAL PROPERTY Label SkybridgeTrilinosSerial)
+  set_property (GLOBAL PROPERTY SubProject RideTrilinosCuda)
+  set_property (GLOBAL PROPERTY Label RideTrilinosCuda)
   #set (CTEST_BUILD_TARGET all)
   set (CTEST_BUILD_TARGET install)
 
@@ -218,14 +227,17 @@ if (BUILD_HOMMEXX_CUDA)
   set_property (GLOBAL PROPERTY SubProject RideHOMMEXXCuda)
   set_property (GLOBAL PROPERTY Label RideHOMMEXXCuda)
   
+    #"-DCMAKE_CXX_COMPILER=/home/ikalash/Trilinos/packages/kokkos/config/nvcc_wrapper"
+    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/Trilinos/build-hommexx-cuda/install"
+
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
-    "-DCMAKE_CXX_COMPILER=/ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper"
     "-DBUILD_HOMME_SWEQX_FLAT=ON"
     "-DBUILD_HOMME_PREQX_FLAT=ON"
-    "-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/prefix_mdeakin"
     "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXX_baseline/build" 
+    "-DCMAKE_CXX_COMPILER=/ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper"
+    "-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/prefix_mdeakin"
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild")
