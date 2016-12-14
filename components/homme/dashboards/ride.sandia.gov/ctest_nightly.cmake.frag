@@ -135,8 +135,6 @@ if (BUILD_TRILINOS_CUDA)
 
   set (CONFIGURE_OPTIONS
     "-DCMAKE_INSTALL_PREFIX:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
-    "-DCMAKE_BUILD_TYPE:STRING=RELEASE"
-    #
     "-DTrilinos_ENABLE_Kokkos=ON"
     "-DTrilinos_ENABLE_KokkosAlgorithms=ON"
     "-DTrilinos_ENABLE_KokkosContainers=ON"
@@ -229,15 +227,18 @@ if (BUILD_HOMMEXX_CUDA)
   
     #"-DCMAKE_CXX_COMPILER=/home/ikalash/Trilinos/packages/kokkos/config/nvcc_wrapper"
     #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/Trilinos/build-hommexx-cuda/install"
+    #"-DCMAKE_CXX_COMPILER=/ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper"
+    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/prefix_mdeakin"
+    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/Trilinos/build-hommexx-cuda/install"
 
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
     "-DBUILD_HOMME_SWEQX_FLAT=ON"
     "-DBUILD_HOMME_PREQX_FLAT=ON"
-    "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXX_baseline/build" 
-    "-DCMAKE_CXX_COMPILER=/ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper"
-    "-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/prefix_mdeakin"
+    "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXX_baseline/HOMMEXXBuild" 
+    "-DCMAKE_CXX_COMPILER=${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper"
+    "-DTRILINOS_INSTALL_DIR:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild")
