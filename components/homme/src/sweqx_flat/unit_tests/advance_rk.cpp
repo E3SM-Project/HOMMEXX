@@ -790,6 +790,73 @@ TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
   delete[] v;
 }
 
+TEST_CASE("gradient_sphere_input",
+          "advance_nonstag_rk_cxx") {
+  constexpr const int dim = 2;
+
+  constexpr const char *testinput =
+      np == 4
+          ? "gradient_sphere_np4.in"
+          : np == 8 ? "gradient_sphere_np8.in" : nullptr;
+  SECTION(testinput) {
+    int grad_np;
+    std::map<std::string, int *> intparams;
+    intparams.insert({std::string("np"), &grad_np});
+    std::ifstream input(testinput);
+    REQUIRE(input);
+    input_reader(intparams, input);
+    REQUIRE(grad_np == np);
+
+    input.clear();
+    input.seekg(std::ifstream::beg);
+
+    Scalar_Field_Host s_host("Scalars", np, np);
+    std::map<std::string, real *> data;
+    data.insert({std::string("s"), s_host.ptr_on_device()});
+
+    Dvv_Host dvv_host("dvv", np, np);
+    data.insert({std::string("deriv_Dvv"),
+                 dvv_host.ptr_on_device()});
+
+    constexpr const int numelems = 1;
+    D_Host dinv_host("dinv_host", np, np, dim, dim,
+                     numelems);
+    data.insert({std::string("elem_Dinv"),
+                 dinv_host.ptr_on_device()});
+
+    Homme_View_Host<real ***> grad_theory("Gradient Theory",
+                                          np, np, dim);
+    data.insert({std::string("Gradient Sphere result"),
+                 grad_theory.ptr_on_device()});
+    input_reader(data, input);
+
+    Scalar_Field s("Scalar Values", np, np);
+    Kokkos::deep_copy(s, s_host);
+
+    Dvv dvv("dvv", np, np);
+    Kokkos::deep_copy(dvv, dvv_host);
+
+    D dinv("dinv", np, np, dim, dim, numelems);
+    Kokkos::deep_copy(dinv, dinv_host);
+
+    Vector_Field grad_exper_device("Gradient Exper", np, np,
+                                   dim);
+    gradient_sphere_c(0, s, dvv, dinv, grad_exper_device);
+    Vector_Field_Host grad_exper("Gradient Exper", np, np,
+                                 dim);
+    Kokkos::deep_copy(grad_exper, grad_exper_device);
+
+    for(int j = 0; j < dim; j++) {
+      for(int k = 0; k < np; k++) {
+        for(int l = 0; l < np; l++) {
+          REQUIRE(check_answer(grad_theory(l, k, j),
+                               grad_exper(l, k, j)) == 0.0);
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("gradient_sphere_random",
           "advance_nonstag_rk_cxx") {
   SECTION("random test") {
@@ -856,7 +923,8 @@ TEST_CASE("gradient_sphere_random",
   }
 }
 
-TEST_CASE("vorticity_sphere", "advance_nonstag_rk_cxx") {
+TEST_CASE("vorticity_sphere_input",
+          "advance_nonstag_rk_cxx") {
   constexpr const int dim = 2;
 
   constexpr const char *testinput =
