@@ -47,7 +47,6 @@ find_program (CTEST_GIT_COMMAND NAMES git)
 
 set (HOMMEXX_REPOSITORY_LOCATION git@github.com:ACME-Climate/HOMMEXX.git)
 set (Trilinos_REPOSITORY_LOCATION git@github.com:trilinos/Trilinos.git)
-set (NVCC_WRAPPER /ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper)
 set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44) 
 
 if (CLEAN_BUILD)
@@ -150,7 +149,7 @@ if (BUILD_TRILINOS_CUDA)
     "-DKokkos_ENABLE_Cuda=ON"
     "-DKokkos_ENABLE_Cuda_UVM=ON"
     "-DCUDA_TOOLKIT_ROOT_DIR=${CUDA_ROOT}"
-    "-DCMAKE_CXX_COMPILER=${NVCC_WRAPPER}"
+    "-DCMAKE_CXX_COMPILER=${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper"
   )
 
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/TriBuild")
@@ -225,12 +224,6 @@ if (BUILD_HOMMEXX_CUDA)
   set_property (GLOBAL PROPERTY SubProject RideHOMMEXXCuda)
   set_property (GLOBAL PROPERTY Label RideHOMMEXXCuda)
   
-    #"-DCMAKE_CXX_COMPILER=/home/ikalash/Trilinos/packages/kokkos/config/nvcc_wrapper"
-    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/Trilinos/build-hommexx-cuda/install"
-    #"-DCMAKE_CXX_COMPILER=/ascldap/users/ikalash/prefix_mdeakin/bin/nvcc_wrapper"
-    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/prefix_mdeakin"
-    #"-DTRILINOS_INSTALL_DIR=/ascldap/users/ikalash/Trilinos/build-hommexx-cuda/install"
-
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
