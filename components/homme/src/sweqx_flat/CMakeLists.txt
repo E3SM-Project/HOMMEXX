@@ -77,6 +77,10 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_SHARE}/time_mod.F90
   ${SRC_SHARE}/unit_tests_mod.F90
   ${SRC_SHARE}/viscosity_mod_base.F90
+  ${SRC_SHARE}/ControlParameters.cpp
+  ${SRC_SHARE}/Derivative.cpp
+  ${SRC_SHARE}/PhysicalConstants.cpp
+  ${SRC_SHARE}/ViewsPool.cpp
   ${SRC_UTILS}/shr_file_mod.F90
   ${SRC_UTILS}/shr_kind_mod.F90
   ${SRC_UTILS}/shr_mpi_mod.F90
@@ -87,6 +91,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
   ${SRC_KERNELS_DIR}/recover_q.cpp
+  ${SRC_KERNELS_DIR}/SphericalOperators.cpp
   ${SRC_SHARE}/kokkos_init.cpp
 )
 
@@ -97,6 +102,7 @@ SET(SWEQX_FLAT_SRCS
 
 SET(SWEQX_FLAT_UT_SRCS
   ${UNIT_TEST_DIR}/advance_rk.cpp
+  ${UNIT_TEST_DIR}/advance_rk_unit_test_mod.F90
   ${TARGET_DIR}/advance_mod.F90
   ${TARGET_DIR}/shallow_water_mod.F90
   ${TARGET_DIR}/edge_mod.F90

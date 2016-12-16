@@ -3,11 +3,14 @@
 
 #include <dimensions.hpp>
 #include <kinds.hpp>
+#include <ViewsPool.hpp>
 
 #include <fortran_binding.hpp>
 
 #include <iostream>
 #include <stdexcept>
+
+#include <SphericalOperators.hpp>
 
 namespace Homme {
 
@@ -178,6 +181,89 @@ void contra2latlon_c(const int &nets, const int &nete,
 /* TODO: Deal with Fortran's globals in a better way */
 extern real nu FORTRAN_VAR(control_mod, nu);
 extern real nu_s FORTRAN_VAR(control_mod, nu_s);
+
+void loop_lapl_pre_bndry_ex_c (const int &nets, const int &nete,
+                               const int &nelems, const int& n0,
+                               const int& var_coef, const real& nu_ratio,
+                               real*& ptens_ptr, real*& vtens_ptr)
+{
+  HommeView4D<KMU> ptens           (ptens_ptr,         np, np, nlev, nelems);
+  HommeView5D<KMU> vtens           (vtens_ptr,         np, np, 2, nlev, nelems);
+  HommeView4D<KMM> T_bh            ("T_bh",            np, np, nlev, nelems);
+  HommeView5D<KMM> elem_state_v_n0 ("elem_state_v_n0", np, np, 2, nlev, nelems);
+
+  HommeView3D<KMU> elem_state_ps = get_views_pool_c()->get_elem_state_ps();
+  HommeView5D<KMU> elem_state_p  = get_views_pool_c()->get_elem_state_p();
+  HommeView6D<KMU> elem_state_v  = get_views_pool_c()->get_elem_state_v();
+
+  Kokkos::parallel_for(
+    Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
+    KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+    {
+      const int ielem  = nets - 1 + team_member.league_rank();
+      //const int ilevel = team_member.team_rank();
+
+      Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(team_member,nlev),
+        KOKKOS_LAMBDA (const unsigned int ilevel)
+        {
+          for (int igp=0; igp<np; ++igp)
+          {
+            for (int jgp=0; jgp<np; ++jgp)
+            {
+                T_bh (igp, jgp, ilevel, ielem) = elem_state_p(igp,jgp,ilevel,n0-1,ielem) + elem_state_ps(igp,jgp,ielem);
+                elem_state_v_n0(igp, jgp, 0, ilevel, ielem) = elem_state_v(igp, jgp, 0, ilevel, n0-1, ielem);
+                elem_state_v_n0(igp, jgp, 1, ilevel, ielem) = elem_state_v(igp, jgp, 1, ilevel, n0-1, ielem);
+            }
+          }
+        }
+      );
+    }
+  );
+
+  laplace_sphere_wk_kokkos  (nets-1, nete, nelems, var_coef, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets-1, nete, nelems, var_coef, &nu_ratio, elem_state_v_n0, vtens);
+}
+
+void loop_lapl_post_bndry_ex_c (const int &nets, const int &nete,
+                                const int &nelems,const real& nu_ratio,
+                                real*& ptens_ptr, real*& vtens_ptr)
+{
+  HommeView4D<KMU> ptens (ptens_ptr, np, np, nlev, nelems);
+  HommeView5D<KMU> vtens (vtens_ptr, np, np, 2, nlev, nelems);
+  HommeView4D<KMM> T_bh  ("T_bh",    np, np, nlev, nelems);
+  HommeView5D<KMM> v_bh  ("v_bh",    np, np, 2, nlev, nelems);
+
+  HommeView3D<KMU> rspheremp = get_views_pool_c()->get_rspheremp();
+
+  Kokkos::parallel_for(
+    Kokkos::TeamPolicy<>(nete-(nets-1),nlev),
+    KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+    {
+      const int ielem  = nets - 1 + team_member.league_rank();
+      //const int ilevel = team_member.team_rank();
+
+      Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(team_member,nlev),
+        KOKKOS_LAMBDA (const unsigned int ilevel)
+        {
+          for (int igp=0; igp<np; ++igp)
+          {
+            for (int jgp=0; jgp<np; ++jgp)
+            {
+                T_bh (igp, jgp, ilevel, ielem)    = rspheremp (igp, jgp, ielem) * ptens(igp, jgp, ilevel, ielem);
+                v_bh (igp, jgp, 0, ilevel, ielem) = rspheremp (igp, jgp, ielem) * vtens(igp, jgp, 0, ilevel, ielem);
+                v_bh (igp, jgp, 1, ilevel, ielem) = rspheremp (igp, jgp, ielem) * vtens(igp, jgp, 1, ilevel, ielem);
+            }
+          }
+        }
+      );
+    }
+  );
+
+  laplace_sphere_wk_kokkos  (nets-1, nete, nelems, true, T_bh, ptens);
+  vlaplace_sphere_wk_kokkos (nets-1, nete, nelems, true, &nu_ratio, v_bh, vtens);
+}
 
 /* TODO: Give this a better name */
 void add_hv_c(const int &nets, const int &nete,

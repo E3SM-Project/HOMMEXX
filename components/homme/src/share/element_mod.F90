@@ -17,7 +17,7 @@ module element_mod
 #ifdef _PRIM
 
   public :: setup_element_pointers
-  real (kind=real_kind), allocatable, target, public :: state_Qdp                (:,:,:,:,:,:)    ! (np,np,nlev,qsize_d,2,nelemd)   
+  real (kind=real_kind), allocatable, target, public :: state_Qdp                (:,:,:,:,:,:)    ! (np,np,nlev,qsize_d,2,nelemd)
   real (kind=real_kind), allocatable, target, public :: derived_vn0              (:,:,:,:,:)      ! (np,np,2,nlev,nelemd)                   velocity for SE tracer advection
   real (kind=real_kind), allocatable, target, public :: derived_divdp            (:,:,:,:)        ! (np,np,nlev,nelemd)                     divergence of dp
   real (kind=real_kind), allocatable, target, public :: derived_divdp_proj       (:,:,:,:)        ! (np,np,nlev,nelemd)                     DSSed divdp
@@ -37,7 +37,7 @@ module element_mod
     real (kind=real_kind) :: ps_v(np,np,timelevels)                   ! surface pressure                   4
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
-    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)  ! Tracer mass                        7  (np,np,nlev,qsize,2)   
+    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)  ! Tracer mass                        7  (np,np,nlev,qsize,2)
   end type elem_state_t
 
   integer(kind=int_kind),public,parameter::StateComponents=8  ! num prognistics variables (for prim_restart_mod.F90)
@@ -52,13 +52,13 @@ module element_mod
 
     ! diagnostics for explicit timestep
     real (kind=real_kind) :: phi(np,np,nlev)                          ! geopotential
-    real (kind=real_kind) :: omega_p(np,np,nlev)                      ! vertical tendency (derived)       
+    real (kind=real_kind) :: omega_p(np,np,nlev)                      ! vertical tendency (derived)
     real (kind=real_kind) :: eta_dot_dpdn(np,np,nlevp)                ! mean vertical flux from dynamics
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
-    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure               
-    real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity                             
-    real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence                          
+    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure
+    real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity
+    real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence
 
     ! tracer advection fields used for consistency and limiters
     real (kind=real_kind) :: dp(np,np,nlev)                           ! for dp_tracers at physics timestep
@@ -85,16 +85,16 @@ module element_mod
     real (kind=real_kind) :: Ttnd(npsq,nlev)                          ! accumulated T tendency due to nudging towards prescribed met
 #else
     ! forcing terms for HOMME
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing 
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing
     real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing 
+    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
 #endif
 
     ! forcing terms for both CAM and HOMME
     ! FQps for conserving dry mass in the presence of precipitation
 
     real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate
-    real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v 
+    real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
   end type derived_state_t
 
 !else for USE_OPENACC if
@@ -183,7 +183,7 @@ module element_mod
     real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
 
   end type derived_state_t
-  
+
 !ending USE_OPENACC if
 #endif
 
@@ -261,16 +261,24 @@ module element_mod
 ! ================== SHALLOW-WATER DATA-STRUCTURES ===================
 
   public :: setup_element_pointers_sw
-  real (kind=real_kind), allocatable, target, public :: elem_Dinv    (:,:,:,:,:)    ! (np,np,2,2,nelemd)
-  real (kind=real_kind), allocatable, target, public :: elem_D       (:,:,:,:,:)    ! (np,np,2,2,nelemd)
-  real (kind=real_kind), allocatable, target, public :: elem_metdet  (:,:,:)        ! (np,np,nelemd)    
-  real (kind=real_kind), allocatable, target, public :: elem_rmetdet (:,:,:)        ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_state_p (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)  
-  real (kind=real_kind), allocatable, target, public :: elem_state_ps (:,:,:)       ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_state_v  (:,:,:,:,:,:) ! (np,np,2,nlev,timelevels,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_spheremp  (:,:,:)      ! (np,np,nelemd)    
-  real (kind=real_kind), allocatable, target, public :: elem_rspheremp (:,:,:)      ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_fcor      (:,:,:)      ! (np,np,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_met       (:,:,:,:,:)    ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_metinv    (:,:,:,:,:)    ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_metdet    (:,:,:)        ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_rmetdet   (:,:,:)        ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_Dinv      (:,:,:,:,:)    ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_D         (:,:,:,:,:)    ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_mp        (:,:,:)        ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_rmp       (:,:,:)        ! (np,np,2,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_state_p   (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_state_ps  (:,:,:)       ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_state_v   (:,:,:,:,:,:) ! (np,np,2,nlev,timelevels,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_spheremp  (:,:,:)      ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_rspheremp (:,:,:)      ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_fcor      (:,:,:)      ! (np,np,nelemd)
+
+  real (kind=real_kind), allocatable, target, public :: elem_vec_sphere2cart (:,:,:,:,:)  ! (np,np,3,2,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_hyperviscosity  (:,:,:)      ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_tensorVisc      (:,:,:,:,:)      ! (np,np,nelemd)
 
 
   type, public :: elem_state_t
@@ -278,9 +286,9 @@ module element_mod
     ! prognostic variables for shallow-water solver
      real (kind=real_kind) :: gradps(np,np,2)                         ! gradient of surface geopotential
 #if SW_USE_FLAT_ARRAYS
-     real (kind=real_kind), pointer   :: p(:,:,:,:) 
+     real (kind=real_kind), pointer   :: p(:,:,:,:)
      real (kind=real_kind), pointer   :: ps(:,:)                      ! surface geopotential
-     real (kind=real_kind), pointer   :: v(:,:,:,:,:)                 ! contravarient comp 
+     real (kind=real_kind), pointer   :: v(:,:,:,:,:)                 ! contravarient comp
 #else
      real (kind=real_kind) :: p(np,np,nlev,timelevels)
      real (kind=real_kind) :: ps(np,np)                               ! surface geopotential
@@ -326,10 +334,14 @@ module element_mod
      real (kind=real_kind)    :: dx_short                             ! short length scale in km
      real (kind=real_kind)    :: dx_long                              ! long length scale in km
 
+#if SW_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer :: variable_hyperviscosity(:,:)   ! hyperviscosity based on above
+     real (kind=real_kind), pointer :: tensorVisc(:,:,:,:)            !og, matrix V for tensor viscosity
+#else
      real (kind=real_kind)    :: variable_hyperviscosity(np,np)       ! hyperviscosity based on above
-     real (kind=real_kind)    :: hv_courant                           ! hyperviscosity courant number
      real (kind=real_kind)    :: tensorVisc(np,np,2,2)                !og, matrix V for tensor viscosity
-
+#endif
+     real (kind=real_kind)    :: hv_courant                           ! hyperviscosity courant number
      ! Edge connectivity information
 !     integer(kind=int_kind)   :: node_numbers(4)
 !     integer(kind=int_kind)   :: node_multiplicity(4)                 ! number of elements sharing corner node
@@ -340,33 +352,36 @@ module element_mod
      type (elem_state_t)      :: state
 
      type (derived_state_t)   :: derived
-#if defined _PRIM 
+#if defined _PRIM
      type (elem_accum_t)       :: accum
 #endif
+#if SW_USE_FLAT_ARRAYS
+     ! Metric terms
+     real (kind=real_kind), pointer    :: met(:,:,:,:)                  ! metric tensor on velocity and pressure grid
+     real (kind=real_kind), pointer    :: metinv(:,:,:,:)
+     real (kind=real_kind), pointer    :: metdet(:,:)
+     real (kind=real_kind), pointer    :: rmetdet(:,:)
+     real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
+     real (kind=real_kind), pointer    :: D(:,:,:,:)
+     real (kind=real_kind), pointer    :: spheremp(:,:)
+     real (kind=real_kind), pointer    :: rspheremp(:,:)
+     real (kind=real_kind), pointer    :: fcor(:,:)
+#else
      ! Metric terms
      real (kind=real_kind)    :: met(np,np,2,2)                       ! metric tensor on velocity and pressure grid
      real (kind=real_kind)    :: metinv(np,np,2,2)                    ! metric tensor on velocity and pressure grid
-#if SW_USE_FLAT_ARRAYS
-     real (kind=real_kind), pointer    :: metdet(:,:)                       
-     real (kind=real_kind), pointer    :: rmetdet(:,:) 
-     real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
-     real (kind=real_kind), pointer    :: D(:,:,:,:) 
-     real (kind=real_kind), pointer    :: spheremp(:,:) 
-     real (kind=real_kind), pointer    :: rspheremp(:,:) 
-     real (kind=real_kind), pointer    :: fcor(:,:) 
-#else
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
      real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
-     
+
      ! Mass matrix terms for an element on the sphere
      ! This mass matrix is used when solving the equations in weak form
      ! with the natural (surface area of the sphere) inner product
      real (kind=real_kind)    :: spheremp(np,np)                      ! mass matrix on v and p grid
      real (kind=real_kind)    :: rspheremp(np,np)                     ! inverse mass matrix on v and p grid
      real (kind=real_kind)    :: fcor(np,np)                          ! Coreolis term
-#endif   
+#endif
 
      ! Mass flux across the sides of each sub-element.
      ! The storage is redundent since the mass across shared sides
@@ -406,12 +421,19 @@ module element_mod
 
      ! Convert vector fields from spherical to rectangular components
      ! The transpose of this operation is its pseudoinverse.
+#if SW_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer :: vec_sphere2cart(:,:,:,:)
+
+     ! Mass matrix terms for an element on a cube face
+     real (kind=real_kind), pointer :: mp(:,:)                            ! mass matrix on v and p grid
+     real (kind=real_kind), pointer :: rmp(:,:)                           ! inverse mass matrix on v and p grid
+#else
      real (kind=real_kind)    :: vec_sphere2cart(np,np,3,2)
 
      ! Mass matrix terms for an element on a cube face
      real (kind=real_kind)    :: mp(np,np)                            ! mass matrix on v and p grid
      real (kind=real_kind)    :: rmp(np,np)                           ! inverse mass matrix on v and p grid
-
+#endif
      integer(kind=long_kind)  :: gdofP(np,np)                         ! global degree of freedom (P-grid)
 
      type (index_t) :: idxP
@@ -436,7 +458,7 @@ module element_mod
 contains
 
   subroutine PrintElem(arr)
-   
+
     real(kind=real_kind) :: arr(:,:)
     integer :: i,j
 
@@ -604,9 +626,9 @@ contains
     allocate( derived_divdp_proj       (np,np,nlev,nelemd)                    )
     do ie = 1 , nelemd
       elem(ie)%state%Qdp                 => state_Qdp                (:,:,:,:,:,ie)
-      elem(ie)%derived%vn0               => derived_vn0              (:,:,:,:,ie)  
-      elem(ie)%derived%divdp             => derived_divdp            (:,:,:,ie)    
-      elem(ie)%derived%divdp_proj        => derived_divdp_proj       (:,:,:,ie)    
+      elem(ie)%derived%vn0               => derived_vn0              (:,:,:,:,ie)
+      elem(ie)%derived%divdp             => derived_divdp            (:,:,:,ie)
+      elem(ie)%derived%divdp_proj        => derived_divdp_proj       (:,:,:,ie)
     enddo
 #endif
   end subroutine setup_element_pointers
@@ -619,27 +641,41 @@ contains
 #if SW_USE_FLAT_ARRAYS
     integer :: ie
 
+    allocate( elem_met                 (np,np,2,2,nelemd)        )
+    allocate( elem_metinv              (np,np,2,2,nelemd)        )
     allocate( elem_metdet              (np,np,nelemd)            )
     allocate( elem_rmetdet             (np,np,nelemd)            )
     allocate( elem_Dinv                (np,np,2,2,nelemd)        )
     allocate( elem_D                   (np,np,2,2,nelemd)        )
+    allocate( elem_mp                  (np,np,nelemd)            )
+    allocate( elem_rmp                 (np,np,nelemd)            )
     allocate( elem_state_p             (np,np,nlev,timelevels,nelemd) )
-    allocate( elem_state_ps            (np,np,nelemd) ) 
-    allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) ) 
+    allocate( elem_state_ps            (np,np,nelemd) )
+    allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) )
     allocate( elem_spheremp            (np,np, nelemd)           )
     allocate( elem_rspheremp           (np,np, nelemd)          )
     allocate( elem_fcor                (np,np, nelemd)          )
+    allocate( elem_vec_sphere2cart     (np,np, 3, 2, nelemd)    )
+    allocate( elem_hyperviscosity      (np,np, nelemd)          )
+    allocate( elem_tensorVisc          (np,np, 2, 2, nelemd)    )
     do ie = 1 , nelemd
-      elem(ie)%metdet                 => elem_metdet(:,:,ie)
-      elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
-      elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
-      elem(ie)%D                      => elem_D(:,:,:,:,ie)
-      elem(ie)%state%p                => elem_state_p(:,:,:,:,ie) 
-      elem(ie)%state%ps               => elem_state_ps(:,:,ie) 
-      elem(ie)%state%v                => elem_state_v(:,:,:,:,:,ie)   
-      elem(ie)%spheremp               => elem_spheremp(:,:,ie)   
-      elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)   
-      elem(ie)%fcor                   => elem_fcor(:,:,ie)   
+      elem(ie)%met                      => elem_met(:,:,:,:,ie)
+      elem(ie)%metinv                   => elem_metinv(:,:,:,:,ie)
+      elem(ie)%metdet                   => elem_metdet(:,:,ie)
+      elem(ie)%rmetdet                  => elem_rmetdet(:,:,ie)
+      elem(ie)%Dinv                     => elem_Dinv(:,:,:,:,ie)
+      elem(ie)%D                        => elem_D(:,:,:,:,ie)
+      elem(ie)%mp                       => elem_mp(:,:,ie)
+      elem(ie)%rmp                      => elem_rmp(:,:,ie)
+      elem(ie)%state%p                  => elem_state_p(:,:,:,:,ie)
+      elem(ie)%state%ps                 => elem_state_ps(:,:,ie)
+      elem(ie)%state%v                  => elem_state_v(:,:,:,:,:,ie)
+      elem(ie)%spheremp                 => elem_spheremp(:,:,ie)
+      elem(ie)%rspheremp                => elem_rspheremp(:,:,ie)
+      elem(ie)%fcor                     => elem_fcor(:,:,ie)
+      elem(ie)%vec_sphere2cart          => elem_vec_sphere2cart(:,:,:,:,ie)
+      elem(ie)%variable_hyperviscosity  => elem_hyperviscosity(:,:,ie)
+      elem(ie)%tensorVisc               => elem_tensorVisc(:,:,:,:,ie)
     enddo
 #endif
   end subroutine setup_element_pointers_sw
