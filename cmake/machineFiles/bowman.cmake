@@ -5,8 +5,6 @@ SET (CMAKE_Fortran_COMPILER mpif90 CACHE FILEPATH "")
 SET (CMAKE_C_COMPILER mpicc CACHE FILEPATH "")
 SET (CMAKE_CXX_COMPILER mpicxx CACHE FILEPATH "")
 
-SET (FORCE_Fortran_FLAGS "-traceback -fp-model precise -ftz -g -O2" CACHE STRING "")
-
 # Michael's prefix directory which contains HDF5, PNetCDF, NetCDF, and NetCDF Fortran
 SET (MDEAKIN_PREFIX "/home/mdeakin/prefix" FILEPATH "")
 
