@@ -1,6 +1,0 @@
-	ERROR loading module sems-hdf5/1.8.12/parallel
-	Module points to path  /projects/sems/install/capacity-hpc/sems/tpl/hdf5/1.8.12/intel/14.0.4/openmpi/1.8.8/parallel  which does not exist
-	You may need to load the appropriate compilers before loading this module
-	ERROR loading module sems-netcdf/4.3.2/parallel
-	Module points to path  /projects/sems/install/capacity-hpc/sems/tpl/netcdf/4.3.2/intel/14.0.4/openmpi/1.8.8/parallel  which does not exist
-	You may need to load the appropriate compilers before loading this module

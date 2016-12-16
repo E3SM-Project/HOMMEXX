@@ -1,12 +1,6 @@
 #this cronjob is run on login12 of skybridge
+00 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_serial.batch
+00 02 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_openmp.batch
+01 06 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_serial.sh
+01 06 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
 
-01 00 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_serial.sh"
-15 00 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch hommexxSerial.batch
-01 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash process_results_ctest_serial.sh
-02 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_serial.sh
-03 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_openmp.sh"
-18 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch hommexxOpenMP.batch
-01 02 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash process_results_ctest_openmp.sh
-02 02 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
-
- 
