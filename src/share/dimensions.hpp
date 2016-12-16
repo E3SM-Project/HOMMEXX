@@ -13,6 +13,8 @@ constexpr const int npsq = np * np;
 constexpr const int max_neigh_edges = 8;
 constexpr const int nc = NC;
 
+constexpr const int dim = 2;
+
 #ifdef QSIZE_D
 constexpr const int qsize_d = QSIZE_D;
 #else
