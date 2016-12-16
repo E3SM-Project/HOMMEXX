@@ -87,6 +87,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
   ${SRC_KERNELS_DIR}/recover_q.cpp
+  ${SRC_KERNELS_DIR}/team_parallel.cpp
   ${SRC_SHARE}/kokkos_init.cpp
 )
 
@@ -108,7 +109,6 @@ SET(SWEQX_FLAT_UT_SRCS
 )
 
 SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
-
 
 SET(SW_USE_FLAT_ARRAYS TRUE)
 
