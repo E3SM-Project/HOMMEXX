@@ -47,7 +47,8 @@ find_program (CTEST_GIT_COMMAND NAMES git)
 
 set (HOMMEXX_REPOSITORY_LOCATION git@github.com:ACME-Climate/HOMMEXX.git)
 set (Trilinos_REPOSITORY_LOCATION git@github.com:trilinos/Trilinos.git)
-set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44) 
+set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44)
+set (NVCC_WRAPPER ${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper) 
 
 if (CLEAN_BUILD)
   # Initial cache info
@@ -149,7 +150,7 @@ if (BUILD_TRILINOS_CUDA)
     "-DKokkos_ENABLE_Cuda=ON"
     "-DKokkos_ENABLE_Cuda_UVM=ON"
     "-DCUDA_TOOLKIT_ROOT_DIR=${CUDA_ROOT}"
-    "-DCMAKE_CXX_COMPILER=${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper"
+    "-DCMAKE_CXX_COMPILER=${NVCC_WRAPPER}"
   )
 
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/TriBuild")
