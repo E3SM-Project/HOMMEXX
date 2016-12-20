@@ -18,14 +18,14 @@ template <typename Scalar_QP, typename Vector_QP,
 struct gradient_sphere {
   int ie_m;
   const Scalar_QP s_m;
-  const Dvv dvv_m;
-  const D dinv_m;
+  const HommeExecView2D dvv_m;
+  const HommeExecView5D dinv_m;
   const Vector_QP_Scratch scratch_m;
   const Vector_QP grad_m;
 
   KOKKOS_INLINE_FUNCTION gradient_sphere(
-      int ie, const Scalar_QP s, const Dvv &dvv,
-      const D &dinv, const Vector_QP_Scratch &scratch,
+      int ie, const Scalar_QP s, const HommeExecView2D &dvv,
+      const HommeExecView5D &dinv, const Vector_QP_Scratch &scratch,
       const Vector_QP &grad)
       : ie_m(ie),
         s_m(s),
@@ -71,11 +71,12 @@ struct gradient_sphere {
  */
 template <typename Scalar_QP, typename Vector_QP>
 void gradient_sphere_c(int ie, const Scalar_QP &s,
-                       const Dvv &dvv, const D &dinv,
+                       const HommeExecView2D &dvv,
+                       const HommeExecView5D &dinv,
                        Vector_QP &grad) {
-  Vector_Field scratch("scratch", np, np, dim);
+  HommeExecView3D scratch("scratch", np, np, dim);
   using functor =
-      gradient_sphere<Scalar_QP, Vector_QP, Vector_Field>;
+      gradient_sphere<Scalar_QP, Vector_QP, HommeExecView3D>;
   functor f(ie, s, dvv, dinv, scratch, grad);
   Kokkos::parallel_for(
       Kokkos::RangePolicy<typename functor::loop1_tag>(
@@ -90,13 +91,13 @@ void gradient_sphere_c(int ie, const Scalar_QP &s,
 
 template <typename Scalar_QP, typename Vector_QP>
 KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
-    int ie, const Scalar_QP &s, const Dvv &dvv,
-    const D &dinv, const Team_State &team,
-    Vector_QP &grad) {
-  Vector_Field_Scratch scratch(team.team_scratch(0), np, np,
-                               dim);
+    int ie, const Scalar_QP &s, const HommeExecView2D &dvv,
+    const HommeExecView5D &dinv, const Team_State &team,
+    Vector_QP &grad)
+{
+  HommeScratchView3D scratch(team.team_scratch(0), np, np, dim);
   using functor = gradient_sphere<Scalar_QP, Vector_QP,
-                                  Vector_Field_Scratch>;
+                                  HommeScratchView3D>;
   functor f(ie, s, dvv, dinv, scratch, grad);
   /* Somewhat hacky solution to lack of tag support for
    * TeamThreadRange */
@@ -113,18 +114,20 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_c(
       });
 }
 
-template void gradient_sphere_c(int, const Scalar_Field &,
-                                const Dvv &, const D &,
-                                Vector_Field &);
+template void gradient_sphere_c(int ielem,
+                                const HommeExecView2D& s,
+                                const HommeExecView2D& dvv,
+                                const HommeExecView5D& Dinv,
+                                HommeExecView3D& grad_s);
 
 template <typename Scalar_QP, typename Scalar_QP_Scratch,
           typename Vector_QP, typename Vector_QP_Scratch>
 struct vorticity_sphere {
   int ie_m;
   const Vector_QP v_m;
-  const Dvv dvv_m;
-  const D d_m;
-  const MetDet rmetdet_m;
+  const HommeExecView2D dvv_m;
+  const HommeExecView5D d_m;
+  const HommeExecView3D rmetdet_m;
   const Vector_QP_Scratch scratch_buffer_m;
   const Scalar_QP_Scratch scratch_cache_m;
   const Scalar_QP vorticity_m;
@@ -134,8 +137,8 @@ struct vorticity_sphere {
   struct loop3_tag {};
 
   KOKKOS_INLINE_FUNCTION vorticity_sphere(
-      int ie, const Vector_QP &v, const Dvv &dvv,
-      const D &d, const MetDet &rmetdet,
+      int ie, const Vector_QP &v, const HommeExecView2D &dvv,
+      const HommeExecView5D &d, const HommeExecView3D &rmetdet,
       const Vector_QP_Scratch &scratch_buffer,
       const Scalar_QP_Scratch &scratch_cache,
       const Scalar_QP &vorticity)
@@ -189,17 +192,18 @@ struct vorticity_sphere {
   }
 };
 
-template <typename Scalar_QP, typename Vector_QP>
+template <typename Scalar_QP,typename Vector_QP>
 void vorticity_sphere_c(int ie, const Vector_QP &v,
-                        const Dvv &dvv, const D &d,
-                        const MetDet &rmetdet,
+                        const HommeExecView2D &dvv,
+                        const HommeExecView5D &d,
+                        const HommeExecView3D &rmetdet,
                         Scalar_QP &vorticity) {
-  Vector_Field scratch_buffer("contravariant scratch space",
+  HommeExecView3D scratch_buffer("contravariant scratch space",
                               np, np, dim);
-  Scalar_Field scratch_cache("scratch cache", np, np);
+  HommeExecView2D scratch_cache("scratch cache", np, np);
 
-  using functor = vorticity_sphere<Scalar_QP, Scalar_Field,
-                                   Vector_QP, Vector_Field>;
+  using functor = vorticity_sphere<Scalar_QP, HommeExecView2D,
+                                   Vector_QP, HommeExecView3D>;
   functor f(ie, v, dvv, d, rmetdet, scratch_buffer,
             scratch_cache, vorticity);
   Kokkos::parallel_for(
@@ -218,16 +222,17 @@ void vorticity_sphere_c(int ie, const Vector_QP &v,
 
 template <typename Scalar_QP, typename Vector_QP>
 KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
-    int ie, const Vector_QP &v, const Dvv &dvv, const D &d,
-    const MetDet &rmetdet, const Team_State &team,
-    Scalar_QP &vorticity) {
-  Vector_Field_Scratch scratch_buffer(team.team_scratch(0),
-                                      np, np, dim);
-  Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
-                                     np, np);
+    int ie, const Vector_QP &v, const HommeExecView2D &dvv,
+    const HommeExecView5D &d, const HommeExecView3D& rmetdet,
+    const Team_State &team, Scalar_QP &vorticity)
+{
+  HommeScratchView3D scratch_buffer(team.team_scratch(0),
+                                    np, np, dim);
+  HommeScratchView2D scratch_cache(team.team_scratch(0),
+                                   np, np);
   using functor =
-      vorticity_sphere<Scalar_QP, Scalar_Field_Scratch,
-                       Vector_QP, Vector_Field_Scratch>;
+      vorticity_sphere<Scalar_QP, HommeScratchView2D,
+                       Vector_QP, HommeScratchView3D>;
   functor f(ie, v, dvv, d, rmetdet, scratch_buffer,
             scratch_cache, vorticity);
   /* Somewhat hacky solution to lack of tag support for
@@ -251,28 +256,30 @@ KOKKOS_INLINE_FUNCTION void vorticity_sphere_c(
       });
 }
 
-template void vorticity_sphere_c(int, const Vector_Field &,
-                                 const Dvv &, const D &,
-                                 const MetDet &,
-                                 Scalar_Field &);
+template void vorticity_sphere_c(int ielem,
+                                 const HommeExecView3D & v,
+                                 const HommeExecView2D & dvv,
+                                 const HommeExecView5D & D,
+                                 const HommeExecView3D & metdet,
+                                 HommeExecView2D& curl_v);
 
 template <typename Scalar_QP, typename Scalar_QP_Scratch,
           typename Vector_QP, typename Vector_QP_Scratch>
 struct divergence_sphere {
   int ie_m;
   const Vector_QP v_m;
-  const Dvv dvv_m;
-  const MetDet metdet_m;
-  const MetDet rmetdet_m;
-  const D dinv_m;
+  const HommeExecView2D dvv_m;
+  const HommeExecView3D metdet_m;
+  const HommeExecView3D rmetdet_m;
+  const HommeExecView5D dinv_m;
   const Vector_QP_Scratch scratch_contra_m;
   const Scalar_QP_Scratch scratch_cache_m;
   const Scalar_QP divergence_m;
 
   KOKKOS_INLINE_FUNCTION divergence_sphere(
-      int ie, const Vector_QP &v, const Dvv &dvv,
-      const MetDet &metdet, const MetDet &rmetdet,
-      const D &dinv, Vector_QP_Scratch &scratch_contra,
+      int ie, const Vector_QP &v, const HommeExecView2D &dvv,
+      const HommeExecView3D &metdet, const HommeExecView3D &rmetdet,
+      const HommeExecView5D &dinv, Vector_QP_Scratch &scratch_contra,
       Scalar_QP_Scratch &scratch_cache,
       Scalar_QP &divergence)
       : ie_m(ie),
@@ -334,17 +341,17 @@ struct divergence_sphere {
 
 template <typename Scalar_QP, typename Vector_QP>
 void divergence_sphere_c(int ie, const Vector_QP &v,
-                         const Dvv &dvv,
-                         const MetDet &metdet,
-                         const MetDet &rmetdet,
-                         const D &dinv,
+                         const HommeExecView2D &dvv,
+                         const HommeExecView3D &metdet,
+                         const HommeExecView3D &rmetdet,
+                         const HommeExecView5D &dinv,
                          Scalar_QP &divergence) {
-  Vector_Field scratch_contra("contravariant scratch space",
+  HommeExecView3D scratch_contra("contravariant scratch space",
                               np, np, dim);
-  Scalar_Field scratch_cache("scratch cache", np, np);
+  HommeExecView2D scratch_cache("scratch cache", np, np);
   using functor =
-      divergence_sphere<Scalar_QP, Scalar_Field, Vector_QP,
-                        Vector_Field>;
+      divergence_sphere<Scalar_QP, HommeExecView2D,
+                        Vector_QP, HommeExecView3D>;
   functor f(ie, v, dvv, metdet, rmetdet, dinv,
             scratch_contra, scratch_cache, divergence);
   Kokkos::parallel_for(
@@ -363,17 +370,17 @@ void divergence_sphere_c(int ie, const Vector_QP &v,
 
 template <typename Scalar_QP, typename Vector_QP>
 KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
-    int ie, const Vector_QP &v, const Dvv &dvv,
-    const MetDet &metdet, const MetDet &rmetdet,
-    const D &dinv, const Team_State &team,
+    int ie, const Vector_QP &v, const HommeExecView2D &dvv,
+    const HommeExecView3D &metdet, const HommeExecView3D &rmetdet,
+    const HommeExecView5D &dinv, const Team_State &team,
     Scalar_QP &divergence) {
-  Vector_Field_Scratch scratch_contra(team.team_scratch(0),
+  HommeScratchView3D scratch_contra(team.team_scratch(0),
                                       np, np, dim);
-  Scalar_Field_Scratch scratch_cache(team.team_scratch(0),
+  HommeScratchView2D scratch_cache(team.team_scratch(0),
                                      np, np);
   using functor =
-      divergence_sphere<Scalar_QP, Scalar_Field_Scratch,
-                        Vector_QP, Vector_Field_Scratch>;
+      divergence_sphere<Scalar_QP, HommeScratchView2D,
+                        Vector_QP, HommeScratchView3D>;
   functor f(ie, v, dvv, metdet, rmetdet, dinv,
             scratch_contra, scratch_cache, divergence);
   /* Somewhat hacky solution to lack of tag support for
@@ -399,11 +406,13 @@ KOKKOS_INLINE_FUNCTION void divergence_sphere_c(
       });
 }
 
-template void divergence_sphere_c(int, const Vector_Field &,
-                                  const Dvv &,
-                                  const MetDet &,
-                                  const MetDet &, const D &,
-                                  Scalar_Field &);
+template void divergence_sphere_c(int ielem,
+                                  const HommeExecView3D & v,
+                                  const HommeExecView2D & dvv,
+                                  const HommeExecView3D & metdet,
+                                  const HommeExecView3D & rmetdet,
+                                  const HommeExecView5D & dinv,
+                                  HommeExecView2D& div_v);
 
 extern "C" {
 
@@ -417,53 +426,54 @@ void loop7_c(const int &nets, const int &nete,
              real *&fcor_ptr, real *&p_ptr, real *&ps_ptr,
              real *&v_ptr, real *&ptens_ptr,
              real *&vtens_ptr) {
-  Dvv_Host dvv_host(dvv_ptr, np, np);
-  Dvv dvv("dvv", np, np);
-  Kokkos::deep_copy(dvv, dvv_host);
 
-  D_Host d_host(d_ptr, np, np, dim, dim, nelemd);
-  D d("d", np, np, dim, dim, nelemd);
-  Kokkos::deep_copy(d, d_host);
+  const int elem_start   = nets - 1;
+  const int elem_end     = nete;
+  const int num_my_elems = elem_end - elem_start;
 
-  D_Host dinv_host(dinv_ptr, np, np, dim, dim, nelemd);
-  D dinv("dinv", np, np, dim, dim, nelemd);
-  Kokkos::deep_copy(dinv, dinv_host);
+  HommeHostView2D<MemoryUnmanaged> dvv_host(dvv_ptr, np, np);
+  HommeExecView2D                  dvv_exec("dvv", np, np);
+  Kokkos::deep_copy(dvv_exec, dvv_host);
 
-  MetDet_Host metdet_host(metdet_ptr, np, np, nelemd);
-  MetDet metdet("metdet", np, np, nelemd);
-  Kokkos::deep_copy(metdet, metdet_host);
+  HommeHostView5D<MemoryUnmanaged> d_host(d_ptr, np, np, dim, dim, nelemd);
+  HommeExecView5D                  d_exec("d", np, np, dim, dim, nelemd);
+  Kokkos::deep_copy(d_exec, d_host);
 
-  MetDet_Host rmetdet_host(rmetdet_ptr, np, np, nelemd);
-  MetDet rmetdet("rmetdet", np, np, nelemd);
-  Kokkos::deep_copy(rmetdet, rmetdet_host);
+  HommeHostView5D<MemoryUnmanaged> dinv_host(dinv_ptr, np, np, dim, dim, nelemd);
+  HommeExecView5D                  dinv_exec("dinv", np, np, dim, dim, nelemd);
+  Kokkos::deep_copy(dinv_exec, dinv_host);
 
-  FCor_Host fcor_host(fcor_ptr, np, np, nelemd);
-  FCor fcor("fcor", np, np, nelemd);
-  Kokkos::deep_copy(fcor, fcor_host);
+  HommeHostView3D<MemoryUnmanaged> metdet_host(metdet_ptr, np, np, nelemd);
+  HommeExecView3D                  metdet_exec("metdet", np, np, nelemd);
+  Kokkos::deep_copy(metdet_exec, metdet_host);
 
-  P_Host p_host(p_ptr, np, np, nlev, timelevels, nelemd);
-  P p("p", np, np, nlev, timelevels, nelemd);
-  Kokkos::deep_copy(p, p_host);
+  HommeHostView3D<MemoryUnmanaged> rmetdet_host(rmetdet_ptr, np, np, nelemd);
+  HommeExecView3D                  rmetdet_exec("rmetdet", np, np, nelemd);
+  Kokkos::deep_copy(rmetdet_exec, rmetdet_host);
 
-  PS_Host ps_host(ps_ptr, np, np, nelemd);
-  PS ps("ps", np, np, nelemd);
-  Kokkos::deep_copy(ps, ps_host);
+  HommeHostView3D<MemoryUnmanaged> fcor_host(fcor_ptr, np, np, nelemd);
+  HommeExecView3D                  fcor_exec("fcor", np, np, nelemd);
+  Kokkos::deep_copy(fcor_exec, fcor_host);
 
-  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
-                nelemd);
-  V v("Lateral velocity", np, np, dim, nlev, timelevels,
-      nelemd);
-  Kokkos::deep_copy(v, v_host);
+  HommeHostView5D<MemoryUnmanaged> p_host(p_ptr, np, np, nlev, timelevels, nelemd);
+  HommeExecView5D                  p_exec("p", np, np, nlev, timelevels, nelemd);
+  Kokkos::deep_copy(p_exec, p_host);
 
-  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
-                        nete - nets + 1);
-  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
-  Kokkos::deep_copy(ptens, ptens_host);
+  HommeHostView3D<MemoryUnmanaged> ps_host(ps_ptr, np, np, nelemd);
+  HommeExecView3D                  ps_exec("ps", np, np, nelemd);
+  Kokkos::deep_copy(ps_exec, ps_host);
 
-  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
-                        nete - nets + 1);
-  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
-  Kokkos::deep_copy(vtens, vtens_host);
+  HommeHostView6D<MemoryUnmanaged> v_host(v_ptr, np, np, dim, nlev, timelevels, nelemd);
+  HommeExecView6D                  v_exec("Lateral velocity", np, np, dim, nlev, timelevels, nelemd);
+  Kokkos::deep_copy(v_exec, v_host);
+
+  HommeHostView4D<MemoryUnmanaged> ptens_host(ptens_ptr, np, np, nlev, num_my_elems);
+  HommeExecView4D                  ptens_exec("ptens", np, np, nlev, num_my_elems);
+  Kokkos::deep_copy(ptens_exec, ptens_host);
+
+  HommeHostView5D<MemoryUnmanaged> vtens_host(vtens_ptr, np, np, dim, nlev, num_my_elems);
+  HommeExecView5D                  vtens_exec("vtens", np, np, dim, nlev, num_my_elems);
+  Kokkos::deep_copy(vtens_exec, vtens_host);
 
   enum {
     TRACERADV_UGRADQ = 0,
@@ -473,12 +483,12 @@ void loop7_c(const int &nets, const int &nete,
   /* League size is arbitrary
    * Team size must fit in the hardware constraints
    */
-  const int league_size = (nete - nets + 1) * nlev;
+  const int league_size = num_my_elems * nlev;
 
   const int vector_mem_needed =
-      Vector_Field_Scratch::shmem_size(np, np, dim);
+      HommeScratchView3D::shmem_size(np, np, dim);
   const int scalar_mem_needed =
-      Scalar_Field_Scratch::shmem_size(np, np);
+      HommeScratchView2D::shmem_size(np, np);
   const int mem_needed =
       7 * vector_mem_needed + 5 * scalar_mem_needed;
   Kokkos::TeamPolicy<> policy(league_size, 1);
@@ -491,24 +501,24 @@ void loop7_c(const int &nets, const int &nete,
                               Kokkos::PerTeam(mem_needed)),
       KOKKOS_LAMBDA(const Team_State &team) {
         const int ie =
-            (team.league_rank() / nlev) + nets - 1;
+            (team.league_rank() / nlev) + elem_start;
         const int k = team.league_rank() % nlev;
         assert(ie < nelemd);
         if(ie < nete) {
-          Vector_Field_Scratch ulatlon(team.team_scratch(0),
+          HommeScratchView3D ulatlon(team.team_scratch(0),
                                        np, np, dim);
-          Scalar_Field_Scratch e(team.team_scratch(0), np,
+          HommeScratchView2D e(team.team_scratch(0), np,
                                  np);
-          Vector_Field_Scratch pv(team.team_scratch(0), np,
+          HommeScratchView3D pv(team.team_scratch(0), np,
                                   np, dim);
 
-          Vector_Field_Scratch grade(team.team_scratch(0),
+          HommeScratchView3D grade(team.team_scratch(0),
                                      np, np, dim);
-          Scalar_Field_Scratch zeta(team.team_scratch(0),
+          HommeScratchView2D zeta(team.team_scratch(0),
                                     np, np);
-          Vector_Field_Scratch gradh(team.team_scratch(0),
+          HommeScratchView3D gradh(team.team_scratch(0),
                                      np, np, dim);
-          Scalar_Field_Scratch div(team.team_scratch(0), np,
+          HommeScratchView2D div(team.team_scratch(0), np,
                                    np);
 
           team.team_barrier();
@@ -517,16 +527,16 @@ void loop7_c(const int &nets, const int &nete,
               [&](const int index) {
                 const int j = index / np;
                 const int i = index % np;
-                real v1 = v(i, j, 0, k, n0 - 1, ie);
-                real v2 = v(i, j, 1, k, n0 - 1, ie);
+                real v1 = v_exec(i, j, 0, k, n0 - 1, ie);
+                real v2 = v_exec(i, j, 1, k, n0 - 1, ie);
                 e(i, j) = 0.0;
                 for(int h = 0; h < dim; h++) {
                   ulatlon(i, j, h) =
-                      d(i, j, h, 0, ie) * v1 +
-                      d(i, j, h, 1, ie) * v2;
+                      d_exec(i, j, h, 0, ie) * v1 +
+                      d_exec(i, j, h, 1, ie) * v2;
                   pv(i, j, h) =
                       ulatlon(i, j, h) *
-                      (pmean + p(i, j, k, n0 - 1, ie));
+                      (pmean + p_exec(i, j, k, n0 - 1, ie));
                   // e(i, j) +=
                   //     ulatlon(i, j, h) * ulatlon(i, j,
                   //     h);
@@ -535,28 +545,28 @@ void loop7_c(const int &nets, const int &nete,
                                      ulatlon(i, j, 0) +
                                  ulatlon(i, j, 1) *
                                      ulatlon(i, j, 1)) +
-                          p(i, j, k, n0 - 1, ie) +
-                          ps(i, j, ie);
+                          p_exec(i, j, k, n0 - 1, ie) +
+                          ps_exec(i, j, ie);
                 // e(i, j) /= 2.0;
                 // e(i, j) +=
-                //     p(i, j, k, n0 - 1, ie) + ps(i, j,
+                //     p_exec(i, j, k, n0 - 1, ie) + ps_exec(i, j,
                 //     ie);
               });
 
           team.team_barrier();
-          gradient_sphere_c(ie, e, dvv, dinv, team, grade);
+          gradient_sphere_c(ie, e, dvv_exec, dinv_exec, team, grade);
 
           team.team_barrier();
-          vorticity_sphere_c(ie, ulatlon, dvv, d, rmetdet,
+          vorticity_sphere_c(ie, ulatlon, dvv_exec, d_exec, rmetdet_exec,
                              team, zeta);
 
           if(tracer_advection_formulation ==
              TRACERADV_UGRADQ) {
             auto p_slice = Kokkos::subview(
-                p, std::make_pair(0, np),
+                p_exec, std::make_pair(0, np),
                 std::make_pair(0, np), k, n0 - 1, ie);
             team.team_barrier();
-            gradient_sphere_c(ie, p_slice, dvv, dinv, team,
+            gradient_sphere_c(ie, p_slice, dvv_exec, dinv_exec, team,
                               gradh);
             team.team_barrier();
             Kokkos::parallel_for(
@@ -570,8 +580,8 @@ void loop7_c(const int &nets, const int &nete,
                 });
           } else {
             team.team_barrier();
-            divergence_sphere_c(ie, pv, dvv, metdet,
-                                rmetdet, dinv, team, div);
+            divergence_sphere_c(ie, pv, dvv_exec, metdet_exec,
+                                rmetdet_exec, dinv_exec, team, div);
           }
 
           team.team_barrier();
@@ -586,17 +596,17 @@ void loop7_c(const int &nets, const int &nete,
               [&](const int index) {
                 const int j = index / np;
                 const int i = index % np;
-                vtens(i, j, 0, k, ie - nets + 1) +=
+                vtens_exec(i, j, 0, k, ie - elem_start) +=
                     (ulatlon(i, j, 1) *
-                         (fcor(i, j, ie) + zeta(i, j)) -
+                         (fcor_exec(i, j, ie) + zeta(i, j)) -
                      grade(i, j, 0));
 
-                vtens(i, j, 1, k, ie - nets + 1) +=
+                vtens_exec(i, j, 1, k, ie - elem_start) +=
                     (-ulatlon(i, j, 0) *
-                         (fcor(i, j, ie) + zeta(i, j)) -
+                         (fcor_exec(i, j, ie) + zeta(i, j)) -
                      grade(i, j, 1));
 
-                ptens(i, j, k, ie - nets + 1) -= div(i, j);
+                ptens_exec(i, j, k, ie - elem_start) -= div(i, j);
               });
 
           team.team_barrier();
@@ -608,19 +618,21 @@ void loop7_c(const int &nets, const int &nete,
                 const int i = index % np;
                 // take the local element timestep
                 for(int h = 0; h < dim; h++) {
-                  vtens(i, j, h, k, ie - nets + 1) =
+                  vtens_exec(i, j, h, k, ie - elem_start) =
                       ulatlon(i, j, h) +
                       dtstage *
-                          vtens(i, j, h, k, ie - nets + 1);
+                          vtens_exec(i, j, h, k, ie - elem_start);
                 }
-                ptens(i, j, k, ie - nets + 1) =
-                    p(i, j, k, n0 - 1, ie - nets + 1) +
-                    dtstage * ptens(i, j, k, ie - nets + 1);
+                ptens_exec(i, j, k, ie - elem_start) =
+                    p_exec(i, j, k, n0 - 1, ie - elem_start) +
+                    dtstage * ptens_exec(i, j, k, ie - elem_start);
               });
         }
       });
-  Kokkos::deep_copy(ptens_host, ptens);
-  Kokkos::deep_copy(vtens_host, vtens);
+
+  // Finally copying the results back into the host views
+  Kokkos::deep_copy(ptens_host, ptens_exec);
+  Kokkos::deep_copy(vtens_host, vtens_exec);
 }
 
 }  // extern "C"
