@@ -124,28 +124,30 @@ void vorticity_sphere_c_callable(real *v, real *dvv,
 namespace Homme {
 template <typename Scalar_QP, typename Vector_QP>
 void gradient_sphere_c(int ie, const Scalar_QP &s,
-                       const Dvv &dvv, const D &dinv,
+                       const HommeExecView2D &dvv,
+                       const HommeExecView5D &dinv,
                        Vector_QP &grad);
 
 template <typename Scalar_QP, typename Vector_QP>
 void vorticity_sphere_c(int ie, const Vector_QP &v,
-                        const Dvv &dvv, const D &d,
-                        const MetDet &rmetdet,
+                        const HommeExecView2D &dvv,
+                        const HommeExecView5D &d,
+                        const HommeExecView3D &rmetdet,
                         Scalar_QP &grad);
 
 template <typename Scalar_QP, typename Vector_QP>
 void divergence_sphere_c(int ie, const Vector_QP &v,
-                         const Dvv &dvv,
-                         const MetDet &metdet,
-                         const MetDet &rmetdet,
-                         const D &dinv,
+                         const HommeExecView2D &dvv,
+                         const HommeExecView3D &metdet,
+                         const HommeExecView3D &rmetdet,
+                         const HommeExecView5D &dinv,
                          Scalar_QP &divergence);
 }
 
 template <typename rngAlg, typename dist, typename number>
 void genRandArray(number *arr, int arr_len, rngAlg &engine,
                   dist &pdf) {
-  for(int i = 0; i < arr_len; i++) {
+  for(int i = 0; i < arr_len; ++i) {
     arr[i] = pdf(engine);
   }
 }
@@ -153,7 +155,7 @@ void genRandArray(number *arr, int arr_len, rngAlg &engine,
 template <typename rngAlg, typename dist, typename number>
 void genRandArray(number *arr, int arr_len, rngAlg &engine,
                   dist &&pdf) {
-  for(int i = 0; i < arr_len; i++) {
+  for(int i = 0; i < arr_len; ++i) {
     arr[i] = pdf(engine);
   }
 }
@@ -162,7 +164,7 @@ template <typename rngAlg, typename dist, typename number>
 void genRandTheoryExper(number *arr_theory,
                         number *arr_exper, int arr_len,
                         rngAlg &engine, dist &pdf) {
-  for(int i = 0; i < arr_len; i++) {
+  for(int i = 0; i < arr_len; ++i) {
     arr_theory[i] = pdf(engine);
     arr_exper[i] = arr_theory[i];
   }
@@ -172,7 +174,7 @@ template <typename rngAlg, typename dist, typename number>
 void genRandTheoryExper(number *arr_theory,
                         number *arr_exper, int arr_len,
                         rngAlg &engine, dist &&pdf) {
-  for(int i = 0; i < arr_len; i++) {
+  for(int i = 0; i < arr_len; ++i) {
     arr_theory[i] = pdf(engine);
     arr_exper[i] = arr_theory[i];
   }
@@ -196,7 +198,7 @@ void input_reader(std::map<std::string, input_type *> &data,
           break;
         }
         values[i] = buf;
-        i++;
+        ++i;
       }
     }
   }
@@ -254,7 +256,7 @@ TEST_CASE("copy_timelevels", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -310,7 +312,7 @@ TEST_CASE("q_tests", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -358,7 +360,7 @@ TEST_CASE("recover_dpq", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -411,7 +413,7 @@ TEST_CASE("contra2latlon", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -456,7 +458,7 @@ TEST_CASE("add_hv", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -530,7 +532,7 @@ TEST_CASE("weighted_rhs", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -601,7 +603,7 @@ TEST_CASE("rk_stage", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const int nets = (std::uniform_int_distribution<int>(
           1, numelems - 1))(engine);
       const int nete = (std::uniform_int_distribution<int>(
@@ -698,7 +700,7 @@ TEST_CASE("loop7", "advance_nonstag_rk_cxx") {
     std::random_device rd;
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       const real pmean =
           (std::uniform_real_distribution<real>(0, 1.0))(
               engine);
@@ -810,39 +812,39 @@ TEST_CASE("gradient_sphere_input",
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    Scalar_Field_Host s_host("Scalars", np, np);
+    HommeHostView2D<MemoryManaged> s_host("Scalars", np, np);
     std::map<std::string, real *> data;
     data.insert({std::string("s"), s_host.ptr_on_device()});
 
-    Dvv_Host dvv_host("dvv", np, np);
+    HommeHostView2D<MemoryManaged> dvv_host("dvv", np, np);
     data.insert({std::string("deriv_Dvv"),
                  dvv_host.ptr_on_device()});
 
     constexpr const int numelems = 1;
-    D_Host dinv_host("dinv_host", np, np, dim, dim,
+    HommeHostView5D<MemoryManaged> dinv_host("dinv_host", np, np, dim, dim,
                      numelems);
     data.insert({std::string("elem_Dinv"),
                  dinv_host.ptr_on_device()});
 
-    Homme_View_Host<real ***> grad_theory("Gradient Theory",
+    HommeHostView3D<MemoryManaged> grad_theory("Gradient Theory",
                                           np, np, dim);
     data.insert({std::string("Gradient Sphere result"),
                  grad_theory.ptr_on_device()});
     input_reader(data, input);
 
-    Scalar_Field s("Scalar Values", np, np);
+    HommeExecView2D s("Scalar Values", np, np);
     Kokkos::deep_copy(s, s_host);
 
-    Dvv dvv("dvv", np, np);
+    HommeExecView2D dvv("dvv", np, np);
     Kokkos::deep_copy(dvv, dvv_host);
 
-    D dinv("dinv", np, np, dim, dim, numelems);
+    HommeExecView5D dinv("dinv", np, np, dim, dim, numelems);
     Kokkos::deep_copy(dinv, dinv_host);
 
-    Vector_Field grad_exper_device("Gradient Exper", np, np,
+    HommeExecView3D grad_exper_device("Gradient Exper", np, np,
                                    dim);
     gradient_sphere_c(0, s, dvv, dinv, grad_exper_device);
-    Vector_Field_Host grad_exper("Gradient Exper", np, np,
+    HommeHostView3D<MemoryManaged> grad_exper("Gradient Exper", np, np,
                                  dim);
     Kokkos::deep_copy(grad_exper, grad_exper_device);
 
@@ -869,20 +871,20 @@ TEST_CASE("gradient_sphere_random",
     using rngAlg = std::mt19937_64;
     rngAlg engine(rd());
 
-    Scalar_Field_Host s_fortran("", np, np);
-    Scalar_Field s_kokkos("", np, np);
+    HommeHostView2D<MemoryManaged> s_fortran("", np, np);
+    HommeExecView2D                s_kokkos("", np, np);
 
-    Dvv_Host dvv_fortran("", np, np);
-    Dvv dvv_kokkos("", np, np);
+    HommeHostView2D<MemoryManaged> dvv_fortran("", np, np);
+    HommeExecView2D                dvv_kokkos("", np, np);
 
-    D_Host dinv_fortran("", np, np, dim, dim, numelems);
-    D dinv_kokkos("", np, np, dim, dim, numelems);
+    HommeHostView5D<MemoryManaged> dinv_fortran("", np, np, dim, dim, numelems);
+    HommeExecView5D                dinv_kokkos("", np, np, dim, dim, numelems);
 
-    Vector_Field_Host grad_theory("", np, np, dim);
-    Vector_Field grad_exper("", np, np, dim);
-    Vector_Field_Host grad_exper_host("", np, np, dim);
+    HommeHostView3D<MemoryManaged> grad_theory("", np, np, dim);
+    HommeExecView3D                grad_exper("", np, np, dim);
+    HommeHostView3D<MemoryManaged> grad_exper_host("", np, np, dim);
 
-    for(int i = 0; i < numRandTests; i++) {
+    for(int i = 0; i < numRandTests; ++i) {
       genRandArray(
           s_fortran.ptr_on_device(), np * np, engine,
           std::uniform_real_distribution<real>(0, 1.0));
@@ -911,7 +913,7 @@ TEST_CASE("gradient_sphere_random",
         Kokkos::deep_copy(grad_exper_host, grad_exper);
         for(int k = 0; k < dim; k++) {
           for(int j = 0; j < np; j++) {
-            for(int i = 0; i < np; i++) {
+            for(int i = 0; i < np; ++i) {
               REQUIRE(check_answer(
                           grad_theory(i, j, k),
                           grad_exper_host(i, j, k)) == 0.0);
@@ -944,46 +946,46 @@ TEST_CASE("vorticity_sphere_input",
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    Vector_Field_Host v_host("Velocity", np, np, dim);
+    HommeHostView3D<MemoryManaged> v_host("Velocity", np, np, dim);
     std::map<std::string, real *> data;
     data.insert({std::string("v"), v_host.ptr_on_device()});
 
-    Dvv_Host dvv_host("dvv", np, np);
+    HommeHostView2D<MemoryManaged> dvv_host("dvv", np, np);
     data.insert({std::string("deriv_Dvv"),
                  dvv_host.ptr_on_device()});
 
     constexpr const int num_elems = 1;
-    D_Host d_host("d", np, np, dim, dim, num_elems);
+    HommeHostView5D<MemoryManaged> d_host("d", np, np, dim, dim, num_elems);
     data.insert(
         {std::string("elem_D"), d_host.ptr_on_device()});
 
-    MetDet_Host rmetdet_host("rmetdet", np, np, num_elems);
+    HommeHostView3D<MemoryManaged> rmetdet_host("rmetdet", np, np, num_elems);
     data.insert({std::string("elem_rmetdet"),
                  rmetdet_host.ptr_on_device()});
 
-    Scalar_Field_Host vort_theory("Vorticity Theory", np,
+    HommeHostView2D<MemoryManaged> vort_theory("Vorticity Theory", np,
                                   np);
     data.insert({std::string("Vorticity Sphere result"),
                  vort_theory.ptr_on_device()});
     input_reader(data, input);
 
-    Vector_Field v("Velocity", np, np, dim);
+    HommeExecView3D v("Velocity", np, np, dim);
     Kokkos::deep_copy(v, v_host);
 
-    Dvv dvv("dvv", np, np);
+    HommeExecView2D dvv("dvv", np, np);
     Kokkos::deep_copy(dvv, dvv_host);
 
-    D d("d", np, np, dim, dim, num_elems);
+    HommeExecView5D d("d", np, np, dim, dim, num_elems);
     Kokkos::deep_copy(d, d_host);
 
-    MetDet rmetdet("rmetdet", np, np, num_elems);
+    HommeExecView3D rmetdet("rmetdet", np, np, num_elems);
     Kokkos::deep_copy(rmetdet, rmetdet_host);
 
-    Scalar_Field vort_exper_device("Vorticity Exper", np,
+    HommeExecView2D vort_exper_device("Vorticity Exper", np,
                                    np);
     vorticity_sphere_c(0, v, dvv, d, rmetdet,
                        vort_exper_device);
-    Scalar_Field_Host vort_exper("Vorticity Exper", np, np);
+    HommeHostView2D<MemoryManaged> vort_exper("Vorticity Exper", np, np);
     Kokkos::deep_copy(vort_exper, vort_exper_device);
 
     for(int k = 0; k < np; k++) {
@@ -1006,23 +1008,23 @@ TEST_CASE("vorticity_sphere_random",
   using rngAlg = std::mt19937_64;
   rngAlg engine(rd());
 
-  Vector_Field_Host v_fortran("", np, np, dim);
-  Vector_Field v_kokkos("", np, np, dim);
+  HommeHostView3D<MemoryManaged> v_fortran("", np, np, dim);
+  HommeExecView3D                v_kokkos("", np, np, dim);
 
-  Dvv_Host dvv_fortran("", np, np);
-  Dvv dvv_kokkos("", np, np);
+  HommeHostView2D<MemoryManaged> dvv_fortran("", np, np);
+  HommeExecView2D                dvv_kokkos("", np, np);
 
-  D_Host d_fortran("", np, np, dim, dim, numelems);
-  D d_kokkos("", np, np, dim, dim, numelems);
+  HommeHostView5D<MemoryManaged> d_fortran("", np, np, dim, dim, numelems);
+  HommeExecView5D                d_kokkos("", np, np, dim, dim, numelems);
 
-  MetDet_Host rmetdet_fortran("", np, np, numelems);
-  MetDet rmetdet_kokkos("", np, np, numelems);
+  HommeHostView3D<MemoryManaged> rmetdet_fortran("", np, np, numelems);
+  HommeExecView3D                rmetdet_kokkos("", np, np, numelems);
 
-  Scalar_Field_Host vort_theory("", np, np);
-  Scalar_Field vort_exper("", np, np);
-  Scalar_Field_Host vort_exper_host("", np, np);
+  HommeHostView2D<MemoryManaged> vort_theory("", np, np);
+  HommeExecView2D                vort_exper("", np, np);
+  HommeHostView2D<MemoryManaged> vort_exper_host("", np, np);
 
-  for(int i = 0; i < numRandTests; i++) {
+  for(int i = 0; i < numRandTests; ++i) {
     genRandArray(
         v_fortran.ptr_on_device(), np * np * dim, engine,
         std::uniform_real_distribution<real>(0, 1.0));
@@ -1055,13 +1057,11 @@ TEST_CASE("vorticity_sphere_random",
       vorticity_sphere_c(ie, v_kokkos, dvv_kokkos, d_kokkos,
                          rmetdet_kokkos, vort_exper);
       Kokkos::deep_copy(vort_exper_host, vort_exper);
-      for(int k = 0; k < dim; k++) {
-        for(int j = 0; j < np; j++) {
-          for(int i = 0; i < np; i++) {
-            REQUIRE(check_answer(
-                        vort_theory(i, j, k),
-                        vort_exper_host(i, j, k)) == 0.0);
-          }
+      for(int j = 0; j < np; j++) {
+        for(int i = 0; i < np; ++i) {
+          REQUIRE(check_answer(
+                      vort_theory(i, j),
+                      vort_exper_host(i, j)) == 0.0);
         }
       }
     }
@@ -1088,50 +1088,50 @@ TEST_CASE("divergence_sphere_input",
     input.clear();
     input.seekg(std::ifstream::beg);
 
-    Vector_Field_Host v_host("Velocity", np, np, dim);
+    HommeHostView3D<MemoryManaged> v_host("Velocity", np, np, dim);
     std::map<std::string, real *> data;
     data.insert({std::string("v"), v_host.ptr_on_device()});
 
-    Dvv_Host dvv_host("dvv", np, np);
+    HommeHostView2D<MemoryManaged> dvv_host("dvv", np, np);
     data.insert({std::string("deriv_Dvv"),
                  dvv_host.ptr_on_device()});
 
     constexpr const int num_elems = 1;
-    D_Host dinv_host("dinv_host", np, np, dim, dim,
+    HommeHostView5D<MemoryManaged> dinv_host("dinv_host", np, np, dim, dim,
                      num_elems);
     data.insert({std::string("elem_Dinv"),
                  dinv_host.ptr_on_device()});
 
-    MetDet_Host rmetdet_host("rmetdet", np, np, num_elems);
+    HommeHostView3D<MemoryManaged> rmetdet_host("rmetdet", np, np, num_elems);
     data.insert({std::string("elem_rmetdet"),
                  rmetdet_host.ptr_on_device()});
 
-    MetDet_Host metdet_host("metdet", np, np, num_elems);
+    HommeHostView3D<MemoryManaged> metdet_host("metdet", np, np, num_elems);
     data.insert({std::string("elem_metdet"),
                  metdet_host.ptr_on_device()});
 
-    Scalar_Field_Host div_theory("Divergence Theory", np,
+    HommeHostView2D<MemoryManaged> div_theory("Divergence Theory", np,
                                  np);
     data.insert({std::string("Divergence Sphere result"),
                  div_theory.ptr_on_device()});
     input_reader(data, input);
 
-    Vector_Field v("Velocity", np, np, dim);
+    HommeExecView3D v("Velocity", np, np, dim);
     Kokkos::deep_copy(v, v_host);
-    Dvv dvv("dvv", np, np);
+    HommeExecView2D dvv("dvv", np, np);
     Kokkos::deep_copy(dvv, dvv_host);
-    D dinv("dinv", np, np, dim, dim, num_elems);
+    HommeExecView5D dinv("dinv", np, np, dim, dim, num_elems);
     Kokkos::deep_copy(dinv, dinv_host);
-    MetDet metdet("metdet", np, np, num_elems);
+    HommeExecView3D metdet("metdet", np, np, num_elems);
     Kokkos::deep_copy(metdet, metdet_host);
 
-    MetDet rmetdet("rmetdet", np, np, num_elems);
+    HommeExecView3D rmetdet("rmetdet", np, np, num_elems);
     Kokkos::deep_copy(rmetdet, rmetdet_host);
 
-    Scalar_Field div_exper("Divergence Exper", np, np);
+    HommeExecView2D div_exper("Divergence Exper", np, np);
     divergence_sphere_c(0, v, dvv, metdet, rmetdet, dinv,
                         div_exper);
-    Homme_View_Host<real **> div_exper_host(
+    HommeHostView2D<MemoryManaged> div_exper_host(
         "Divergence Exper", np, np);
     Kokkos::deep_copy(div_exper_host, div_exper);
 
@@ -1155,25 +1155,26 @@ TEST_CASE("divergence_sphere_random",
   using rngAlg = std::mt19937_64;
   rngAlg engine(rd());
 
-  Vector_Field_Host v_fortran("", np, np, dim);
-  Vector_Field v_kokkos("", np, np, dim);
+  HommeHostView3D<MemoryManaged> v_fortran("", np, np, dim);
+  HommeExecView3D                v_kokkos("", np, np, dim);
 
-  Dvv_Host dvv_fortran("", np, np);
-  Dvv dvv_kokkos("", np, np);
+  HommeHostView2D<MemoryManaged> dvv_fortran("", np, np);
+  HommeExecView2D                dvv_kokkos("", np, np);
 
-  D_Host dinv_fortran("", np, np, dim, dim, numelems);
-  D dinv_kokkos("", np, np, dim, dim, numelems);
+  HommeHostView5D<MemoryManaged> dinv_fortran("", np, np, dim, dim, numelems);
+  HommeExecView5D                dinv_kokkos("", np, np, dim, dim, numelems);
 
-  MetDet_Host metdet_fortran("", np, np, numelems);
-  MetDet metdet_kokkos("", np, np, numelems);
-  MetDet_Host rmetdet_fortran("", np, np, numelems);
-  MetDet rmetdet_kokkos("", np, np, numelems);
+  HommeHostView3D<MemoryManaged> metdet_fortran("", np, np, numelems);
+  HommeExecView3D                metdet_kokkos("", np, np, numelems);
 
-  Scalar_Field_Host div_theory("", np, np);
-  Scalar_Field div_exper("", np, np);
-  Scalar_Field_Host div_exper_host("", np, np);
+  HommeHostView3D<MemoryManaged> rmetdet_fortran("", np, np, numelems);
+  HommeExecView3D                rmetdet_kokkos("", np, np, numelems);
 
-  for(int i = 0; i < numRandTests; i++) {
+  HommeHostView2D<MemoryManaged> div_theory("", np, np);
+  HommeExecView2D                div_exper("", np, np);
+  HommeHostView2D<MemoryManaged> div_exper_host("", np, np);
+
+  for(int i = 0; i < numRandTests; ++i) {
     genRandArray(
         v_fortran.ptr_on_device(), np * np * dim, engine,
         std::uniform_real_distribution<real>(0, 1.0));
@@ -1215,13 +1216,11 @@ TEST_CASE("divergence_sphere_random",
                           metdet_kokkos, rmetdet_kokkos,
                           dinv_kokkos, div_exper);
       Kokkos::deep_copy(div_exper_host, div_exper);
-      for(int k = 0; k < dim; k++) {
-        for(int j = 0; j < np; j++) {
-          for(int i = 0; i < np; i++) {
-            REQUIRE(check_answer(div_theory(i, j, k),
-                                 div_exper_host(i, j, k)) ==
-                    0.0);
-          }
+      for(int j = 0; j < np; j++) {
+        for(int i = 0; i < np; ++i) {
+          REQUIRE(check_answer(div_theory(i, j),
+                               div_exper_host(i, j)) ==
+                  0.0);
         }
       }
     }
