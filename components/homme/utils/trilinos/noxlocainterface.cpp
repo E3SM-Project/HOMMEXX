@@ -1,204 +1,223 @@
 // ----------   Includes   ----------
+#include "noxlocainterface.hpp"
 #include <iostream>
 #include "Epetra_CrsMatrix.h"
-#include "noxlocainterface.hpp"
 
 #include "EpetraExt_RowMatrixOut.h"
 #include "Epetra_Operator.h"
 
-#include "Epetra_Vector.h"
 #include "Epetra_Import.h"
+#include "Epetra_Vector.h"
 
 #include "Epetra_LinearProblem.h"
 //#include "AztecOO.h"
-#include <BelosLinearProblem.hpp>
-#include <BelosBlockGmresSolMgr.hpp>
 #include <AztecOO.h>
-#include "precon_interface.hpp"
-#include "block_precon_interface.hpp"
-
-
-#include <BelosLinearProblem.hpp>
 #include <BelosBlockGmresSolMgr.hpp>
+#include <BelosLinearProblem.hpp>
+#include "block_precon_interface.hpp"
+#include "precon_interface.hpp"
 
+#include <BelosBlockGmresSolMgr.hpp>
+#include <BelosLinearProblem.hpp>
 
-#include "BelosConfigDefs.hpp"
-#include "BelosLinearProblem.hpp"
-#include "BelosEpetraAdapter.hpp"
 #include "BelosBlockGmresSolMgr.hpp"
-
-
-
+#include "BelosConfigDefs.hpp"
+#include "BelosEpetraAdapter.hpp"
+#include "BelosLinearProblem.hpp"
 
 //-----------------------------------------------------------------------------
 
+Problem_Interface::Problem_Interface(
+    int nelems, double *statevector_,
+    const LOCA::ParameterVector &pVector_,
+    const Epetra_Comm &comm_, void *blackbox_res_,
+    void *precdata_, void *jacdata_,
+    void (*residualFunction_)(double *, double *, int,
+                              void *),
+    void (*precFunction_)(double *, int, double *, void *),
+    void (*jacFunction_)(double *, int, double *, void *),
+    void (*precUpdateFunction_)(double *, int, void *),
+    void (*getJacVector_)(double *, int, void *))
+    : N(nelems),
+      statevector(statevector_),
+      comm(comm_),
+      pVector(pVector_),
+      blackbox_res(blackbox_res_),
+      precdata(precdata_),
+      jacdata(jacdata_),
+      residualFunction(residualFunction_),
+      precFunction(precFunction_),
+      jacFunction(jacFunction_),
+      precUpdateFunction(precUpdateFunction_),
+      getJacVector(getJacVector_) {
+  globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
 
-Problem_Interface::Problem_Interface(int nelems, double* statevector_,
-		const LOCA::ParameterVector& pVector_, const Epetra_Comm& comm_,
-		void* blackbox_res_, void* precdata_, void* jacdata_,
-		void (*residualFunction_)(double *, double *, int, void *),
-		void (*precFunction_)(double *, int, double*, void *),
-		void (*jacFunction_)(double *, int, double*, void *),
-		void (*precUpdateFunction_)(double *, int, void *),
-		void (*getJacVector_)(double *, int, void *)) :
-	N(nelems),
-	statevector(statevector_),
-	comm(comm_),
-	pVector(pVector_),
-	blackbox_res(blackbox_res_),
-        precdata(precdata_),
-        jacdata(jacdata_),
-	residualFunction(residualFunction_),
-	precFunction(precFunction_),
-	jacFunction(jacFunction_),
-	precUpdateFunction(precUpdateFunction_),
-	getJacVector(getJacVector_)
-{ 
+  solution = Teuchos::rcp(
+      new Epetra_Vector(Copy, *globalMap, statevector));
 
-	globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
-
-	solution = Teuchos::rcp(new Epetra_Vector(Copy, *globalMap, statevector));
-
-        if (comm.MyPID()==0) printproc=true;
-        else   printproc=false;
+  if(comm.MyPID() == 0)
+    printproc = true;
+  else
+    printproc = false;
 }
 
+Problem_Interface::Problem_Interface(
+    int nelems, double *statevector_,
+    const LOCA::ParameterVector &pVector_,
+    const Epetra_Comm &comm_, void *blackbox_res_,
+    void *precdata_, void *jacdata_,
+    void (*residualFunction_)(double *, double *, int,
+                              void *),
+    void (*precFunctionblock11_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock12_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock21_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock22_)(double *, int, double *,
+                                 void *),
+    void (*jacFunction_)(double *, int, double *, void *),
+    void (*precUpdateFunction_)(double *, int, void *),
+    void (*getJacVector_)(double *, int, void *))
+    : N(nelems),
+      statevector(statevector_),
+      comm(comm_),
+      pVector(pVector_),
+      blackbox_res(blackbox_res_),
+      precdata(precdata_),
+      jacdata(jacdata_),
+      residualFunction(residualFunction_),
+      precFunctionblock11(precFunctionblock11_),
+      precFunctionblock12(precFunctionblock12_),
+      precFunctionblock21(precFunctionblock21_),
+      precFunctionblock22(precFunctionblock22_),
+      jacFunction(jacFunction_),
+      precUpdateFunction(precUpdateFunction_),
+      getJacVector(getJacVector_) {
+  globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
 
+  solution = Teuchos::rcp(
+      new Epetra_Vector(Copy, *globalMap, statevector));
 
-Problem_Interface::Problem_Interface(int nelems, double* statevector_,
-		const LOCA::ParameterVector& pVector_, const Epetra_Comm& comm_,
-		void* blackbox_res_, void* precdata_, void* jacdata_,
-		void (*residualFunction_)(double *, double *, int, void *),
-		void (*precFunctionblock11_)(double *, int, double*, void *),
-		void (*precFunctionblock12_)(double *, int, double*, void *),
-		void (*precFunctionblock21_)(double *, int, double*, void *),
-		void (*precFunctionblock22_)(double *, int, double*, void *),
-		void (*jacFunction_)(double *, int, double*, void *),
-		void (*precUpdateFunction_)(double *, int, void *),
-		void (*getJacVector_)(double *, int, void *)) :
-	N(nelems),
-	statevector(statevector_),
-	comm(comm_),
-	pVector(pVector_),
-	blackbox_res(blackbox_res_),
-        precdata(precdata_),
-        jacdata(jacdata_),
-	residualFunction(residualFunction_),
-	precFunctionblock11(precFunctionblock11_),
-	precFunctionblock12(precFunctionblock12_),
-	precFunctionblock21(precFunctionblock21_),
-	precFunctionblock22(precFunctionblock22_),
-	jacFunction(jacFunction_),
-	precUpdateFunction(precUpdateFunction_),
-	getJacVector(getJacVector_)
-{ 
-
-	globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
-
-	solution = Teuchos::rcp(new Epetra_Vector(Copy, *globalMap, statevector));
-
-        if (comm.MyPID()==0) printproc=true;
-        else   printproc=false;
+  if(comm.MyPID() == 0)
+    printproc = true;
+  else
+    printproc = false;
 }
 
-/* This interface is just for testing... comparing two block preconditioner formulations */
+/* This interface is just for testing... comparing two block
+ * preconditioner formulations */
 
-Problem_Interface::Problem_Interface(int nelems, double* statevector_,
-                const LOCA::ParameterVector& pVector_, const Epetra_Comm& comm_,
-                void* blackbox_res_, void* precdata_, void* jacdata_,
-                void (*residualFunction_)(double *, double *, int, void *),
-                void (*precFunctionblock11_)(double *, int, double*, void *),
-                void (*precFunctionblock12_)(double *, int, double*, void *),
-                void (*precFunctionblock21_)(double *, int, double*, void *),
-                void (*precFunctionblock22_)(double *, int, double*, void *),
-                void (*auxprecFunctionblock11_)(double *, int, double*, void *),
-                void (*auxprecFunctionblock12_)(double *, int, double*, void *),
-                void (*auxprecFunctionblock21_)(double *, int, double*, void *),
-                void (*auxprecFunctionblock22_)(double *, int, double*, void *),
-                void (*jacFunction_)(double *, int, double*, void *),
-                void (*precUpdateFunction_)(double *, int, void *),
-                void (*getJacVector_)(double *, int, void *)) :
-        N(nelems),
-        statevector(statevector_),
-        comm(comm_),
-        pVector(pVector_),
-        blackbox_res(blackbox_res_),
-        precdata(precdata_),
-        jacdata(jacdata_),
-        residualFunction(residualFunction_),
-        precFunctionblock11(precFunctionblock11_),
-        precFunctionblock12(precFunctionblock12_),
-        precFunctionblock21(precFunctionblock21_),
-        precFunctionblock22(precFunctionblock22_),
-        auxprecFunctionblock11(auxprecFunctionblock11_),
-        auxprecFunctionblock12(auxprecFunctionblock12_),
-        auxprecFunctionblock21(auxprecFunctionblock21_),
-        auxprecFunctionblock22(auxprecFunctionblock22_),
-        jacFunction(jacFunction_),
-        precUpdateFunction(precUpdateFunction_),
-        getJacVector(getJacVector_)
-{
+Problem_Interface::Problem_Interface(
+    int nelems, double *statevector_,
+    const LOCA::ParameterVector &pVector_,
+    const Epetra_Comm &comm_, void *blackbox_res_,
+    void *precdata_, void *jacdata_,
+    void (*residualFunction_)(double *, double *, int,
+                              void *),
+    void (*precFunctionblock11_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock12_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock21_)(double *, int, double *,
+                                 void *),
+    void (*precFunctionblock22_)(double *, int, double *,
+                                 void *),
+    void (*auxprecFunctionblock11_)(double *, int, double *,
+                                    void *),
+    void (*auxprecFunctionblock12_)(double *, int, double *,
+                                    void *),
+    void (*auxprecFunctionblock21_)(double *, int, double *,
+                                    void *),
+    void (*auxprecFunctionblock22_)(double *, int, double *,
+                                    void *),
+    void (*jacFunction_)(double *, int, double *, void *),
+    void (*precUpdateFunction_)(double *, int, void *),
+    void (*getJacVector_)(double *, int, void *))
+    : N(nelems),
+      statevector(statevector_),
+      comm(comm_),
+      pVector(pVector_),
+      blackbox_res(blackbox_res_),
+      precdata(precdata_),
+      jacdata(jacdata_),
+      residualFunction(residualFunction_),
+      precFunctionblock11(precFunctionblock11_),
+      precFunctionblock12(precFunctionblock12_),
+      precFunctionblock21(precFunctionblock21_),
+      precFunctionblock22(precFunctionblock22_),
+      auxprecFunctionblock11(auxprecFunctionblock11_),
+      auxprecFunctionblock12(auxprecFunctionblock12_),
+      auxprecFunctionblock21(auxprecFunctionblock21_),
+      auxprecFunctionblock22(auxprecFunctionblock22_),
+      jacFunction(jacFunction_),
+      precUpdateFunction(precUpdateFunction_),
+      getJacVector(getJacVector_) {
+  globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
 
-        globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
+  solution = Teuchos::rcp(
+      new Epetra_Vector(Copy, *globalMap, statevector));
 
-        solution = Teuchos::rcp(new Epetra_Vector(Copy, *globalMap, statevector));
-
-        if (comm.MyPID()==0) printproc=true;
-        else   printproc=false;
+  if(comm.MyPID() == 0)
+    printproc = true;
+  else
+    printproc = false;
 }
 
+Problem_Interface::Problem_Interface(
+    int nelems, double *statevector_,
+    const LOCA::ParameterVector &pVector_,
+    const Epetra_Comm &comm_, void *blackbox_res_,
+    void *precdata_,
+    void (*residualFunction_)(double *, double *, int,
+                              void *),
+    void (*precFunction_)(double *, int, double *, void *),
+    void (*precUpdateFunction_)(double *, int, void *))
+    : N(nelems),
+      statevector(statevector_),
+      comm(comm_),
+      pVector(pVector_),
+      blackbox_res(blackbox_res_),
+      precdata(precdata_),
+      residualFunction(residualFunction_),
+      precFunction(precFunction_),
+      precUpdateFunction(precUpdateFunction_) {
+  globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
 
+  solution = Teuchos::rcp(
+      new Epetra_Vector(Copy, *globalMap, statevector));
 
-
-
-
-
-Problem_Interface::Problem_Interface(int nelems, double* statevector_,
-		const LOCA::ParameterVector& pVector_, const Epetra_Comm& comm_,
-		void* blackbox_res_, void* precdata_,
-		void (*residualFunction_)(double *, double *, int, void *),
-		void (*precFunction_)(double *, int, double*, void *),
-		void (*precUpdateFunction_)(double *, int, void *)) :
-	N(nelems),
-	statevector(statevector_),
-	comm(comm_),
-	pVector(pVector_),
-	blackbox_res(blackbox_res_),
-        precdata(precdata_),
-	residualFunction(residualFunction_),
-	precFunction(precFunction_),
-	precUpdateFunction(precUpdateFunction_)
-{ 
-
-	globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
-
-	solution = Teuchos::rcp(new Epetra_Vector(Copy, *globalMap, statevector));
-
-        if (comm.MyPID()==0) printproc=true;
-        else   printproc=false;
+  if(comm.MyPID() == 0)
+    printproc = true;
+  else
+    printproc = false;
 }
 
 /*
-Problem_Interface::Problem_Interface(int nelems, double* statevector_,
-		const LOCA::ParameterVector& pVector_, const Epetra_Comm& comm_,
-		void* blackbox_res_, void* precdata_,
-		void (*residualFunction_)(double *, double *, int, void *),
-		void (*precFunction_)(double *, int, double*, void *),
-		void (*precUpdateFunction_)(double *, int, void *)) :
-	N(nelems),
-	statevector(statevector_),
-	comm(comm_),
-	pVector(pVector_),
-	blackbox_res(blackbox_res_),
+Problem_Interface::Problem_Interface(int nelems, double*
+statevector_,
+    const LOCA::ParameterVector& pVector_, const
+Epetra_Comm& comm_,
+    void* blackbox_res_, void* precdata_,
+    void (*residualFunction_)(double *, double *, int, void
+*),
+    void (*precFunction_)(double *, int, double*, void *),
+    void (*precUpdateFunction_)(double *, int, void *)) :
+  N(nelems),
+  statevector(statevector_),
+  comm(comm_),
+  pVector(pVector_),
+  blackbox_res(blackbox_res_),
         precdata(precdata_),
-	residualFunction(residualFunction_),
-	precFunction(precFunction_),
-	precUpdateFunction(precUpdateFunction_)
-{ 
+  residualFunction(residualFunction_),
+  precFunction(precFunction_),
+  precUpdateFunction(precUpdateFunction_)
+{
 
-	globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
+  globalMap = Teuchos::rcp(new Epetra_Map(-1, N, 0, comm));
 
-	solution = Teuchos::rcp(new Epetra_Vector(Copy, *globalMap, statevector));
+  solution = Teuchos::rcp(new Epetra_Vector(Copy,
+*globalMap, statevector));
 
         if (comm.MyPID()==0) printproc=true;
         else   printproc=false;
@@ -208,321 +227,332 @@ Problem_Interface::Problem_Interface(int nelems, double* statevector_,
 }
 */
 
-Problem_Interface::~Problem_Interface()
-{ 
+Problem_Interface::~Problem_Interface() {}
+
+void Problem_Interface::printCommID() {
+  if(printproc) cout << "Printing CommID" << endl << flush;
+  if(comm.MyPID() == 0)
+    cout << "MyPID_interface=" << comm.MyPID() << endl
+         << flush;
 }
 
-
-void Problem_Interface::printCommID(){
-        if (printproc)   cout<<"Printing CommID"<<endl<<flush;
-        if (comm.MyPID()==0) cout<<"MyPID_interface="<<comm.MyPID()<<endl<<flush;
+void Problem_Interface::resetBlackbox(void *blackbox_res_,
+                                      void *precdata_,
+                                      void *jacdata_) {
+  blackbox_res = blackbox_res_;
+  precdata = precdata_;
+  jacdata = jacdata_;
 }
 
-
-
-void Problem_Interface::resetBlackbox(void* blackbox_res_,  void* precdata_,void* jacdata_){
-	blackbox_res=blackbox_res_; 
-	precdata=precdata_;
-	jacdata=jacdata_;
+void Problem_Interface::resetBlackbox(void *blackbox_res_,
+                                      void *precdata_) {
+  blackbox_res = blackbox_res_;
+  precdata = precdata_;
 }
 
-
-
-void Problem_Interface::resetBlackbox(void* blackbox_res_,  void* precdata_){
-	blackbox_res=blackbox_res_; 
-	precdata=precdata_;
+void Problem_Interface::resetBlackbox(void *blackbox_res_) {
+  blackbox_res = blackbox_res_;
 }
 
+bool Problem_Interface::computeF(const Epetra_Vector &x,
+                                 Epetra_Vector &F,
+                                 FillType flag) {
+  cout.precision(16);
+  //     double n1; x.Norm2(&n1);
+  // if(printproc) cout << "computeF Norm of x="<<n1<<endl;
 
+  F.PutScalar(0.0);
+  //  static int icount=0; cout << "Residual called" <<
+  //  icount++ <<  endl;
+  residualFunction(x.Values(), F.Values(), N, blackbox_res);
+  // residualFunction(x.Values(), F.Values(), N, jacdata);
 
-void Problem_Interface::resetBlackbox(void* blackbox_res_){
-	blackbox_res=blackbox_res_; 
+  //     double n2; F.Norm2(&n2);
+  // if(printproc) cout << "computeF Norm of F="<<n2<<endl;
+  return true;
 }
 
-
-
-bool Problem_Interface::computeF(const Epetra_Vector& x, Epetra_Vector& F, FillType flag)
-{
-cout.precision(16);
-//     double n1; x.Norm2(&n1);
-//if(printproc) cout << "computeF Norm of x="<<n1<<endl;
-
-	F.PutScalar(0.0);
-	//  static int icount=0; cout << "Residual called" << icount++ <<  endl;
-	residualFunction(x.Values(), F.Values(), N, blackbox_res);
-	//residualFunction(x.Values(), F.Values(), N, jacdata);
-
-//     double n2; F.Norm2(&n2);
-//if(printproc) cout << "computeF Norm of F="<<n2<<endl;
-	return true;
+void Problem_Interface::setParameters(
+    const LOCA::ParameterVector &params) {
+  pVector = params;
 }
 
-
-
-void Problem_Interface::setParameters(const LOCA::ParameterVector& params)
-{
-	pVector = params;
+void Problem_Interface::printSolution(
+    const Epetra_Vector &x, double conParam) {
+  //    cout << setprecision(5) << "Solution at: " <<
+  //    conParam << "  is:  "
+  //    << x[0] << " " << x[1] << " " << x[2] << " " << x[3]
+  //    << " "
+  //    << x[4] << " " << x[5] << " ... " << x[N-1] << endl;
 }
 
-void Problem_Interface::printSolution(const Epetra_Vector& x, double conParam)
-{
-	//    cout << setprecision(5) << "Solution at: " << conParam << "  is:  " 
-	//    << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << " "
-	//    << x[4] << " " << x[5] << " ... " << x[N-1] << endl;
+Teuchos::RCP<Epetra_Vector> Problem_Interface::getVector()
+    const {
+  return solution;
 }
 
-Teuchos::RCP<Epetra_Vector> Problem_Interface::getVector() const
-{ return solution;}
-
-
-void Problem_Interface::getJacVec(Epetra_Vector &y)const
-{ 
-        getJacVector(y.Values(),N,jacdata);
-        //getJacVector(y.Values(),N,blackbox_res);
-
+void Problem_Interface::getJacVec(Epetra_Vector &y) const {
+  getJacVector(y.Values(), N, jacdata);
+  // getJacVector(y.Values(),N,blackbox_res);
 }
 
-
-void Problem_Interface::getbbVec(Epetra_Vector &y)const
-{ 
-        getJacVector(y.Values(),N,blackbox_res);
-
+void Problem_Interface::getbbVec(Epetra_Vector &y) const {
+  getJacVector(y.Values(), N, blackbox_res);
 }
 
+bool Problem_Interface::computeJacobian(
+    const Epetra_Vector &x, Epetra_Operator &Jac) {
+  //        if (printproc)   cout<<"Updating Jacobian data
+  //        before nonlinear solve"<<endl;
+  // cout<<"Updating Jacobian data before nonlinear
+  // solve"<<endl;
+
+  // precUpdateFunction should be more appropriately named
+  // UpdateStateVector
+  // test
+  // Epetra_Vector a(x);
+  // a.PutScalar(0.0);
+  // precUpdateFunction(a.Values(),N,jacdata);
+
+  /*
+  cout.precision(16);
 
 
 
-bool Problem_Interface::computeJacobian(const Epetra_Vector& x, Epetra_Operator& Jac)
-{
-//        if (printproc)   cout<<"Updating Jacobian data before nonlinear solve"<<endl;
-        // cout<<"Updating Jacobian data before nonlinear solve"<<endl;
+  Epetra_Vector Jacv(x);
+  Epetra_Vector F(x);
+  Epetra_Vector step(x);
+  step.PutScalar(0.0);
 
-//precUpdateFunction should be more appropriately named UpdateStateVector
-//test 
-//Epetra_Vector a(x);
-//a.PutScalar(0.0);
-//precUpdateFunction(a.Values(),N,jacdata);
+  Epetra_Vector a(x);
+  a.PutScalar(0.0);
+  getJacVec(a); //copies the data from np1 entries of
+  jacdata and put them into an Epetra_Vector a
 
+       double na1; a.Norm2(&na1);
+  if(printproc) cout << "computeJacobian norm of
+  na1="<<na1<<endl;
 
-/*
-cout.precision(16);
-
-
-
-Epetra_Vector Jacv(x);
-Epetra_Vector F(x); 
-Epetra_Vector step(x);
-step.PutScalar(0.0);
-
-Epetra_Vector a(x);
-a.PutScalar(0.0);
-getJacVec(a); //copies the data from np1 entries of jacdata and put them into an Epetra_Vector a
-
-     double na1; a.Norm2(&na1);
-if(printproc) cout << "computeJacobian norm of na1="<<na1<<endl;
-
-     double n0; x.Norm2(&n0);
-if(printproc) cout << "computeJacobian norm of x="<<n0<<endl;
+       double n0; x.Norm2(&n0);
+  if(printproc) cout << "computeJacobian norm of
+  x="<<n0<<endl;
 
 
-	residualFunction(x.Values(), F.Values(), N, blackbox_res);
-     double n1; F.Norm2(&n1);
-if(printproc) cout << "computeF Norm of F="<<n1<<endl;
+    residualFunction(x.Values(), F.Values(), N,
+  blackbox_res);
+       double n1; F.Norm2(&n1);
+  if(printproc) cout << "computeF Norm of F="<<n1<<endl;
 
 
-        jacFunction(step.Values(),N,Jacv.Values(),jacdata);
+          jacFunction(step.Values(),N,Jacv.Values(),jacdata);
 
-double n2; Jacv.Norm2(&n2);
-if(printproc) cout << "computeJacobian Norm of preJac="<<n2<<endl;
-*/
+  double n2; Jacv.Norm2(&n2);
+  if(printproc) cout << "computeJacobian Norm of
+  preJac="<<n2<<endl;
+  */
 
-//only necessary line
-      precUpdateFunction(x.Values(),N,jacdata);
-      precUpdateFunction(x.Values(),N,precdata);
+  // only necessary line
+  precUpdateFunction(x.Values(), N, jacdata);
+  precUpdateFunction(x.Values(), N, precdata);
 
+  /*
+  Epetra_Vector b(x);
+  b.PutScalar(0.0);
+  getJacVec(b); //copies the data from np1 entries of
+  jacdata and put them into an Epetra_Vector a
+       double nb2; b.Norm2(&nb2);
+  if(printproc) cout << "computeJacobian norm of
+  nb2="<<nb2<<endl;
 
-/*
-Epetra_Vector b(x);
-b.PutScalar(0.0);
-getJacVec(b); //copies the data from np1 entries of jacdata and put them into an Epetra_Vector a
-     double nb2; b.Norm2(&nb2);
-if(printproc) cout << "computeJacobian norm of nb2="<<nb2<<endl;
-	
-residualFunction(x.Values(), F.Values(), N, blackbox_res);
-     double n3; F.Norm2(&n3);
-if(printproc) cout << "computeF Norm of F="<<n3<<endl;
+  residualFunction(x.Values(), F.Values(), N, blackbox_res);
+       double n3; F.Norm2(&n3);
+  if(printproc) cout << "computeF Norm of F="<<n3<<endl;
 
-        jacFunction(step.Values(),N,Jacv.Values(),jacdata);
-double n4; Jacv.Norm2(&n4);
-if(printproc) cout << "computeJacobian Norm of postJac="<<n4<<endl;
+          jacFunction(step.Values(),N,Jacv.Values(),jacdata);
+  double n4; Jacv.Norm2(&n4);
+  if(printproc) cout << "computeJacobian Norm of
+  postJac="<<n4<<endl;
 
 
 
-//revert back for test
-      precUpdateFunction(a.Values(),N,jacdata);
-      precUpdateFunction(a.Values(),N,precdata);
+  //revert back for test
+        precUpdateFunction(a.Values(),N,jacdata);
+        precUpdateFunction(a.Values(),N,precdata);
 
 
-Epetra_Vector c(x);
-c.PutScalar(0.0);
-getJacVec(c); //copies the data from np1 entries of jacdata and put them into an Epetra_Vector a
+  Epetra_Vector c(x);
+  c.PutScalar(0.0);
+  getJacVec(c); //copies the data from np1 entries of
+  jacdata and put them into an Epetra_Vector a
 
-     double nc1; c.Norm2(&nc1);
-if(printproc) cout << "computeJacobian norm of nc1="<<nc1<<endl;
-	
-residualFunction(c.Values(), F.Values(), N, blackbox_res);
-     double nc3; F.Norm2(&nc3);
-if(printproc) cout << "computeF Norm of F="<<nc3<<endl;
+       double nc1; c.Norm2(&nc1);
+  if(printproc) cout << "computeJacobian norm of
+  nc1="<<nc1<<endl;
 
-        jacFunction(step.Values(),N,Jacv.Values(),jacdata);
-double nc4; Jacv.Norm2(&nc4);
-if(printproc) cout << "computeJacobian Norm of postJac="<<nc4<<endl;
+  residualFunction(c.Values(), F.Values(), N, blackbox_res);
+       double nc3; F.Norm2(&nc3);
+  if(printproc) cout << "computeF Norm of F="<<nc3<<endl;
 
-
-
-        precUpdateFunction(x.Values(),N,jacdata);
-        precUpdateFunction(x.Values(),N,precdata);
-//        precUpdateFunction(x.Values(),N,precdata);
-//        precUpdateFunction(x.Values(),N,blackbox_res);
-
-*/
-/*
-Epetra_Vector a(x);
-a.PutScalar(10.0);
-getJacVec(a);
+          jacFunction(step.Values(),N,Jacv.Values(),jacdata);
+  double nc4; Jacv.Norm2(&nc4);
+  if(printproc) cout << "computeJacobian Norm of
+  postJac="<<nc4<<endl;
 
 
-if (printproc) {
-cout<<"Jacx=["<<endl;
-for(int i=0; i<N;i++) cout<<*(a.Values()+i)<<endl;
-cout<<"];"<<endl;
+
+          precUpdateFunction(x.Values(),N,jacdata);
+          precUpdateFunction(x.Values(),N,precdata);
+  //        precUpdateFunction(x.Values(),N,precdata);
+  //        precUpdateFunction(x.Values(),N,blackbox_res);
+
+  */
+  /*
+  Epetra_Vector a(x);
+  a.PutScalar(10.0);
+  getJacVec(a);
+
+
+  if (printproc) {
+  cout<<"Jacx=["<<endl;
+  for(int i=0; i<N;i++) cout<<*(a.Values()+i)<<endl;
+  cout<<"];"<<endl;
+  }
+
+  */
+
+  // if(printproc) cout << "computejac x="<<x<<endl<<flush;
+
+  //        if (printproc)   cout<<x;
+  // precUpdateFunction(x.Values(),N,blackbox_res);
+
+  return true;
 }
 
-*/
-
-
-//if(printproc) cout << "computejac x="<<x<<endl<<flush;
-
-
-//        if (printproc)   cout<<x;
-        //precUpdateFunction(x.Values(),N,blackbox_res);
-
-	return true;
-}
-
-
-// Preconditioner is 2 steps. Only computePreconditioner is given the state,
+// Preconditioner is 2 steps. Only computePreconditioner is
+// given the state,
 //  which we store in solution.
 /*
-bool Problem_Interface::computePreconditioner(const Epetra_Vector& x,
-		Epetra_Operator& Prec,
-		Teuchos::ParameterList* p)
+bool Problem_Interface::computePreconditioner(const
+Epetra_Vector& x,
+    Epetra_Operator& Prec,
+    Teuchos::ParameterList* p)
 {
-//        if (printproc)   cout<<"Updating Preconditioner before nonlinear solve"<<endl;
+//        if (printproc)   cout<<"Updating Preconditioner
+before nonlinear solve"<<endl;
 // precUpdateFunction(x.Values(),N,precdata);
 
- //       if (printproc)   cout<<"Updating Preconditioner before nonlinear solve"<<endl;
+ //       if (printproc)   cout<<"Updating Preconditioner
+before nonlinear solve"<<endl;
 
-	//A=Teuchos::rcp ( new Precon_Interface(comm,N,globalMap,precdata,precFunction));
+  //A=Teuchos::rcp ( new
+Precon_Interface(comm,N,globalMap,precdata,precFunction));
 
      //   if (comm.MyPID()==0) printproc=true;
 
   //      if (printproc)   cout<<"N="<<N<<endl;
 
-// if (comm.MyPID()==0) cout<<"comm.mypid="<<comm.MyPID()<<endl<<flush;
+// if (comm.MyPID()==0)
+cout<<"comm.mypid="<<comm.MyPID()<<endl<<flush;
 
 
-	A=Teuchos::rcp ( new Precon_Interface(N,globalMap,comm,precdata,precFunction));
+  A=Teuchos::rcp ( new
+Precon_Interface(N,globalMap,comm,precdata,precFunction));
 
-   //     if (printproc)   cout<<"Updated Preconditioner before nonlinear solve"<<endl;
-	return true;
+   //     if (printproc)   cout<<"Updated Preconditioner
+before nonlinear solve"<<endl;
+  return true;
 }
 */
 
-
-
-// Preconditioner is 2 steps. Only computePreconditioner is given the state,
+// Preconditioner is 2 steps. Only computePreconditioner is
+// given the state,
 //  which we store in solution.
-bool Problem_Interface::computePreconditioner(const Epetra_Vector& x,
-                Epetra_Operator& Prec,
-                Teuchos::ParameterList* p)
-{
-//        if (printproc)   cout<<"Updating Preconditioner before nonlinear solve"<<endl;
+bool Problem_Interface::computePreconditioner(
+    const Epetra_Vector &x, Epetra_Operator &Prec,
+    Teuchos::ParameterList *p) {
+  //        if (printproc)   cout<<"Updating Preconditioner
+  //        before nonlinear solve"<<endl;
 
+  // This is how we define the non-seggregated Picard
+  // operator as a preconditioning operator
+  // precUpdateFunction(x.Values(),N,precdata);
 
-//This is how we define the non-seggregated Picard operator as a preconditioning operator
-// precUpdateFunction(x.Values(),N,precdata);
+  // This is how we define the seggregated block Picard
+  // operator as a preconditioning operator
+  // A=Teuchos::rcp ( new
+  // Precon_Interface(N,globalMap,comm,precdata,precFunctionblock11,precFunctionblock12,precFunctionblock21,precFunctionblock22));
+  // A=Teuchos::rcp ( new
+  // Block_Precon_Interface(N,globalMap,comm,precdata,precFunctionblock11,precFunctionblock12,precFunctionblock21,precFunctionblock22));
+  A = Teuchos::rcp(new Block_Precon_Interface(
+      N, globalMap, comm, precdata, auxprecFunctionblock11,
+      auxprecFunctionblock12, auxprecFunctionblock21,
+      auxprecFunctionblock22));
 
+  // This is how we setup the SIMPLE algorithm
+  // Convention: for SIMPLE algorithm based on Picard
+  // linearization
+  // 11 block is F
+  // 12 block is diag(F)^{-1}B'
+  // 21 block is B
+  // 22 block is S=G-Bdiag(F)^{-1}B'
+  F = Teuchos::rcp(new Precon_Interface(
+      N, globalMap, comm, precdata, precFunctionblock11));
+  S = Teuchos::rcp(new Precon_Interface(
+      N, globalMap, comm, precdata, precFunctionblock22));
 
-//This is how we define the seggregated block Picard operator as a preconditioning operator
-        //A=Teuchos::rcp ( new Precon_Interface(N,globalMap,comm,precdata,precFunctionblock11,precFunctionblock12,precFunctionblock21,precFunctionblock22));
-        //A=Teuchos::rcp ( new Block_Precon_Interface(N,globalMap,comm,precdata,precFunctionblock11,precFunctionblock12,precFunctionblock21,precFunctionblock22));
-        A=Teuchos::rcp ( new Block_Precon_Interface(N,globalMap,comm,precdata,auxprecFunctionblock11,auxprecFunctionblock12,auxprecFunctionblock21,auxprecFunctionblock22));
-
-
-//This is how we setup the SIMPLE algorithm
-//Convention: for SIMPLE algorithm based on Picard linearization
-//11 block is F
-//12 block is diag(F)^{-1}B'
-//21 block is B
-//22 block is S=G-Bdiag(F)^{-1}B'
-        F=Teuchos::rcp ( new Precon_Interface(N,globalMap,comm,precdata,precFunctionblock11));
-        S=Teuchos::rcp ( new Precon_Interface(N,globalMap,comm,precdata,precFunctionblock22));
-
-        return true;
+  return true;
 }
-
-
-
-
-
-
-
-
 
 /* Analytic Jacobian */
 #if 1
-int Problem_Interface::Apply(const Epetra_MultiVector &X,Epetra_MultiVector &Y)const {
+int Problem_Interface::Apply(const Epetra_MultiVector &X,
+                             Epetra_MultiVector &Y) const {
+  cout.precision(16);
+  Y.PutScalar(0.0);
+  // Apply Analytic Jacobian function J to X and store
+  // result in Y, jacdata (@np1) holds data for point of
+  // linearization
+  // jacFunction(X(0)->Values(),N,Y(0)->Values(),jacdata);
+  // Test with precdata here instead of jacdata, I believe
+  // they should be the same
+  // Print out vector we are applying J to before and after
+  // the apply
+  // if (printproc)  cout<<"a="<<X<<endl;
 
-cout.precision(16);
-       Y.PutScalar(0.0);
-// Apply Analytic Jacobian function J to X and store result in Y, jacdata (@np1) holds data for point of linearization
-			 //jacFunction(X(0)->Values(),N,Y(0)->Values(),jacdata);
-			 //Test with precdata here instead of jacdata, I believe they should be the same
-//Print out vector we are applying J to before and after the apply
-        //if (printproc)  cout<<"a="<<X<<endl;
+  double n0;
+  X(0)->Norm2(&n0);
+  if(printproc) cout << "Apply Norm of x=" << n0 << endl;
 
+  Epetra_Vector Jac(*Y(0));    // y=J_a*x
+  Epetra_Vector tempx(*X(0));  // x
+  Epetra_Vector a(*Y(0));
+  a.PutScalar(10.0);
+  getJacVec(a);  // copies the data from np1 entries of
+                 // jacdata and put them into an
+                 // Epetra_Vector a
 
-     double n0; X(0)->Norm2(&n0);
-if(printproc) cout << "Apply Norm of x="<<n0<<endl;
+  // double n1; a.Norm2(&n1);
+  // if(printproc) cout << "Analytic Jac Norm of
+  // a="<<n1<<endl;
 
-Epetra_Vector Jac(*Y(0)); //y=J_a*x
-Epetra_Vector tempx(*X(0)); //x
-Epetra_Vector a(*Y(0));
-a.PutScalar(10.0);
-getJacVec(a); //copies the data from np1 entries of jacdata and put them into an Epetra_Vector a
+  // double n2; tempx.Norm2(&n2);
+  // if(printproc) cout << "Analytic Jac Norm of
+  // x="<<n2<<endl;
 
+  // jacFunction(X(0)->Values(),N,Y(0)->Values(),jacdata);
+  //			 jacFunction(tempx.Values(),N,Jac.Values(),blackbox_res);
+  jacFunction(tempx.Values(), N, Jac.Values(), jacdata);
 
-//double n1; a.Norm2(&n1);
-//if(printproc) cout << "Analytic Jac Norm of a="<<n1<<endl;
-     
-//double n2; tempx.Norm2(&n2);
-//if(printproc) cout << "Analytic Jac Norm of x="<<n2<<endl;
+  //			 jacFunction(X(0)->Values(),N,Y(0)->Values(),blackbox_res);
+  //			 jacFunction(X(0)->Values(),N,Y(0)->Values(),blackbox_res);
+  // if (printproc)  cout<<"b="<<Y<<endl;
 
-			 //jacFunction(X(0)->Values(),N,Y(0)->Values(),jacdata);
-//			 jacFunction(tempx.Values(),N,Jac.Values(),blackbox_res);
-			 jacFunction(tempx.Values(),N,Jac.Values(),jacdata);
+  // double n3; Jac.Norm2(&n3);
+  // if(printproc) cout << "Analytic Jac Norm of
+  // Jac="<<n3<<endl;
 
-//			 jacFunction(X(0)->Values(),N,Y(0)->Values(),blackbox_res);
-//			 jacFunction(X(0)->Values(),N,Y(0)->Values(),blackbox_res);
-        //if (printproc)  cout<<"b="<<Y<<endl;
-
-//double n3; Jac.Norm2(&n3);
-//if(printproc) cout << "Analytic Jac Norm of Jac="<<n3<<endl;
-
-
-Y=Jac;
-	return 0;
+  Y = Jac;
+  return 0;
 }
 #endif
 
@@ -649,24 +679,20 @@ return 0;
 
 #endif
 
-
-
 #if 1
-int Problem_Interface::ApplyInverse(const Epetra_MultiVector& X, Epetra_MultiVector& Y)const
-{
+int Problem_Interface::ApplyInverse(
+    const Epetra_MultiVector &X,
+    Epetra_MultiVector &Y) const {
+  //    if (printproc) {
+  // cout<<"rhs=["<<endl;
+  //    for (int i=0; i<N; i++) cout<<" "<<X[0][i];
+  // cout<<"];"<<endl;
+  //}
 
-//    if (printproc) {
-//cout<<"rhs=["<<endl;
-//    for (int i=0; i<N; i++) cout<<" "<<X[0][i];
-//cout<<"];"<<endl;
-//}
-
-	Y=X;
-	return 0;
-
+  Y = X;
+  return 0;
 }
 #endif
-
 
 #if 0
 int Problem_Interface::ApplyInverse(const Epetra_MultiVector& X, Epetra_MultiVector& Y)const
@@ -736,20 +762,25 @@ if(printproc) cout << "normprecvec="<<n0<<endl;
 
 
 return 0;
-} 
-#endif 
+}
+#endif
 
 /*
 //Test FD
 Epetra_Vector a(*Y(0));
 a.PutScalar(10.0);
-getJacVec(a); //copies the data from np1 entries of jacdata and put them into an Epetra_Vector a
+getJacVec(a); //copies the data from np1 entries of jacdata
+and put them into an Epetra_Vector a
 
 
 //J_x (y)=(F(x+delta y)-F(x))/delta
 
-double normJacx;a.Norm2(&normJacx);     // here x is the vector that we are linearizing about, this is passed in via jacdata J_x, we get this vector data using getJacVec(a);
-double normJacy;Y(0)->Norm2(&normJacy); //here y is the vector that we are applying J_x to (y is the const input vector X in Apply)
+double normJacx;a.Norm2(&normJacx);     // here x is the
+vector that we are linearizing about, this is passed in via
+jacdata J_x, we get this vector data using getJacVec(a);
+double normJacy;Y(0)->Norm2(&normJacy); //here y is the
+vector that we are applying J_x to (y is the const input
+vector X in Apply)
 double lambda=1.e-6;
 //double lambda=5.e-8;
 double delta;
@@ -780,8 +811,10 @@ const Epetra_Vector FDb(tempx);
 //     double n1; b.Norm2(&n1);
 //if(printproc) cout << "Apply Norm of x="<<n1<<endl;
 
-        //residualFunction(b.Values(), tempa.Values(), N,jacdata); //F(x+delta y)
-        residualFunction(FDb.Values(), tempa.Values(), N,blackbox_res); //F(x+delta y)
+        //residualFunction(b.Values(), tempa.Values(),
+N,jacdata); //F(x+delta y)
+        residualFunction(FDb.Values(), tempa.Values(),
+N,blackbox_res); //F(x+delta y)
 
 
  //    double n2; tempa.Norm2(&n2);
@@ -791,8 +824,10 @@ const Epetra_Vector FDb(tempx);
 const Epetra_Vector c(a);
 //    double n3; c.Norm2(&n3);
 //if(printproc) cout << "FD Jac Norm of x="<<n3<<endl;
-        //residualFunction(c.Values(), tempb.Values(), N, jacdata); //F(x)
-        residualFunction(c.Values(), tempb.Values(), N, blackbox_res); //F(x)
+        //residualFunction(c.Values(), tempb.Values(), N,
+jacdata); //F(x)
+        residualFunction(c.Values(), tempb.Values(), N,
+blackbox_res); //F(x)
 
 //double n4; tempb.Norm2(&n4);
 //if(printproc) cout << "Apply Norm of F="<<n4<<endl;
@@ -800,8 +835,10 @@ const Epetra_Vector c(a);
 Epetra_Vector FDJac(tempy);
 FDJac.PutScalar(0.0);
 
-// i.e. J_x y= (F(x+delta y)-F(x))/delta, where delta= lambda(lambda +norm x/norm y)
-    for (int i=0; i<N; i++) FDJac[i] = (tempa[i]-tempb[i])/delta;
+// i.e. J_x y= (F(x+delta y)-F(x))/delta, where delta=
+lambda(lambda +norm x/norm y)
+    for (int i=0; i<N; i++) FDJac[i] =
+(tempa[i]-tempb[i])/delta;
 
 Epetra_Vector Xin(*X(0)); //X
 Epetra_Vector FDdiff(*Y(0));
@@ -827,38 +864,43 @@ Epetra_Vector diff(*Y(0));
 double ndiff; diff.Norm2(&ndiff);
 if(printproc) cout << "X - A*(Pinv*X)"<<ndiff<<endl;
 return 0;
-} 
+}
 */
-
-
-
 
 /* seggregated SIMPLE */
 
-//ApplyInverse routine for the SIMPLE preconditioner
-//Convention: for SIMPLE algorithm based on Picard linearization
-//11 block is F
-//12 block is diag(F)^{-1}B'
-//21 block is B
-//22 block is S=G-Bdiag(F)^{-1}B'
+// ApplyInverse routine for the SIMPLE preconditioner
+// Convention: for SIMPLE algorithm based on Picard
+// linearization
+// 11 block is F
+// 12 block is diag(F)^{-1}B'
+// 21 block is B
+// 22 block is S=G-Bdiag(F)^{-1}B'
 
-// These operators receive and return complete state vectors. 
-// Components where the operator is not defined will return a zero 
+// These operators receive and return complete state
+// vectors.
+// Components where the operator is not defined will return
+// a zero
 // Specifically,
-// F is applied to velocities and returns velocities along with a height field of 0
-// similarly S is applied to a height field and returns a height field along with a velocity field of 0
-// B is applied to a velocity field and returns a scalar height feild along with a zero velocity field
-// diag(F)^{-1}B' is applied to a height field and returns a velocity field with a zero height field.
-// communication within each of these operators uses the appropriate edge1,2,3 data structures
-
+// F is applied to velocities and returns velocities along
+// with a height field of 0
+// similarly S is applied to a height field and returns a
+// height field along with a velocity field of 0
+// B is applied to a velocity field and returns a scalar
+// height feild along with a zero velocity field
+// diag(F)^{-1}B' is applied to a height field and returns a
+// velocity field with a zero height field.
+// communication within each of these operators uses the
+// appropriate edge1,2,3 data structures
 
 // rhs vector is X
-// we implicitly view X as partitioned into components b1 and b2, 
+// we implicitly view X as partitioned into components b1
+// and b2,
 // return vector is Y
-// we implicitly view Y as partitioned into components Y1 and Y2, 
+// we implicitly view Y as partitioned into components Y1
+// and Y2,
 
-
-//SIMPLE algorithm
+// SIMPLE algorithm
 //
 // 1. Solve F x1=b1
 // 2. Solve S x2=-Bx1+b2
@@ -1111,56 +1153,40 @@ return 0;
 }
 #endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* Testing seggregated simple vs unseggregated simple */
 
-//ApplyInverse routine for the SIMPLE preconditioner
-//Convention: for SIMPLE algorithm based on Picard linearization
-//11 block is F
-//12 block is diag(F)^{-1}B'
-//21 block is B
-//22 block is S=G-Bdiag(F)^{-1}B'
+// ApplyInverse routine for the SIMPLE preconditioner
+// Convention: for SIMPLE algorithm based on Picard
+// linearization
+// 11 block is F
+// 12 block is diag(F)^{-1}B'
+// 21 block is B
+// 22 block is S=G-Bdiag(F)^{-1}B'
 
-// These operators receive and return complete state vectors. 
-// Components where the operator is not defined will return a zero 
+// These operators receive and return complete state
+// vectors.
+// Components where the operator is not defined will return
+// a zero
 // Specifically,
-// F is applied to velocities and returns velocities along with a height field of 0
-// similarly S is applied to a height field and returns a height field along with a velocity field of 0
-// B is applied to a velocity field and returns a scalar height feild along with a zero velocity field
-// diag(F)^{-1}B' is applied to a height field and returns a velocity field with a zero height field.
-// communication within each of these operators uses the appropriate edge1,2,3 data structures
-
+// F is applied to velocities and returns velocities along
+// with a height field of 0
+// similarly S is applied to a height field and returns a
+// height field along with a velocity field of 0
+// B is applied to a velocity field and returns a scalar
+// height feild along with a zero velocity field
+// diag(F)^{-1}B' is applied to a height field and returns a
+// velocity field with a zero height field.
+// communication within each of these operators uses the
+// appropriate edge1,2,3 data structures
 
 // rhs vector is X
-// we implicitly view X as partitioned into components b1 and b2, 
+// we implicitly view X as partitioned into components b1
+// and b2,
 // return vector is Y
-// we implicitly view Y as partitioned into components Y1 and Y2, 
+// we implicitly view Y as partitioned into components Y1
+// and Y2,
 
-
-//SIMPLE algorithm
+// SIMPLE algorithm
 //
 // 1. Solve F x1=b1
 // 2. Solve S x2=-Bx1+b2
@@ -1233,11 +1259,6 @@ if(printproc) cout << "Norm of RHS="<<n8<<endl;
         Epetra_MultiVector y1(Y);
         y1(0)->PutScalar(0.0);
 
-
-
-
-
-
 #if 0
        Epetra_MultiVector b1(X);
 
@@ -1309,7 +1330,6 @@ if(printproc) cout << "diag vec diff="<<diagndiff/nx1<<endl;
 */
 //end M and Minv
 
-
 #if 0
 //Test diag(F)*inv(Diag(F))
 Epetra_Vector ei1(*Y(0));
@@ -1341,11 +1361,6 @@ double diagndiff1; diagdiff1.Norm2(&diagndiff1);
 if(printproc) cout << "diag vec diff norm="<<diagndiff1<<endl<<flush;
 // end test diag(F)*inv(Diag(F))
 #endif
-
-
-
-
-
 
 #if 0
 //Test inv(Diag(F))*B' -(inv(Diag(F))B')
@@ -1385,10 +1400,6 @@ double diagndiff1; diagdiff1.Norm2(&diagndiff1);
 if(printproc) cout << "FDi Bt-FDiBt vec diff norm="<<diagndiff1<<endl<<flush;
 // end test diag(F)*inv(Diag(F))
 #endif
-
-
-
-
 
 #if 0
 //Test F*(inv(Diag(F))*B') -(F*inv(diag(f))*B')
@@ -1875,11 +1886,6 @@ return 0;
 }
 #endif
 
-
-
-
-
-
 #if 0
 /* SIMPLE  */
 
@@ -2197,9 +2203,6 @@ return 0;
 }
 #endif
 
-
-
-
 #if 0
 int Problem_Interface::ApplyInverse(const Epetra_MultiVector& X, Epetra_MultiVector& Y)const
 {
@@ -2481,26 +2484,17 @@ return 0;
 }
 #endif
 
+void Problem_Interface::runPreIterate(
+    const NOX::Solver::Generic &solver) {
+  //    if (printproc)   cout<<"Pre Iterate"<<endl;
+  //   if (printproc)   cout<<"N="<<N<<endl;
+  //    if (comm.MyPID()==0)
+  //    cout<<"comm.mypid="<<comm.MyPID()<<endl<<flush;
 
-
-
-
-
-
-
-void Problem_Interface::runPreIterate (const NOX::Solver::Generic &solver)
-{
-
-//    if (printproc)   cout<<"Pre Iterate"<<endl;
- //   if (printproc)   cout<<"N="<<N<<endl;
-//    if (comm.MyPID()==0) cout<<"comm.mypid="<<comm.MyPID()<<endl<<flush;
-
-
-//  cout<<"Updating Preconditioner before nonlinear solve"<<endl;
-//  precUpdateFunction(statevector,N,precdata);
-//  precUpdateFunction(statevector,N,blackbox_res);
+  //  cout<<"Updating Preconditioner before nonlinear
+  //  solve"<<endl;
+  //  precUpdateFunction(statevector,N,precdata);
+  //  precUpdateFunction(statevector,N,blackbox_res);
 }
 
-
 //-----------------------------------------------------------------------------
-

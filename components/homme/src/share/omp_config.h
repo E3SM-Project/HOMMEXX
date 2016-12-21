@@ -9,10 +9,8 @@
 #define OMP_SIMD !dir$ simd
 #endif
 
-
 #else
 
 #define OMP_SIMD
 
 #endif
-
