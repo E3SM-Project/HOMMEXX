@@ -1,5 +1,5 @@
-
-SET(TRILINOS_INSTALL_DIR "~/prefix" CACHE FILEPATH "Where to install Trilinos")
+SET (TRILINOS_INSTALL_DIR "~/prefix" CACHE FILEPATH "Where to install Trilinos")
+SET (TRILINOS_BUILD_TYPE "RELEASE" CACHE STRING "Build type for trilinos")
 
 FIND_PACKAGE(Trilinos QUIET PATHS ${TRILINOS_INSTALL_DIR}/lib/cmake/Trilinos)
 
@@ -45,8 +45,8 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
           -DTPL_ENABLE_CUDA=ON
           -DKokkos_ENABLE_CUDA=ON
           -DKokkos_ENABLE_CUDA_UVM=ON
-	  -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR}
-	  -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER})
+          -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR}
+          -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER})
       SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda -expt-relaxed-constexpr")
       MESSAGE("CUDA Enabled")
       SET(Kokkos_TPL_LIBRARIES "${Kokkos_TPL_LIBRARIES};cudart;cublas;cufft")
@@ -56,7 +56,7 @@ IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
   # Set up Trilinos as an external project
   SET(TRILINOS_REPO "git@github.com:trilinos/Trilinos")
 
-  SET(TRILINOS_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
+  SET(TRILINOS_CMAKE_ARGS -DCMAKE_BUILD_TYPE=${TRILINOS_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${TRILINOS_INSTALL_DIR} ${PACKAGES} ${EXECUTION_SPACES})
 
   INCLUDE(ExternalProject)
 
