@@ -13,7 +13,7 @@ LOG_FILE=$BASE_DIR/nightly_log_skybridgeHOMMEXXopenmp.txt
 
 eval "env TEST_DIRECTORY=$BASE_DIR SCRIPT_DIRECTORY=$BASE_DIR  ctest -VV -S $BASE_DIR/ctest_nightly.cmake" > $LOG_FILE 2>&1
 
-scp -r /home/ikalash/nightlyHOMMEXXCDash/build/Testing/20* ikalash@software-login.sandia.gov:/home/ikalash/hommexxCDash/SkybridgeHOMMEXXOpenMP
+cp -r /home/ikalash/nightlyHOMMEXXCDash/build/Testing/20* /gpfs1/ikalash/hommexxCDash/SkybridgeHOMMEXXOpenMP
 
 #bash process_results_ctest.sh
 #bash send_email_ctest.sh
