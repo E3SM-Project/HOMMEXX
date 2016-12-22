@@ -78,10 +78,12 @@ void recover_q_c(const int &nets, const int &nete,
             2, Kokkos::Experimental::Iterate::Left,
             Kokkos::Experimental::Iterate::Left>,
         Kokkos::IndexType<int> >;
-    P_Host p_host(p_ptr, np, np, nlev, timelevels,
-                  num_elems);
+
     /* TODO: Improve name of p and it's label */
-    P p("p", np, np, nlev, timelevels, num_elems);
+    HommeHostView5D<MemoryUnmanaged> p_host(
+        p_ptr, np, np, nlev, timelevels, num_elems);
+    HommeExecView5D p("p", np, np, nlev, timelevels,
+                      num_elems);
     Kokkos::deep_copy(p, p_host);
     try {
       Kokkos::Experimental::md_parallel_for(
@@ -116,15 +118,17 @@ void contra2latlon_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
-                num_elems);
-  V v("Lateral velocity", np, np, dim, nlev, timelevels,
-      num_elems);
+
+  HommeHostView6D<MemoryUnmanaged> v_host(
+      v_ptr, np, np, dim, nlev, timelevels, num_elems);
+  HommeExecView6D v("Lateral velocity", np, np, dim, nlev,
+                    timelevels, num_elems);
   Kokkos::deep_copy(v, v_host);
 
   /* TODO: Improve name of d and it's label */
-  D_Host d_host(d_ptr, np, np, dim, dim, num_elems);
-  D d("d", np, np, dim, dim, num_elems);
+  HommeHostView5D<MemoryUnmanaged> d_host(
+      d_ptr, np, np, dim, dim, num_elems);
+  HommeExecView5D d("d", np, np, dim, dim, num_elems);
   Kokkos::deep_copy(d, d_host);
 
   try {
@@ -167,39 +171,47 @@ void add_hv_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
+
+  const int elem_start = nets - 1;
+  const int elem_end = nete;
+  const int num_my_elems = elem_end - elem_start;
+
   /* TODO: Improve name of sphere_mp and it's label */
-  Sphere_MP_Host sphere_mp_host(sphere_mp_ptr, np, np,
-                                num_elems);
-  Sphere_MP sphere_mp("sphere_mp", np, np, num_elems);
+  HommeHostView3D<MemoryUnmanaged> sphere_mp_host(
+      sphere_mp_ptr, np, np, num_elems);
+  HommeExecView3D sphere_mp("sphere_mp", np, np, num_elems);
   Kokkos::deep_copy(sphere_mp, sphere_mp_host);
 
   /* TODO: Improve name of ptens and it's label */
-  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
-                        nete - nets + 1);
-  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  HommeHostView4D<MemoryUnmanaged> ptens_host(
+      ptens_ptr, np, np, nlev, num_my_elems);
+  HommeExecView4D ptens("ptens", np, np, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(ptens, ptens_host);
 
   /* TODO: Improve name of vtens and it's label */
-  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
-                        nete - nets + 1);
-  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  HommeHostView5D<MemoryUnmanaged> vtens_host(
+      vtens_ptr, np, np, dim, nlev, num_my_elems);
+  HommeExecView5D vtens("vtens", np, np, dim, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(vtens, vtens_host);
 
   real _nu = nu;
   real _nu_s = nu_s;
   try {
     Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        RangePolicy({0, elem_start}, {nlev, elem_end},
+                    {1, 1}),
         KOKKOS_LAMBDA(int k, int ie) {
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
-              ptens(i, j, k, ie - nets + 1) =
-                  -_nu_s * ptens(i, j, k, ie - nets + 1) /
+              ptens(i, j, k, ie - elem_start) =
+                  -_nu_s * ptens(i, j, k, ie - elem_start) /
                   sphere_mp(i, j, ie);
               for(int h = 0; h < dim; h++) {
-                vtens(i, j, h, k, ie - nets + 1) =
+                vtens(i, j, h, k, ie - elem_start) =
                     -_nu *
-                    vtens(i, j, h, k, ie - nets + 1) /
+                    vtens(i, j, h, k, ie - elem_start) /
                     sphere_mp(i, j, ie);
               }
             }
@@ -212,6 +224,8 @@ void add_hv_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+
+  // Copy the results back on the host views
   Kokkos::deep_copy(ptens_host, ptens);
   Kokkos::deep_copy(vtens_host, vtens);
 }
@@ -227,9 +241,10 @@ void recover_dpq_c(const int &nets, const int &nete,
             Kokkos::Experimental::Iterate::Left>,
         Kokkos::IndexType<int> >;
     /* TODO: Improve name of p and it's label */
-    P_Host p_host(p_ptr, np, np, nlev, timelevels,
-                  num_elems);
-    P p("p", np, np, nlev, timelevels, num_elems);
+    HommeHostView5D<MemoryUnmanaged> p_host(
+        p_ptr, np, np, nlev, timelevels, num_elems);
+    HommeExecView5D p("p", np, np, nlev, timelevels,
+                      num_elems);
     Kokkos::deep_copy(p, p_host);
     try {
       Kokkos::Experimental::md_parallel_for(
@@ -265,45 +280,55 @@ void weighted_rhs_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
+
+  const int elem_start = nets - 1;
+  const int elem_end = nete;
+  const int num_my_elems = elem_end - elem_start;
+
   /* TODO: Improve name of rsphere_mp and it's label */
-  Sphere_MP_Host rsphere_mp_host(rsphere_mp_ptr, np, np,
-                                 num_elems);
-  Sphere_MP rsphere_mp("rsphere_mp", np, np, num_elems);
+  HommeHostView3D<MemoryUnmanaged> rsphere_mp_host(
+      rsphere_mp_ptr, np, np, num_elems);
+  HommeExecView3D rsphere_mp("rsphere_mp", np, np,
+                             num_elems);
   Kokkos::deep_copy(rsphere_mp, rsphere_mp_host);
 
   /* TODO: Improve name of dinv and it's label */
-  D_Host dinv_host(dinv_ptr, np, np, dim, dim, num_elems);
-  D dinv("dinv", np, np, dim, dim, num_elems);
+  HommeHostView5D<MemoryUnmanaged> dinv_host(
+      dinv_ptr, np, np, dim, dim, num_elems);
+  HommeExecView5D dinv("dinv", np, np, dim, dim, num_elems);
   Kokkos::deep_copy(dinv, dinv_host);
 
   /* TODO: Improve name of ptens and it's label */
-  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
-                        nete - nets + 1);
-  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  HommeHostView4D<MemoryUnmanaged> ptens_host(
+      ptens_ptr, np, np, nlev, num_my_elems);
+  HommeExecView4D ptens("ptens", np, np, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(ptens, ptens_host);
 
   /* TODO: Improve name of vtens and it's label */
-  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
-                        nete - nets + 1);
-  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  HommeHostView5D<MemoryUnmanaged> vtens_host(
+      vtens_ptr, np, np, dim, nlev, num_my_elems);
+  HommeExecView5D vtens("vtens", np, np, dim, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(vtens, vtens_host);
 
   try {
     Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        RangePolicy({0, elem_start}, {nlev, elem_end},
+                    {1, 1}),
         KOKKOS_LAMBDA(int k, int ie) {
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
-              ptens(i, j, k, ie - nets + 1) *=
+              ptens(i, j, k, ie - elem_start) *=
                   rsphere_mp(i, j, ie);
               real vtens1 =
                   rsphere_mp(i, j, ie) *
-                  vtens(i, j, 0, k, ie - nets + 1);
+                  vtens(i, j, 0, k, ie - elem_start);
               real vtens2 =
                   rsphere_mp(i, j, ie) *
-                  vtens(i, j, 1, k, ie - nets + 1);
+                  vtens(i, j, 1, k, ie - elem_start);
               for(int h = 0; h < dim; h++) {
-                vtens(i, j, h, k, ie - nets + 1) =
+                vtens(i, j, h, k, ie - elem_start) =
                     dinv(i, j, h, 0, ie) * vtens1 +
                     dinv(i, j, h, 1, ie) * vtens2;
               }
@@ -317,6 +342,8 @@ void weighted_rhs_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+
+  // Copy the results back on the host views
   Kokkos::deep_copy(ptens_host, ptens);
   Kokkos::deep_copy(vtens_host, vtens);
 }
@@ -334,42 +361,58 @@ void rk_stage_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
-                num_elems);
-  V v("Lateral velocity", np, np, dim, nlev, timelevels,
-      num_elems);
+
+  const int elem_start = nets - 1;
+  const int elem_end = nete;
+  const int num_my_elems = elem_end - elem_start;
+
+  if(rkstages < 1) {
+    std::cout << "Uh-oh...\n";
+  }
+
+  HommeHostView6D<MemoryUnmanaged> v_host(
+      v_ptr, np, np, dim, nlev, timelevels, num_elems);
+  HommeExecView6D v("Lateral velocity", np, np, dim, nlev,
+                    timelevels, num_elems);
   Kokkos::deep_copy(v, v_host);
 
   /* TODO: Improve name of p and it's label */
-  P_Host p_host(p_ptr, np, np, nlev, timelevels, num_elems);
-  P p("p", np, np, nlev, timelevels, num_elems);
+  HommeHostView5D<MemoryUnmanaged> p_host(
+      p_ptr, np, np, nlev, timelevels, num_elems);
+  HommeExecView5D p("p", np, np, nlev, timelevels,
+                    num_elems);
   Kokkos::deep_copy(p, p_host);
 
   /* TODO: Improve name of alpha0 and it's label */
-  Alpha_Host alpha0_host(alpha0_ptr, rkstages);
-  Alpha alpha0("alpha0", rkstages);
+  HommeHostView1D<MemoryUnmanaged> alpha0_host(alpha0_ptr,
+                                               rkstages);
+  HommeExecView1D alpha0("alpha0", rkstages);
   Kokkos::deep_copy(alpha0, alpha0_host);
 
   /* TODO: Improve name of alpha and it's label */
-  Alpha_Host alpha_host(alpha_ptr, rkstages);
-  Alpha alpha("alpha", rkstages);
+  HommeHostView1D<MemoryUnmanaged> alpha_host(alpha_ptr,
+                                              rkstages);
+  HommeExecView1D alpha("alpha", rkstages);
   Kokkos::deep_copy(alpha, alpha_host);
 
   /* TODO: Improve name of ptens and it's label */
-  PTens_Host ptens_host(ptens_ptr, np, np, nlev,
-                        nete - nets + 1);
-  PTens ptens("ptens", np, np, nlev, nete - nets + 1);
+  HommeHostView4D<MemoryUnmanaged> ptens_host(
+      ptens_ptr, np, np, nlev, num_my_elems);
+  HommeExecView4D ptens("ptens", np, np, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(ptens, ptens_host);
 
   /* TODO: Improve name of vtens and it's label */
-  VTens_Host vtens_host(vtens_ptr, np, np, dim, nlev,
-                        nete - nets + 1);
-  VTens vtens("vtens", np, np, dim, nlev, nete - nets + 1);
+  HommeHostView5D<MemoryUnmanaged> vtens_host(
+      vtens_ptr, np, np, dim, nlev, num_my_elems);
+  HommeExecView5D vtens("vtens", np, np, dim, nlev,
+                        num_my_elems);
   Kokkos::deep_copy(vtens, vtens_host);
 
   try {
     Kokkos::Experimental::md_parallel_for(
-        RangePolicy({0, nets - 1}, {nlev, nete}, {1, 1}),
+        RangePolicy({0, elem_start}, {nlev, elem_end},
+                    {1, 1}),
         KOKKOS_LAMBDA(int k, int ie) {
           for(int j = 0; j < np; j++) {
             for(int i = 0; i < np; i++) {
@@ -378,12 +421,12 @@ void rk_stage_c(const int &nets, const int &nete,
                     alpha0(s - 1) *
                         v(i, j, h, k, np1 - 1, ie) +
                     alpha(s - 1) *
-                        vtens(i, j, h, k, ie - nets + 1);
+                        vtens(i, j, h, k, ie - elem_start);
               }
               p(i, j, k, n0 - 1, ie) =
                   alpha0(s - 1) * p(i, j, k, np1 - 1, ie) +
                   alpha(s - 1) *
-                      ptens(i, j, k, ie - nets + 1);
+                      ptens(i, j, k, ie - elem_start);
             }
           }
         });
@@ -394,6 +437,8 @@ void rk_stage_c(const int &nets, const int &nete,
     std::cout << "Unknown exception" << std::endl;
     std::abort();
   }
+
+  // Copy the results back on the host views
   Kokkos::deep_copy(p_host, p);
   Kokkos::deep_copy(v_host, v);
 }
@@ -408,15 +453,17 @@ void copy_timelevels_c(const int &nets, const int &nete,
           2, Kokkos::Experimental::Iterate::Left,
           Kokkos::Experimental::Iterate::Left>,
       Kokkos::IndexType<int> >;
-  V_Host v_host(v_ptr, np, np, dim, nlev, timelevels,
-                num_elems);
-  V v("Lateral velocity", np, np, dim, nlev, timelevels,
-      num_elems);
+  HommeHostView6D<MemoryUnmanaged> v_host(
+      v_ptr, np, np, dim, nlev, timelevels, num_elems);
+  HommeExecView6D v("Lateral velocity", np, np, dim, nlev,
+                    timelevels, num_elems);
   Kokkos::deep_copy(v, v_host);
 
   /* TODO: Improve name of p and it's label */
-  P_Host p_host(p_ptr, np, np, nlev, timelevels, num_elems);
-  P p("p", np, np, nlev, timelevels, num_elems);
+  HommeHostView5D<MemoryUnmanaged> p_host(
+      p_ptr, np, np, nlev, timelevels, num_elems);
+  HommeExecView5D p("p", np, np, nlev, timelevels,
+                    num_elems);
   Kokkos::deep_copy(p, p_host);
 
   try {
@@ -442,6 +489,8 @@ void copy_timelevels_c(const int &nets, const int &nete,
               << std::endl;
     std::abort();
   }
+
+  // Copy the results back on the host views
   Kokkos::deep_copy(v_host, v);
   Kokkos::deep_copy(p_host, p);
 }
