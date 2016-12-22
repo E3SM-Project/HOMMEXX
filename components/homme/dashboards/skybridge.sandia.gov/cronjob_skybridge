@@ -1,4 +1,5 @@
 #this cronjob is run on login12 of skybridge
+00 00 * * 1-7  rm -rf /gpfs1/ikalash/hommexxCDash/Skybridge*/*
 00 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_serial.batch
 00 02 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_openmp.batch
 01 06 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_serial.sh
