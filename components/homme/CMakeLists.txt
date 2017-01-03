@@ -1,7 +1,8 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.5)
+
+SET (CMAKE_BUILD_TYPE RELEASE CACHE STRING "Select build type.")
 
 PROJECT(HOMME C CXX Fortran)
-
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.5)
 
 INCLUDE(FortranCInterface)
 
@@ -22,7 +23,7 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 FortranCInterface_HEADER(cmake_fortran_c_interface.h
                          MACRO_NAMESPACE  "FCI_")
 
-# Prefer shared libraries (Yellowstone etc.) 
+# Prefer shared libraries (Yellowstone etc.)
 OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 
 # need to tell the source to use this capability
@@ -43,7 +44,7 @@ OPTION(IS_BIG_ENDIAN "Whether the machine is big endian" FALSE)
 # Default use quad precision
 OPTION(HOMME_QUAD_PREC "Default to try to use quadruple precision" TRUE)
 
-IF (${HOMME_QUAD_PREC}) 
+IF (${HOMME_QUAD_PREC})
   testQuadPrec(HOMME_QUAD_SUPPORTED)
   IF (NOT ${HOMME_QUAD_SUPPORTED})
     SET(HOMME_QUAD_PREC FALSE)
