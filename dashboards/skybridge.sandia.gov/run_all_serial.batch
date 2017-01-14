@@ -11,7 +11,7 @@ cores=16                             # Number MPI processes to run on each node 
 
 
 cd /home/ikalash/nightlyHOMMEXXCDash 
-bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_serial.sh"
+#bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_serial.sh"
 bash -c -l "source skybridge_modules_gcc.sh >& modules_hommexx.out; bash nightly_cron_script_hommexx_skybridge_serial.sh" 
 bash process_results_ctest_serial.sh
 bash send_email_ctest_serial.sh
