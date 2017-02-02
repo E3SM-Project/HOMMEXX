@@ -1,11 +1,4 @@
 #!/bin/bash                                           
-#BSUB -a "openmpi"                                    
-#BSUB -n 8
-#BSUB -W 01:00                                                           
-#BSUB -R "span[ptile=16]"                             
-#BSUB -o hommexxCDash.out                                 
-#BSUB -e hommexxCDash.err                                
-#BSUB -J hommexxCDash 
 
 #rm -rf repos
 rm -rf build

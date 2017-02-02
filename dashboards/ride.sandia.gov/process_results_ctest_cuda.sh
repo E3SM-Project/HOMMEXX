@@ -1,5 +1,5 @@
 
-cd /home/ikalash/nightlyHOMMEXXCDash
+cd ${WORKSPACE}
 grep "Test   #" nightly_log_rideHOMMEXXcuda.txt >& results0
 grep "Test  #" nightly_log_rideHOMMEXXcuda.txt >& results1
 cat results0 results1 >& results11

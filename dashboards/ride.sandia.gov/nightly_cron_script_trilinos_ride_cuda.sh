@@ -1,19 +1,10 @@
 #!/bin/csh
 
-BASE_DIR=/home/ikalash/nightlyHOMMEXXCDash
+BASE_DIR=${WORKSPACE}
 cd $BASE_DIR
 
 unset http_proxy
 unset https_proxy
-
-rm -rf repos
-rm -rf build
-rm -rf ctest_nightly.cmake.work
-rm -rf nightly_log*
-rm -rf results*
-rm -rf modules*out
-rm -rf *err
-rm -rf *out 
 
 cat trilinosCUDA ctest_nightly.cmake.frag >& ctest_nightly.cmake  
 
