@@ -48,7 +48,7 @@ find_program (CTEST_GIT_COMMAND NAMES git)
 set (HOMMEXX_REPOSITORY_LOCATION git@github.com:ACME-Climate/HOMMEXX.git)
 set (Trilinos_REPOSITORY_LOCATION git@github.com:trilinos/Trilinos.git)
 set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44)
-set (NVCC_WRAPPER ${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper) 
+set (NVCC_WRAPPER $ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper) 
 
 if (CLEAN_BUILD)
   # Initial cache info
@@ -159,7 +159,7 @@ if (BUILD_TRILINOS_CUDA)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/TriBuild"
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/Trilinos"
+    SOURCE "$ENV{jenkins_trilinos_dir}"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )
@@ -226,12 +226,12 @@ if (BUILD_HOMMEXX_CUDA)
   set_property (GLOBAL PROPERTY Label RideHOMMEXXCuda)
   
   set (CONFIGURE_OPTIONS
-    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/RIDE.cmake"
+    "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
     "-DBUILD_HOMME_SWEQX_FLAT=ON"
     "-DBUILD_HOMME_PREQX_FLAT=ON"
     "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXX_baseline/HOMMEXXBuild" 
-    "-DCMAKE_CXX_COMPILER=${CTEST_SOURCE_DIRECTORY}/Trilinos/packages/kokkos/config/nvcc_wrapper"
+    "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
     "-DTRILINOS_INSTALL_DIR:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     )
   
@@ -241,7 +241,7 @@ if (BUILD_HOMMEXX_CUDA)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme"
+    SOURCE "$ENV{jenkins_hommexx_dir}/components/homme"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )
