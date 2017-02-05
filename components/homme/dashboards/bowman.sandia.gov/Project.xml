@@ -1,0 +1,6 @@
+<Project name="HOMMEXX">
+  <SubProject name="BowmanTrilinos">
+  </SubProject>
+  <SubProject name="BowmanHOMMEXX">
+  </SubProject>
+</Project>
