@@ -16,4 +16,3 @@ bash -c -l "source ride_modules_cuda.sh >& modules_trilinos.out; bash apply_kokk
 bash -c -l "source ride_modules_cuda.sh >& modules_hommexx.out; bash nightly_cron_script_hommexx_ride_cuda.sh"
 bash process_results_ctest_cuda.sh
 bash send_email_ctest_cuda.sh
-
