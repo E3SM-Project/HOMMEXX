@@ -1,1 +1,0 @@
-16 15 * * 1-7 source /home/ikalash/.bashrc; cd /home/ikalash/nightlyHOMMEXXCDash; rm -rf modules.out; bash -l -c "source bowman_modules.sh >& modules.out; bash nightly_cron_script_trilinos_bowman_openmp.sh"

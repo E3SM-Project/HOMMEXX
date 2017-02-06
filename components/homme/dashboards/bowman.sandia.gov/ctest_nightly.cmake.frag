@@ -145,6 +145,10 @@ if (BUILD_TRILINOS_OPENMP)
     "-DKokkos_ENABLE_OpenMP=ON"
     "-DTPL_ENABLE_Pthread=OFF"
     "-DKokkos_ENABLE_Pthread=OFF"
+    "-DCMAKE_C_FLAGS:STRING='-O3 -xMIC-AVX512'"
+    "-DCMAKE_CXX_FLAGS:STRING='-O3 -xMIC-AVX512'" 
+    "-DCMAKE_Fortran_FLAGS:STRING='-O3 -xMIC-AVX512'" 
+    "-DCMAKE_EXE_LINKER_FLAGS='-O3 -xMIC-AVX512'"
   )
 
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/TriBuildOpenMP")
@@ -220,11 +224,13 @@ if (BUILD_HOMMEXX_OPENMP)
   set_property (GLOBAL PROPERTY Label BowmanHOMMEXX)
   
   set (CONFIGURE_OPTIONS
-    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/bowman.cmake"
+    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/bowman_cdash.cmake"
     "-DUSE_NUM_PROCS=16"
     "-DTRILINOS_INSTALL_DIR:FILEPATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstallOpenMP"
-    "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
+    "-DBUILD_HOMME_SWEQX_FLAT=ON"
+    "-DBUILD_HOMME_PREQX_FLAT=ON"
     )
+  #  "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP")
     file (MAKE_DIRECTORY ${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP)
