@@ -1,6 +1,6 @@
 #!/bin/bash                                           
 #BSUB -a "openmpi"                                    
-#BSUB -n 8
+#BSUB -n 16
 #BSUB -W 01:00                                                           
 #BSUB -R "span[ptile=16]"                             
 #BSUB -o hommexxCDash.out                                 
