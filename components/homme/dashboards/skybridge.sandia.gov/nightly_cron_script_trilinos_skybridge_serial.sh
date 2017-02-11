@@ -6,14 +6,6 @@ cd $BASE_DIR
 unset http_proxy
 unset https_proxy
 
-rm -rf repos
-rm -rf build
-rm -rf ctest_nightly.cmake.work
-rm -rf nightly_log*
-rm -rf results*
-rm -rf slurm*
-rm -rf modules*out
-
 cat trilinosSerial ctest_nightly.cmake.frag >& ctest_nightly.cmake  
 
 now=$(date +"%m_%d_%Y-%H_%M")
