@@ -13,10 +13,4 @@ LOG_FILE=$BASE_DIR/nightly_log_bowmanHOMMEXXopenmp.txt
 
 eval "env TEST_DIRECTORY=$BASE_DIR SCRIPT_DIRECTORY=$BASE_DIR  ctest -VV -S $BASE_DIR/ctest_nightly.cmake" > $LOG_FILE 2>&1
 
-#rm -rf /gpfs1/ikalash/hommexxCDash/SkybridgeHOMMEXXOpenMP/* 
-#cp -r /home/ikalash/nightlyHOMMEXXCDash/build/Testing/20* /gpfs1/ikalash/hommexxCDash/SkybridgeHOMMEXXOpenMP
-#rm -rf /home/ikalash/nightlyHOMMEXXCDash/build/Testing/20*
-
-#bash process_results_ctest.sh
-#bash send_email_ctest.sh
 
