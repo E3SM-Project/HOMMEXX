@@ -1,3 +1,3 @@
 00 00 * * 1-7 source /home/ikalash/.bashrc; cd /home/ikalash/nightlyHOMMEXXCDash; rm -rf modules.out; bash -l -c "source bowman_modules.sh >& modules.out; bash nightly_cron_script_trilinos_bowman_openmp.sh"
 30 00 * * 1-7 source /home/ikalash/.bashrc; cd /home/ikalash/nightlyHOMMEXXCDash; sbatch hommexxOpenMP.batch
-00 01 * * 1-7 cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
+00 18 * * 1-7 cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
