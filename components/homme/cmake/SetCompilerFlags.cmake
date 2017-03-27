@@ -4,7 +4,6 @@
 
 # Fortran Flags
 
-SET(CMAKE_Fortran_FLAGS "")
 MESSAGE(STATUS "CMAKE_Fortran_COMPILER_ID = ${CMAKE_Fortran_COMPILER_ID}")
 # Need this for a fix in repro_sum_mod
 IF (${CMAKE_Fortran_COMPILER_ID} STREQUAL XL)

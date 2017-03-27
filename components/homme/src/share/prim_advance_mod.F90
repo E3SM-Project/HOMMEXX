@@ -29,7 +29,7 @@ module prim_advance_mod
 #ifdef TRILINOS
   public :: distribute_flux_at_corners
 #endif
-  
+
   type (EdgeBuffer_t) :: edge1
   type (EdgeBuffer_t) :: edge2
   type (EdgeBuffer_t) :: edge3p1
@@ -38,13 +38,25 @@ module prim_advance_mod
 
   real (kind=real_kind), allocatable :: ur_weights(:)
 
+interface
+  subroutine compute_and_apply_rhs_pre_exchange_c(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                                  deriv,nets,nete,compute_diagnostics,eta_ave_w) bind(c)
+
+    use iso_c_binding, only: c_ptr, c_int
+
+    integer (kind=c_int) :: np1, nm1, n0
+    integer (kind=c_int) :: nets, nete
+    integer (kind=c_int) :: qn0
+  end subroutine compute_and_apply_rhs_pre_exchange_c
+end interface
+
 contains
 
   subroutine prim_advance_init(par, elem,integration)
     use edge_mod, only : initEdgeBuffer
     use control_mod, only : qsplit,rsplit
     implicit none
-    
+
     type (parallel_t) :: par
     type (element_t), intent(inout), target   :: elem(:)
     character(len=*)    , intent(in) :: integration
@@ -141,6 +153,20 @@ contains
    end do
 
   end subroutine
+#endif
+
+! Define the macros to correctly call the Kokkos or Fortran kernels
+! The following lines are what we want to have soon. For now we have to
+! include cxx code one small kernel at a time. When that is done and everything
+! works, we can switch to one single big loop.
+!#ifdef USE_KOKKOS_KERNELS
+!#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_c
+!#else
+!#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_f90
+!#endif
+
+#ifdef USE_KOKKOS_KERNELS
+#else
 #endif
 
   !_____________________________________________________________________
@@ -485,45 +511,45 @@ contains
        np1 = n0
 
        lx = 1
-	   do ie=nets,nete
-		   do k=1,nlev
-			   do j=1,np
-				   do i=1,np
-					   xstate(lx) = elem(ie)%state%v(i,j,1,k,n0)
-					   lx = lx+1
-				   end do
-			   end do
-		   end do
-	   end do
-	   do ie=nets,nete
-		   do k=1,nlev
-			   do j=1,np
-				   do i=1,np
-					   xstate(lx) = elem(ie)%state%v(i,j,2,k,n0)
-					   lx = lx+1
-				   end do
-			   end do
-		   end do
-	   end do
-	   do ie=nets,nete
-		   do k=1,nlev
-			   do j=1,np
-				   do i=1,np
-					   xstate(lx) = elem(ie)%state%T(i,j,k,n0)
-					   lx = lx+1
-				   end do
-			   end do
-		   end do
-	   end do
-	   do ie=nets,nete
-		   do j=1,np
-			   do i=1,np
-				   xstate(lx) = elem(ie)%state%ps_v(i,j,n0)
-				   lx = lx+1
-			   end do
-		   end do
-	   end do
-       
+     do ie=nets,nete
+       do k=1,nlev
+         do j=1,np
+           do i=1,np
+             xstate(lx) = elem(ie)%state%v(i,j,1,k,n0)
+             lx = lx+1
+           end do
+         end do
+       end do
+     end do
+     do ie=nets,nete
+       do k=1,nlev
+         do j=1,np
+           do i=1,np
+             xstate(lx) = elem(ie)%state%v(i,j,2,k,n0)
+             lx = lx+1
+           end do
+         end do
+       end do
+     end do
+     do ie=nets,nete
+       do k=1,nlev
+         do j=1,np
+           do i=1,np
+             xstate(lx) = elem(ie)%state%T(i,j,k,n0)
+             lx = lx+1
+           end do
+         end do
+       end do
+     end do
+     do ie=nets,nete
+       do j=1,np
+         do i=1,np
+           xstate(lx) = elem(ie)%state%ps_v(i,j,n0)
+           lx = lx+1
+         end do
+       end do
+     end do
+
 ! activate these lines to test infrastructure and still solve with explicit code
 !       ! RK2
 !       ! forward euler to u(dt/2) = u(0) + (dt/2) RHS(0)  (store in u(np1))
@@ -541,45 +567,45 @@ contains
       call c_f_pointer(c_ptr_to_object, fptr) ! convert C ptr to F ptr
       elem = fptr%base
 
-	  lx = 1
-	  do ie=nets,nete
-		  do k=1,nlev
-			  do j=1,np
-				  do i=1,np
-					  elem(ie)%state%v(i,j,1,k,np1) = xstate(lx)
-					  lx = lx+1
-				  end do
-			  end do
-		  end do
-	  end do
-	  do ie=nets,nete
-		  do k=1,nlev
-			  do j=1,np
-				  do i=1,np
-					  elem(ie)%state%v(i,j,2,k,np1) = xstate(lx) 
-					  lx = lx+1
-				  end do
-			  end do
-		  end do
-	  end do
-	  do ie=nets,nete
-		  do k=1,nlev
-			  do j=1,np
-				  do i=1,np
-					  elem(ie)%state%T(i,j,k,np1) = xstate(lx)
-					  lx = lx+1
-				  end do
-			  end do
-		  end do
-	  end do
-	  do ie=nets,nete
-		  do j=1,np
-			  do i=1,np
-				  elem(ie)%state%ps_v(i,j,np1) = xstate(lx)
-				  lx = lx+1
-			  end do
-		  end do
-	  end do
+    lx = 1
+    do ie=nets,nete
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+            elem(ie)%state%v(i,j,1,k,np1) = xstate(lx)
+            lx = lx+1
+          end do
+        end do
+      end do
+    end do
+    do ie=nets,nete
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+            elem(ie)%state%v(i,j,2,k,np1) = xstate(lx)
+            lx = lx+1
+          end do
+        end do
+      end do
+    end do
+    do ie=nets,nete
+      do k=1,nlev
+        do j=1,np
+          do i=1,np
+            elem(ie)%state%T(i,j,k,np1) = xstate(lx)
+            lx = lx+1
+          end do
+        end do
+      end do
+    end do
+    do ie=nets,nete
+      do j=1,np
+        do i=1,np
+          elem(ie)%state%ps_v(i,j,np1) = xstate(lx)
+          lx = lx+1
+        end do
+      end do
+    end do
       call t_stopf("JFNK_imp_timestep")
 #endif
 
@@ -1450,10 +1476,10 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
           ! Complete global assembly by normalizing velocity by rmp
           ! Vscript = Vscript - dt*grad(Gref)
           ! ==========================================================
-          if(iam==1) then           
+          if(iam==1) then
 !BUG  There appears to be a bug in the Intel 15.0.1 compiler that generates
 !BUG  incorrect code for this loop if the following print * statement is removed.
-             print *,'IAM: ',iam, ' prim_advance_si: after SUM(v(np1)) ',sum(elem(ie)%state%v(:,:,:,:,np1)) 
+             print *,'IAM: ',iam, ' prim_advance_si: after SUM(v(np1)) ',sum(elem(ie)%state%v(:,:,:,:,np1))
           endif
 
 #if (defined COLUMN_OPENMP)
@@ -2058,7 +2084,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
   if (nu_s == 0 .and. nu == 0 .and. nu_p==0 ) return;
 !JMD  call t_barrierf('sync_advance_hypervis', hybrid%par%comm)
-!pw   call t_adj_detailf(+1) 
+!pw   call t_adj_detailf(+1)
   call t_startf('advance_hypervis_dp')
 
 
@@ -2191,7 +2217,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
                     vtens(i,j,2,k,ie)=vtens_tmp
                  enddo
               enddo
-              if (0<ntrac) then 
+              if (0<ntrac) then
                 elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) - &
                                               eta_ave_w*nu_p*dpflux(:,:,:,k,ie)/hypervis_subcycle
                 if (nu_top>0 .and. k<=3) then
@@ -2204,7 +2230,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
               ! NOTE: we will DSS all tendicies, EXCEPT for dp3d, where we DSS the new state
               elem(ie)%state%dp3d(:,:,k,nt) = elem(ie)%state%dp3d(:,:,k,nt)*elem(ie)%spheremp(:,:)&
                    + dt*dptens(:,:,k,ie)
-              
+
            enddo
 
 
@@ -2229,7 +2255,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
            kptr=3*nlev
            if (0<ntrac) then
              do k=1,nlev
-               temp(:,:,k) = elem(ie)%state%dp3d(:,:,k,nt) / elem(ie)%spheremp  ! STATE before DSS 
+               temp(:,:,k) = elem(ie)%state%dp3d(:,:,k,nt) / elem(ie)%spheremp  ! STATE before DSS
              enddo
              corners = 0.0d0
              corners(1:np,1:np,:) = elem(ie)%state%dp3d(:,:,:,nt) ! fill in interior data of STATE*mass
@@ -2241,20 +2267,20 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
            if (0<ntrac) then
              kptr=3*nlev
              desc = elem(ie)%desc
-             
-             call edgeDGVunpack(edge3, corners, nlev, kptr, ie) 
+
+             call edgeDGVunpack(edge3, corners, nlev, kptr, ie)
              corners = corners/dt
-             
+
              do k=1,nlev
                temp(:,:,k) =  elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,nt) - temp(:,:,k)
                temp(:,:,k) =  temp(:,:,k)/dt
 
                call distribute_flux_at_corners(cflux, corners(:,:,k), desc%getmapP)
- 
-               cflux(1,1,:)   = elem(ie)%rspheremp(1,  1) * cflux(1,1,:)  
-               cflux(2,1,:)   = elem(ie)%rspheremp(np, 1) * cflux(2,1,:) 
-               cflux(1,2,:)   = elem(ie)%rspheremp(1, np) * cflux(1,2,:) 
-               cflux(2,2,:)   = elem(ie)%rspheremp(np,np) * cflux(2,2,:) 
+
+               cflux(1,1,:)   = elem(ie)%rspheremp(1,  1) * cflux(1,1,:)
+               cflux(2,1,:)   = elem(ie)%rspheremp(np, 1) * cflux(2,1,:)
+               cflux(1,2,:)   = elem(ie)%rspheremp(1, np) * cflux(1,2,:)
+               cflux(2,2,:)   = elem(ie)%rspheremp(np,np) * cflux(2,2,:)
 
                elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) + &
                  eta_ave_w*subcell_dss_fluxes(temp(:,:,k), np, nc, elem(ie)%metdet,cflux)/hypervis_subcycle
@@ -2271,7 +2297,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
               vtens(:,:,1,k,ie)=dt*vtens(:,:,1,k,ie)*elem(ie)%rspheremp(:,:)
               vtens(:,:,2,k,ie)=dt*vtens(:,:,2,k,ie)*elem(ie)%rspheremp(:,:)
               ttens(:,:,k,ie)=dt*ttens(:,:,k,ie)*elem(ie)%rspheremp(:,:)
-              
+
               elem(ie)%state%dp3d(:,:,k,nt)=elem(ie)%state%dp3d(:,:,k,nt)*elem(ie)%rspheremp(:,:)
            enddo
 
@@ -2595,13 +2621,17 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
   end subroutine advance_hypervis_lf
 
-
+#if 0
+#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE_F90
+#else
+#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE_ORIG
+#endif
   !
-  ! phl notes: output is stored in first argument. Advances from 2nd argument using tendencies evaluated at 3rd rgument: 
+  ! phl notes: output is stored in first argument. Advances from 2nd argument using tendencies evaluated at 3rd rgument:
   ! phl: for offline winds use time at 3rd argument (same as rhs currently)
   !
   subroutine compute_and_apply_rhs(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
-       deriv,nets,nete,compute_diagnostics,eta_ave_w)
+                                   deriv,nets,nete,compute_diagnostics,eta_ave_w)
   ! ===================================
   ! compute the RHS, accumulate into u(np1) and apply DSS
   !
@@ -2628,6 +2658,159 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   !
   !
   ! ===================================
+
+  use kinds,          only : real_kind
+  use bndry_mod,      only : bndry_exchangev
+  use derivative_mod, only : derivative_t, subcell_dss_fluxes
+  use dimensions_mod, only : nlev, ntrac
+  use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
+  use edgetype_mod,   only : edgedescriptor_t
+  use element_mod,    only : element_t
+  use hybvcoord_mod,  only : hvcoord_t
+
+  implicit none
+
+  type (hvcoord_t)      , intent(in)    :: hvcoord
+  type (element_t)      , intent(inout) :: elem(:)
+  type (hybrid_t)       , intent(in)    :: hybrid
+  type (derivative_t)   , intent(in)    :: deriv
+  integer               , intent(in)    :: np1, nm1, n0, qn0, nets, nete
+  real (kind=real_kind) , intent(in)    :: dt2
+  logical               , intent(in)    :: compute_diagnostics
+  real (kind=real_kind) , intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+
+  type (EdgeDescriptor_t)                                 :: desc
+  real (kind=real_kind)   , dimension(np,np,nlev)         :: stashdp3d
+  real (kind=real_kind)   , dimension(0:np+1,0:np+1,nlev) :: corners
+  real (kind=real_kind)   , dimension(2,2,2)              :: cflux
+  real (kind=real_kind)   , dimension(nc,nc,4)            :: tempflux
+  real (kind=real_kind)   , dimension(np,np)              :: tempdp3d
+  integer                                                 :: ie, k, kptr
+
+!JMD  call t_barrierf('sync_compute_and_apply_rhs', hybrid%par%comm)
+
+!pw call t_adj_detailf(+1)
+  call t_startf('compute_and_apply_rhs')
+
+  call COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE (np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                           deriv,nets,nete,compute_diagnostics,eta_ave_w)
+
+  do ie=nets,nete
+     ! =========================================================
+     !
+     ! Pack ps(np1), T, and v tendencies into comm buffer
+     !
+     ! =========================================================
+     kptr=0
+     call edgeVpack(edge3p1, elem(ie)%state%ps_v(:,:,np1),1,kptr,ie)
+
+     kptr=1
+     call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
+
+     kptr=nlev+1
+     call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
+
+     if (rsplit>0) then
+        kptr=kptr+2*nlev
+        call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+     endif
+  end do
+
+  ! =============================================================
+    ! Insert communications here: for shared memory, just a single
+  ! sync is required
+  ! =============================================================
+
+  call t_startf('caar_bexchV')
+  call bndry_exchangeV(hybrid,edge3p1)
+  call t_stopf('caar_bexchV')
+
+  do ie=nets,nete
+     ! ===========================================================
+     ! Unpack the edges for vgrad_T and v tendencies...
+     ! ===========================================================
+     kptr=0
+     call edgeVunpack(edge3p1, elem(ie)%state%ps_v(:,:,np1), 1, kptr, ie)
+
+     kptr=1
+     call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
+
+     kptr=nlev+1
+     call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
+
+     if (rsplit>0) then
+        if (0<ntrac.and.eta_ave_w.ne.0.) then
+          do k=1,nlev
+             stashdp3d(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)/elem(ie)%spheremp(:,:)
+          end do
+        endif
+
+        corners = 0.0d0
+        corners(1:np,1:np,:) = elem(ie)%state%dp3d(:,:,:,np1)
+        kptr=kptr+2*nlev
+        call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
+
+        if  (0<ntrac.and.eta_ave_w.ne.0.) then
+          desc = elem(ie)%desc
+          call edgeDGVunpack(edge3p1, corners, nlev, kptr, ie)
+          corners = corners/dt2
+
+          do k=1,nlev
+            tempdp3d = elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
+            tempdp3d = tempdp3d - stashdp3d(:,:,k)
+            tempdp3d = tempdp3d/dt2
+
+            call distribute_flux_at_corners(cflux, corners(:,:,k), desc%getmapP)
+
+            cflux(1,1,:)   = elem(ie)%rspheremp(1,  1) * cflux(1,1,:)
+            cflux(2,1,:)   = elem(ie)%rspheremp(np, 1) * cflux(2,1,:)
+            cflux(1,2,:)   = elem(ie)%rspheremp(1, np) * cflux(1,2,:)
+            cflux(2,2,:)   = elem(ie)%rspheremp(np,np) * cflux(2,2,:)
+
+            tempflux =  eta_ave_w*subcell_dss_fluxes(tempdp3d, np, nc, elem(ie)%metdet, cflux)
+            elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) + tempflux
+          end do
+        end if
+     endif
+
+     ! ====================================================
+     ! Scale tendencies by inverse mass matrix
+     ! ====================================================
+
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k)
+#endif
+     do k=1,nlev
+        elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
+        elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
+        elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
+     end do
+
+     if (rsplit>0) then
+        ! vertically lagrangian: complete dp3d timestep:
+        do k=1,nlev
+           elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
+        enddo
+        ! when debugging: also update ps_v
+        !elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
+     else
+        ! vertically eulerian: complete ps_v timestep:
+        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
+     endif
+  end do
+
+#ifdef DEBUGOMP
+#if (defined HORIZ_OPENMP)
+!$OMP BARRIER
+#endif
+#endif
+  call t_stopf('compute_and_apply_rhs')
+!pw  call t_adj_detailf(-1)
+
+  end subroutine compute_and_apply_rhs
+
+  subroutine compute_and_apply_rhs_pre_exchange_orig(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
   use kinds, only : real_kind
   use dimensions_mod, only : np, nc, nlev, ntrac, max_corner_elem
   use element_mod, only : element_t,PrintElem
@@ -2657,7 +2840,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   type (hybrid_t)      , intent(in) :: hybrid
   type (element_t)     , intent(inout), target :: elem(:)
   type (derivative_t)  , intent(in) :: deriv
-  real (kind=real_kind) :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+  real (kind=real_kind), intent(in) :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
 
   ! local
   real (kind=real_kind), pointer, dimension(:,:)      :: ps         ! surface pressure for current tiime level
@@ -2669,13 +2852,13 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   real (kind=real_kind), dimension(np,np,nlev+1)   :: eta_dot_dpdn  ! half level vertical velocity on p-grid
   real (kind=real_kind), dimension(np,np)      :: sdot_sum   ! temporary field
   real (kind=real_kind), dimension(np,np,2)    :: vtemp     ! generic gradient storage
-  real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !                            
-  real (kind=real_kind), dimension(np,np,2     ):: v         !                            
+  real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !
+  real (kind=real_kind), dimension(np,np,2     ):: v         !
   real (kind=real_kind), dimension(np,np)      :: vgrad_T    ! v.grad(T)
   real (kind=real_kind), dimension(np,np)      :: Ephi       ! kinetic energy + PHI term
   real (kind=real_kind), dimension(np,np,2)      :: grad_ps    ! lat-lon coord version
   real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p
-  real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p - p_met)
+  real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p- p_met)
   real (kind=real_kind), dimension(np,np,nlev)   :: vort       ! vorticity
   real (kind=real_kind), dimension(np,np,nlev)   :: p          ! pressure
   real (kind=real_kind), dimension(np,np,nlev)   :: dp         ! delta pressure
@@ -2699,12 +2882,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   real (kind=real_kind) ::  cp2,cp_ratio,E,de,Qt,v1,v2
   real (kind=real_kind) ::  glnps1,glnps2,gpterm
   integer :: i,j,k,kptr,ie
-  real (kind=real_kind) ::  u_m_umet, v_m_vmet, t_m_tmet 
-
-!JMD  call t_barrierf('sync_compute_and_apply_rhs', hybrid%par%comm)
-
-!pw call t_adj_detailf(+1)
-  call t_startf('compute_and_apply_rhs')
+  real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
   do ie=nets,nete
      !ps => elem(ie)%state%ps_v(:,:,n0)
      phi => elem(ie)%derived%phi(:,:,:)
@@ -2732,7 +2910,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
 #if (defined COLUMN_OPENMP_BROKEN)
 !  Note that the following does not work with OpenMP threading turned on.
-!  The line 
+!  The line
 !              p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
 !  is sequential in that it depends upon the previous p(:,:,k-1) and therefore
 !  gives a race condition.
@@ -2787,7 +2965,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
            grad_p_m_pmet(:,:,:,k) = &
                 grad_p(:,:,:,k) - &
                 hvcoord%hybm(k)* &
-                gradient_sphere( elem(ie)%derived%ps_met(:,:)+tevolve*elem(ie)%derived%dpsdt_met(:,:), &
+                gradient_sphere(elem(ie)%derived%ps_met(:,:)+tevolve*elem(ie)%derived%dpsdt_met(:,:), &
                                  deriv,elem(ie)%Dinv)
         endif
 #endif
@@ -2894,7 +3072,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
         !    omega = v grad p  - integral_etatop^eta[ divdp ]
         ! ===========================================================
         do k=1,nlev-1
-           eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:) - eta_dot_dpdn(:,:,k+1)
+           eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:) -eta_dot_dpdn(:,:,k+1)
         end do
 
         eta_dot_dpdn(:,:,1     ) = 0.0D0
@@ -3194,124 +3372,234 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
            end if
         enddo
         elem(ie)%state%ps_v(:,:,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%ps_v(:,:,nm1) - dt2*sdot_sum )
+    endif
+    enddo
+  end subroutine compute_and_apply_rhs_pre_exchange_orig
 
-     endif
-
-
-     ! =========================================================
-     !
-     ! Pack ps(np1), T, and v tendencies into comm buffer
-     !
-     ! =========================================================
-     kptr=0
-     call edgeVpack(edge3p1, elem(ie)%state%ps_v(:,:,np1),1,kptr,ie)
-
-     kptr=1
-     call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
-
-     kptr=nlev+1
-     call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
-
-     if (rsplit>0) then
-        kptr=kptr+2*nlev
-        call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
-     endif
-  end do
-
-  ! =============================================================
-    ! Insert communications here: for shared memory, just a single
-  ! sync is required
-  ! =============================================================
-
-  call t_startf('caar_bexchV')
-  call bndry_exchangeV(hybrid,edge3p1)
-  call t_stopf('caar_bexchV')
-
-  do ie=nets,nete
-     ! ===========================================================
-     ! Unpack the edges for vgrad_T and v tendencies...
-     ! ===========================================================
-     kptr=0
-     call edgeVunpack(edge3p1, elem(ie)%state%ps_v(:,:,np1), 1, kptr, ie)
-
-     kptr=1
-     call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
-
-     kptr=nlev+1
-     call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
-
-     if (rsplit>0) then
-        if (0<ntrac.and.eta_ave_w.ne.0.) then
-          do k=1,nlev
-             stashdp3d(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)/elem(ie)%spheremp(:,:)
-          end do
-        endif
-
-        corners = 0.0d0
-        corners(1:np,1:np,:) = elem(ie)%state%dp3d(:,:,:,np1)
-        kptr=kptr+2*nlev
-        call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
-
-        if  (0<ntrac.and.eta_ave_w.ne.0.) then
-          desc = elem(ie)%desc
-          call edgeDGVunpack(edge3p1, corners, nlev, kptr, ie)
-          corners = corners/dt2
-
-          do k=1,nlev
-            tempdp3d = elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-            tempdp3d = tempdp3d - stashdp3d(:,:,k)
-            tempdp3d = tempdp3d/dt2
-
-            call distribute_flux_at_corners(cflux, corners(:,:,k), desc%getmapP)
- 
-            cflux(1,1,:)   = elem(ie)%rspheremp(1,  1) * cflux(1,1,:)  
-            cflux(2,1,:)   = elem(ie)%rspheremp(np, 1) * cflux(2,1,:) 
-            cflux(1,2,:)   = elem(ie)%rspheremp(1, np) * cflux(1,2,:) 
-            cflux(2,2,:)   = elem(ie)%rspheremp(np,np) * cflux(2,2,:) 
-
-            tempflux =  eta_ave_w*subcell_dss_fluxes(tempdp3d, np, nc, elem(ie)%metdet, cflux)
-            elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) + tempflux
-          end do
-        end if   
-     endif
-
-     ! ====================================================
-     ! Scale tendencies by inverse mass matrix
-     ! ====================================================
-
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
+#ifdef USE_KOKKOS_KERNELS
+#define CAAR_COMPUTE_T_V                caar_compute_T_v_c
+#define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_c
+#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
+#define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_c
+#define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_c
+#define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_c
+#define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_c
+#define CAAR_UPDATE_STATES              caar_update_states_c
+#else
+#define CAAR_COMPUTE_T_V                caar_compute_T_v_f90
+#define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_f90
+#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_f90
+#define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_f90
+#define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_f90
+#define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_f90
+#define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_f90
+#define CAAR_UPDATE_STATES              caar_update_states_f90
 #endif
-     do k=1,nlev
-        elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
-        elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
-        elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
-     end do
 
-     if (rsplit>0) then
-        ! vertically lagrangian: complete dp3d timestep:
-        do k=1,nlev
-           elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-        enddo
-        ! when debugging: also update ps_v
-        !elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
-     else
-        ! vertically eulerian: complete ps_v timestep:
-        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
-     endif
+  subroutine compute_and_apply_rhs_pre_exchange_f90(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                                    deriv,nets,nete,compute_diagnostics,eta_ave_w)
 
-  end do
+  use kinds,                only : real_kind
+  use control_mod,          only : use_cpstar
+  use derivative_mod,       only : derivative_t, gradient_sphere, divergence_sphere, vorticity_sphere, subcell_div_fluxes
+  use dimensions_mod,       only : nlev, ntrac, nelemd
+  use element_mod,          only : element_t, elem_state_dp3d, elem_state_v, elem_state_Temp,   &
+                                   elem_derived_vn0, elem_sub_elem_mass_flux, elem_state_Qdp,   &
+                                   elem_D, elem_Dinv, elem_metdet, elem_rmetdet, elem_spheremp, &
+                                   elem_state_phis, elem_derived_phi, elem_derived_pecnd,       &
+                                   elem_derived_omega_p, elem_derived_eta_dot_dpdn, elem_fcor
+  use hybvcoord_mod,        only : hvcoord_t
+  use physical_constants,   only : Rgas, kappa
+  use physics_mod,          only : virtual_specific_heat, virtual_temperature
+  use prim_si_mod,          only : preq_vertadv, preq_omega_ps, preq_hydrostatic
+  use caar_subroutines_mod, only : caar_compute_pressure_f90, caar_compute_vort_and_div_f90, caar_compute_T_v_f90, &
+                                   caar_preq_hydrostatic_f90, caar_preq_omega_ps_f90, caar_compute_eta_dot_dpdn_f90,  &
+                                   caar_compute_phi_kinetic_energy_f90, caar_energy_diagnostics_f90, caar_update_states_f90
+  use iso_c_binding,        only : c_ptr, c_loc
 
-#ifdef DEBUGOMP
-#if (defined HORIZ_OPENMP)
-!$OMP BARRIER
+  implicit none
+
+#ifdef USE_KOKKOS_KERNELS
+  interface
+    subroutine init_caar_helpers() bind(c)
+    end subroutine init_caar_helpers
+
+    subroutine caar_compute_pressure_c() bind(c)
+    end subroutine caar_compute_pressure_c
+
+    subroutine caar_compute_vort_and_div_c() bind(c)
+    end subroutine caar_compute_vort_and_div_c
+
+    subroutine caar_compute_T_v_c() bind(c)
+    end subroutine caar_compute_T_v_c
+
+    subroutine caar_preq_hydrostatic_c() bind(c)
+    end subroutine caar_preq_hydrostatic_c
+
+    subroutine caar_preq_omega_ps_c() bind(c)
+    end subroutine caar_preq_omega_ps_c
+
+    subroutine caar_compute_eta_dot_dpdn_c() bind(c)
+    end subroutine caar_compute_eta_dot_dpdn_c
+
+    subroutine caar_compute_phi_kinetic_energy_c() bind(c)
+    end subroutine caar_compute_phi_kinetic_energy_c
+
+    subroutine caar_energy_diagnostics_c() bind(c)
+    end subroutine caar_energy_diagnostics_c
+
+    subroutine caar_update_states_c() bind(c)
+    end subroutine caar_update_states_c
+  end interface
 #endif
+
+  type (hvcoord_t)     , intent(in)    :: hvcoord
+  type (hybrid_t)      , intent(in)    :: hybrid
+  type (element_t)     , intent(inout) :: elem(:)
+  integer              , intent(in)    :: np1,nm1,n0,qn0,nets,nete
+  real (kind=real_kind), intent(in)    :: dt2
+  logical              , intent(in)    :: compute_diagnostics
+  real (kind=real_kind), intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+  type (derivative_t)  , intent(in), target  :: deriv
+  !
+  ! locals
+  !
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: p             ! pressure
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: dp            ! delta pressure
+  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: grad_p
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: kappa_star
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: omega_p
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: T_v
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vgrad_p       ! v dot grad(p)
+  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: vdp
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: div_vdp
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vort          ! vorticity
+  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: v_vadv        ! velocity vertical advection
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: T_vadv        ! temperature vertical advection
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vtens1
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vtens2
+  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: ttens
+  real (kind=real_kind), dimension(np,np,nlev+1,nelemd), target :: eta_dot_dpdn  ! half level vertical velocity on p-grid
+
+!  real (kind=real_kind), dimension(np,np,2)         :: v
+!  real (kind=real_kind), dimension(np,np,nlev)      :: rdp           ! inverse of delta pressure
+!  real (kind=real_kind), dimension(np,np,2)         :: grad_ps       ! lat-lon coord version
+!  real (kind=real_kind), dimension(np,np)           :: Ephi          ! kinetic energy + PHI term
+!  real (kind=real_kind), dimension(np,np,2)         :: vtemp         ! generic gradient storage
+!  real (kind=real_kind), dimension(np,np)           :: vgrad_T       ! v.grad(T)
+!  real (kind=real_kind), dimension(np,np,nlev)      :: vtens1
+!  real (kind=real_kind), dimension(np,np,nlev)      :: vtens2
+!  real (kind=real_kind), dimension(np,np,nlev)      :: ttens
+!  real (kind=real_kind), dimension(np,np)           :: sdot_sum
+!  real (kind=real_kind), dimension(nc,nc,4)         :: tempflux
+!
+!  real (kind=real_kind)                             :: u_m_umet, v_m_vmet, t_m_tmet
+!  real (kind=real_kind)                             :: v1, v2, Qt, E
+!  real (kind=real_kind)                             :: glnps1, glnps2, gpterm
+!
+!  integer                                           :: ie, k, j, i
+
+  type (c_ptr) :: dvv_ptr, elem_D_ptr, elem_Dinv_ptr, elem_metdet_ptr
+  type (c_ptr) :: elem_rmetdet_ptr, elem_spheremp_ptr, elem_fcor_ptr
+  type (c_ptr) :: p_ptr, grad_p_ptr, vgrad_p_ptr, vdp_ptr, div_vdp_ptr, vort_ptr
+  type (c_ptr) :: vtens1_ptr, vtens2_ptr, ttens_ptr, T_v_ptr, v_vadv_ptr, T_vadv_ptr
+  type (c_ptr) :: kappa_star_ptr, elem_state_dp_ptr, elem_state_Qdp_ptr
+  type (c_ptr) :: elem_state_phis_ptr, elem_derived_phi_ptr, elem_state_v_ptr
+  type (c_ptr) :: elem_state_T_ptr, elem_state_dp3d_ptr, elem_sub_elem_mass_flux_ptr
+  type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr
+  type (c_ptr) :: elem_derived_vn0_ptr, omega_p_ptr, eta_dot_dpdn_ptr
+  type (c_ptr) :: elem_derived_pecnd_ptr
+
+#ifdef USE_KOKKOS_KERNELS
+  call init_caar_helpers()
 #endif
-  call t_stopf('compute_and_apply_rhs')
-!pw  call t_adj_detailf(-1)
 
-  end subroutine compute_and_apply_rhs
+  ! Create the pointers
+  dvv_ptr                       = c_loc(deriv%dvv)
+  elem_D_ptr                    = c_loc(elem_D)
+  elem_Dinv_ptr                 = c_loc(elem_Dinv)
+  elem_metdet_ptr               = c_loc(elem_metdet)
+  elem_rmetdet_ptr              = c_loc(elem_rmetdet)
+  elem_spheremp_ptr             = c_loc(elem_spheremp)
+  elem_fcor_ptr                 = c_loc(elem_fcor)
+  p_ptr                         = c_loc(p)
+  grad_p_ptr                    = c_loc(grad_p)
+  kappa_star_ptr                = c_loc(kappa_star)
+  omega_p_ptr                   = c_loc(omega_p)
+  T_v_ptr                       = c_loc(T_v)
+  vgrad_p_ptr                   = c_loc(vgrad_p)
+  vdp_ptr                       = c_loc(vdp)
+  div_vdp_ptr                   = c_loc(div_vdp)
+  vort_ptr                      = c_loc(vort)
+  T_vadv_ptr                    = c_loc(T_vadv)
+  v_vadv_ptr                    = c_loc(v_vadv)
+  ttens_ptr                     = c_loc(ttens)
+  vtens1_ptr                    = c_loc(vtens1)
+  vtens2_ptr                    = c_loc(vtens2)
+  elem_state_dp_ptr             = c_loc(elem_state_dp3d)
+  elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+  elem_state_v_ptr              = c_loc(elem_state_v)
+  elem_state_T_ptr              = c_loc(elem_state_Temp)
+  elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+  elem_state_phis_ptr           = c_loc(elem_state_phis)
+  elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+  elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
+  elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+  elem_sub_elem_mass_flux_ptr   = c_loc(elem_sub_elem_mass_flux)
+  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+  elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+  eta_dot_dpdn_ptr              = c_loc(eta_dot_dpdn)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! remove this once you have compute_eta_dot_dpdn
+eta_dot_dpdn = 0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+  call CAAR_COMPUTE_PRESSURE(nets, nete, n0, p_ptr, elem_state_dp_ptr, &
+                             hvcoord%hyai(1), hvcoord%ps0)
+
+  call CAAR_COMPUTE_VORT_AND_DIV(nets, nete, n0, eta_ave_w, dvv_ptr, elem_D_ptr,   &
+                                 elem_Dinv_ptr, elem_metdet_ptr, elem_rmetdet_ptr, &
+                                 p_ptr, elem_state_dp_ptr, grad_p_ptr,             &
+                                 elem_state_v_ptr, elem_derived_vn0_ptr,           &
+                                 vgrad_p_ptr, vdp_ptr, div_vdp_ptr, vort_ptr)
+
+  call CAAR_COMPUTE_T_V(nets, nete, n0, qn0, T_v_ptr, kappa_star_ptr, &
+                        elem_state_dp_ptr, elem_state_T_ptr, elem_state_Qdp_ptr)
+
+  ! ====================================================
+  ! Compute Hydrostatic equation, modeld after CCM-3
+  ! ====================================================
+  call CAAR_PREQ_HYDROSTATIC(nets, nete, elem_derived_phi_ptr, elem_state_phis_ptr, &
+                             T_v_ptr, p_ptr, elem_state_dp_ptr)
+  ! ====================================================
+  ! Compute omega_p according to CCM-3
+  ! ====================================================
+  call CAAR_PREQ_OMEGA_PS(nets, nete, div_vdp_ptr, vgrad_p_ptr, p_ptr, omega_p_ptr)
+
+  call CAAR_COMPUTE_ETA_DOT_DPDN(nets, nete, eta_dot_dpdn_ptr, T_vadv_ptr, v_vadv_ptr,    &
+                                 elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+                                 omega_p_ptr, eta_ave_w)
+
+  call CAAR_COMPUTE_PHI_KINETIC_ENERGY(nets, nete, n0, dvv_ptr, p_ptr, grad_p_ptr, &
+                                       v_vadv_ptr, T_vadv_ptr, elem_Dinv_ptr,      &
+                                       elem_fcor_ptr, vort_ptr, elem_state_T_ptr,  &
+                                       elem_state_v_ptr, elem_derived_phi_ptr,     &
+                                       elem_derived_pecnd_ptr,                     &
+                                       kappa_star_ptr, T_v_ptr, omega_p_ptr,       &
+                                       ttens_ptr, vtens1_ptr, vtens2_ptr)
+
+!
+!#ifdef ENERGY_DIAGNOSTICS
+!  call CAAR_ENERGY_DIAGNOSTICS()
+!#endif
+
+  call CAAR_UPDATE_STATES(nets, nete, nm1, np1, dt2, &
+                          vdp_ptr, div_vdp_ptr, vtens1_ptr, vtens2_ptr, ttens_ptr, &
+                          elem_Dinv_ptr, elem_metdet_ptr, elem_spheremp_ptr, &
+                          elem_state_v_ptr, elem_state_T_ptr, elem_state_dp3d_ptr, &
+                          elem_sub_elem_mass_flux_ptr, eta_dot_dpdn_ptr, eta_ave_w)
+
+  end subroutine compute_and_apply_rhs_pre_exchange_f90
 
   subroutine distribute_flux_at_corners(cflux, corners, getmapP)
     use kinds,          only : int_kind, real_kind
@@ -3325,55 +3613,55 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
     cflux = 0.0d0
     if (getmapP(swest+0*max_corner_elem) /= -1) then
-      cflux(1,1,1) =                (corners(0,1) - corners(1,1))     
+      cflux(1,1,1) =                (corners(0,1) - corners(1,1))
       cflux(1,1,1) = cflux(1,1,1) + (corners(0,0) - corners(1,1)) / 2.0d0
       cflux(1,1,1) = cflux(1,1,1) + (corners(0,1) - corners(1,0)) / 2.0d0
- 
-      cflux(1,1,2) =                (corners(1,0) - corners(1,1))     
+
+      cflux(1,1,2) =                (corners(1,0) - corners(1,1))
       cflux(1,1,2) = cflux(1,1,2) + (corners(0,0) - corners(1,1)) / 2.0d0
       cflux(1,1,2) = cflux(1,1,2) + (corners(1,0) - corners(0,1)) / 2.0d0
     else
-      cflux(1,1,1) =                (corners(0,1) - corners(1,1))     
-      cflux(1,1,2) =                (corners(1,0) - corners(1,1))     
+      cflux(1,1,1) =                (corners(0,1) - corners(1,1))
+      cflux(1,1,2) =                (corners(1,0) - corners(1,1))
     endif
- 
+
     if (getmapP(swest+1*max_corner_elem) /= -1) then
-      cflux(2,1,1) =                (corners(np+1,1) - corners(np,1))     
+      cflux(2,1,1) =                (corners(np+1,1) - corners(np,1))
       cflux(2,1,1) = cflux(2,1,1) + (corners(np+1,0) - corners(np,1)) / 2.0d0
       cflux(2,1,1) = cflux(2,1,1) + (corners(np+1,1) - corners(np,0)) / 2.0d0
- 
-      cflux(2,1,2) =                (corners(np  ,0) - corners(np,  1))     
+
+      cflux(2,1,2) =                (corners(np  ,0) - corners(np,  1))
       cflux(2,1,2) = cflux(2,1,2) + (corners(np+1,0) - corners(np,  1)) / 2.0d0
       cflux(2,1,2) = cflux(2,1,2) + (corners(np  ,0) - corners(np+1,1)) / 2.0d0
     else
-      cflux(2,1,1) =                (corners(np+1,1) - corners(np,1))     
-      cflux(2,1,2) =                (corners(np  ,0) - corners(np,1))     
+      cflux(2,1,1) =                (corners(np+1,1) - corners(np,1))
+      cflux(2,1,2) =                (corners(np  ,0) - corners(np,1))
     endif
- 
+
     if (getmapP(swest+2*max_corner_elem) /= -1) then
-      cflux(1,2,1) =                (corners(0,np  ) - corners(1,np  ))     
+      cflux(1,2,1) =                (corners(0,np  ) - corners(1,np  ))
       cflux(1,2,1) = cflux(1,2,1) + (corners(0,np+1) - corners(1,np  )) / 2.0d0
       cflux(1,2,1) = cflux(1,2,1) + (corners(0,np  ) - corners(1,np+1)) / 2.0d0
- 
-      cflux(1,2,2) =                (corners(1,np+1) - corners(1,np  ))     
+
+      cflux(1,2,2) =                (corners(1,np+1) - corners(1,np  ))
       cflux(1,2,2) = cflux(1,2,2) + (corners(0,np+1) - corners(1,np  )) / 2.0d0
       cflux(1,2,2) = cflux(1,2,2) + (corners(1,np+1) - corners(0,np  )) / 2.0d0
     else
-      cflux(1,2,1) =                (corners(0,np  ) - corners(1,np  ))     
-      cflux(1,2,2) =                (corners(1,np+1) - corners(1,np  ))     
+      cflux(1,2,1) =                (corners(0,np  ) - corners(1,np  ))
+      cflux(1,2,2) =                (corners(1,np+1) - corners(1,np  ))
     endif
- 
+
     if (getmapP(swest+3*max_corner_elem) /= -1) then
-      cflux(2,2,1) =                (corners(np+1,np  ) - corners(np,np  ))     
+      cflux(2,2,1) =                (corners(np+1,np  ) - corners(np,np  ))
       cflux(2,2,1) = cflux(2,2,1) + (corners(np+1,np+1) - corners(np,np  )) / 2.0d0
       cflux(2,2,1) = cflux(2,2,1) + (corners(np+1,np  ) - corners(np,np+1)) / 2.0d0
- 
-      cflux(2,2,2) =                (corners(np  ,np+1) - corners(np,np  ))     
+
+      cflux(2,2,2) =                (corners(np  ,np+1) - corners(np,np  ))
       cflux(2,2,2) = cflux(2,2,2) + (corners(np+1,np+1) - corners(np,np  )) / 2.0d0
       cflux(2,2,2) = cflux(2,2,2) + (corners(np  ,np+1) - corners(np+1,np)) / 2.0d0
     else
-      cflux(2,2,1) =                (corners(np+1,np  ) - corners(np,np  ))     
-      cflux(2,2,2) =                (corners(np  ,np+1) - corners(np,np  ))     
+      cflux(2,2,1) =                (corners(np+1,np  ) - corners(np,np  ))
+      cflux(2,2,2) =                (corners(np  ,np+1) - corners(np,np  ))
     endif
   end subroutine
 

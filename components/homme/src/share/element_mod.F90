@@ -14,14 +14,88 @@ module element_mod
   private
   integer, public, parameter :: timelevels = 3
 
+  real (kind=real_kind),    allocatable, target, public :: elem_Dinv      (:,:,:,:,:) ! (np,np,2,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_D         (:,:,:,:,:) ! (np,np,2,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_metdet    (:,:,:)     ! (np,np,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_rmetdet   (:,:,:)     ! (np,np,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_fcor      (:,:,:)     ! (np,np,nelemd)
+
+  real (kind=real_kind),    allocatable, target, public :: elem_mp        (:,:,:)     ! (np,np,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_rmp       (:,:,:)     ! (np,np,nelemd)
+
+  type (spherical_polar_t), allocatable, target, public :: elem_spherep   (:,:,:)     ! Spherical coords of GLL points
+  real (kind=real_kind),    allocatable, target, public :: elem_spheremp  (:,:,:)     ! (np,np,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_rspheremp (:,:,:)     ! (np,np,nelemd)
+
+  real (kind=real_kind),    allocatable, target, public :: elem_sub_elem_mass_flux (:,:,:,:,:)    ! (nc,nc,4,nlev,nelemd)
+
 #ifdef _PRIM
 
   public :: setup_element_pointers
-  real (kind=real_kind), allocatable, target, public :: state_Qdp                (:,:,:,:,:,:)    ! (np,np,nlev,qsize_d,2,nelemd)   
+  real (kind=real_kind), allocatable, target, public :: state_Qdp                (:,:,:,:,:,:)    ! (np,np,nlev,qsize_d,2,nelemd)
   real (kind=real_kind), allocatable, target, public :: derived_vn0              (:,:,:,:,:)      ! (np,np,2,nlev,nelemd)                   velocity for SE tracer advection
   real (kind=real_kind), allocatable, target, public :: derived_divdp            (:,:,:,:)        ! (np,np,nlev,nelemd)                     divergence of dp
   real (kind=real_kind), allocatable, target, public :: derived_divdp_proj       (:,:,:,:)        ! (np,np,nlev,nelemd)                     DSSed divdp
 
+  ! elem_state_t arrays
+  real (kind=real_kind), allocatable, target, public :: elem_state_v    (:,:,:,:,:,:)            ! velocity                           1
+  real (kind=real_kind), allocatable, target, public :: elem_state_Temp (:,:,:,:,:)              ! temperature                        2
+  real (kind=real_kind), allocatable, target, public :: elem_state_dp3d (:,:,:,:,:)              ! delta p on levels                  8
+  real (kind=real_kind), allocatable, target, public :: elem_state_lnps (:,:,:,:)                ! log surface pressure               3
+  real (kind=real_kind), allocatable, target, public :: elem_state_ps_v (:,:,:,:)                ! surface pressure                   4
+  real (kind=real_kind), allocatable, target, public :: elem_state_phis (:,:,:)                  ! surface geopotential (prescribed)  5
+  real (kind=real_kind), allocatable, target, public :: elem_state_Q    (:,:,:,:,:)              ! Tracer concentration               6
+  real (kind=real_kind), allocatable, target, public :: elem_state_Qdp  (:,:,:,:,:,:)            ! Tracer mass                        7
+
+  ! derived_state_t arrays
+  real (kind=real_kind), allocatable, target, public :: elem_derived_vn0              (:,:,:,:,:)   ! velocity for SE tracer advection
+  real (kind=real_kind), allocatable, target, public :: elem_derived_vstar            (:,:,:,:,:)   ! velocity on Lagrangian surfaces
+  real (kind=real_kind), allocatable, target, public :: elem_derived_dpdiss_biharmonic(:,:,:,:)     ! mean dp dissipation tendency, if nu_p>0
+  real (kind=real_kind), allocatable, target, public :: elem_derived_dpdiss_ave       (:,:,:,:)     ! mean dp used to compute psdiss_tens
+  real (kind=real_kind), allocatable, target, public :: elem_derived_phi              (:,:,:,:)     ! geopotential
+  real (kind=real_kind), allocatable, target, public :: elem_derived_omega_p          (:,:,:,:)     ! vertical tendency (derived)
+  real (kind=real_kind), allocatable, target, public :: elem_derived_eta_dot_dpdn     (:,:,:,:)     ! mean vertical flux from dynamics
+  real (kind=real_kind), allocatable, target, public :: elem_derived_grad_lnps        (:,:,:,:)     ! gradient of log surface pressure
+  real (kind=real_kind), allocatable, target, public :: elem_derived_zeta             (:,:,:,:)     ! relative vorticity
+  real (kind=real_kind), allocatable, target, public :: elem_derived_div              (:,:,:,:,:)   ! divergence
+  real (kind=real_kind), allocatable, target, public :: elem_derived_dp               (:,:,:,:)     ! for dp_tracers at physics timestep
+  real (kind=real_kind), allocatable, target, public :: elem_derived_divdp            (:,:,:,:)     ! divergence of dp
+  real (kind=real_kind), allocatable, target, public :: elem_derived_divdp_proj       (:,:,:,:)     ! DSSed divdp
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FQ               (:,:,:,:,:,:) ! tracer forcing
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FM               (:,:,:,:,:,:) ! momentum forcing
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FT               (:,:,:,:,:)   ! temperature forcing
+  real (kind=real_kind), allocatable, target, public :: elem_derived_pecnd            (:,:,:,:)     ! pressure perturbation from condensate
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FQps             (:,:,:,:)     ! forcing of FQ on ps_v
+
+  ! elem_accum_t arrays
+  real (kind=real_kind), allocatable, target, public :: elem_accum_KEvert1    (:,:,:)     ! term from continuity equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_KEvert2    (:,:,:)     ! term from momentum equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEvert1    (:,:,:)     ! term from continuity equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEvert2    (:,:,:)     ! term from T equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEvert1_wet(:,:,:)     ! wet term from continuity equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEvert2_wet(:,:,:)     ! wet term from T equ
+  real (kind=real_kind), allocatable, target, public :: elem_accum_KEhorz1    (:,:,:)     ! at time t
+  real (kind=real_kind), allocatable, target, public :: elem_accum_KEhorz2    (:,:,:)     ! after calling time_advance, these will be at time t-1
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEhorz1    (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEhorz2    (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEhorz1_wet(:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEhorz2_wet(:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_T1         (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_T2         (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_T2_s       (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_S1         (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_S1_wet     (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_S2         (:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_DIFF       (:,:,:,:,:) ! net hypervis term
+  real (kind=real_kind), allocatable, target, public :: elem_accum_DIFFT      (:,:,:,:)   ! net hypervis term
+  real (kind=real_kind), allocatable, target, public :: elem_accum_CONV       (:,:,:,:,:) ! dpdn u dot CONV = T1 + T2
+  real (kind=real_kind), allocatable, target, public :: elem_accum_KEner      (:,:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_PEner      (:,:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEner      (:,:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_IEner_wet  (:,:,:,:)
+  real (kind=real_kind), allocatable, target, public :: elem_accum_Qvar       (:,:,:,:,:) ! Q variance at half time levels
+  real (kind=real_kind), allocatable, target, public :: elem_accum_Qmass      (:,:,:,:,:) ! Q mass at half time levels
+  real (kind=real_kind), allocatable, target, public :: elem_accum_Q1mass     (:,:,:,:)   ! Q mass at full time levels
 
 #if USE_OPENACC
 
@@ -37,7 +111,7 @@ module element_mod
     real (kind=real_kind) :: ps_v(np,np,timelevels)                   ! surface pressure                   4
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
-    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)  ! Tracer mass                        7  (np,np,nlev,qsize,2)   
+    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)  ! Tracer mass                        7  (np,np,nlev,qsize,2)
   end type elem_state_t
 
   integer(kind=int_kind),public,parameter::StateComponents=8  ! num prognistics variables (for prim_restart_mod.F90)
@@ -52,13 +126,13 @@ module element_mod
 
     ! diagnostics for explicit timestep
     real (kind=real_kind) :: phi(np,np,nlev)                          ! geopotential
-    real (kind=real_kind) :: omega_p(np,np,nlev)                      ! vertical tendency (derived)       
+    real (kind=real_kind) :: omega_p(np,np,nlev)                      ! vertical tendency (derived)
     real (kind=real_kind) :: eta_dot_dpdn(np,np,nlevp)                ! mean vertical flux from dynamics
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
-    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure               
-    real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity                             
-    real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence                          
+    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure
+    real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity
+    real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence
 
     ! tracer advection fields used for consistency and limiters
     real (kind=real_kind) :: dp(np,np,nlev)                           ! for dp_tracers at physics timestep
@@ -85,16 +159,16 @@ module element_mod
     real (kind=real_kind) :: Ttnd(npsq,nlev)                          ! accumulated T tendency due to nudging towards prescribed met
 #else
     ! forcing terms for HOMME
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing 
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing
     real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing 
+    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
 #endif
 
     ! forcing terms for both CAM and HOMME
     ! FQps for conserving dry mass in the presence of precipitation
 
     real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate
-    real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v 
+    real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
   end type derived_state_t
 
 !else for USE_OPENACC if
@@ -109,7 +183,17 @@ module element_mod
     ! prognostics must match those in prim_restart_mod.F90
     ! vertically-lagrangian code advects dp3d instead of ps_v
     ! tracers Q, Qdp always use 2 level time scheme
-
+#ifdef HOMME_USE_FLAT_ARRAYS
+    real (kind=real_kind), pointer :: v   (:,:,:,:,:)            ! velocity                           1
+    real (kind=real_kind), pointer :: T   (:,:,:,:)              ! temperature                        2
+    real (kind=real_kind), pointer :: dp3d(:,:,:,:)              ! delta p on levels                  8
+    real (kind=real_kind), pointer :: lnps(:,:,:)                ! log surface pressure               3
+    real (kind=real_kind), pointer :: ps_v(:,:,:)                ! surface pressure                   4
+    real (kind=real_kind), pointer :: phis(:,:)                  ! surface geopotential (prescribed)  5
+    real (kind=real_kind), pointer :: Q   (:,:,:,:)              ! Tracer concentration               6
+    real (kind=real_kind), pointer :: Qdp (:,:,:,:,:)            ! Tracer mass                        7
+! #if HOMME_USE_FLAT_ARRAYS
+#else
     real (kind=real_kind) :: v   (np,np,2,nlev,timelevels)            ! velocity                           1
     real (kind=real_kind) :: T   (np,np,nlev,timelevels)              ! temperature                        2
     real (kind=real_kind) :: dp3d(np,np,nlev,timelevels)              ! delta p on levels                  8
@@ -118,7 +202,8 @@ module element_mod
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
     real (kind=real_kind) :: Qdp (np,np,nlev,qsize_d,2)               ! Tracer mass                        7
-
+! #if HOMME_USE_FLAT_ARRAYS
+#endif
   end type elem_state_t
 
   integer(kind=int_kind),public,parameter::StateComponents=8! num prognistics variables (for prim_restart_mod.F90)
@@ -130,6 +215,28 @@ module element_mod
 
     ! storage for subcycling tracers/dynamics
 
+#ifdef HOMME_USE_FLAT_ARRAYS
+    real (kind=real_kind), pointer :: vn0  (:,:,:,:)                      ! velocity for SE tracer advection
+    real (kind=real_kind), pointer :: vstar(:,:,:,:)                      ! velocity on Lagrangian surfaces
+    real (kind=real_kind), pointer :: dpdiss_biharmonic(:,:,:)            ! mean dp dissipation tendency, if nu_p>0
+    real (kind=real_kind), pointer :: dpdiss_ave(:,:,:)                   ! mean dp used to compute psdiss_tens
+
+    ! diagnostics for explicit timestep
+    real (kind=real_kind), pointer :: phi(:,:,:)                          ! geopotential
+    real (kind=real_kind), pointer :: omega_p(:,:,:)                      ! vertical tendency (derived)
+    real (kind=real_kind), pointer :: eta_dot_dpdn(:,:,:)                 ! mean vertical flux from dynamics
+
+    ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
+    real (kind=real_kind), pointer :: grad_lnps(:,:,:)                    ! gradient of log surface pressure
+    real (kind=real_kind), pointer :: zeta(:,:,:)                         ! relative vorticity
+    real (kind=real_kind), pointer :: div(:,:,:,:)                        ! divergence
+
+    ! tracer advection fields used for consistency and limiters
+    real (kind=real_kind), pointer :: dp(:,:,:)                           ! for dp_tracers at physics timestep
+    real (kind=real_kind), pointer :: divdp(:,:,:)                        ! divergence of dp
+    real (kind=real_kind), pointer :: divdp_proj(:,:,:)                   ! DSSed divdp
+! #if HOMME_USE_FLAT_ARRAYS
+#else
     real (kind=real_kind) :: vn0  (np,np,2,nlev)                      ! velocity for SE tracer advection
     real (kind=real_kind) :: vstar(np,np,2,nlev)                      ! velocity on Lagrangian surfaces
     real (kind=real_kind) :: dpdiss_biharmonic(np,np,nlev)            ! mean dp dissipation tendency, if nu_p>0
@@ -149,6 +256,8 @@ module element_mod
     real (kind=real_kind) :: dp(np,np,nlev)                           ! for dp_tracers at physics timestep
     real (kind=real_kind) :: divdp(np,np,nlev)                        ! divergence of dp
     real (kind=real_kind) :: divdp_proj(np,np,nlev)                   ! DSSed divdp
+! #if HOMME_USE_FLAT_ARRAYS
+#endif
 
 #ifdef CAM
     ! forcing terms for CAM
@@ -168,22 +277,35 @@ module element_mod
     real (kind=real_kind) :: Utnd(npsq,nlev)                          ! accumulated U tendency due to nudging towards prescribed met
     real (kind=real_kind) :: Vtnd(npsq,nlev)                          ! accumulated V tendency due to nudging towards prescribed met
     real (kind=real_kind) :: Ttnd(npsq,nlev)                          ! accumulated T tendency due to nudging towards prescribed met
-
+! #ifdef CAM
+#else
+#ifdef HOMME_USE_FLAT_ARRAYS
+    ! forcing terms for HOMME
+    real (kind=real_kind), pointer :: FQ(:,:,:,:,:)                   ! tracer forcing
+    real (kind=real_kind), pointer :: FM(:,:,:,:,:)                   ! momentum forcing
+    real (kind=real_kind), pointer :: FT(:,:,:,:)                     ! temperature forcing
 #else
     ! forcing terms for HOMME
     real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing
     real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
     real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
 #endif
+! #ifdef CAM
+#endif
 
     ! forcing terms for both CAM and HOMME
     ! FQps for conserving dry mass in the presence of precipitation
 
+#ifdef HOMME_USE_FLAT_ARRAYS
+    real (kind=real_kind), pointer :: pecnd(:,:,:)                    ! pressure perturbation from condensate
+    real (kind=real_kind), pointer :: FQps(:,:,:)                     ! forcing of FQ on ps_v
+#else
     real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate
     real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
+#endif
 
   end type derived_state_t
-  
+
 !ending USE_OPENACC if
 #endif
 
@@ -212,6 +334,34 @@ module element_mod
     ! S1   = < Cp_star dp/dn , RT omega_p/Cp_star >
     ! S2   = -< div (u dp/dn), phis >
 
+#ifdef HOMME_USE_FLAT_ARRAYS
+    real (kind=real_kind), pointer :: KEvert1(:,:)                           ! term from continuity equ
+    real (kind=real_kind), pointer :: KEvert2(:,:)                           ! term from momentum equ
+    real (kind=real_kind), pointer :: IEvert1(:,:)                           ! term from continuity equ
+    real (kind=real_kind), pointer :: IEvert2(:,:)                           ! term from T equ
+    real (kind=real_kind), pointer :: IEvert1_wet(:,:)                       ! wet term from continuity equ
+    real (kind=real_kind), pointer :: IEvert2_wet(:,:)                       ! wet term from T equ
+
+    real (kind=real_kind), pointer :: KEhorz1(:,:)                           ! at time t
+    real (kind=real_kind), pointer :: KEhorz2(:,:)                           ! after calling time_advance, these will be at time t-1
+    real (kind=real_kind), pointer :: IEhorz1(:,:)
+    real (kind=real_kind), pointer :: IEhorz2(:,:)
+    real (kind=real_kind), pointer :: IEhorz1_wet(:,:)
+    real (kind=real_kind), pointer :: IEhorz2_wet(:,:)
+
+    real (kind=real_kind), pointer :: T1(:,:)
+    real (kind=real_kind), pointer :: T2(:,:)
+    real (kind=real_kind), pointer :: T2_s(:,:)
+    real (kind=real_kind), pointer :: S1(:,:)
+    real (kind=real_kind), pointer :: S1_wet(:,:)
+    real (kind=real_kind), pointer :: S2(:,:)
+
+    ! the KE conversion term and diffusion term
+    real (kind=real_kind), pointer :: DIFF(:,:,:,:)                       ! net hypervis term
+    real (kind=real_kind), pointer :: DIFFT(:,:,:)                        ! net hypervis term
+    real (kind=real_kind), pointer :: CONV(:,:,:,:)                       ! dpdn u dot CONV = T1 + T2
+! #if HOMME_USE_FLAT_ARRAYS
+#else
     real (kind=real_kind) :: KEvert1(np,np)                           ! term from continuity equ
     real (kind=real_kind) :: KEvert2(np,np)                           ! term from momentum equ
     real (kind=real_kind) :: IEvert1(np,np)                           ! term from continuity equ
@@ -237,6 +387,9 @@ module element_mod
     real (kind=real_kind) :: DIFF(np,np,2,nlev)                       ! net hypervis term
     real (kind=real_kind) :: DIFFT(np,np,nlev)                        ! net hypervis term
     real (kind=real_kind) :: CONV(np,np,2,nlev)                       ! dpdn u dot CONV = T1 + T2
+! #if HOMME_USE_FLAT_ARRAYS
+#endif
+! ENERGY_DIAGNOSTICS
 #endif
 
     ! the "4" timelevels represents data computed at:
@@ -246,6 +399,15 @@ module element_mod
     !  4  t+.5   after Robert
     ! after calling TimeLevelUpdate, all times above decrease by 1.0
 
+#ifdef HOMME_USE_FLAT_ARRAYS
+    real (kind=real_kind), pointer :: KEner(:,:,:)
+    real (kind=real_kind), pointer :: PEner(:,:,:)
+    real (kind=real_kind), pointer :: IEner(:,:,:)
+    real (kind=real_kind), pointer :: IEner_wet(:,:,:)
+    real (kind=real_kind), pointer :: Qvar(:,:,:,:)                    ! Q variance at half time levels
+    real (kind=real_kind), pointer :: Qmass(:,:,:,:)                   ! Q mass at half time levels
+    real (kind=real_kind), pointer :: Q1mass(:,:,:)                    ! Q mass at full time levels
+#else
     real (kind=real_kind) :: KEner(np,np,4)
     real (kind=real_kind) :: PEner(np,np,4)
     real (kind=real_kind) :: IEner(np,np,4)
@@ -253,7 +415,7 @@ module element_mod
     real (kind=real_kind) :: Qvar(np,np,qsize_d,4)                    ! Q variance at half time levels
     real (kind=real_kind) :: Qmass(np,np,qsize_d,4)                   ! Q mass at half time levels
     real (kind=real_kind) :: Q1mass(np,np,qsize_d)                    ! Q mass at full time levels
-
+#endif
   end type elem_accum_t
 
 ! if not _PRIM
@@ -261,26 +423,19 @@ module element_mod
 ! ================== SHALLOW-WATER DATA-STRUCTURES ===================
 
   public :: setup_element_pointers_sw
-  real (kind=real_kind), allocatable, target, public :: elem_Dinv    (:,:,:,:,:)    ! (np,np,2,2,nelemd)
-  real (kind=real_kind), allocatable, target, public :: elem_D       (:,:,:,:,:)    ! (np,np,2,2,nelemd)
-  real (kind=real_kind), allocatable, target, public :: elem_metdet  (:,:,:)        ! (np,np,nelemd)    
-  real (kind=real_kind), allocatable, target, public :: elem_rmetdet (:,:,:)        ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_state_p (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)  
-  real (kind=real_kind), allocatable, target, public :: elem_state_ps (:,:,:)       ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_state_v  (:,:,:,:,:,:) ! (np,np,2,nlev,timelevels,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_spheremp  (:,:,:)      ! (np,np,nelemd)    
-  real (kind=real_kind), allocatable, target, public :: elem_rspheremp (:,:,:)      ! (np,np,nelemd) 
-  real (kind=real_kind), allocatable, target, public :: elem_fcor      (:,:,:)      ! (np,np,nelemd) 
+  real (kind=real_kind), allocatable, target, public :: elem_state_p (:,:,:,:,:)    ! (np,np,nlevel,timelevels,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_state_ps (:,:,:)       ! (np,np,nelemd)
+  real (kind=real_kind), allocatable, target, public :: elem_state_v  (:,:,:,:,:,:) ! (np,np,2,nlev,timelevels,nelemd)
 
 
   type, public :: elem_state_t
 
     ! prognostic variables for shallow-water solver
      real (kind=real_kind) :: gradps(np,np,2)                         ! gradient of surface geopotential
-#if SW_USE_FLAT_ARRAYS
-     real (kind=real_kind), pointer   :: p(:,:,:,:) 
+#ifdef HOMME_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer   :: p(:,:,:,:)
      real (kind=real_kind), pointer   :: ps(:,:)                      ! surface geopotential
-     real (kind=real_kind), pointer   :: v(:,:,:,:,:)                 ! contravarient comp 
+     real (kind=real_kind), pointer   :: v(:,:,:,:,:)                 ! contravarient comp
 #else
      real (kind=real_kind) :: p(np,np,nlev,timelevels)
      real (kind=real_kind) :: ps(np,np)                               ! surface geopotential
@@ -294,6 +449,7 @@ module element_mod
      real (kind=real_kind) :: vstar(np,np,2,nlev)                     ! velocity on Lagrangian surfaces
   end type derived_state_t
 
+! #ifdef _PRIM
 #endif
 
 ! ============= DATA-STRUCTURES COMMON TO ALL SOLVERS ================
@@ -309,9 +465,6 @@ module element_mod
   type, public :: element_t
      integer(kind=int_kind) :: LocalId
      integer(kind=int_kind) :: GlobalId
-
-     ! Coordinate values of element points
-     type (spherical_polar_t) :: spherep(np,np)                       ! Spherical coords of GLL points
 
      ! Equ-angular gnomonic projection coordinates
      type (cartesian2D_t)     :: cartp(np,np)                         ! gnomonic coords of GLL points
@@ -340,33 +493,47 @@ module element_mod
      type (elem_state_t)      :: state
 
      type (derived_state_t)   :: derived
-#if defined _PRIM 
+#if defined _PRIM
      type (elem_accum_t)       :: accum
 #endif
      ! Metric terms
      real (kind=real_kind)    :: met(np,np,2,2)                       ! metric tensor on velocity and pressure grid
      real (kind=real_kind)    :: metinv(np,np,2,2)                    ! metric tensor on velocity and pressure grid
-#if SW_USE_FLAT_ARRAYS
-     real (kind=real_kind), pointer    :: metdet(:,:)                       
-     real (kind=real_kind), pointer    :: rmetdet(:,:) 
+#ifdef HOMME_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer    :: metdet(:,:)
+     real (kind=real_kind), pointer    :: rmetdet(:,:)
      real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
-     real (kind=real_kind), pointer    :: D(:,:,:,:) 
-     real (kind=real_kind), pointer    :: spheremp(:,:) 
-     real (kind=real_kind), pointer    :: rspheremp(:,:) 
-     real (kind=real_kind), pointer    :: fcor(:,:) 
+     real (kind=real_kind), pointer    :: D(:,:,:,:)
+     real (kind=real_kind), pointer    :: spheremp(:,:)
+     real (kind=real_kind), pointer    :: rspheremp(:,:)
+     real (kind=real_kind), pointer    :: fcor(:,:)
+
+     real (kind=real_kind), pointer    :: mp(:,:)                            ! mass matrix on v and p grid
+     real (kind=real_kind), pointer    :: rmp(:,:)                           ! inverse mass matrix on v and p grid
+
+     type (spherical_polar_t), pointer :: spherep(:,:)                       ! Spherical coords of GLL points
+
+     real (kind=real_kind), pointer    :: sub_elem_mass_flux(:,:,:,:)
 #else
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
      real (kind=real_kind)    :: D(np,np,2,2)                         ! Map covariant field on cube to vector field on the sphere
-     
+
+     ! Mass matrix terms for an element on a cube face
+     real (kind=real_kind)    :: mp(np,np)                            ! mass matrix on v and p grid
+     real (kind=real_kind)    :: rmp(np,np)                           ! inverse mass matrix on v and p grid
+
      ! Mass matrix terms for an element on the sphere
      ! This mass matrix is used when solving the equations in weak form
      ! with the natural (surface area of the sphere) inner product
+
+     ! Coordinate values of element points
+     type (spherical_polar_t) :: spherep(np,np)                       ! Spherical coords of GLL points
+
      real (kind=real_kind)    :: spheremp(np,np)                      ! mass matrix on v and p grid
      real (kind=real_kind)    :: rspheremp(np,np)                     ! inverse mass matrix on v and p grid
      real (kind=real_kind)    :: fcor(np,np)                          ! Coreolis term
-#endif   
 
      ! Mass flux across the sides of each sub-element.
      ! The storage is redundent since the mass across shared sides
@@ -403,14 +570,11 @@ module element_mod
      !  ---------------------------------------------------------------
      !          First Coordinate ------->
      real (kind=real_kind) :: sub_elem_mass_flux(nc,nc,4,nlev)
+#endif
 
      ! Convert vector fields from spherical to rectangular components
      ! The transpose of this operation is its pseudoinverse.
      real (kind=real_kind)    :: vec_sphere2cart(np,np,3,2)
-
-     ! Mass matrix terms for an element on a cube face
-     real (kind=real_kind)    :: mp(np,np)                            ! mass matrix on v and p grid
-     real (kind=real_kind)    :: rmp(np,np)                           ! inverse mass matrix on v and p grid
 
      integer(kind=long_kind)  :: gdofP(np,np)                         ! global degree of freedom (P-grid)
 
@@ -436,7 +600,7 @@ module element_mod
 contains
 
   subroutine PrintElem(arr)
-   
+
     real(kind=real_kind) :: arr(:,:)
     integer :: i,j
 
@@ -591,6 +755,7 @@ contains
   end subroutine allocate_element_desc
 
 
+#ifdef _PRIM
   !___________________________________________________________________
   subroutine setup_element_pointers(elem)
     use dimensions_mod, only: nelemd, qsize
@@ -604,19 +769,179 @@ contains
     allocate( derived_divdp_proj       (np,np,nlev,nelemd)                    )
     do ie = 1 , nelemd
       elem(ie)%state%Qdp                 => state_Qdp                (:,:,:,:,:,ie)
-      elem(ie)%derived%vn0               => derived_vn0              (:,:,:,:,ie)  
-      elem(ie)%derived%divdp             => derived_divdp            (:,:,:,ie)    
-      elem(ie)%derived%divdp_proj        => derived_divdp_proj       (:,:,:,ie)    
+      elem(ie)%derived%vn0               => derived_vn0              (:,:,:,:,ie)
+      elem(ie)%derived%divdp             => derived_divdp            (:,:,:,ie)
+      elem(ie)%derived%divdp_proj        => derived_divdp_proj       (:,:,:,ie)
     enddo
+#else
+#ifdef HOMME_USE_FLAT_ARRAYS
+    integer :: ie
+
+    allocate( elem_D                   (np,np,2,2,nelemd) )
+    allocate( elem_Dinv                (np,np,2,2,nelemd) )
+    allocate( elem_metdet              (np,np,nelemd)     )
+    allocate( elem_rmetdet             (np,np,nelemd)     )
+    allocate( elem_fcor                (np,np, nelemd)    )
+    allocate( elem_mp                  (np,np, nelemd)    )
+    allocate( elem_rmp                 (np,np, nelemd)    )
+    allocate( elem_spherep             (np,np, nelemd)    )
+    allocate( elem_spheremp            (np,np, nelemd)    )
+    allocate( elem_rspheremp           (np,np, nelemd)    )
+    allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
+
+    do ie = 1 , nelemd
+      elem(ie)%D                      => elem_D(:,:,:,:,ie)
+      elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
+      elem(ie)%metdet                 => elem_metdet(:,:,ie)
+      elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
+      elem(ie)%fcor                   => elem_fcor(:,:,ie)
+      elem(ie)%mp                     => elem_mp(:,:,ie)
+      elem(ie)%rmp                    => elem_rmp(:,:,ie)
+      elem(ie)%spherep                => elem_spherep(:,:,ie)
+      elem(ie)%spheremp               => elem_spheremp(:,:,ie)
+      elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
+      elem(ie)%sub_elem_mass_flux     => elem_sub_elem_mass_flux(:,:,:,:,ie)
+    enddo
+
+    ! elem_state_t arrays
+    allocate( elem_state_v    (np,np,2,nlev,timelevels,nelemd) )
+    allocate( elem_state_Temp (np,np,nlev,timelevels,nelemd)   )
+    allocate( elem_state_dp3d (np,np,nlev,timelevels,nelemd)   )
+    allocate( elem_state_lnps (np,np,timelevels,nelemd)        )
+    allocate( elem_state_ps_v (np,np,timelevels,nelemd)        )
+    allocate( elem_state_phis (np,np,nelemd)                   )
+    allocate( elem_state_Q    (np,np,nlev,qsize_d,nelemd)      )
+    allocate( elem_state_Qdp  (np,np,nlev,qsize_d,2,nelemd)    )
+
+    do ie = 1 , nelemd
+      elem(ie)%state%v        => elem_state_v    (:,:,:,:,:,ie)
+      elem(ie)%state%T        => elem_state_Temp (:,:,:,:,ie)
+      elem(ie)%state%dp3d     => elem_state_dp3d (:,:,:,:,ie)
+      elem(ie)%state%lnps     => elem_state_lnps (:,:,:,ie)
+      elem(ie)%state%ps_v     => elem_state_ps_v (:,:,:,ie)
+      elem(ie)%state%phis     => elem_state_phis (:,:,ie)
+      elem(ie)%state%Q        => elem_state_Q    (:,:,:,:,ie)
+      elem(ie)%state%Qdp      => elem_state_Qdp  (:,:,:,:,:,ie)
+    enddo
+
+    ! derived_state_t arrays
+    allocate( elem_derived_vn0              (np,np,2,nlev,nelemd)                  )
+    allocate( elem_derived_vstar            (np,np,2,nlev,nelemd)                  )
+    allocate( elem_derived_dpdiss_biharmonic(np,np,nlev,nelemd)                    )
+    allocate( elem_derived_dpdiss_ave       (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_phi              (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_omega_p          (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_eta_dot_dpdn     (np,np,nlevp,nelemd)                   )
+    allocate( elem_derived_grad_lnps        (np,np,2,nelemd)                       )
+    allocate( elem_derived_zeta             (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_div              (np,np,nlev,timelevels,nelemd)         )
+    allocate( elem_derived_dp               (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_divdp            (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_divdp_proj       (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_FQ               (np,np,nlev,qsize_d,timelevels,nelemd) )
+    allocate( elem_derived_FM               (np,np,2,nlev,timelevels,nelemd)       )
+    allocate( elem_derived_FT               (np,np,nlev,timelevels,nelemd)         )
+    allocate( elem_derived_pecnd            (np,np,nlev,nelemd)                    )
+    allocate( elem_derived_FQps             (np,np,timelevels,nelemd)              )
+
+    do ie = 1 , nelemd
+      elem(ie)%derived%vn0                  => elem_derived_vn0              (:,:,:,:,ie)
+      elem(ie)%derived%vstar                => elem_derived_vstar            (:,:,:,:,ie)
+      elem(ie)%derived%dpdiss_biharmonic    => elem_derived_dpdiss_biharmonic(:,:,:,ie)
+      elem(ie)%derived%dpdiss_ave           => elem_derived_dpdiss_ave       (:,:,:,ie)
+      elem(ie)%derived%phi                  => elem_derived_phi              (:,:,:,ie)
+      elem(ie)%derived%omega_p              => elem_derived_omega_p          (:,:,:,ie)
+      elem(ie)%derived%eta_dot_dpdn         => elem_derived_eta_dot_dpdn     (:,:,:,ie)
+      elem(ie)%derived%grad_lnps            => elem_derived_grad_lnps        (:,:,:,ie)
+      elem(ie)%derived%zeta                 => elem_derived_zeta             (:,:,:,ie)
+      elem(ie)%derived%div                  => elem_derived_div              (:,:,:,:,ie)
+      elem(ie)%derived%dp                   => elem_derived_dp               (:,:,:,ie)
+      elem(ie)%derived%divdp                => elem_derived_divdp            (:,:,:,ie)
+      elem(ie)%derived%divdp_proj           => elem_derived_divdp_proj       (:,:,:,ie)
+      elem(ie)%derived%FQ                   => elem_derived_FQ               (:,:,:,:,:,ie)
+      elem(ie)%derived%FM                   => elem_derived_FM               (:,:,:,:,:,ie)
+      elem(ie)%derived%FT                   => elem_derived_FT               (:,:,:,:,ie)
+      elem(ie)%derived%pecnd                => elem_derived_pecnd            (:,:,:,ie)
+      elem(ie)%derived%FQps                 => elem_derived_FQps             (:,:,:,ie)
+    enddo
+
+    ! elem_accum_t arrays
+    allocate( elem_accum_KEvert1    (np,np,nelemd)           )
+    allocate( elem_accum_KEvert2    (np,np,nelemd)           )
+    allocate( elem_accum_IEvert1    (np,np,nelemd)           )
+    allocate( elem_accum_IEvert2    (np,np,nelemd)           )
+    allocate( elem_accum_IEvert1_wet(np,np,nelemd)           )
+    allocate( elem_accum_IEvert2_wet(np,np,nelemd)           )
+    allocate( elem_accum_KEhorz1    (np,np,nelemd)           )
+    allocate( elem_accum_KEhorz2    (np,np,nelemd)           )
+    allocate( elem_accum_IEhorz1    (np,np,nelemd)           )
+    allocate( elem_accum_IEhorz2    (np,np,nelemd)           )
+    allocate( elem_accum_IEhorz1_wet(np,np,nelemd)           )
+    allocate( elem_accum_IEhorz2_wet(np,np,nelemd)           )
+    allocate( elem_accum_T1         (np,np,nelemd)           )
+    allocate( elem_accum_T2         (np,np,nelemd)           )
+    allocate( elem_accum_T2_s       (np,np,nelemd)           )
+    allocate( elem_accum_S1         (np,np,nelemd)           )
+    allocate( elem_accum_S1_wet     (np,np,nelemd)           )
+    allocate( elem_accum_S2         (np,np,nelemd)           )
+    allocate( elem_accum_DIFF       (np,np,2,nlev,nelemd)    )
+    allocate( elem_accum_DIFFT      (np,np,nlev,nelemd)      )
+    allocate( elem_accum_CONV       (np,np,2,nlev,nelemd)    )
+    allocate( elem_accum_KEner      (np,np,4,nelemd)         )
+    allocate( elem_accum_PEner      (np,np,4,nelemd)         )
+    allocate( elem_accum_IEner      (np,np,4,nelemd)         )
+    allocate( elem_accum_IEner_wet  (np,np,4,nelemd)         )
+    allocate( elem_accum_Qvar       (np,np,qsize_d,4,nelemd) )
+    allocate( elem_accum_Qmass      (np,np,qsize_d,4,nelemd) )
+    allocate( elem_accum_Q1mass     (np,np,qsize_d,nelemd)   )
+
+    do ie = 1 , nelemd
+#ifdef ENERGY_DIAGNOSTICS
+      elem(ie)%accum%KEvert1        => elem_accum_KEvert1    (:,:,ie)
+      elem(ie)%accum%KEvert2        => elem_accum_KEvert2    (:,:,ie)
+      elem(ie)%accum%IEvert1        => elem_accum_IEvert1    (:,:,ie)
+      elem(ie)%accum%IEvert2        => elem_accum_IEvert2    (:,:,ie)
+      elem(ie)%accum%IEvert1_wet    => elem_accum_IEvert1_wet(:,:,ie)
+      elem(ie)%accum%IEvert2_wet    => elem_accum_IEvert2_wet(:,:,ie)
+      elem(ie)%accum%KEhorz1        => elem_accum_KEhorz1    (:,:,ie)
+      elem(ie)%accum%KEhorz2        => elem_accum_KEhorz2    (:,:,ie)
+      elem(ie)%accum%IEhorz1        => elem_accum_IEhorz1    (:,:,ie)
+      elem(ie)%accum%IEhorz2        => elem_accum_IEhorz2    (:,:,ie)
+      elem(ie)%accum%IEhorz1_wet    => elem_accum_IEhorz1_wet(:,:,ie)
+      elem(ie)%accum%IEhorz2_wet    => elem_accum_IEhorz2_wet(:,:,ie)
+      elem(ie)%accum%T1             => elem_accum_T1         (:,:,ie)
+      elem(ie)%accum%T2             => elem_accum_T2         (:,:,ie)
+      elem(ie)%accum%T2_s           => elem_accum_T2_s       (:,:,ie)
+      elem(ie)%accum%S1             => elem_accum_S1         (:,:,ie)
+      elem(ie)%accum%S1_wet         => elem_accum_S1_wet     (:,:,ie)
+      elem(ie)%accum%S2             => elem_accum_S2         (:,:,ie)
+      elem(ie)%accum%DIFF           => elem_accum_DIFF       (:,:,:,:,ie)
+      elem(ie)%accum%DIFFT          => elem_accum_DIFFT      (:,:,:,ie)
+      elem(ie)%accum%CONV           => elem_accum_CONV       (:,:,:,:,ie)
+#endif
+      elem(ie)%accum%KEner          => elem_accum_KEner      (:,:,:,ie)
+      elem(ie)%accum%PEner          => elem_accum_PEner      (:,:,:,ie)
+      elem(ie)%accum%IEner          => elem_accum_IEner      (:,:,:,ie)
+      elem(ie)%accum%IEner_wet      => elem_accum_IEner_wet  (:,:,:,ie)
+      elem(ie)%accum%Qvar           => elem_accum_Qvar       (:,:,:,:,ie)
+      elem(ie)%accum%Qmass          => elem_accum_Qmass      (:,:,:,:,ie)
+      elem(ie)%accum%Q1mass         => elem_accum_Q1mass     (:,:,:,ie)
+    enddo
+! #if HOMME_USE_FLAT_ARRAYS
+#endif
+! #if USE_OPENACC
 #endif
   end subroutine setup_element_pointers
+
+! #ifdef _PRIM
+#else
 
   !___________________________________________________________________
   subroutine setup_element_pointers_sw(elem)
     use dimensions_mod, only: nelemd, qsize
     implicit none
     type(element_t), intent(inout) :: elem(:)
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     integer :: ie
 
     allocate( elem_metdet              (np,np,nelemd)            )
@@ -624,8 +949,10 @@ contains
     allocate( elem_Dinv                (np,np,2,2,nelemd)        )
     allocate( elem_D                   (np,np,2,2,nelemd)        )
     allocate( elem_state_p             (np,np,nlev,timelevels,nelemd) )
-    allocate( elem_state_ps            (np,np,nelemd) ) 
-    allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) ) 
+    allocate( elem_state_ps            (np,np,nelemd) )
+    allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) )
+    allocate( elem_mp                  (np,np, nelemd)           )
+    allocate( elem_rmp                 (np,np, nelemd)           )
     allocate( elem_spheremp            (np,np, nelemd)           )
     allocate( elem_rspheremp           (np,np, nelemd)          )
     allocate( elem_fcor                (np,np, nelemd)          )
@@ -634,16 +961,19 @@ contains
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
       elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
       elem(ie)%D                      => elem_D(:,:,:,:,ie)
-      elem(ie)%state%p                => elem_state_p(:,:,:,:,ie) 
-      elem(ie)%state%ps               => elem_state_ps(:,:,ie) 
-      elem(ie)%state%v                => elem_state_v(:,:,:,:,:,ie)   
-      elem(ie)%spheremp               => elem_spheremp(:,:,ie)   
-      elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)   
-      elem(ie)%fcor                   => elem_fcor(:,:,ie)   
+      elem(ie)%state%p                => elem_state_p(:,:,:,:,ie)
+      elem(ie)%state%ps               => elem_state_ps(:,:,ie)
+      elem(ie)%state%v                => elem_state_v(:,:,:,:,:,ie)
+      elem(ie)%mp                     => elem_mp(:,:,ie)
+      elem(ie)%rmp                    => elem_rmp(:,:,ie)
+      elem(ie)%spheremp               => elem_spheremp(:,:,ie)
+      elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
+      elem(ie)%fcor                   => elem_fcor(:,:,ie)
     enddo
 #endif
   end subroutine setup_element_pointers_sw
 
-
+! #ifdef _PRIM
+#endif
 
 end module element_mod

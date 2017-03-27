@@ -182,6 +182,12 @@ IF(${BUILD_HOMME_PREQX})
   ENDIF()
 ENDIF()
 
+IF(${BUILD_HOMME_PREQX_FLAT})
+  ADD_SUBDIRECTORY(preqx_flat_ut)
+  ADD_SUBDIRECTORY(prtcA_flat)
+  ADD_SUBDIRECTORY(prtcA_flat_c)
+ENDIF()
+
 # Add the test exec subdirs for the prim executable
 IF(${BUILD_HOMME_PRIM})
   ADD_SUBDIRECTORY(primA)

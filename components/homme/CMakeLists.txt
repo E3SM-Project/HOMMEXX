@@ -72,6 +72,27 @@ IF(REFSOLN)
   ADD_DEFINITIONS(-D_REFSOLN)
 ENDIF()
 
+############################################
+# Selection of Kokkos execution space
+############################################
+
+SET (HOMMEXX_EXEC_SPACE "Default" CACHE STRING "Select the kokkos exec space")
+
+STRING (TOUPPER ${HOMMEXX_EXEC_SPACE} HOMMEXX_EXEC_SPACE_UPPER)
+IF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "CUDA")
+  SET (HOMMEXX_CUDA_SPACE ON)
+ELSEIF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "OPENMP")
+  SET (HOMMEXX_OPENMP_SPACE ON)
+ELSEIF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "THREADS")
+  SET (HOMMEXX_THREADS_SPACE ON)
+ELSEIF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "SERIAL")
+  SET (HOMMEXX_SERIAL_SPACE ON)
+ELSEIF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "DEFAULT")
+  SET (HOMMEXX_DEFAULT_SPACE ON)
+ELSE()
+  MESSAGE (ABORT "Invalid choice for 'HOMMEXX_EXEC_SPACE'. Valid options (case insensitive) are 'Cuda', 'OpenMP', 'Threads', 'Serial', 'Default'")
+ENDIF()
+
 ##############################################################################
 # Compiler options set in cmake/SetCompiler.cmake
 ##############################################################################
@@ -143,6 +164,7 @@ ENDIF ()
 
 # Use ccsm_utils FindNETCDF path
 SET (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cime/externals/CMake" ${CMAKE_MODULE_PATH})
+MESSAGE ("NETCDF PATH:${Netcdf_INCLUDE_DIR}")
 FIND_PACKAGE(NETCDF)
 # For pio - allow the user to set HDF5_DIR to find libhdf5 etc.
 IF (HDF5_DIR)
@@ -156,6 +178,18 @@ SET (CPRNC_BINARY ${CMAKE_BINARY_DIR}/utils/cprnc/cprnc)
 ADD_SUBDIRECTORY(utils/cprnc)
 
 ADD_SUBDIRECTORY(utils/timing)
+
+##########################################
+# Processing executables subdirectories
+##########################################
+
+STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+IF (CMAKE_BUILD_TYPE_UPPER MATCHES "DEBUG")
+  SET (HOMMEXX_DEBUG ON)
+ENDIF()
+
+CONFIGURE_FILE (${CMAKE_CURRENT_SOURCE_DIR}/src/Hommexx_config.h.in ${CMAKE_BINARY_DIR}/src/Hommexx_config.h)
+
 ADD_SUBDIRECTORY(test/unit_tests)
 
 SET(EXEC_LIST ""  CACHE INTERNAL "List of configured executables")

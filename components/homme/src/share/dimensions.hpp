@@ -1,31 +1,48 @@
+#ifndef HOMMEXX_DIMENSIONS_HPP
+#define HOMMEXX_DIMENSIONS_HPP
 
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif
-
-#ifndef _DIMENSIONS_HPP_
-#define _DIMENSIONS_HPP_
+#include "Hommexx_config.h"
 
 namespace Homme {
 
-constexpr const int np = NP;
-constexpr const int npsq = np * np;
-constexpr const int max_neigh_edges = 8;
-constexpr const int nc = NC;
+// Until whenever CUDA supports constexpr properly
+#ifdef HOMMEXX_CUDA_SPACE
 
-constexpr const int dim = 2;
-
+#define np                      NP
+#define npsq                    (np * np)
+#define max_neigh_edges         8
+#define nc                      NC
+#define dim                     2
 #ifdef QSIZE_D
-constexpr const int qsize_d = QSIZE_D;
+#define qsize_d                 QSIZE_D
 #else
-constexpr const int qsize_d = 4;
+#define qsize_d                 4
 #endif
+#define nlev                    PLEV
+#define nlevp                   (nlev + 1)
+#define timelevels              3
 
-constexpr const int nlev = PLEV;
-constexpr const int nlevp = nlev + 1;
+#else // HOMMEXX_CUDA_BUILD
 
-constexpr const int timelevels = 3;
-
-}  // namespace Homme
-
+constexpr int np              = NP;
+constexpr int npsq            = np * np;
+constexpr int max_neigh_edges = 8;
+constexpr int nc              = NC;
+constexpr int dim             = 2;
+#ifdef QSIZE_D
+constexpr int qsize_d         = QSIZE_D;
+#else
+constexpr int qsize_d         = 4;
 #endif
+constexpr int nlev            = PLEV;
+constexpr int nlevp           = nlev + 1;
+constexpr int timelevels      = 3;
+
+#endif // HOMMEXX_CUDA_BUILD
+
+} // namespace Homme
+
+#endif // HOMMEXX_DIMENSIONS_HPP

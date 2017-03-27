@@ -13,12 +13,29 @@ SET(SRC_UTILS         ${HOMME_SOURCE_DIR}/utils/csm_share)
 SET(UTILS_TIMING_DIR  ${CMAKE_BINARY_DIR}/utils/timing)
 SET(SRC_KERNELS_DIR   ${SRC_BASE}/kokkos_kernels)
 SET(UNIT_TEST_DIR     ${TARGET_DIR}/unit_tests)
+SET(HOMME_CONFIG_DIR  ${CMAKE_BINARY_DIR}/src)  # where Hommexx_config.h is located
 
 # Find F90 files in target directory
-FILE(GLOB TARGET_F90  ${TARGET_DIR}/*.F90)
+SET (TARGET_F90
+  ${TARGET_DIR}/advance_mod.F90
+  ${TARGET_DIR}/bndry_mod.F90
+  ${TARGET_DIR}/derivative_mod.F90
+  ${TARGET_DIR}/edge_mod.F90
+  ${TARGET_DIR}/init_mod.F90
+  ${TARGET_DIR}/main.F90
+  ${TARGET_DIR}/restart_mod.F90
+  ${TARGET_DIR}/rk_mod.F90
+  ${TARGET_DIR}/shallow_water_mod.F90
+  ${TARGET_DIR}/shal_movie_mod.F90
+  ${TARGET_DIR}/solver_init_mod.F90
+  ${TARGET_DIR}/state_mod.F90
+  ${TARGET_DIR}/sweq_mod.F90
+  ${TARGET_DIR}/types_mod.F90
+  ${TARGET_DIR}/viscosity_mod.F90
+)
 
 # Make INCLUDE_DIRS global so the tests can access it
-SET (EXEC_INCLUDE_DIRS ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} )
+SET (EXEC_INCLUDE_DIRS ${HOMME_CONFIG_DIR} ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} )
 
 SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/checksum_mod.F90
@@ -110,7 +127,7 @@ SET(SWEQX_FLAT_UT_SRCS
 
 SET(EXEC_SOURCES ${SWEQX_FLAT_SRCS} )
 
-SET(SW_USE_FLAT_ARRAYS TRUE)
+SET(HOMME_USE_FLAT_ARRAYS TRUE)
 
 IF (${FORTRAN_LOOPS})
   SET (DONT_USE_KOKKOS TRUE)
