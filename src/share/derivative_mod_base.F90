@@ -1918,7 +1918,7 @@ end do
 
     deriv%dvv = dvv
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
     allocate(elem%rmetdet(np, np))
 #endif
@@ -1927,7 +1927,7 @@ end do
 
     vort = vorticity_sphere(v, deriv, elem)
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%rmetdet)
 #endif
@@ -2054,7 +2054,7 @@ end do
 
     deriv%dvv = dvv
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%metdet(np, np))
     allocate(elem%rmetdet(np, np))
@@ -2065,7 +2065,7 @@ end do
 
     div = divergence_sphere(v, deriv, elem)
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
     deallocate(elem%rmetdet)

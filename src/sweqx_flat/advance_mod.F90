@@ -382,7 +382,7 @@ contains
     type(element_t) :: elem
     type(derivative_t) :: deriv
 
-#if SW_USE_FLAT_ARRAYS
+#if HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np,np,2,2))
     allocate(elem%Dinv(np,np,2,2))
     allocate(elem%metdet(np,np))
@@ -450,7 +450,7 @@ contains
           ptens(:,:,k,ie - nets + 1) = p(:,:,k,n0,ie - nets + 1) + dtstage*ptens(:,:,k,ie - nets + 1)
        end do!end of loop over levels
     end do
-#if SW_USE_FLAT_ARRAYS
+#if HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
