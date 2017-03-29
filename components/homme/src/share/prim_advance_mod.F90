@@ -423,7 +423,6 @@ contains
        !
        ! phl: rhs: t=t
        !
-print *, "============== STAGE 1 (nm1, n0, n0) ====================="
        call compute_and_apply_rhs(nm1,n0,n0,qn0,dt/5,elem,hvcoord,hybrid,&
             deriv,nets,nete,compute_diagnostics,eta_ave_w/4)
        ! u2 = u0 + dt/5 RHS(u1)
@@ -431,7 +430,6 @@ print *, "============== STAGE 1 (nm1, n0, n0) ====================="
        !
        ! phl: rhs: t=t+dt/5
        !
-call abortmp('That''s enough, thank you.')
        call compute_and_apply_rhs(np1,n0,nm1,qn0,dt/5,elem,hvcoord,hybrid,&
             deriv,nets,nete,.false.,0d0)
        ! u3 = u0 + dt/3 RHS(u2)
@@ -2697,27 +2695,8 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 !pw call t_adj_detailf(+1)
   call t_startf('compute_and_apply_rhs')
 
-print *, "******************* STARTING COMPUTE_AND_APPLY_RHS ***************"
-print *, "       np1, nm1, n0 = ",np1,nm1,n0
-print *, "       nets, nete = ", nets, nete
-print *, "pre exchange start"
-ie=11
-k=23
-print *, "tnm1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,nm1)), frobeniusnorm(elem(ie)%state%T(:,:,k,nm1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,nm1))
-print *, "tn0 ", frobeniusnorm(elem(ie)%state%v(:,:,:,k,n0)) , frobeniusnorm(elem(ie)%state%T(:,:,k,n0)) , frobeniusnorm(elem(ie)%state%dp3d(:,:,k,n0))
-print *, "tnp1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,np1)), frobeniusnorm(elem(ie)%state%T(:,:,k,np1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,np1))
-print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
-
   call COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE (np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
                                            deriv,nets,nete,compute_diagnostics,eta_ave_w)
-
-print *, "pre exchange end"
-ie=11
-k=23
-print *, "tnm1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,nm1)), frobeniusnorm(elem(ie)%state%T(:,:,k,nm1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,nm1))
-print *, "tn0 ", frobeniusnorm(elem(ie)%state%v(:,:,:,k,n0)) , frobeniusnorm(elem(ie)%state%T(:,:,k,n0)) , frobeniusnorm(elem(ie)%state%dp3d(:,:,k,n0))
-print *, "tnp1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,np1)), frobeniusnorm(elem(ie)%state%T(:,:,k,np1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,np1))
-print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
 
   do ie=nets,nete
      ! =========================================================
@@ -2744,25 +2723,10 @@ print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
     ! Insert communications here: for shared memory, just a single
   ! sync is required
   ! =============================================================
-print *, "post pack"
-ie=11
-k=23
-print *, "tnm1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,nm1)), frobeniusnorm(elem(ie)%state%T(:,:,k,nm1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,nm1))
-print *, "tn0 ", frobeniusnorm(elem(ie)%state%v(:,:,:,k,n0)) , frobeniusnorm(elem(ie)%state%T(:,:,k,n0)) , frobeniusnorm(elem(ie)%state%dp3d(:,:,k,n0))
-print *, "tnp1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,np1)), frobeniusnorm(elem(ie)%state%T(:,:,k,np1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,np1))
-print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
 
   call t_startf('caar_bexchV')
   call bndry_exchangeV(hybrid,edge3p1)
   call t_stopf('caar_bexchV')
-
-print *, "post exchange end"
-ie=11
-k=23
-print *, "tnm1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,nm1)), frobeniusnorm(elem(ie)%state%T(:,:,k,nm1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,nm1))
-print *, "tn0 ", frobeniusnorm(elem(ie)%state%v(:,:,:,k,n0)) , frobeniusnorm(elem(ie)%state%T(:,:,k,n0)) , frobeniusnorm(elem(ie)%state%dp3d(:,:,k,n0))
-print *, "tnp1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,np1)), frobeniusnorm(elem(ie)%state%T(:,:,k,np1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,np1))
-print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
 
   do ie=nets,nete
      ! ===========================================================
@@ -2811,15 +2775,6 @@ print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
           end do
         end if
      endif
-if (ie==11) then
-print *, "post unpack, pre scaling"
-k=23
-print *, "tnm1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,nm1)), frobeniusnorm(elem(ie)%state%T(:,:,k,nm1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,nm1))
-print *, "tn0 ", frobeniusnorm(elem(ie)%state%v(:,:,:,k,n0)) , frobeniusnorm(elem(ie)%state%T(:,:,k,n0)) , frobeniusnorm(elem(ie)%state%dp3d(:,:,k,n0))
-print *, "tnp1", frobeniusnorm(elem(ie)%state%v(:,:,:,k,np1)), frobeniusnorm(elem(ie)%state%T(:,:,k,np1)), frobeniusnorm(elem(ie)%state%dp3d(:,:,k,np1))
-print *, ie, k, "dp3d np1:", elem(ie)%state%dp3d(:,:,k,np1)
-print *, "--------------------------------"
-endif
 
      ! ====================================================
      ! Scale tendencies by inverse mass matrix
@@ -2846,10 +2801,6 @@ endif
         elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
      endif
   end do
-!print *, "caar end"
-!print *, "tnm1", frobeniusnorm(elem(1)%state%T(:,:,:,nm1))
-!print *, "tn0 ", frobeniusnorm(elem(1)%state%T(:,:,:,n0))
-!print *, "tnp1", frobeniusnorm(elem(1)%state%T(:,:,:,np1))
 
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
@@ -3039,14 +2990,6 @@ integer :: ie, i, j
   eta_dot_dpdn_ptr              = c_loc(eta_dot_dpdn)
   sdot_sum_ptr                  = c_loc(sdot_sum)
 
-!do ie=nets,nete
-!do j=1,np
-!do i=1,np
-!print *, ie,i,j,elem_Dinv(i,j,:,:,ie)
-!enddo
-!enddo
-!enddo
-!       call abortmp('ERROR: full_imp integration not yet coded for vert lagrangian adv option')
   call CAAR_COMPUTE_PRESSURE(nets, nete, n0, p_ptr, elem_state_dp_ptr, &
                              hvcoord%hyai(1), hvcoord%ps0)
 
@@ -3064,6 +3007,7 @@ integer :: ie, i, j
   ! ====================================================
   call CAAR_PREQ_HYDROSTATIC(nets, nete, n0, elem_derived_phi_ptr, elem_state_phis_ptr, &
                              T_v_ptr, p_ptr, elem_state_dp_ptr)
+
   ! ====================================================
   ! Compute omega_p according to CCM-3
   ! ====================================================

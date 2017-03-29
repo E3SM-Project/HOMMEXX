@@ -4,8 +4,6 @@
 
 module caar_subroutines_mod
   use kinds,        only : real_kind
-  use utils_mod,    only : FrobeniusNorm
-  use parallel_mod, only : abortmp
 
   implicit none
 
@@ -102,7 +100,6 @@ contains
     call c_f_pointer(elem_derived_vn0_ptr, elem_derived_vn0, [np, np, 2, nlev, nelemd])
 
     deriv%dvv = dvv
-!print *, "compute div vort"
 
     do ie=nets,nete
 #ifdef HOMME_USE_FLAT_ARRAYS
@@ -154,7 +151,6 @@ contains
         ! ================================
         elem_derived_vn0(:,:,:,k,ie)=elem_derived_vn0(:,:,:,k,ie)+eta_ave_w*vdp(:,:,:,k,ie)
 
-
         ! =========================================
         !
         ! Compute relative vorticity and divergence
@@ -163,10 +159,6 @@ contains
         div_vdp(:,:,k,ie) = divergence_sphere(vdp(:,:,:,k,ie),deriv,elem)
         vort(:,:,k,ie)  = vorticity_sphere(elem_state_v(:,:,:,k,n0,ie),deriv,elem)
       end do
-!print *, "dp", dp(:,:,1,n0,ie)
-!print *, "vdp", vdp(:,:,:,1,ie)
-!print *, "divdp", div_vdp(:,:,4,ie)
-!call abortmp ("that's all, thanks")
     end do
   end subroutine caar_compute_vort_and_div_f90
 
@@ -224,11 +216,6 @@ contains
 #endif
       do ie=nets, nete
         do k=1,nlev
-!if (ie==11.and.k==23) then
-!  print *, "t", frobeniusnorm(elem_state_Temp(:,:,k,n0,ie))
-!  print *, "qdp", frobeniusnorm(elem_state_Qdp(:,:,k,1,qn0,ie))
-!  print *, "dp", frobeniusnorm(dp(:,:,k,n0,ie))
-!endif
         do j=1,np
             do i=1,np
               Qt = elem_state_Qdp(i,j,k,1,qn0,ie)/dp(i,j,k,n0,ie)
@@ -240,9 +227,6 @@ contains
               endif
             end do
           end do
-!if (ie==11.and.k==23) then
-!  print *, "T_v", T_v(:,:,k,ie)
-!endif
         end do
       end do
     end if
@@ -338,7 +322,6 @@ contains
     call c_f_pointer (p_ptr,       p,       [np, np, nlev, nelemd])
     call c_f_pointer (omega_p_ptr, omega_p, [np, np, nlev, nelemd])
 
-!print *, "preq omega"
     do ie=nets, nete
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,j,i,ckk,term,ckl)
@@ -371,11 +354,6 @@ contains
           omega_p(i,j,nlev,ie) = omega_p(i,j,nlev,ie) - ckl*suml(i,j) - ckk*term
         end do
       end do
-!print *, "vgrad_p", vgrad_p(:,:,1,ie)
-!print *, "p", p(:,:,1,ie)
-!print *, "divdp", div_vdp(:,:,1,ie)
-!print *, "omega_p", omega_p(:,:,1,ie)
-!call abortmp ("that's all, thanks")
     end do
   end subroutine caar_preq_omega_ps_f90
 
@@ -403,11 +381,11 @@ contains
     integer :: ie, k
 
     ! Cast the pointers
-    call c_f_pointer (eta_dot_dpdn_ptr,              eta_dot_dpdn,              [np,np,nlev,nelemd])
+    call c_f_pointer (eta_dot_dpdn_ptr,              eta_dot_dpdn,              [np,np,nlev+1,nelemd])
     call c_f_pointer (T_vadv_ptr,                    T_vadv,                    [np,np,nlev,nelemd])
     call c_f_pointer (v_vadv_ptr,                    v_vadv,                    [np,np,2,nlev,nelemd])
     call c_f_pointer (omega_p_ptr,                   omega_p,                   [np,np,nlev,nelemd])
-    call c_f_pointer (elem_derived_eta_dot_dpdn_ptr, elem_derived_eta_dot_dpdn, [np,np,nlev,nelemd])
+    call c_f_pointer (elem_derived_eta_dot_dpdn_ptr, elem_derived_eta_dot_dpdn, [np,np,nlev+1,nelemd])
     call c_f_pointer (elem_derived_omega_p_ptr,      elem_derived_omega_p,      [np,np,nlev,nelemd])
 
     do ie=nets,nete
@@ -524,7 +502,6 @@ contains
     call c_f_pointer (p_ptr,                  p,                  [np,np,nlev,nelemd])
     call c_f_pointer (grad_p_ptr,             grad_p,             [np,np,2,nlev,nelemd])
     call c_f_pointer (vort_ptr,               vort,               [np,np,nlev,nelemd])
-    call c_f_pointer (T_v_ptr,                T_v,                [np, np, nlev, nelemd])
     call c_f_pointer (kappa_star_ptr,         kappa_star,         [np, np, nlev, nelemd])
     call c_f_pointer (omega_p_ptr,            omega_p,            [np, np, nlev, nelemd])
     call c_f_pointer (t_vadv_ptr,             T_vadv,             [np,np,nlev,nelemd])

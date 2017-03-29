@@ -22,8 +22,6 @@ contains
 #if ( defined CAM )
   use control_mod, only: se_met_nudge_u, se_met_nudge_p, se_met_nudge_t, se_met_tevolve
 #endif
-  use parallel_mod, only : abortmp
-  use utils_mod,      only: FrobeniusNorm
 
   use time_mod, only : tevolve
 
@@ -79,7 +77,7 @@ contains
   real (kind=real_kind) ::  glnps1,glnps2,gpterm
   integer :: i,j,k,kptr,ie
   real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
-print *, "caar orig:"
+
   do ie=nets,nete
      !ps => elem(ie)%state%ps_v(:,:,n0)
      phi => elem(ie)%derived%phi(:,:,:)
