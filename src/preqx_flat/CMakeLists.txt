@@ -51,6 +51,7 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_BASE_DIR}/surfaces_mod.F90
   ${SRC_BASE_DIR}/vertical_mod.F90
   ${SRC_BASE_DIR}/test_mod.F90
+  ${SRC_BASE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/caar_subroutines_mod.F90
