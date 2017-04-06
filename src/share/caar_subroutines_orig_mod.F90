@@ -1,3 +1,7 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 module caar_subroutines_orig_mod
   implicit none
 contains
@@ -111,29 +115,36 @@ contains
 !  gives a race condition.
 !  !$omp parallel do private(k,i,j,v1,v2,vtemp)
 #endif
+     if (rsplit==0) then
+        do k=1,nlev
+          dp(:,:,k) = (hvcoord%hyai(k+1)*hvcoord%ps0 + hvcoord%hybi(k+1)*elem(ie)%state%ps_v(:,:,n0)) &
+               - (hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0))
+          p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,n0)
+          grad_p(:,:,:,k) = hvcoord%hybm(k)*grad_ps(:,:,:)
+        enddo
+     else
+        ! vertically lagrangian code: we advect dp3d instead of ps_v
+        ! we also need grad(p) at all levels (not just grad(ps))
+        !p(k)= hyam(k)*ps0 + hybm(k)*ps
+        !    = .5*(hyai(k+1)+hyai(k))*ps0 + .5*(hybi(k+1)+hybi(k))*ps
+        !    = .5*(ph(k+1) + ph(k) )  = ph(k) + dp(k)/2
+        !
+        ! p(k+1)-p(k) = ph(k+1)-ph(k) + (dp(k+1)-dp(k))/2
+        !             = dp(k) + (dp(k+1)-dp(k))/2 = (dp(k+1)+dp(k))/2
+        dp(:,:,1) = elem(ie)%state%dp3d(:,:,1,n0)
+        p(:,:,1)=hvcoord%hyai(1)*hvcoord%ps0 + dp(:,:,1)/2
+        do k=2,nlev
+          dp(:,:,k) = elem(ie)%state%dp3d(:,:,k,n0)
+          p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
+        enddo
+     endif
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,j,v1,v2,vtemp)
+#endif
      do k=1,nlev
-        if (rsplit==0) then
-           dp(:,:,k) = (hvcoord%hyai(k+1)*hvcoord%ps0 + hvcoord%hybi(k+1)*elem(ie)%state%ps_v(:,:,n0)) &
-                - (hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0))
-           p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,n0)
-           grad_p(:,:,:,k) = hvcoord%hybm(k)*grad_ps(:,:,:)
-        else
-           ! vertically lagrangian code: we advect dp3d instead of ps_v
-           ! we also need grad(p) at all levels (not just grad(ps))
-           !p(k)= hyam(k)*ps0 + hybm(k)*ps
-           !    = .5*(hyai(k+1)+hyai(k))*ps0 + .5*(hybi(k+1)+hybi(k))*ps
-           !    = .5*(ph(k+1) + ph(k) )  = ph(k) + dp(k)/2
-           !
-           ! p(k+1)-p(k) = ph(k+1)-ph(k) + (dp(k+1)-dp(k))/2
-           !             = dp(k) + (dp(k+1)-dp(k))/2 = (dp(k+1)+dp(k))/2
-           dp(:,:,k) = elem(ie)%state%dp3d(:,:,k,n0)
-           if (k==1) then
-              p(:,:,k)=hvcoord%hyai(k)*hvcoord%ps0 + dp(:,:,k)/2
-           else
-              p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
-           endif
-           grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
-        endif
+        ! if rsplit=0, then we computed grad_p by hand from grad_ps
+        if (rsplit>0) grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+
         rdp(:,:,k) = 1.0D0/dp(:,:,k)
 
         ! ============================
@@ -542,9 +553,9 @@ contains
 !        enddo
 !        elem(ie)%state%ps_v(:,:,np1) = -elem(ie)%spheremp(:,:)*sdot_sum
 !      else
-!#if (defined COLUMN_OPENMP)
-!!$omp parallel do private(k,tempflux)
-!#endif
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,tempflux)
+#endif
         do k=1,nlev
            elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
            elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )

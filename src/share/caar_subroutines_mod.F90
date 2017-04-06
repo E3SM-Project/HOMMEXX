@@ -8,17 +8,17 @@ module caar_subroutines_mod
   implicit none
 
 contains
-  subroutine caar_compute_pressure_f90(nets, nete, n0, p_ptr, dp_ptr, hyai, ps0) bind(c)
+  subroutine caar_compute_pressure_f90(nets, nete, nelemd, n0, hyai_ps0, p_ptr, dp_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
     use control_mod,    only : rsplit
-    use dimensions_mod, only : nlev, np, nelemd
+    use dimensions_mod, only : nlev, np
     use element_mod,    only : timelevels
     !
     ! Inputs
     !
-    integer (kind=c_int),  intent(in) :: nets, nete, n0
+    integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
     type (c_ptr),          intent(in) :: p_ptr, dp_ptr
-    real (kind=real_kind), intent(in) :: hyai, ps0
+    real (kind=real_kind), intent(in) :: hyai_ps0
     !
     ! Locals
     !
@@ -36,26 +36,26 @@ contains
        ! compute p and delta p
        ! ============================
        ! dont thread this because of k-1 dependence:
-       p(:,:,1,ie)=hyai*ps0 + dp(:,:,1,n0,ie)/2
+       p(:,:,1,ie)=hyai_ps0 + dp(:,:,1,n0,ie)/2
        do k=2,nlev
           p(:,:,k,ie)=p(:,:,k-1,ie) + dp(:,:,k-1,n0,ie)/2 + dp(:,:,k,n0,ie)/2
        enddo
     end do
   end subroutine caar_compute_pressure_f90
 
-  subroutine caar_compute_vort_and_div_f90(nets, nete, n0, eta_ave_w, dvv_ptr,       &
-                                           D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr, &
-                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,   &
-                                           elem_state_v_ptr, elem_derived_vn0_ptr,   &
+  subroutine caar_compute_vort_and_div_f90(nets, nete, nelemd, n0, eta_ave_w, dvv_ptr,  &
+                                           D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr,    &
+                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,      &
+                                           elem_state_v_ptr, elem_derived_vn0_ptr,      &
                                            vdp_ptr, div_vdp_ptr, vort_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
-    use dimensions_mod, only : np, nlev, nelemd
+    use dimensions_mod, only : np, nlev
     use derivative_mod, only : derivative_t, gradient_sphere, vorticity_sphere, divergence_sphere
     use element_mod,    only : element_t, timelevels
     !
     ! Inputs
     !
-    integer (kind=c_int),  intent(in) :: nets, nete, n0
+    integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
     type (c_ptr),          intent(in) :: dvv_ptr, D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr
     type (c_ptr),          intent(in) :: p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr
     type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_derived_vn0_ptr
