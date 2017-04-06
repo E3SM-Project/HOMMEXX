@@ -16,10 +16,6 @@
 // Whether the Default Kokkos exec space has been selected
 #cmakedefine HOMMEXX_DEFAULT_SPACE
 
-// Whether we want to use the new Kokkos Extents, which allow
-// for dynamic dimensions to not be first in the view data type
-#cmakedefine HOMMEXX_USE_KOKKOS_EXTENTS
-
 // Whether the debug parts of cxx code should be compiled or not
 #cmakedefine HOMMEXX_DEBUG
 
