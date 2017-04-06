@@ -41,7 +41,12 @@ program prim_main
 
   implicit none
   interface
-     subroutine init_kokkos() bind(c)
+     subroutine init_kokkos(num_threads) bind(c)
+       use iso_c_binding, only : c_int
+       !
+       ! Input(s)
+       !
+       integer (kind=c_int), intent(in) :: num_threads
      end subroutine init_kokkos
 
      subroutine finalize_kokkos() bind(c)
@@ -67,11 +72,6 @@ program prim_main
   character (len=20) :: numtrac_char
 
   logical :: dir_e ! boolean existence of directory where output netcdf goes
-
-#if USE_KOKKOS_KERNELS
-  ! Kokkos has to be initialize before it is used
-  call init_kokkos()
-#endif
 
   ! =====================================================
   ! Begin executable code set distributed memory world...
@@ -106,6 +106,10 @@ program prim_main
 #if (defined HORIZ_OPENMP)
   !$OMP PARALLEL NUM_THREADS(nthreads), DEFAULT(SHARED), PRIVATE(ithr,nets,nete,hybrid)
   call omp_set_num_threads(vert_num_threads)
+#endif
+#ifdef USE_KOKKOS_KERNELS
+  ! Kokkos has to be initialize before it is used
+  call init_kokkos(vert_num_threads)
 #endif
   ithr=omp_get_thread_num()
   nets=dom_mt(ithr)%start
