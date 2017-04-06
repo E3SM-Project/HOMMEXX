@@ -6,13 +6,19 @@
 namespace Homme {
 
 extern "C" {
-void init_kokkos() {
+
+void init_kokkos(const int& num_threads) {
   /* Set OpenMP Environment variables to control how many
    * threads/processors Kokkos uses */
-  Kokkos::initialize();
+
+  Kokkos::InitArguments args;
+  args.num_threads = num_threads;
+  Kokkos::initialize(args);
   //  Kokkos::OpenMP::print_configuration(std::cout, true);
 }
 
 void finalize_kokkos() { Kokkos::finalize(); }
-}
-}  // namespace Homme
+
+} // extern "C"
+
+} // namespace Homme
