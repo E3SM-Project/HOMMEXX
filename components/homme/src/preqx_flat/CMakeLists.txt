@@ -2,7 +2,14 @@
 
 MACRO(PREQX_FLAT_SETUP FORTRAN_LOOPS)
 
-MESSAGE (STATUS "Executing PREQX_FLAT_SETUP")
+IF (${FORTRAN_LOOPS})
+  SET (USE_KOKKOS_KERNELS FALSE)
+ELSE ()
+  SET (USE_KOKKOS_KERNELS TRUE)
+ENDIF ()
+
+MESSAGE (STATUS " +---------- Beginning execution of PREQX_FLAT_SETUP ------------+")
+MESSAGE (STATUS "  --> Building with USE_KOKKOS_KERNELS = ${USE_KOKKOS_KERNELS}")
 
 SET(TARGET_DIR          ${HOMME_SOURCE_DIR}/src/preqx_flat)
 SET(UTILS_SHARE_DIR     ${HOMME_SOURCE_DIR}/utils/csm_share)
@@ -10,7 +17,6 @@ SET(SRC_BASE_DIR        ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE_DIR       ${HOMME_SOURCE_DIR}/src/share)
 SET(PHYSICS_DIR         ${HOMME_SOURCE_DIR}/physics)
 SET(UTILS_TIMING_DIR    ${CMAKE_BINARY_DIR}/utils/timing)
-SET(SRC_KERNELS_DIR     ${HOMME_SOURCE_DIR}/src/kokkos_kernels)
 SET(UNIT_TEST_DIR       ${TARGET_DIR}/unit_tests)
 SET(HOMMEXX_CONFIG_DIR  ${CMAKE_BINARY_DIR}/src)  # where Hommexx_config.h is located
 
@@ -132,6 +138,11 @@ SET(PREQX_FLAT_DEPS_C
   ${SRC_BASE_DIR}/jrio.c
 )
 
+SET(PREQX_FLAT_DEPS_CXX
+  ${TARGET_DIR}/cxx/caar_helpers.cpp
+  ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
+)
+
 # If the user specified a file for custom compiler options use those
 IF (DEFINED PREQX_FLAT_CUSTOM_FLAGS_FILE)
   setCustomCompilerFlags(PREQX_FLAT_CUSTOM_FLAGS_FILE PREQX_FLAT_SRCS_F90)
@@ -139,7 +150,13 @@ ENDIF ()
 
 # We pulled prim_main off the deps cause it would create a main function
 # clash when building the unit test (a main in prim_main.F90 and one in tester.cpp)
-SET(PREQX_FLAT_DEPS ${TARGET_F90} ${PREQX_FLAT_DEPS_C} ${PREQX_FLAT_DEPS_F90} )
+SET(PREQX_FLAT_DEPS ${TARGET_F90} ${PREQX_FLAT_DEPS_F90} ${PREQX_FLAT_DEPS_C})
+IF (${USE_KOKKOS_KERNELS})
+  SET (PREQX_FLAT_DEPS
+    ${PREQX_FLAT_DEPS}
+    ${PREQX_FLAT_DEPS_CXX}
+  )
+ENDIF ()
 SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 
 SET(PREQX_FLAT_UT_SRCS
@@ -150,11 +167,18 @@ SET(PREQX_FLAT_UT_SRCS
 SET(PREQX_FLAT_INCLUDE_DIRS
   ${SRC_SHARE_DIR}
   ${SRC_BASE_DIR}
-  ${SRC_KERNELS_DIR}
   ${PHYSICS_DIR}
   ${TARGET_DIR}
   ${HOMMEXX_CONFIG_DIR}
 )
+
+IF (${USE_KOKKOS_KERNELS})
+  SET (PREQX_FLAT_INCLUDE_DIRS
+    ${PREQX_FLAT_INCLUDE_DIRS}
+    ${TARGET_DIR}/cxx
+    ${SRC_SHARE_DIR}/cxx
+  )
+ENDIF ()
 
 # Make SRCS global so the tests can access it
 SET(EXEC_SOURCES ${PREQX_FLAT_SRCS})
@@ -163,13 +187,6 @@ IF (${ENABLE_HORIZ_OPENMP} AND ${ENABLE_COLUMN_OPENMP})
   SET(NESTED_OPENMP TRUE CACHE BOOL "Both horizontal and column threading")
 ENDIF ()
 
-IF (${FORTRAN_LOOPS})
-  SET (USE_KOKKOS_KERNELS FALSE)
-ELSE ()
-  SET (USE_KOKKOS_KERNELS TRUE)
-ENDIF ()
-
-MESSAGE(STATUS " Building with USE_KOKKOS_KERNELS = ${USE_KOKKOS_KERNELS}")
-MESSAGE(STATUS "End of executing PREQX_FLAT_SETUP ------------")
+MESSAGE (STATUS " +------------ Ending execution of PREQX_FLAT_SETUP -------------+")
 
 ENDMACRO(PREQX_FLAT_SETUP)

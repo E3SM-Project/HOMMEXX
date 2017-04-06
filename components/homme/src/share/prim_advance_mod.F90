@@ -166,10 +166,6 @@ contains
 !#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_f90
 !#endif
 
-#ifdef USE_KOKKOS_KERNELS
-#else
-#endif
-
   !_____________________________________________________________________
   subroutine prim_advance_exp(elem, deriv, hvcoord, hybrid,dt, tl,  nets, nete, compute_diagnostics)
 
@@ -2670,6 +2666,8 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   use edgetype_mod,   only : edgedescriptor_t
   use element_mod,    only : element_t
   use hybvcoord_mod,  only : hvcoord_t
+use parallel_mod, only: abortmp
+use thread_mod,       only: omp_get_num_threads,nthreads, vert_num_threads, omp_get_thread_num
 
   implicit none
 
@@ -2813,24 +2811,26 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   end subroutine compute_and_apply_rhs
 
 #ifdef USE_KOKKOS_KERNELS
-#define CAAR_COMPUTE_T_V                caar_compute_T_v_c
+!#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
 #define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_c
-#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
-#define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_c
-#define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_c
-#define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_c
-#define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_c
-#define CAAR_UPDATE_STATES              caar_update_states_c
 #else
-#define CAAR_COMPUTE_T_V                caar_compute_T_v_f90
 #define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_f90
+#endif
+
 #define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_f90
+#define CAAR_COMPUTE_T_V                caar_compute_T_v_f90
 #define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_f90
 #define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_f90
 #define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_f90
 #define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_f90
 #define CAAR_UPDATE_STATES              caar_update_states_f90
-#endif
+!#define CAAR_COMPUTE_T_V                caar_compute_T_v_c
+!#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
+!#define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_c
+!#define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_c
+!#define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_c
+!#define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_c
+!#define CAAR_UPDATE_STATES              caar_update_states_c
 
   subroutine compute_and_apply_rhs_pre_exchange_f90(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
                                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -2852,41 +2852,62 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   use caar_subroutines_mod, only : caar_compute_pressure_f90, caar_compute_vort_and_div_f90, caar_compute_T_v_f90, &
                                    caar_preq_hydrostatic_f90, caar_preq_omega_ps_f90, caar_compute_eta_dot_dpdn_f90,  &
                                    caar_compute_phi_kinetic_energy_f90, caar_energy_diagnostics_f90, caar_update_states_f90
-  use iso_c_binding,        only : c_ptr, c_loc, c_f_pointer
+  use iso_c_binding,        only : c_ptr, c_loc, c_f_pointer, c_associated
 
   implicit none
 
 #ifdef USE_KOKKOS_KERNELS
   interface
-    subroutine init_caar_helpers() bind(c)
-    end subroutine init_caar_helpers
 
-    subroutine caar_compute_pressure_c() bind(c)
+    subroutine caar_compute_pressure_c(nets, nete, nelemd, n0, hyai_ps0, p_ptr, dp_ptr) bind(c)
+      use kinds,         only : real_kind
+      use iso_c_binding, only : c_int, c_ptr
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
+      type (c_ptr),          intent(in) :: p_ptr, dp_ptr
+      real (kind=real_kind), intent(in) :: hyai_ps0
     end subroutine caar_compute_pressure_c
 
-    subroutine caar_compute_vort_and_div_c() bind(c)
-    end subroutine caar_compute_vort_and_div_c
-
-    subroutine caar_compute_T_v_c() bind(c)
-    end subroutine caar_compute_T_v_c
-
-    subroutine caar_preq_hydrostatic_c() bind(c)
-    end subroutine caar_preq_hydrostatic_c
-
-    subroutine caar_preq_omega_ps_c() bind(c)
-    end subroutine caar_preq_omega_ps_c
-
-    subroutine caar_compute_eta_dot_dpdn_c() bind(c)
-    end subroutine caar_compute_eta_dot_dpdn_c
-
-    subroutine caar_compute_phi_kinetic_energy_c() bind(c)
-    end subroutine caar_compute_phi_kinetic_energy_c
-
-    subroutine caar_energy_diagnostics_c() bind(c)
-    end subroutine caar_energy_diagnostics_c
-
-    subroutine caar_update_states_c() bind(c)
-    end subroutine caar_update_states_c
+!    subroutine caar_compute_vort_and_div_c(nets, nete, nelemd, n0, eta_ave_w, dvv_ptr, &
+!                                           D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr,   &
+!                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,     &
+!                                           elem_state_v_ptr, elem_derived_vn0_ptr,     &
+!                                           vdp_ptr, div_vdp_ptr, vort_ptr) bind(c)
+!      use kinds,         only : real_kind
+!      use iso_c_binding, only : c_int, c_ptr
+!      !
+!      ! Inputs
+!      !
+!      integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
+!      type (c_ptr),          intent(in) :: dvv_ptr, D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr
+!      type (c_ptr),          intent(in) :: p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr
+!      type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_derived_vn0_ptr
+!      type (c_ptr),          intent(in) :: vdp_ptr, div_vdp_ptr, vort_ptr
+!      real (kind=real_kind), intent(in) :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+!    end subroutine caar_compute_vort_and_div_c
+!
+!    subroutine caar_compute_T_v_c() bind(c)
+!    end subroutine caar_compute_T_v_c
+!
+!    subroutine caar_preq_hydrostatic_c() bind(c)
+!    end subroutine caar_preq_hydrostatic_c
+!
+!    subroutine caar_preq_omega_ps_c() bind(c)
+!    end subroutine caar_preq_omega_ps_c
+!
+!    subroutine caar_compute_eta_dot_dpdn_c() bind(c)
+!    end subroutine caar_compute_eta_dot_dpdn_c
+!
+!    subroutine caar_compute_phi_kinetic_energy_c() bind(c)
+!    end subroutine caar_compute_phi_kinetic_energy_c
+!
+!    subroutine caar_energy_diagnostics_c() bind(c)
+!    end subroutine caar_energy_diagnostics_c
+!
+!    subroutine caar_update_states_c() bind(c)
+!    end subroutine caar_update_states_c
   end interface
 #endif
 
@@ -2901,41 +2922,23 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   !
   ! locals
   !
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: p             ! pressure
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: dp            ! delta pressure
-  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: grad_p
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: kappa_star
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: omega_p
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: T_v
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vgrad_p       ! v dot grad(p)
-  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: vdp
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: div_vdp
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vort          ! vorticity
-  real (kind=real_kind), dimension(np,np,2,nlev,nelemd), target :: v_vadv        ! velocity vertical advection
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: T_vadv        ! temperature vertical advection
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vtens1
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: vtens2
-  real (kind=real_kind), dimension(np,np,nlev,nelemd),   target :: ttens
-  real (kind=real_kind), dimension(np,np,nlev+1,nelemd), target :: eta_dot_dpdn  ! half level vertical velocity on p-grid
-  real (kind=real_kind), dimension(np,np,nelemd),        target :: sdot_sum
-
-!  real (kind=real_kind), dimension(np,np,2)         :: v
-!  real (kind=real_kind), dimension(np,np,nlev)      :: rdp           ! inverse of delta pressure
-!  real (kind=real_kind), dimension(np,np,2)         :: grad_ps       ! lat-lon coord version
-!  real (kind=real_kind), dimension(np,np)           :: Ephi          ! kinetic energy + PHI term
-!  real (kind=real_kind), dimension(np,np,2)         :: vtemp         ! generic gradient storage
-!  real (kind=real_kind), dimension(np,np)           :: vgrad_T       ! v.grad(T)
-!  real (kind=real_kind), dimension(np,np,nlev)      :: vtens1
-!  real (kind=real_kind), dimension(np,np,nlev)      :: vtens2
-!  real (kind=real_kind), dimension(np,np,nlev)      :: ttens
-!  real (kind=real_kind), dimension(np,np)           :: sdot_sum
-!  real (kind=real_kind), dimension(nc,nc,4)         :: tempflux
-!
-!  real (kind=real_kind)                             :: u_m_umet, v_m_vmet, t_m_tmet
-!  real (kind=real_kind)                             :: v1, v2, Qt, E
-!  real (kind=real_kind)                             :: glnps1, glnps2, gpterm
-!
-!  integer                                           :: ie, k, j, i
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: p             ! pressure
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: dp            ! delta pressure
+  real (kind=real_kind), dimension(:,:,:,:,:), allocatable, target :: grad_p
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: kappa_star
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: omega_p
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: T_v
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: vgrad_p       ! v dot grad(p)
+  real (kind=real_kind), dimension(:,:,:,:,:), allocatable, target :: vdp
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: div_vdp
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: vort          ! vorticity
+  real (kind=real_kind), dimension(:,:,:,:,:), allocatable, target :: v_vadv        ! velocity vertical advection
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: T_vadv        ! temperature vertical advection
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: vtens1
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: vtens2
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: ttens
+  real (kind=real_kind), dimension(:,:,:,:),   allocatable, target :: eta_dot_dpdn  ! half level vertical velocity on p-grid
+  real (kind=real_kind), dimension(:,:,:),     allocatable, target :: sdot_sum
 
   type (c_ptr) :: dvv_ptr, elem_D_ptr, elem_Dinv_ptr, elem_metdet_ptr
   type (c_ptr) :: elem_rmetdet_ptr, elem_spheremp_ptr, elem_fcor_ptr
@@ -2947,10 +2950,24 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr
   type (c_ptr) :: elem_derived_vn0_ptr, omega_p_ptr, eta_dot_dpdn_ptr, sdot_sum_ptr
   type (c_ptr) :: elem_derived_pecnd_ptr, elem_state_ps_v_ptr
-integer :: ie, i, j
-#ifdef USE_KOKKOS_KERNELS
-  call init_caar_helpers()
-#endif
+
+  allocate(p             (np,np,nlev,nelemd)  )
+  allocate(dp            (np,np,nlev,nelemd)  )
+  allocate(grad_p        (np,np,2,nlev,nelemd))
+  allocate(kappa_star    (np,np,nlev,nelemd)  )
+  allocate(omega_p       (np,np,nlev,nelemd)  )
+  allocate(T_v           (np,np,nlev,nelemd)  )
+  allocate(vgrad_p       (np,np,nlev,nelemd)  )
+  allocate(vdp           (np,np,2,nlev,nelemd))
+  allocate(div_vdp       (np,np,nlev,nelemd)  )
+  allocate(vort          (np,np,nlev,nelemd)  )
+  allocate(v_vadv        (np,np,2,nlev,nelemd))
+  allocate(T_vadv        (np,np,nlev,nelemd)  )
+  allocate(vtens1        (np,np,nlev,nelemd)  )
+  allocate(vtens2        (np,np,nlev,nelemd)  )
+  allocate(ttens         (np,np,nlev,nelemd)  )
+  allocate(eta_dot_dpdn  (np,np,nlev+1,nelemd))
+  allocate(sdot_sum      (np,np,nelemd)       )
 
   ! Create the pointers
   dvv_ptr                       = c_loc(deriv%dvv)
@@ -2990,13 +3007,12 @@ integer :: ie, i, j
   eta_dot_dpdn_ptr              = c_loc(eta_dot_dpdn)
   sdot_sum_ptr                  = c_loc(sdot_sum)
 
-  call CAAR_COMPUTE_PRESSURE(nets, nete, n0, p_ptr, elem_state_dp_ptr, &
-                             hvcoord%hyai(1), hvcoord%ps0)
+  call CAAR_COMPUTE_PRESSURE(nets, nete, nelemd, n0, hvcoord%hyai(1)*hvcoord%ps0, p_ptr, elem_state_dp_ptr)
 
-  call CAAR_COMPUTE_VORT_AND_DIV(nets, nete, n0, eta_ave_w, dvv_ptr, elem_D_ptr,    &
-                                 elem_Dinv_ptr, elem_metdet_ptr, elem_rmetdet_ptr,  &
-                                 p_ptr, elem_state_dp_ptr, grad_p_ptr, vgrad_p_ptr, &
-                                 elem_state_v_ptr, elem_derived_vn0_ptr,            &
+  call CAAR_COMPUTE_VORT_AND_DIV(nets, nete, nelemd, n0, eta_ave_w, dvv_ptr, elem_D_ptr,  &
+                                 elem_Dinv_ptr, elem_metdet_ptr, elem_rmetdet_ptr,        &
+                                 p_ptr, elem_state_dp_ptr, grad_p_ptr, vgrad_p_ptr,       &
+                                 elem_state_v_ptr, elem_derived_vn0_ptr,                  &
                                  vdp_ptr, div_vdp_ptr, vort_ptr)
 
   call CAAR_COMPUTE_T_V(nets, nete, n0, qn0, T_v_ptr, kappa_star_ptr, &
@@ -3005,12 +3021,14 @@ integer :: ie, i, j
   ! ====================================================
   ! Compute Hydrostatic equation, modeld after CCM-3
   ! ====================================================
+
   call CAAR_PREQ_HYDROSTATIC(nets, nete, n0, elem_derived_phi_ptr, elem_state_phis_ptr, &
                              T_v_ptr, p_ptr, elem_state_dp_ptr)
 
   ! ====================================================
   ! Compute omega_p according to CCM-3
   ! ====================================================
+
   call CAAR_PREQ_OMEGA_PS(nets, nete, div_vdp_ptr, vgrad_p_ptr, p_ptr, omega_p_ptr)
 
   call CAAR_COMPUTE_ETA_DOT_DPDN(nets, nete, eta_dot_dpdn_ptr, T_vadv_ptr, v_vadv_ptr,    &
@@ -3030,6 +3048,7 @@ integer :: ie, i, j
 !  call CAAR_ENERGY_DIAGNOSTICS()
 !#endif
 !
+
   call CAAR_UPDATE_STATES(nets, nete, nm1, np1, dt2,                                &
                           vdp_ptr, div_vdp_ptr, vtens1_ptr, vtens2_ptr, ttens_ptr,  &
                           elem_Dinv_ptr, elem_metdet_ptr, elem_spheremp_ptr,        &
