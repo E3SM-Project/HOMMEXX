@@ -7,8 +7,9 @@
 namespace Homme {
 
 // Usual typedef for real scalar type
-using Real  = double;
-using CRPtr = Real* const;
+using Real   = double;
+using RCPtr  = Real* const;
+using CRCPtr = const Real* const;
 
 // Selecting the execution space. If no specific request, use Kokkos default exec space
 #ifdef HOMMEXX_CUDA_SPACE
