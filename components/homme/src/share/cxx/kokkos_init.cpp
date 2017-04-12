@@ -1,5 +1,4 @@
-
-#include <Kokkos_Core.hpp>
+#include <Types.hpp>
 
 #include <iostream>
 
@@ -7,14 +6,15 @@ namespace Homme {
 
 extern "C" {
 
-void init_kokkos(const int& num_threads) {
+void init_kokkos(const int& num_threads, bool print_configuration = false) {
   /* Set OpenMP Environment variables to control how many
    * threads/processors Kokkos uses */
 
   Kokkos::InitArguments args;
   args.num_threads = num_threads;
   Kokkos::initialize(args);
-  //  Kokkos::OpenMP::print_configuration(std::cout, true);
+
+  Homme::ExecSpace::print_configuration(std::cout, print_configuration);
 }
 
 void finalize_kokkos() { Kokkos::finalize(); }
