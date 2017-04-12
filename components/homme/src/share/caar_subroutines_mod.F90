@@ -7,6 +7,17 @@ module caar_subroutines_mod
 
   implicit none
 
+  interface caar_flip_f90_array
+    module procedure caar_flip_f90_array_2D
+    module procedure caar_flip_f90_array_3D
+    module procedure caar_flip_f90_array_4D
+    module procedure caar_flip_f90_array_5D
+    module procedure caar_flip_f90_array_6D
+  end interface caar_flip_f90_array
+
+  public :: caar_flip_f90_tensor2d
+  public :: caar_flip_f90_array
+
 contains
   subroutine caar_compute_pressure_f90(nets, nete, nelemd, n0, hyai_ps0, p_ptr, dp_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
@@ -216,7 +227,7 @@ contains
 #endif
       do ie=nets, nete
         do k=1,nlev
-        do j=1,np
+          do j=1,np
             do i=1,np
               Qt = elem_state_Qdp(i,j,k,1,qn0,ie)/dp(i,j,k,n0,ie)
               T_v(i,j,k,ie) = Virtual_Temperature(elem_state_Temp(i,j,k,n0,ie),Qt)
@@ -854,5 +865,239 @@ contains
 !        enddo
 !     endif
   end subroutine caar_energy_diagnostics_f90
+
+  subroutine caar_flip_f90_array_2D (f90_array, c_1d_array, to_c)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:), intent(inout) :: f90_array
+    real (kind=real_kind), dimension(:),   intent(inout) :: c_1d_array
+    logical, intent(in) :: to_c
+    !
+    ! Locals
+    !
+    integer, dimension(2) :: dims
+    integer :: i, j, iter
+
+    dims = SHAPE(f90_array)
+
+    iter = 1
+    if (to_c) then
+      do i=1,dims(1)
+        do j=1,dims(2)
+          c_1d_array (iter) = f90_array(i,j)
+          iter = iter + 1
+        end do
+      end do
+    else
+      do i=1,dims(1)
+        do j=1,dims(2)
+          f90_array(i,j) = c_1d_array (iter)
+          iter = iter + 1
+        end do
+      end do
+    end if
+  end subroutine caar_flip_f90_array_2D
+
+  subroutine caar_flip_f90_array_3D (f90_array, c_1d_array, to_c)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:), intent(inout) :: f90_array
+    real (kind=real_kind), dimension(:),     intent(inout) :: c_1d_array
+    logical, intent(in) :: to_c
+    !
+    ! Locals
+    !
+    integer, dimension(3) :: dims
+    integer :: i, j, k, iter
+
+    dims = SHAPE(f90_array)
+
+    iter = 1
+    if (to_c) then
+      do k=1,dims(3)
+        do i=1,dims(1)
+          do j=1,dims(2)
+            c_1d_array (iter) = f90_array(i,j,k)
+            iter = iter + 1
+          end do
+        end do
+      end do
+    else
+      do k=1,dims(3)
+        do i=1,dims(1)
+          do j=1,dims(2)
+            f90_array(i,j,k) = c_1d_array (iter)
+            iter = iter + 1
+          end do
+        end do
+      end do
+    end if
+  end subroutine caar_flip_f90_array_3D
+
+  subroutine caar_flip_f90_array_4D (f90_array, c_1d_array, to_c)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:,:), intent(inout) :: f90_array
+    real (kind=real_kind), dimension(:),       intent(inout) :: c_1d_array
+    logical, intent(in) :: to_c
+    !
+    ! Locals
+    !
+    integer, dimension(4) :: dims
+    integer :: i, j, k, l, iter
+
+    dims = SHAPE(f90_array)
+
+    iter = 1
+    if (to_c) then
+      do l=1,dims(4)
+        do k=1,dims(3)
+          do i=1,dims(1)
+            do j=1,dims(2)
+              c_1d_array (iter) = f90_array(i,j,k,l)
+              iter = iter + 1
+            end do
+          end do
+        end do
+      end do
+    else
+      do l=1,dims(4)
+        do k=1,dims(3)
+          do i=1,dims(1)
+            do j=1,dims(2)
+              f90_array(i,j,k,l) = c_1d_array (iter)
+              iter = iter + 1
+            end do
+          end do
+        end do
+      end do
+    end if
+  end subroutine caar_flip_f90_array_4D
+
+  subroutine caar_flip_f90_array_5D (f90_array, c_1d_array, to_c)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:,:,:), intent(inout) :: f90_array
+    real (kind=real_kind), dimension(:),         intent(inout) :: c_1d_array
+    logical, intent(in) :: to_c
+    !
+    ! Locals
+    !
+    integer, dimension(5) :: dims
+    integer :: i, j, k, l, m, iter
+
+    dims = SHAPE(f90_array)
+
+    iter = 1
+    if (to_c) then
+      do m=1,dims(5)
+        do l=1,dims(4)
+          do k=1,dims(3)
+            do i=1,dims(1)
+              do j=1,dims(2)
+                c_1d_array (iter) = f90_array(i,j,k,l,m)
+                iter = iter + 1
+              end do
+            end do
+          end do
+        end do
+      end do
+    else
+      do m=1,dims(5)
+        do l=1,dims(4)
+          do k=1,dims(3)
+            do i=1,dims(1)
+              do j=1,dims(2)
+                f90_array(i,j,k,l,m) = c_1d_array (iter)
+                iter = iter + 1
+              end do
+            end do
+          end do
+        end do
+      end do
+    end if
+  end subroutine caar_flip_f90_array_5D
+
+  subroutine caar_flip_f90_array_6D (f90_array, c_1d_array, to_c)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:,:,:,:), intent(inout) :: f90_array
+    real (kind=real_kind), dimension(:),           intent(inout) :: c_1d_array
+    logical, intent(in) :: to_c
+    !
+    ! Locals
+    !
+    integer, dimension(6) :: dims
+    integer :: i, j, k, l, m, n, iter
+
+    dims = SHAPE(f90_array)
+
+    iter = 1
+    if (to_c) then
+      do n=1,dims(6)
+        do m=1,dims(5)
+          do l=1,dims(4)
+            do k=1,dims(3)
+              do i=1,dims(1)
+                do j=1,dims(2)
+                  c_1d_array (iter) = f90_array(i,j,k,l,m,n)
+                  iter = iter + 1
+                end do
+              end do
+            end do
+          end do
+        end do
+      end do
+    else
+      do n=1,dims(6)
+        do m=1,dims(5)
+          do l=1,dims(4)
+            do k=1,dims(3)
+              do i=1,dims(1)
+                do j=1,dims(2)
+                  f90_array(i,j,k,l,m,n) = c_1d_array (iter)
+                  iter = iter + 1
+                end do
+              end do
+            end do
+          end do
+        end do
+      end do
+    end if
+  end subroutine caar_flip_f90_array_6D
+
+  subroutine caar_flip_f90_tensor2d (f90_tensor, c_1d_tensor)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:,:,:), intent(inout) :: f90_tensor
+    real (kind=real_kind), dimension(:),         intent(inout) :: c_1d_tensor
+    !
+    ! Locals
+    !
+    integer, dimension(5) :: dims
+    integer :: i, j, k, l, m, iter
+
+    dims = SHAPE(f90_tensor)
+
+    iter = 1
+    do m=1,dims(5)
+      do l=1,dims(3)
+        do k=1,dims(4)
+          do i=1,dims(1)
+            do j=1,dims(2)
+              c_1d_tensor (iter) = f90_tensor(i,j,l,k,m)
+              iter = iter + 1
+            end do
+          end do
+        end do
+      end do
+    end do
+  end subroutine caar_flip_f90_tensor2d
 
 end module caar_subroutines_mod
