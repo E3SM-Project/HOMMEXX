@@ -139,7 +139,7 @@ SET(PREQX_FLAT_DEPS_C
 )
 
 SET(PREQX_FLAT_DEPS_CXX
-  ${TARGET_DIR}/cxx/caar_helpers.cpp
+  ${SRC_SHARE_DIR}/cxx/caar_helpers.cpp
   ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
 )
 
@@ -175,7 +175,6 @@ SET(PREQX_FLAT_INCLUDE_DIRS
 IF (${USE_KOKKOS_KERNELS})
   SET (PREQX_FLAT_INCLUDE_DIRS
     ${PREQX_FLAT_INCLUDE_DIRS}
-    ${TARGET_DIR}/cxx
     ${SRC_SHARE_DIR}/cxx
   )
 ENDIF ()

@@ -2,8 +2,22 @@
 #include "Utility.hpp"
 #include "Dimensions.hpp"
 #include "SphereOperators.hpp"
+#include "PhysicalConstants.hpp"
+#include "KokkosExp_MDRangePolicy.hpp"
 
 namespace Homme {
+
+KOKKOS_FORCEINLINE_FUNCTION
+Real Virtual_Temperature (const Real Tin, const Real rin)
+{
+  return Tin*(1.0 + (PhysicalConstants::Rwater_vapor/PhysicalConstants::Rgas - 1.0)*rin);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+Real Virtual_Specific_Heat(const Real rin)
+{
+  return PhysicalConstants::cp*(1.0 + (PhysicalConstants::Cpwater_vapor/PhysicalConstants::cp - 1.0)*rin);
+}
 
 extern "C" {
 
@@ -137,18 +151,15 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   // Parallel loop
 
   Kokkos::parallel_for(
-#ifdef HORIZ_OPENMP
+#ifdef USE_KOKKOS_ON_ELEMENTS // Manually add this to the config.h.c file before compiling (but AFTER configuring)
     Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, Kokkos::AUTO),
 #else
-    Kokkos::TeamPolicy<ExecSpace>(1, 8),
+    Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, ExecSpace::thread_pool_size()),
 #endif
     KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
     {
-#ifdef HORIZ_OPENMP
       const int ie = nets_c + team_member.league_rank();
-#else
-    for (int ie=nets_c; ie<nete; ++ie) {
-#endif
+
       // Create subviews to explicitly have static dimensions
       ExecViewUnmanaged<const Real[2][2][NP][NP]>       D_ie       = subview(D_exec,       ie,ALL(),ALL(),ALL(),ALL());
       ExecViewUnmanaged<const Real[2][2][NP][NP]>       Dinv_ie    = subview(Dinv_exec,    ie,ALL(),ALL(),ALL(),ALL());
@@ -205,9 +216,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
           vorticity_sphere(team_member, U_ilev, V_ilev, dvv_exec, rmetdet_ie, D_ie, vort_ilev);
         }
       );
-#ifndef HORIZ_OPENMP
-      }
-#endif
     }
   );
 
@@ -219,6 +227,166 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   deep_copy_mirror_view(div_vdp_host, div_vdp_exec);
   deep_copy_mirror_view(vort_host,    vort_exec);
   deep_copy_mirror_view(vn0_host,     vn0_exec);
+}
+
+void caar_compute_t_v_c (const int& nets, const int& nete, const int& nelemd,
+                         const int& n0,   const int& qn0,  const int& use_cpstar,
+                         RCPtr& T_v_ptr,  RCPtr& kappa_star_ptr,
+                         CRCPtr& dp_ptr,  CRCPtr& Temp_ptr, CRCPtr& Qdp_ptr)
+{
+  // Store the f90 pointers into a unmanaged views
+  HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][NP][NP]> Temp_host (Temp_ptr, nelemd);
+
+  HostViewUnmanaged<Real*[NUM_LEV][NP][NP]> T_v_host        (T_v_ptr,        nelemd);
+  HostViewUnmanaged<Real*[NUM_LEV][NP][NP]> kappa_star_host (kappa_star_ptr, nelemd);
+
+  // Create the execution space views. If ExecSpace can access HostMemSpace,
+  // then the exec view is storing the host view pointer, otherwise is managed
+  auto T_v_exec        = Kokkos::create_mirror_view (exec_space, T_v_host       );
+  auto kappa_star_exec = Kokkos::create_mirror_view (exec_space, kappa_star_host);
+  auto Temp_exec       = Kokkos::create_mirror_view (exec_space, Temp_host      );
+
+  // Forward the views (just the inputs, actually) to the execution space
+  // Note: this is a no-op if ExecSpace can access HostMemSpace
+  deep_copy_mirror_view (Temp_exec, Temp_host);
+
+  // Fix indices: they are coming from fortran where they are 1-based.
+  const int nets_c = nets - 1;
+  const int n0_c   = n0 - 1;
+  const int qn0_c  = qn0 - 1;
+
+  if (qn0_c == -1)
+  {
+#ifdef USE_MD_RANGE_POLICY
+    constexpr Kokkos::Experimental::Iterate Right = Kokkos::Experimental::Iterate::Right;
+    using Rank = Kokkos::Experimental::Rank<3,Right,Right>;
+    using RangePolicy = Kokkos::Experimental::MDRangePolicy<Rank,Kokkos::IndexType<int>>;
+
+    Kokkos::Experimental::md_parallel_for(
+      RangePolicy({nets_c,0,0},{nete,NUM_LEV,NP},{1,1,1}),
+      KOKKOS_LAMBDA (const int ie, const int ilev, const int igp)
+      {
+        // MDRangePolicy supports up to rank 3 so far... We need to add the inner layer by hand
+        for (int jgp=0; jgp<NP; ++jgp)
+        {
+          T_v_exec (ie,ilev,igp,jgp) = Temp_exec(ie,n0,ilev,igp,jgp);
+          kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::kappa;
+        }
+      }
+    );
+#else
+    Kokkos::parallel_for(
+#ifdef USE_KOKKOS_ON_ELEMENTS // Manually add this to the config.h.c file before compiling (but AFTER configuring)
+    Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, Kokkos::AUTO),
+#else
+    Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, ExecSpace::thread_pool_size()),
+#endif
+      KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+      {
+        const int ie = nets_c + team_member.league_rank();
+
+        Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(team_member, NUM_LEV),
+          KOKKOS_LAMBDA (const int ilev)
+          {
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(team_member, NP * NP),
+              KOKKOS_LAMBDA (const int idx)
+              {
+                const int igp = idx / NP;
+                const int jgp = idx % NP;
+
+                T_v_exec (ie,ilev,igp,jgp) = Temp_exec(ie,n0,ilev,igp,jgp);
+                kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::kappa;
+              }
+            );
+          }
+        );
+      }
+    );
+#endif
+  }
+  else
+  {
+    // Two more views needed
+    HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][NP][NP]>            dp_host  (dp_ptr,  nelemd);
+    HostViewUnmanaged<const Real*[QSIZE_D][Q_NUM_TIME_LEVELS][NUM_LEV][NP][NP]> Qdp_host (Qdp_ptr, nelemd);
+
+    auto dp_exec         = Kokkos::create_mirror_view (exec_space, dp_host );
+    auto Qdp_exec        = Kokkos::create_mirror_view (exec_space, Qdp_host);
+
+    deep_copy_mirror_view (dp_exec,  dp_host);
+    deep_copy_mirror_view (Qdp_exec, Qdp_host);
+#ifdef USE_MD_RANGE_POLICY
+    constexpr Kokkos::Experimental::Iterate Right = Kokkos::Experimental::Iterate::Right;
+    using Rank = Kokkos::Experimental::Rank<3,Right,Right>;
+    using RangePolicy = Kokkos::Experimental::MDRangePolicy<Rank,Kokkos::IndexType<int>>;
+
+    Kokkos::Experimental::md_parallel_for(
+      RangePolicy({nets_c,0,0},{nete,NUM_LEV,NP},{1,1,1}),
+      KOKKOS_LAMBDA (const int ie, const int ilev, const int igp)
+      {
+        // MDRangePolicy supports up to rank 3 so far... We need to add the inner layer by hand
+        for (int jgp=0; jgp<NP; ++jgp)
+        {
+          const Real Qt  = Qdp_exec(ie,0,qn0_c,ilev,igp,jgp) / dp_exec(ie,n0_c,ilev,igp,jgp);
+          const Real Tin = Temp_exec(ie,n0_c,ilev,igp,jgp);
+
+          T_v_exec (ie,ilev,igp,jgp) = Virtual_Temperature(Tin,Qt);
+          if (use_cpstar==1)
+          {
+            kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::Rgas/Virtual_Specific_Heat(Qt);
+          }
+          else
+          {
+            kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::kappa;
+          }
+        }
+      }
+    );
+#else
+    Kokkos::parallel_for(
+#ifdef USE_KOKKOS_ON_ELEMENTS // Manually add this to the config.h.c file before compiling (but AFTER configuring)
+    Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, Kokkos::AUTO),
+#else
+    Kokkos::TeamPolicy<ExecSpace>(nete-nets_c, ExecSpace::thread_pool_size()),
+#endif
+      KOKKOS_LAMBDA (const Kokkos::TeamPolicy<>::member_type& team_member)
+      {
+        const int ie = nets_c + team_member.league_rank();
+
+        Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(team_member, NUM_LEV),
+          KOKKOS_LAMBDA (const int ilev)
+          {
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(team_member, NP * NP),
+              KOKKOS_LAMBDA (const int idx)
+              {
+                const int igp = idx / NP;
+                const int jgp = idx % NP;
+
+                const Real Qt  = Qdp_exec(ie,0,qn0_c,ilev,igp,jgp) / dp_exec(ie,n0_c,ilev,igp,jgp);
+                const Real Tin = Temp_exec(ie,n0_c,ilev,igp,jgp);
+
+                T_v_exec (ie,ilev,igp,jgp) = Virtual_Temperature(Tin,Qt);
+
+                if (use_cpstar==1)
+                {
+                  kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::Rgas/Virtual_Specific_Heat(Qt);
+                }
+                else
+                {
+                  kappa_star_exec(ie,ilev,igp,jgp) = PhysicalConstants::kappa;
+                }
+              }
+            );
+          }
+        );
+      }
+    );
+#endif
+  }
 }
 
 } // extern "C"
