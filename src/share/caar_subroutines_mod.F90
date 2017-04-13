@@ -173,21 +173,20 @@ contains
     end do
   end subroutine caar_compute_vort_and_div_f90
 
-  subroutine caar_compute_T_v_f90(nets, nete, n0, qn0, T_v_ptr,      &
-                                  kappa_star_ptr, elem_state_dp_ptr, &
+  subroutine caar_compute_T_v_f90(nets, nete, nelemd, n0, qn0, use_cpstar,    &
+                                  T_v_ptr, kappa_star_ptr, elem_state_dp_ptr, &
                                   elem_state_T_ptr, elem_state_Qdp_ptr) bind(c)
     use iso_c_binding,      only : c_int, c_ptr, c_f_pointer
-    use control_mod,        only : use_cpstar
-    use dimensions_mod,     only : nlev, np, nelemd, qsize
+    use dimensions_mod,     only : nlev, np, qsize
     use element_mod,        only : timelevels
     use physical_constants, only : Rgas, kappa
     use physics_mod,        only : virtual_specific_heat, virtual_temperature
     !
     ! Inputs
     !
-    integer (kind=c_int) :: nets, nete, n0, qn0
-    type (c_ptr), intent(in) :: T_v_ptr, kappa_star_ptr, elem_state_dp_ptr
-    type (c_ptr), intent(in) :: elem_state_T_ptr, elem_state_Qdp_ptr
+    integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0, qn0, use_cpstar
+    type (c_ptr),         intent(in) :: T_v_ptr, kappa_star_ptr, elem_state_dp_ptr
+    type (c_ptr),         intent(in) :: elem_state_T_ptr, elem_state_Qdp_ptr
     !
     ! Locals
     !
@@ -208,10 +207,10 @@ contains
 
     ! compute T_v for timelevel n0
     if (qn0 == -1 ) then
+      do ie=nets, nete
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j)
 #endif
-      do ie=nets, nete
         do k=1,nlev
           do j=1,np
             do i=1,np
@@ -222,10 +221,10 @@ contains
         end do
       end do
     else
+      do ie=nets, nete
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,Qt)
 #endif
-      do ie=nets, nete
         do k=1,nlev
           do j=1,np
             do i=1,np
@@ -1099,5 +1098,36 @@ contains
       end do
     end do
   end subroutine caar_flip_f90_tensor2d
+
+  subroutine caar_flip_f90_Qdp_array (f90_Qdp, c_1d_Qdp)
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), dimension(:,:,:,:,:,:), intent(inout) :: f90_Qdp
+    real (kind=real_kind), dimension(:),           intent(inout) :: c_1d_Qdp
+    !
+    ! Locals
+    !
+    integer, dimension(6) :: dims
+    integer :: igp, jgp, k, qdim, tl, ie, iter
+
+    dims = SHAPE(f90_Qdp)
+
+    iter = 1
+    do ie=1,dims(6)
+      do qdim=1,dims(4)
+        do tl=1,dims(5)
+          do k=1,dims(3)
+            do igp=1,dims(1)
+              do jgp=1,dims(2)
+                c_1d_Qdp (iter) = f90_Qdp(igp,jgp,k,qdim,tl,ie)
+                iter = iter + 1
+              end do
+            end do
+          end do
+        end do
+      end do
+    end do
+  end subroutine caar_flip_f90_Qdp_array
 
 end module caar_subroutines_mod
