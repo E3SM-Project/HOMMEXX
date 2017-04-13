@@ -2810,24 +2810,18 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 #ifdef USE_KOKKOS_KERNELS
 #define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_c
 #define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
+#define CAAR_COMPUTE_T_V                caar_compute_T_v_c
 #else
 #define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_f90
 #define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_f90
+#define CAAR_COMPUTE_T_V                caar_compute_T_v_f90
 #endif
 
-#define CAAR_COMPUTE_T_V                caar_compute_T_v_f90
 #define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_f90
 #define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_f90
 #define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_f90
 #define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_f90
 #define CAAR_UPDATE_STATES              caar_update_states_f90
-!#define CAAR_COMPUTE_T_V                caar_compute_T_v_c
-!#define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
-!#define CAAR_PREQ_HYDROSTATIC           caar_preq_hydrostatic_c
-!#define CAAR_PREQ_OMEGA_PS              caar_preq_omega_ps_c
-!#define CAAR_COMPUTE_ETA_DOT_DPDN       caar_compute_eta_dot_dpdn_c
-!#define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_c
-!#define CAAR_UPDATE_STATES              caar_update_states_c
 
   subroutine compute_and_apply_rhs_pre_exchange_f90(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
                                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -2835,7 +2829,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   use kinds,                  only : real_kind
   use control_mod,            only : use_cpstar
   use derivative_mod,         only : derivative_t, gradient_sphere, divergence_sphere, vorticity_sphere, subcell_div_fluxes
-  use dimensions_mod,         only : nlev, ntrac, nelemd
+  use dimensions_mod,         only : nlev, ntrac, nelemd, qsize_d
   use element_mod,            only : element_t, elem_state_dp3d, elem_state_v, elem_state_Temp,   &
                                      elem_derived_vn0, elem_sub_elem_mass_flux, elem_state_Qdp,   &
                                      timelevels, &
@@ -2849,8 +2843,10 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   use caar_subroutines_mod,   only : caar_compute_pressure_f90, caar_compute_vort_and_div_f90, caar_compute_T_v_f90, &
                                      caar_preq_hydrostatic_f90, caar_preq_omega_ps_f90, caar_compute_eta_dot_dpdn_f90,  &
                                      caar_compute_phi_kinetic_energy_f90, caar_energy_diagnostics_f90, &
-                                     caar_update_states_f90, caar_flip_f90_array, caar_flip_f90_tensor2d
+                                     caar_update_states_f90, caar_flip_f90_array, caar_flip_f90_tensor2d, caar_flip_f90_Qdp_array
   use iso_c_binding,          only : c_ptr, c_loc
+  use utils_mod,              only : FrobeniusNorm
+  use parallel_mod,           only : abortmp
 
   implicit none
 
@@ -2885,10 +2881,19 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
       type (c_ptr),          intent(in) :: vdp_ptr, div_vdp_ptr, vort_ptr
       real (kind=real_kind), intent(in) :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
     end subroutine caar_compute_vort_and_div_c
-!
-!    subroutine caar_compute_T_v_c() bind(c)
-!    end subroutine caar_compute_T_v_c
-!
+
+    subroutine caar_compute_T_v_c(nets, nete,nelemd, n0, qn0, use_cpstar,    &
+                                  T_v_ptr, kappa_star_ptr, elem_state_dp_ptr, &
+                                  elem_state_T_ptr, elem_state_Qdp_ptr) bind(c)
+      use iso_c_binding, only : c_int, c_ptr
+      !
+      ! Inputs
+      !
+      integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0, qn0, use_cpstar
+      type (c_ptr),         intent(in) :: T_v_ptr, kappa_star_ptr, elem_state_dp_ptr
+      type (c_ptr),         intent(in) :: elem_state_T_ptr, elem_state_Qdp_ptr
+    end subroutine caar_compute_T_v_c
+
 !    subroutine caar_preq_hydrostatic_c() bind(c)
 !    end subroutine caar_preq_hydrostatic_c
 !
@@ -2941,19 +2946,23 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! arrays used to flip from left layout to right layout
   real (kind=real_kind), dimension(:,:), pointer :: dvv_2d_ptr
   real (kind=real_kind), dimension(:), allocatable, target :: dvv_c
-  real (kind=real_kind), dimension(:), allocatable, target :: p_c                 ! pressure
-  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_dp3d_c   ! delta pressure
   real (kind=real_kind), dimension(:), allocatable, target :: elem_D_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_Dinv_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_metdet_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_rmetdet_c
+  real (kind=real_kind), dimension(:), allocatable, target :: p_c                 ! pressure
   real (kind=real_kind), dimension(:), allocatable, target :: grad_p_c
   real (kind=real_kind), dimension(:), allocatable, target :: vgrad_p_c
-  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_v_c
-  real (kind=real_kind), dimension(:), allocatable, target :: elem_derived_vn0_c
   real (kind=real_kind), dimension(:), allocatable, target :: vdp_c
   real (kind=real_kind), dimension(:), allocatable, target :: div_vdp_c
   real (kind=real_kind), dimension(:), allocatable, target :: vort_c
+  real (kind=real_kind), dimension(:), allocatable, target :: kappa_star_c
+  real (kind=real_kind), dimension(:), allocatable, target :: T_v_c
+  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_dp3d_c   ! delta pressure
+  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_v_c
+  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_Temp_c
+  real (kind=real_kind), dimension(:), allocatable, target :: elem_state_Qdp_c
+  real (kind=real_kind), dimension(:), allocatable, target :: elem_derived_vn0_c
 #endif
 
   type (c_ptr) :: dvv_ptr, elem_D_ptr, elem_Dinv_ptr, elem_metdet_ptr
@@ -2966,7 +2975,10 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr
   type (c_ptr) :: elem_derived_vn0_ptr, omega_p_ptr, eta_dot_dpdn_ptr, sdot_sum_ptr
   type (c_ptr) :: elem_derived_pecnd_ptr, elem_state_ps_v_ptr
-integer :: i,j
+
+  ! ---------------------------------------------------------- !
+  !                        Subroutine body                     !
+  !----------------------------------------------------------- !
 
   ! Allocate temporaries
   allocate(p             (np,np,nlev,nelemd)  )
@@ -2993,15 +3005,19 @@ integer :: i,j
   allocate(elem_Dinv_c        (nelemd*2*2*np*np))
   allocate(elem_metdet_c      (nelemd*np*np))
   allocate(elem_rmetdet_c     (nelemd*np*np))
-  allocate(elem_state_dp3d_c  (nelemd*timelevels*nlev*np*np))
-  allocate(elem_state_v_c     (nelemd*timelevels*nlev*2*np*np))
-  allocate(elem_derived_vn0_c (nelemd*nlev*2*np*np))
   allocate(p_c                (nelemd*nlev*np*np))
   allocate(grad_p_c           (nelemd*nlev*2*np*np))
   allocate(vgrad_p_c          (nelemd*nlev*np*np))
   allocate(vdp_c              (nelemd*nlev*2*np*np))
   allocate(div_vdp_c          (nelemd*nlev*np*np))
   allocate(vort_c             (nelemd*nlev*np*np))
+  allocate(kappa_star_c       (np*np*nlev*nelemd))
+  allocate(T_v_c              (np*np*nlev*nelemd))
+  allocate(elem_state_dp3d_c  (nelemd*timelevels*nlev*np*np))
+  allocate(elem_state_v_c     (nelemd*timelevels*nlev*2*np*np))
+  allocate(elem_state_Temp_c  (nelemd*timelevels*nlev*np*np))
+  allocate(elem_state_Qdp_c   (nelemd*qsize_d*2*nlev*np*np))
+  allocate(elem_derived_vn0_c (nelemd*nlev*2*np*np))
 
   ! Flip f90 input arrays into cxx arrays
   ! We will have to flip back states at the end though
@@ -3009,11 +3025,13 @@ integer :: i,j
   call caar_flip_f90_array (dvv_2d_ptr, dvv_c,.TRUE.)
   call caar_flip_f90_tensor2d (elem_D, elem_D_c)
   call caar_flip_f90_tensor2d (elem_Dinv, elem_Dinv_c)
-  call caar_flip_f90_array (elem_state_dp3d,elem_state_dp3d_c,.TRUE.)
-  call caar_flip_f90_array (elem_state_v, elem_state_v_c, .TRUE.)
-  call caar_flip_f90_array (elem_derived_vn0, elem_derived_vn0_c, .TRUE.)
   call caar_flip_f90_array (elem_metdet, elem_metdet_c, .TRUE.)
   call caar_flip_f90_array (elem_rmetdet, elem_rmetdet_c, .TRUE.)
+  call caar_flip_f90_array (elem_state_dp3d,elem_state_dp3d_c,.TRUE.)
+  call caar_flip_f90_array (elem_state_v, elem_state_v_c, .TRUE.)
+  call caar_flip_f90_array (elem_state_Temp, elem_state_Temp_c, .TRUE.)
+  call caar_flip_f90_Qdp_array (elem_state_Qdp, elem_state_Qdp_c)
+  call caar_flip_f90_array (elem_derived_vn0, elem_derived_vn0_c, .TRUE.)
 #endif
 
 
@@ -3031,8 +3049,12 @@ integer :: i,j
   vdp_ptr                       = c_loc(vdp_c)
   div_vdp_ptr                   = c_loc(div_vdp_c)
   vort_ptr                      = c_loc(vort_c)
+  kappa_star_ptr                = c_loc(kappa_star_c)
+  T_v_ptr                       = c_loc(T_v_c)
   elem_state_dp3d_ptr           = c_loc(elem_state_dp3d_c)
   elem_state_v_ptr              = c_loc(elem_state_v_c)
+  elem_state_T_ptr              = c_loc(elem_state_Temp_c)
+  elem_state_Qdp_ptr            = c_loc(elem_state_Qdp_c)
   elem_derived_vn0_ptr          = c_loc(elem_derived_vn0_c)
 #else
   dvv_ptr                       = c_loc(deriv%dvv)
@@ -3046,25 +3068,25 @@ integer :: i,j
   vdp_ptr                       = c_loc(vdp)
   div_vdp_ptr                   = c_loc(div_vdp)
   vort_ptr                      = c_loc(vort)
+  kappa_star_ptr                = c_loc(kappa_star)
+  T_v_ptr                       = c_loc(T_v)
   elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
   elem_state_v_ptr              = c_loc(elem_state_v)
+  elem_state_T_ptr              = c_loc(elem_state_Temp)
+  elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
   elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
 #endif
 
   ! Ptrs used in remaining kernels (not yet refactored) point to f90 arrays
   elem_spheremp_ptr             = c_loc(elem_spheremp)
   elem_fcor_ptr                 = c_loc(elem_fcor)
-  kappa_star_ptr                = c_loc(kappa_star)
   omega_p_ptr                   = c_loc(omega_p)
-  T_v_ptr                       = c_loc(T_v)
   T_vadv_ptr                    = c_loc(T_vadv)
   v_vadv_ptr                    = c_loc(v_vadv)
   ttens_ptr                     = c_loc(ttens)
   vtens1_ptr                    = c_loc(vtens1)
   vtens2_ptr                    = c_loc(vtens2)
-  elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
   elem_state_ps_v_ptr           = c_loc(elem_state_ps_v)
-  elem_state_T_ptr              = c_loc(elem_state_Temp)
   elem_state_phis_ptr           = c_loc(elem_state_phis)
   elem_derived_phi_ptr          = c_loc(elem_derived_phi)
   elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
@@ -3108,6 +3130,21 @@ integer :: i,j
   call caar_flip_f90_array (elem_derived_vn0, elem_derived_vn0_c, .FALSE.)
 #endif
 
+  ! =====================================
+  ! Compute T_v
+  ! =======================================
+
+  call t_startf ("caar_compute_T_v")
+  call CAAR_COMPUTE_T_V(nets, nete, nelemd, n0, qn0, use_cpstar, T_v_ptr, kappa_star_ptr, &
+                        elem_state_dp3d_ptr, elem_state_T_ptr, elem_state_Qdp_ptr)
+  call t_stopf ("caar_compute_T_v")
+
+#ifdef USE_KOKKOS_KERNELS
+  ! Flip outputs
+  call caar_flip_f90_array (kappa_star, kappa_star_c, .FALSE.)
+  call caar_flip_f90_array (T_v, T_v_c, .FALSE.)
+#endif
+
 ! ----------------------- REFACTORED UP TO HERE ------------------------
 ! Note: if the variable/stae foo is updated/changed/computed above this line
 !       and also used below this line, you need to add, after the kernel
@@ -3120,29 +3157,26 @@ integer :: i,j
 !
 !       Also VERY IMPORTANT: rebind the pointers to the original f90 arrays
 
-  dvv_ptr                       = c_loc(deriv%dvv)
-  elem_D_ptr                    = c_loc(elem_D)
-  elem_Dinv_ptr                 = c_loc(elem_Dinv)
-  elem_metdet_ptr               = c_loc(elem_metdet)
-  elem_rmetdet_ptr              = c_loc(elem_rmetdet)
-  p_ptr                         = c_loc(p)
-  grad_p_ptr                    = c_loc(grad_p)
-  vgrad_p_ptr                   = c_loc(vgrad_p)
-  vdp_ptr                       = c_loc(vdp)
-  div_vdp_ptr                   = c_loc(div_vdp)
-  vort_ptr                      = c_loc(vort)
-  elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
-  elem_state_v_ptr              = c_loc(elem_state_v)
-  elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+  dvv_ptr              = c_loc(deriv%dvv)
+  elem_D_ptr           = c_loc(elem_D)
+  elem_Dinv_ptr        = c_loc(elem_Dinv)
+  elem_metdet_ptr      = c_loc(elem_metdet)
+  elem_rmetdet_ptr     = c_loc(elem_rmetdet)
+  p_ptr                = c_loc(p)
+  grad_p_ptr           = c_loc(grad_p)
+  vgrad_p_ptr          = c_loc(vgrad_p)
+  vdp_ptr              = c_loc(vdp)
+  div_vdp_ptr          = c_loc(div_vdp)
+  vort_ptr             = c_loc(vort)
+  kappa_star_ptr       = c_loc(kappa_star)
+  T_v_ptr              = c_loc(T_v)
+  elem_state_dp3d_ptr  = c_loc(elem_state_dp3d)
+  elem_state_v_ptr     = c_loc(elem_state_v)
+  elem_state_T_ptr     = c_loc(elem_state_Temp)
+  elem_state_Qdp_ptr   = c_loc(elem_state_Qdp) ! This could be avoided, since Qdp is not used anymore
+  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
 
 ! ---------------------------------------------------------------------
-
-  ! =====================================
-  ! Compute T_v
-  ! =======================================
-
-  call CAAR_COMPUTE_T_V(nets, nete, n0, qn0, T_v_ptr, kappa_star_ptr, &
-                        elem_state_dp3d_ptr, elem_state_T_ptr, elem_state_Qdp_ptr)
 
   ! ====================================================
   ! Compute Hydrostatic equation, modeld after CCM-3
