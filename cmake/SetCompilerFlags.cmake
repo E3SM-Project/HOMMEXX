@@ -28,6 +28,10 @@ ELSE ()
     #SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -mP2OPT_hpo_matrix_opt_framework=0 -fp-model fast -qopt-report=5 -ftz")
 
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -diag-disable 8291")
+
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fp-model precise")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fp-model precise")
+
     # remark #8291: Recommended relationship between field width 'W' and the number of fractional digits 'D' in this edit descriptor is 'W>=D+7'.
 
     # Needed by csm_share
