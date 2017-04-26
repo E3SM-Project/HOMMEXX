@@ -1,6 +1,7 @@
 #ifndef HOMMEXX_UTILITY_HPP
 #define HOMMEXX_UTILITY_HPP
 
+#include "Dimensions.hpp"
 #include "Types.hpp"
 
 namespace Homme {
@@ -28,7 +29,7 @@ struct DeepCopyImpl<ViewOut, ViewIn, true>
 template<typename ViewOut, typename ViewIn>
 struct DeepCopyImpl<ViewOut, ViewIn, false>
 {
-  static void copy(ViewOut view_out, ViewIn view_in)
+  static void copy(ViewOut /*view_out*/, ViewIn /*view_in*/)
   {
     // At the very least, We can check that the underlying data type is the same
     // (apart from possible cv-qualifiers). This can help finding bugs at compile-time
@@ -66,6 +67,29 @@ void deep_copy_mirror_view(ViewOut view_out, ViewIn view_in)
                                                >::value;
 
   Impl::DeepCopyImpl<ViewOut,ViewIn,do_copy>::copy(view_out, view_in);
+}
+
+template<typename DataType, typename Layout, typename MemoryManagement>
+Real compute_host_view_norm (const Kokkos::View<DataType, Layout, HostMemSpace, MemoryManagement> view)
+{
+  typedef Kokkos::View<DataType, Layout, HostMemSpace, MemoryManagement>     HostViewType;
+  typename HostViewType::pointer_type data = view.data();
+
+  size_t length = view.size();
+
+  // Note: use Kahan algorithm to increase accuracy
+  Real norm = 0;
+  Real c = 0;
+  Real temp, y;
+  for (size_t i=0; i<length; ++i)
+  {
+    y = data[i]*data[i] - c;
+    temp = norm + y;
+    c = (temp - norm) - y;
+    norm = temp;
+  }
+
+  return std::sqrt(norm);
 }
 
 } // namespace Homme
