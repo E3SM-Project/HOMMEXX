@@ -35,8 +35,8 @@ private
      real (kind=real_kind) :: M_t(np,np)
   end type derivative_stag_t
 
-  real (kind=real_kind), allocatable :: integration_matrix(:,:)
-  real (kind=real_kind), allocatable :: boundary_interp_matrix(:,:,:)
+  real (kind=real_kind), allocatable, target, public :: integration_matrix(:,:)
+  real (kind=real_kind), allocatable, target, public :: boundary_interp_matrix(:,:,:)
 
 ! ======================================
 ! Public Interfaces
