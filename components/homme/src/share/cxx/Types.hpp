@@ -10,6 +10,7 @@ namespace Homme {
 using Real   = double;
 using RCPtr  = Real* const;
 using CRCPtr = const Real* const;
+using F90Ptr = const Real* const; // Using this in a function signature emphasizes that the ordering is Fortran
 
 // Selecting the execution space. If no specific request, use Kokkos default exec space
 #ifdef HOMMEXX_CUDA_SPACE
@@ -40,17 +41,12 @@ template<typename DataType>
 using ExecViewManaged = ViewType<DataType,ExecMemSpace,Kokkos::MemoryManaged>;
 template<typename DataType>
 using ExecViewUnmanaged = ViewType<DataType,ExecMemSpace,Kokkos::MemoryUnmanaged>;
-template<typename DataType>
-using ExecViewF90 = Kokkos::View<DataType,Kokkos::LayoutLeft,ExecMemSpace,Kokkos::MemoryManaged>;
 
 // Further specializations for host space.
-// Note: views from f90 pointers are LayoutLeft and always unmanaged
 template<typename DataType>
 using HostViewManaged = ViewType<DataType,HostMemSpace,Kokkos::MemoryManaged>;
 template<typename DataType>
 using HostViewUnmanaged = ViewType<DataType,HostMemSpace,Kokkos::MemoryUnmanaged>;
-template<typename DataType>
-using HostViewF90 = Kokkos::View<DataType,Kokkos::LayoutLeft,HostMemSpace,Kokkos::MemoryUnmanaged>;
 
 // The scratch view type: always unmanaged, and always with c pointers
 template<typename DataType>
