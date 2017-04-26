@@ -140,6 +140,7 @@ SET(PREQX_FLAT_DEPS_C
 
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/caar_helpers.cpp
+  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
 )
 
