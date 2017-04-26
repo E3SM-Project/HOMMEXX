@@ -177,7 +177,7 @@ contains
                                   T_v_ptr, kappa_star_ptr, elem_state_dp_ptr, &
                                   elem_state_T_ptr, elem_state_Qdp_ptr) bind(c)
     use iso_c_binding,      only : c_int, c_ptr, c_f_pointer
-    use dimensions_mod,     only : nlev, np, qsize
+    use dimensions_mod,     only : nlev, np, qsize_d
     use element_mod,        only : timelevels
     use physical_constants, only : Rgas, kappa
     use physics_mod,        only : virtual_specific_heat, virtual_temperature
@@ -203,7 +203,7 @@ contains
     call c_f_pointer(T_v_ptr,            T_v,             [np, np, nlev, nelemd])
     call c_f_pointer(kappa_star_ptr,     kappa_star,      [np, np, nlev, nelemd])
     call c_f_pointer(elem_state_T_ptr,   elem_state_Temp, [np, np, nlev, timelevels, nelemd])
-    call c_f_pointer(elem_state_Qdp_ptr, elem_state_Qdp,  [np, np, nlev, qsize, 2, nelemd])
+    call c_f_pointer(elem_state_Qdp_ptr, elem_state_Qdp,  [np, np, nlev, qsize_d, 2, nelemd])
 
     ! compute T_v for timelevel n0
     if (qn0 == -1 ) then
@@ -243,16 +243,16 @@ contains
 
   end subroutine caar_compute_T_v_f90
 
-  subroutine caar_preq_hydrostatic_f90(nets, nete, n0, phi_ptr, phis_ptr, &
+  subroutine caar_preq_hydrostatic_f90(nets, nete, nelemd, n0, phi_ptr, phis_ptr, &
                                        T_v_ptr, p_ptr, dp_ptr) bind(c)
     use iso_c_binding,      only : c_int, c_ptr, c_f_pointer
-    use dimensions_mod,     only : np, nlev, nelemd
+    use dimensions_mod,     only : np, nlev
     use element_mod,        only : timelevels
     use physical_constants, only : rgas
     !
     ! Inputs
     !
-    integer (kind=c_int), intent(in) :: nets, nete, n0
+    integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0
     type (c_ptr), intent(in) :: phi_ptr, phis_ptr, T_v_ptr, p_ptr, dp_ptr
     !
     ! Locals
@@ -305,14 +305,15 @@ contains
 
   end subroutine caar_preq_hydrostatic_f90
 
-  subroutine caar_preq_omega_ps_f90(nets, nete, div_vdp_ptr, &
+  subroutine caar_preq_omega_ps_f90(nets, nete, nelemd, div_vdp_ptr, &
                                     vgrad_p_ptr, p_ptr, omega_p_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
-    use dimensions_mod, only : np, nlev, nelemd
+    use dimensions_mod, only : np, nlev
+    use utils_mod,      only : FrobeniusNorm
     !
     ! Inputs
     !
-    integer (kind=c_int), intent(in) :: nets, nete
+    integer (kind=c_int), intent(in) :: nets, nete, nelemd
     type (c_ptr), intent(in) :: div_vdp_ptr, vgrad_p_ptr, p_ptr, omega_p_ptr
     !
     ! Locals
@@ -367,15 +368,18 @@ contains
     end do
   end subroutine caar_preq_omega_ps_f90
 
-  subroutine caar_compute_eta_dot_dpdn_f90(nets, nete, eta_dot_dpdn_ptr, T_vadv_ptr, v_vadv_ptr,    &
-                                           elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-                                           omega_p_ptr, eta_ave_w) bind(c)
+  subroutine caar_compute_eta_dot_dpdn_f90(nets, nete, nelemd, eta_ave_w, &
+                                           omega_p_ptr, eta_dot_dpdn_ptr, &
+                                           T_vadv_ptr, v_vadv_ptr,        &
+                                           elem_derived_eta_dot_dpdn_ptr, &
+                                           elem_derived_omega_p_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
-    use dimensions_mod, only : np, nlev, nelemd
+    use dimensions_mod, only : np, nlev
+    use utils_mod,      only : FrobeniusNorm
     !
     ! Inputs
     !
-    integer (kind=c_int), intent(in) :: nets, nete
+    integer (kind=c_int), intent(in) :: nets, nete, nelemd
     type (c_ptr), intent(in) :: eta_dot_dpdn_ptr, T_vadv_ptr, v_vadv_ptr, omega_p_ptr
     type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr
     real (kind=real_kind), intent(in) :: eta_ave_w
@@ -456,25 +460,26 @@ contains
     end do
   end subroutine caar_compute_eta_dot_dpdn_f90
 
-  subroutine caar_compute_phi_kinetic_energy_f90(nets, nete, n0, dvv_ptr, p_ptr, grad_p_ptr, &
-                                                 v_vadv_ptr, T_vadv_ptr, elem_Dinv_ptr,      &
-                                                 elem_fcor_ptr, vort_ptr, elem_state_T_ptr,  &
-                                                 elem_state_v_ptr, elem_derived_phi_ptr,     &
-                                                 elem_derived_pecnd_ptr,                     &
-                                                 kappa_star_ptr, T_v_ptr, omega_p_ptr,       &
-                                                 ttens_ptr, vtens1_ptr, vtens2_ptr) bind(c)
+  subroutine caar_compute_phi_kinetic_energy_f90 (nets, nete, nelemd, n0, dvv_ptr,   &
+                                       p_ptr, grad_p_ptr, vort_ptr,                  &
+                                       v_vadv_ptr, T_vadv_ptr,                       &
+                                       elem_Dinv_ptr, elem_fcor_ptr,                 &
+                                       elem_state_T_ptr,elem_state_v_ptr,            &
+                                       elem_derived_phi_ptr, elem_derived_pecnd_ptr, &
+                                       kappa_star_ptr, T_v_ptr, omega_p_ptr,         &
+                                       ttens_ptr, vtens1_ptr, vtens2_ptr) bind (c)
     use iso_c_binding,      only : c_int, c_ptr, c_f_pointer
     use derivative_mod,     only : derivative_t, gradient_sphere
-    use dimensions_mod,     only : np, nlev, nelemd
+    use dimensions_mod,     only : np, nlev
     use element_mod,        only : timelevels
     use physical_constants, only : Rgas
     !
     ! Inputs
     !
-    integer (kind=c_int), intent(in) :: nets, nete, n0
-    type (c_ptr), intent(in) :: dvv_ptr, T_v_ptr, p_ptr, grad_p_ptr, v_vadv_ptr, T_vadv_ptr
+    integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0
+    type (c_ptr), intent(in) :: dvv_ptr, T_v_ptr, p_ptr, grad_p_ptr, vort_ptr
     type (c_ptr), intent(in) :: elem_state_T_ptr, elem_state_v_ptr, elem_derived_phi_ptr
-    type (c_ptr), intent(in) :: elem_Dinv_ptr, elem_fcor_ptr, vort_ptr
+    type (c_ptr), intent(in) :: elem_Dinv_ptr, elem_fcor_ptr, v_vadv_ptr, T_vadv_ptr
     type (c_ptr), intent(in) :: elem_derived_pecnd_ptr, kappa_star_ptr
     type (c_ptr), intent(in) :: vtens1_ptr, vtens2_ptr, ttens_ptr, omega_p_ptr
     !
@@ -592,26 +597,26 @@ contains
     end do
   end subroutine caar_compute_phi_kinetic_energy_f90
 
-  subroutine caar_update_states_f90(nets, nete, nm1, np1, dt2, &
-                                    vdp_ptr, div_vdp_ptr, vtens1_ptr, vtens2_ptr, ttens_ptr, &
-                                    elem_Dinv_ptr, elem_metdet_ptr, elem_spheremp_ptr,       &
-                                    elem_state_v_ptr, elem_state_T_ptr, elem_state_dp3d_ptr, &
-                                    elem_sub_elem_mass_flux_ptr, eta_dot_dpdn_ptr, eta_ave_w,&
-                                    elem_state_ps_v_ptr, sdot_sum_ptr) bind(c)
+  subroutine caar_update_states_f90(nets, nete, nelemd, nm1, np1, dt2, rsplit, ntrac, eta_ave_w,  &
+                                    vdp_ptr, div_vdp_ptr, eta_dot_dpdn_ptr, sdot_sum_ptr,         &
+                                    ttens_ptr, vtens1_ptr, vtens2_ptr,                            &
+                                    elem_Dinv_ptr, elem_metdet_ptr, elem_spheremp_ptr,            &
+                                    elem_state_v_ptr, elem_state_T_ptr, elem_state_dp3d_ptr,      &
+                                    elem_sub_elem_mass_flux_ptr, elem_state_ps_v_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
-    use control_mod,    only : rsplit
     use derivative_mod, only : subcell_div_fluxes
-    use dimensions_mod, only : nlev, ntrac, nelemd, np, nc
+    use dimensions_mod, only : nlev, np, nc
     use element_mod,    only : timelevels
     !
     ! Inputs
     !
-    integer (kind=c_int),  intent(in) :: nets, nete, nm1, np1
+    integer (kind=c_int),  intent(in) :: nets, nete, nelemd, nm1, np1, rsplit, ntrac
     real (kind=real_kind), intent(in) :: dt2, eta_ave_w
-    type (c_ptr), intent(in) :: vdp_ptr, div_vdp_ptr, vtens1_ptr, vtens2_ptr, ttens_ptr
+    type (c_ptr), intent(in) :: vdp_ptr, div_vdp_ptr, eta_dot_dpdn_ptr, sdot_sum_ptr
+    type (c_ptr), intent(in) :: ttens_ptr, vtens1_ptr, vtens2_ptr
     type (c_ptr), intent(in) :: elem_Dinv_ptr, elem_metdet_ptr, elem_spheremp_ptr
     type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_ps_v_ptr, elem_state_T_ptr, elem_state_dp3d_ptr
-    type (c_ptr), intent(in) :: elem_sub_elem_mass_flux_ptr, eta_dot_dpdn_ptr, sdot_sum_ptr
+    type (c_ptr), intent(in) :: elem_sub_elem_mass_flux_ptr
     !
     ! Locals
     !
@@ -1115,8 +1120,8 @@ contains
 
     iter = 1
     do ie=1,dims(6)
-      do qdim=1,dims(4)
-        do tl=1,dims(5)
+      do tl=1,dims(5)
+        do qdim=1,dims(4)
           do k=1,dims(3)
             do igp=1,dims(1)
               do jgp=1,dims(2)
