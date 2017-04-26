@@ -54,7 +54,7 @@ IF (${HOMME_QUAD_PREC})
 ENDIF ()
 
 # Some options for conditional builds
-OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" ON)
+OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" OFF)
 OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" ON)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" OFF)
 OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
@@ -99,6 +99,10 @@ ENDIF()
 INCLUDE(SetCompilerFlags)
 
 # Print the compiler flags to be used
+STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+MESSAGE(STATUS "Fortran Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_Fortran_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+MESSAGE(STATUS "C Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+MESSAGE(STATUS "CXX Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 MESSAGE(STATUS "Fortran Flags = ${CMAKE_Fortran_FLAGS}")
 MESSAGE(STATUS "C Flags = ${CMAKE_C_FLAGS}")
 MESSAGE(STATUS "CXX Flags = ${CMAKE_CXX_FLAGS}")
@@ -183,7 +187,6 @@ ADD_SUBDIRECTORY(utils/timing)
 # Processing executables subdirectories
 ##########################################
 
-STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
 IF (CMAKE_BUILD_TYPE_UPPER MATCHES "DEBUG")
   SET (HOMMEXX_DEBUG ON)
 ENDIF()
