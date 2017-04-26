@@ -1,7 +1,9 @@
-#ifndef TINMAN_DIMENSIONS_HPP
-#define TINMAN_DIMENSIONS_HPP
+#ifndef HOMMEXX_DIMENSIONS_HPP
+#define HOMMEXX_DIMENSIONS_HPP
 
-#include <config.h.c>
+#ifdef HAVE_CONFIG_H
+#include "config.h.c"
+#endif
 
 namespace Homme {
 
@@ -24,4 +26,4 @@ static constexpr int Q_NUM_TIME_LEVELS = 2;
 
 } // namespace TinMan
 
-#endif // TINMAN_DIMENSIONS_HPP
+#endif // HOMMEXX_DIMENSIONS_HPP
