@@ -43,20 +43,20 @@ struct DeepCopyImpl<ViewOut, ViewIn, false>
 } // namespace Impl
 
  /*
-  *This function will actually perform a deep copy only if the memory spaces
-  *are different. Notice that this means that calling this function with two
-  *views living on the same memory space will always end up in a no-op, even
-  *if the two views are 'different'. Use this method only to perform a deep
-  *copy between a view and its mirror view on another memory space. For all
-  *the other cases, use Kokkos::deep_copy
-  *Why we need this? Glad you asked. Right now, Kokkos::deep_copy has a compile
-  *time check to ensure that the data type of the destination view is NOT const.
-  *This can be a problem if you create view_out using create_mirror_view, passing
-  *the output memory space. In particular, if you have a View view_in with
-  *const data type on memory space MS, and you create a mirror view on the same
-  *memory space (perhaps you're using OpenMP), the output view will be a shallow
-  *copy of view_in, with also const data type. If you then try call deep_copy
-  *on these two views, the compiler will bite you.
+  * This function will actually perform a deep copy only if the memory spaces
+  * are different. Notice that this means that calling this function with two
+  * views living on the same memory space will always end up in a no-op, even
+  * if the two views are 'different'. Use this method only to perform a deep
+  * copy between a view and its mirror view on (possibly) another memory space.
+  * For all the other cases, use Kokkos::deep_copy.
+  * Why we need this? Glad you asked. Right now, Kokkos::deep_copy has a compile
+  * time check to ensure that the data type of the destination view is NOT const.
+  * This can be a problem if you create view_out using create_mirror_view, passing
+  * the output memory space. In particular, if you have a View view_in with
+  * const data type on memory space MS, and you create a mirror view on the same
+  * memory space (perhaps you're using OpenMP), the output view will be a shallow
+  * copy of view_in, with also const data type. If you then try call deep_copy
+  * on these two views, the compiler will bite you.
   */
 template<typename ViewOut, typename ViewIn>
 KOKKOS_FORCEINLINE_FUNCTION
