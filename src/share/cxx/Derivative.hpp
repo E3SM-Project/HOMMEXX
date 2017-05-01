@@ -33,6 +33,8 @@ private:
 
 Derivative& get_derivative ();
 
+// I put this function here since in F90 it is inside derivative_mod_base.
+// But honestly, I'm not sure it belongs here.
 void subcell_div_fluxes (const Kokkos::TeamPolicy<ExecSpace>::member_type& team_member,
                          const ExecViewUnmanaged<const Real[2][NP][NP]>    u,
                          const ExecViewUnmanaged<const Real[NP][NP]>       metdet,

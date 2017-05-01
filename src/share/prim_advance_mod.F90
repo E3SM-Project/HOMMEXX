@@ -155,16 +155,6 @@ contains
   end subroutine
 #endif
 
-! Define the macros to correctly call the Kokkos or Fortran kernels
-! The following lines are what we want to have soon. For now we have to
-! include cxx code one small kernel at a time. When that is done and everything
-! works, we can switch to one single big loop.
-!#ifdef USE_KOKKOS_KERNELS
-!#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_c
-!#else
-!#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_f90
-!#endif
-
   !_____________________________________________________________________
   subroutine prim_advance_exp(elem, deriv, hvcoord, hybrid,dt, tl,  nets, nete, compute_diagnostics)
 
@@ -3321,17 +3311,8 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
                           elem_state_v_ptr, elem_state_T_ptr, elem_state_dp3d_ptr,      &
                           elem_sub_elem_mass_flux_ptr, elem_state_ps_v_ptr)
 
-! ----------------------- REFACTORED UP TO HERE ------------------------
-! Note: if the variable/state foo is updated/changed/computed above this line
-!       and also used outside this subroutine, you need to add, after the kernel
-!       completion, an ifdeffed section where, in case of kokkos build,
-!       you flip the arrays back. Something like
-!
-! #ifdef USE_KOKKOS_KERNELS
-!   call caar_flip_f90_array (foo, foo_c, .FALSE.)
-! #endif
-!
 #ifdef USE_KOKKOS_KERNELS
+  ! Flip back output arrays to pass the results back to fortran
   call caar_flip_f90_array (elem_derived_vn0, elem_derived_vn0_c, .FALSE.)
   call caar_flip_f90_array (elem_derived_phi, elem_derived_phi_c, .FALSE. )
   call caar_flip_f90_array (elem_derived_eta_dot_dpdn, elem_derived_eta_dot_dpdn_c, .FALSE. )
@@ -3342,7 +3323,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   call caar_flip_f90_array (elem_state_ps_v, elem_state_ps_v_c, .FALSE. )
   call caar_flip_f90_array (elem_sub_elem_mass_flux, elem_sub_elem_mass_flux_c, .FALSE. )
 #endif
-! ---------------------------------------------------------------------
 
   end subroutine compute_and_apply_rhs_pre_exchange_f90
 
