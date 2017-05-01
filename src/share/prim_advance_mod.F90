@@ -2823,8 +2823,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
   use kinds,                  only : real_kind
   use control_mod,            only : use_cpstar
-  use derivative_mod,         only : derivative_t, gradient_sphere, divergence_sphere, vorticity_sphere, &
-                                     subcell_div_fluxes, integration_matrix, boundary_interp_matrix
+  use derivative_mod,         only : derivative_t, gradient_sphere, divergence_sphere, vorticity_sphere
   use dimensions_mod,         only : np, nc, nlev, ntrac, nelemd, qsize_d
   use element_mod,            only : element_t, elem_state_dp3d, elem_state_v, elem_state_Temp,   &
                                      elem_derived_vn0, elem_sub_elem_mass_flux, elem_state_Qdp,   &
@@ -2846,16 +2845,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
 #ifdef USE_KOKKOS_KERNELS
   interface
-
-    subroutine init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr) bind(c)
-      use kinds,         only : real_kind
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
-    end subroutine init_derivative_c
-
     subroutine caar_compute_pressure_c(nets, nete, nelemd, n0, hyai_ps0, p_ptr, dp_ptr) bind(c)
       use kinds,         only : real_kind
       use iso_c_binding, only : c_int, c_ptr
@@ -2867,10 +2856,10 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
       real (kind=real_kind), intent(in) :: hyai_ps0
     end subroutine caar_compute_pressure_c
 
-    subroutine caar_compute_vort_and_div_c(nets, nete, nelemd, n0, eta_ave_w, dvv_ptr, &
-                                           D_ptr, Dinv_ptr, metdet_ptr, dummy_c_ptr,    &
-                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,     &
-                                           elem_state_v_ptr, elem_derived_vn0_ptr,     &
+    subroutine caar_compute_vort_and_div_c(nets, nete, nelemd, n0, eta_ave_w,        &
+                                           D_ptr, Dinv_ptr, metdet_ptr, dummy_c_ptr, &
+                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,   &
+                                           elem_state_v_ptr, elem_derived_vn0_ptr,   &
                                            vdp_ptr, div_vdp_ptr, vort_ptr) bind(c)
       use kinds,         only : real_kind
       use iso_c_binding, only : c_int, c_ptr
@@ -2878,7 +2867,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
       ! Inputs
       !
       integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
-      type (c_ptr),          intent(in) :: dvv_ptr, D_ptr, Dinv_ptr, metdet_ptr, dummy_c_ptr
+      type (c_ptr),          intent(in) :: D_ptr, Dinv_ptr, metdet_ptr, dummy_c_ptr
       type (c_ptr),          intent(in) :: p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr
       type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_derived_vn0_ptr
       type (c_ptr),          intent(in) :: vdp_ptr, div_vdp_ptr, vort_ptr
@@ -2933,7 +2922,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
       real (kind=real_kind), intent(in) :: eta_ave_w
     end subroutine caar_compute_eta_dot_dpdn_c
 
-    subroutine caar_compute_phi_kinetic_energy_c (nets, nete, nelemd, n0, dvv_ptr,              &
+    subroutine caar_compute_phi_kinetic_energy_c (nets, nete, nelemd, n0,                       &
                                                   p_ptr, grad_p_ptr, vort_ptr,                  &
                                                   v_vadv_ptr, T_vadv_ptr,                       &
                                                   elem_Dinv_ptr, elem_fcor_ptr,                 &
@@ -2946,7 +2935,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
       ! Inputs
       !
       integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0
-      type (c_ptr), intent(in) :: dvv_ptr, T_v_ptr, p_ptr, grad_p_ptr, vort_ptr
+      type (c_ptr), intent(in) :: T_v_ptr, p_ptr, grad_p_ptr, vort_ptr
       type (c_ptr), intent(in) :: elem_state_T_ptr, elem_state_v_ptr, elem_derived_phi_ptr
       type (c_ptr), intent(in) :: elem_Dinv_ptr, elem_fcor_ptr, v_vadv_ptr, T_vadv_ptr
       type (c_ptr), intent(in) :: elem_derived_pecnd_ptr, kappa_star_ptr
@@ -3009,8 +2998,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
 #ifdef USE_KOKKOS_KERNELS
   ! arrays used to flip from left layout to right layout
-  real (kind=real_kind), dimension(:,:), pointer :: dvv_2d_ptr
-  real (kind=real_kind), dimension(:), allocatable, target :: dvv_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_D_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_Dinv_c
   real (kind=real_kind), dimension(:), allocatable, target :: elem_metdet_c
@@ -3047,7 +3034,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   real (kind=real_kind), dimension(:), allocatable, target :: elem_sub_elem_mass_flux_c
 #endif
 
-  type (c_ptr) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
   type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_metdet_ptr
   type (c_ptr) :: elem_rmetdet_ptr, elem_spheremp_ptr, elem_fcor_ptr
   type (c_ptr) :: p_ptr, grad_p_ptr, vgrad_p_ptr, vdp_ptr, div_vdp_ptr, vort_ptr
@@ -3062,15 +3048,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! ---------------------------------------------------------- !
   !                        Subroutine body                     !
   !----------------------------------------------------------- !
-
-#ifdef USE_KOKKOS_KERNELS
-  ! Initialize derivative structure
-  dvv_ptr           = c_loc(deriv%dvv)
-  integr_mat_ptr    = c_loc(integration_matrix)
-  bd_interp_mat_ptr = c_loc(boundary_interp_matrix)
-
-  call init_derivative_c(dvv_ptr,integr_mat_ptr,bd_interp_mat_ptr)
-#endif
 
   ! Allocate temporaries
   allocate(p             (np,np,nlev,nelemd)  )
@@ -3092,7 +3069,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
 #ifdef USE_KOKKOS_KERNELS
   ! Allocate c-ordering arrays
-  allocate(dvv_c                       (np*np))
   allocate(elem_D_c                    (nelemd*2*2*np*np))
   allocate(elem_Dinv_c                 (nelemd*2*2*np*np))
   allocate(elem_metdet_c               (nelemd*np*np))
@@ -3130,8 +3106,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
   ! Flip f90 input arrays into cxx arrays
   ! We will have to flip back states at the end though
-  dvv_2d_ptr => deriv%dvv ! For some reason the following line would not work with deriv%dvv in place of dvv_2d_ptr
-  call caar_flip_f90_array (dvv_2d_ptr, dvv_c,.TRUE.)
   call caar_flip_f90_tensor2d (elem_D, elem_D_c)
   call caar_flip_f90_tensor2d (elem_Dinv, elem_Dinv_c)
   call caar_flip_f90_array (elem_metdet, elem_metdet_c, .TRUE.)
@@ -3153,7 +3127,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! Create the pointers. Based on the build type, we point to f90 or cxx arrays
 
 #ifdef USE_KOKKOS_KERNELS
-  dvv_ptr                       = c_loc(dvv_c)
   elem_D_ptr                    = c_loc(elem_D_c)
   elem_Dinv_ptr                 = c_loc(elem_Dinv_c)
   elem_metdet_ptr               = c_loc(elem_metdet_c)
@@ -3189,7 +3162,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p_c)
   elem_sub_elem_mass_flux_ptr   = c_loc(elem_sub_elem_mass_flux_c)
 #else
-  dvv_ptr                       = c_loc(deriv%dvv)
   elem_D_ptr                    = c_loc(elem_D)
   elem_Dinv_ptr                 = c_loc(elem_Dinv)
   elem_metdet_ptr               = c_loc(elem_metdet)
@@ -3239,10 +3211,11 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! ======================================
 
   call t_startf ("caar_compute_vort_and_div")
-  call CAAR_COMPUTE_VORT_AND_DIV (nets, nete, nelemd, n0, eta_ave_w, dvv_ptr,                  &
-                                  elem_D_ptr, elem_Dinv_ptr, elem_metdet_ptr, elem_rmetdet_ptr, &
-                                  p_ptr, elem_state_dp3d_ptr, grad_p_ptr,                  &
-                                  vgrad_p_ptr, elem_state_v_ptr, elem_derived_vn0_ptr,     &
+  call CAAR_COMPUTE_VORT_AND_DIV (nets, nete, nelemd, n0, eta_ave_w                    &
+                                  elem_D_ptr, elem_Dinv_ptr,                           &
+                                  elem_metdet_ptr, elem_rmetdet_ptr,                   &
+                                  p_ptr, elem_state_dp3d_ptr, grad_p_ptr,              &
+                                  vgrad_p_ptr, elem_state_v_ptr, elem_derived_vn0_ptr, &
                                   vdp_ptr, div_vdp_ptr, vort_ptr)
   call t_stopf ("caar_compute_vort_and_div")
 
@@ -3285,7 +3258,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! ===========================================
 
   call t_startf ("caar_compute_phi_kinetic_energy")
-  call CAAR_COMPUTE_PHI_KINETIC_ENERGY(nets, nete, nelemd, n0, dvv_ptr,              &
+  call CAAR_COMPUTE_PHI_KINETIC_ENERGY(nets, nete, nelemd, n0,                       &
                                        p_ptr, grad_p_ptr, vort_ptr,                  &
                                        v_vadv_ptr, T_vadv_ptr,                       &
                                        elem_Dinv_ptr, elem_fcor_ptr,                 &

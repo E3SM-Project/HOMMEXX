@@ -92,7 +92,7 @@ void caar_compute_pressure_c (const int& nets, const int& nete,
 }
 
 void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& nelemd, const int& n0,
-                                  const Real& eta_ave_w, CRCPtr& dvv_ptr, CRCPtr& D_ptr, CRCPtr& Dinv_ptr,
+                                  const Real& eta_ave_w, CRCPtr& D_ptr, CRCPtr& Dinv_ptr,
                                   CRCPtr& metdet_ptr, CRCPtr& rmetdet_ptr, CRCPtr& p_ptr, CRCPtr& dp_ptr,
                                   RCPtr& grad_p_ptr, RCPtr& vgrad_p_ptr, CRCPtr& v_ptr, RCPtr& vn0_ptr,
                                   RCPtr& vdp_ptr, RCPtr& div_vdp_ptr, RCPtr& vort_ptr)
@@ -101,11 +101,10 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   using Kokkos::ALL;
 
   // Store the f90 pointers into a unmanaged views
-  HostViewUnmanaged<const Real[NP][NP]>                               dvv_host     (dvv_ptr);
   HostViewUnmanaged<const Real*[2][2][NP][NP]>                        D_host       (D_ptr,       nelemd);
   HostViewUnmanaged<const Real*[2][2][NP][NP]>                        Dinv_host    (Dinv_ptr,    nelemd);
   HostViewUnmanaged<const Real*[NP][NP]>                              metdet_host  (metdet_ptr,  nelemd);
-  HostViewUnmanaged<const Real*[NP][NP]>                              rmetdet_host (rmetdet_ptr,  nelemd);
+  HostViewUnmanaged<const Real*[NP][NP]>                              rmetdet_host (rmetdet_ptr, nelemd);
   HostViewUnmanaged<const Real*[NUM_LEV][NP][NP]>                     p_host       (p_ptr,       nelemd);
   HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][NP][NP]>    dp_host      (dp_ptr,      nelemd);
   HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][2][NP][NP]> v_host       (v_ptr,       nelemd);
@@ -118,7 +117,7 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
 
   // Create the execution space views. If ExecSpace can access HostMemSpace,
   // then the exec view is storing the host view pointer, otherwise is managed
-  auto dvv_exec     = Kokkos::create_mirror_view (exec_space, dvv_host     );
+  auto dvv_exec     = get_derivative().get_dvv();
   auto D_exec       = Kokkos::create_mirror_view (exec_space, D_host       );
   auto Dinv_exec    = Kokkos::create_mirror_view (exec_space, Dinv_host    );
   auto metdet_exec  = Kokkos::create_mirror_view (exec_space, metdet_host  );
@@ -135,7 +134,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
 
   // Forward the views (just the inputs, actually) to the execution space
   // Note: this is a no-op if ExecSpace can access HostMemSpace
-  deep_copy_mirror_view(dvv_exec,     dvv_host);
   deep_copy_mirror_view(D_exec,       D_host);
   deep_copy_mirror_view(Dinv_exec,    Dinv_host);
   deep_copy_mirror_view(metdet_exec,  metdet_host);
@@ -715,8 +713,7 @@ void caar_compute_eta_dot_dpdn_c (const int& nets, const int& nete,
 
 void caar_compute_phi_kinetic_energy_c (const int& nets, const int& nete,
                                         const int& nelemd, const int& n0,
-                                        CRCPtr& dvv_ptr, CRCPtr& p_ptr,
-                                        CRCPtr& grad_p_ptr, CRCPtr& vort_ptr,
+                                        CRCPtr& p_ptr, CRCPtr& grad_p_ptr, CRCPtr& vort_ptr,
                                         CRCPtr& v_vadv_ptr, CRCPtr& T_vadv_ptr,
                                         CRCPtr& elem_Dinv_ptr, CRCPtr& elem_fcor_ptr,
                                         CRCPtr& elem_state_T_ptr, CRCPtr& elem_state_v_ptr,
@@ -728,7 +725,6 @@ void caar_compute_phi_kinetic_energy_c (const int& nets, const int& nete,
   using Kokkos::ALL;
 
   // Store the f90 pointers into a unmanaged views
-  HostViewUnmanaged<const Real[NP][NP]>               dvv_host        (dvv_ptr);
   HostViewUnmanaged<const Real*[NUM_LEV][NP][NP]>     p_host          (p_ptr,          nelemd);
   HostViewUnmanaged<const Real*[NUM_LEV][NP][NP]>     vort_host       (vort_ptr,       nelemd);
   HostViewUnmanaged<const Real*[NUM_LEV][2][NP][NP]>  grad_p_host     (grad_p_ptr,     nelemd);
@@ -752,7 +748,7 @@ void caar_compute_phi_kinetic_energy_c (const int& nets, const int& nete,
 
   // Create the execution space views. If ExecSpace can access HostMemSpace,
   // then the exec view is storing the host view pointer, otherwise is managed
-  auto dvv_exec                = Kokkos::create_mirror_view (exec_space, dvv_host);
+  auto dvv_exec                = get_derivative().get_dvv();
   auto Dinv_exec               = Kokkos::create_mirror_view (exec_space, Dinv_host);
   auto fcor_exec               = Kokkos::create_mirror_view (exec_space, fcor_host);
   auto omega_p_exec            = Kokkos::create_mirror_view (exec_space, omega_p_host);
@@ -778,7 +774,6 @@ void caar_compute_phi_kinetic_energy_c (const int& nets, const int& nete,
 
   // Forward the views (just the inputs, actually) to the execution space
   // Note: this is a no-op if ExecSpace can access HostMemSpace
-  deep_copy_mirror_view (dvv_exec,                dvv_host);
   deep_copy_mirror_view (Dinv_exec,               Dinv_host);
   deep_copy_mirror_view (fcor_exec,               fcor_host);
   deep_copy_mirror_view (omega_p_exec,            omega_p_host);

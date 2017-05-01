@@ -3,9 +3,14 @@
 #endif
 
 module caar_subroutines_mod
-  use kinds,        only : real_kind
+  use kinds               , only : real_kind
+  use derivative_mod_base , only : derivative_t
 
   implicit none
+
+  private
+
+  type (derivative_t) :: deriv
 
   interface caar_flip_f90_array
     module procedure caar_flip_f90_array_2D
@@ -19,6 +24,17 @@ module caar_subroutines_mod
   public :: caar_flip_f90_array
 
 contains
+
+  subroutine init_caar_derivative_f90 (deriv_in)
+    use derivative_mod_base , only : derivative_t
+    !
+    ! Inputs
+    !
+    type (derivative_t), intent(in) :: deriv_in
+
+    deriv%dvv              = deriv_in%dvv
+  end subroutine init_caar_derivative_f90
+
   subroutine caar_compute_pressure_f90(nets, nete, nelemd, n0, hyai_ps0, p_ptr, dp_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
     use control_mod,    only : rsplit
@@ -54,10 +70,10 @@ contains
     end do
   end subroutine caar_compute_pressure_f90
 
-  subroutine caar_compute_vort_and_div_f90(nets, nete, nelemd, n0, eta_ave_w, dvv_ptr,  &
-                                           D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr,    &
-                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,      &
-                                           elem_state_v_ptr, elem_derived_vn0_ptr,      &
+  subroutine caar_compute_vort_and_div_f90(nets, nete, nelemd, n0, eta_ave_w,        &
+                                           D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr, &
+                                           p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr,   &
+                                           elem_state_v_ptr, elem_derived_vn0_ptr,   &
                                            vdp_ptr, div_vdp_ptr, vort_ptr) bind(c)
     use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
     use dimensions_mod, only : np, nlev
@@ -67,7 +83,7 @@ contains
     ! Inputs
     !
     integer (kind=c_int),  intent(in) :: nets, nete, nelemd, n0
-    type (c_ptr),          intent(in) :: dvv_ptr, D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr
+    type (c_ptr),          intent(in) :: D_ptr, Dinv_ptr, metdet_ptr, rmetdet_ptr
     type (c_ptr),          intent(in) :: p_ptr, dp_ptr, grad_p_ptr, vgrad_p_ptr
     type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_derived_vn0_ptr
     type (c_ptr),          intent(in) :: vdp_ptr, div_vdp_ptr, vort_ptr
@@ -75,7 +91,6 @@ contains
     !
     ! Locals
     !
-    real (kind=real_kind), dimension(:,:),         pointer :: dvv
     real (kind=real_kind), dimension(:,:,:,:,:),   pointer :: D
     real (kind=real_kind), dimension(:,:,:,:,:),   pointer :: Dinv
     real (kind=real_kind), dimension(:,:,:),       pointer :: metdet
@@ -91,11 +106,9 @@ contains
     real (kind=real_kind), dimension(:,:,:,:,:),   pointer :: elem_derived_vn0
     integer               :: ie, k, i, j
     real (kind=real_kind) :: v1, v2
-    type (derivative_t)   :: deriv
     type (element_t)      :: elem
 
     ! cast the pointers
-    call c_f_pointer(dvv_ptr,              dvv,              [np, np])
     call c_f_pointer(D_ptr,                D,                [np, np, 2, 2, nelemd])
     call c_f_pointer(Dinv_ptr,             Dinv,             [np, np, 2, 2, nelemd])
     call c_f_pointer(metdet_ptr,           metdet,           [np, np, nelemd])
@@ -109,8 +122,6 @@ contains
     call c_f_pointer(vgrad_p_ptr,          vgrad_p,          [np, np, nlev, nelemd])
     call c_f_pointer(elem_state_v_ptr,     elem_state_v,     [np, np, 2, nlev, timelevels, nelemd])
     call c_f_pointer(elem_derived_vn0_ptr, elem_derived_vn0, [np, np, 2, nlev, nelemd])
-
-    deriv%dvv = dvv
 
     do ie=nets,nete
 #ifdef HOMME_USE_FLAT_ARRAYS
@@ -460,7 +471,7 @@ contains
     end do
   end subroutine caar_compute_eta_dot_dpdn_f90
 
-  subroutine caar_compute_phi_kinetic_energy_f90 (nets, nete, nelemd, n0, dvv_ptr,   &
+  subroutine caar_compute_phi_kinetic_energy_f90 (nets, nete, nelemd, n0,            &
                                        p_ptr, grad_p_ptr, vort_ptr,                  &
                                        v_vadv_ptr, T_vadv_ptr,                       &
                                        elem_Dinv_ptr, elem_fcor_ptr,                 &
@@ -477,7 +488,7 @@ contains
     ! Inputs
     !
     integer (kind=c_int), intent(in) :: nets, nete, nelemd, n0
-    type (c_ptr), intent(in) :: dvv_ptr, T_v_ptr, p_ptr, grad_p_ptr, vort_ptr
+    type (c_ptr), intent(in) :: T_v_ptr, p_ptr, grad_p_ptr, vort_ptr
     type (c_ptr), intent(in) :: elem_state_T_ptr, elem_state_v_ptr, elem_derived_phi_ptr
     type (c_ptr), intent(in) :: elem_Dinv_ptr, elem_fcor_ptr, v_vadv_ptr, T_vadv_ptr
     type (c_ptr), intent(in) :: elem_derived_pecnd_ptr, kappa_star_ptr
@@ -485,7 +496,6 @@ contains
     !
     ! Locals
     !
-    real (kind=real_kind), dimension(:,:),         pointer :: dvv
     real (kind=real_kind), dimension(:,:,:,:),     pointer :: p
     real (kind=real_kind), dimension(:,:,:,:,:),   pointer :: grad_p
     real (kind=real_kind), dimension(:,:,:,:),     pointer :: vort
@@ -512,7 +522,6 @@ contains
 
 
     ! Cast the pointers
-    call c_f_pointer (dvv_ptr,                dvv,                [np,np])
     call c_f_pointer (T_v_ptr,                T_v,                [np,np,nlev,nelemd])
     call c_f_pointer (p_ptr,                  p,                  [np,np,nlev,nelemd])
     call c_f_pointer (grad_p_ptr,             grad_p,             [np,np,2,nlev,nelemd])
@@ -530,9 +539,6 @@ contains
     call c_f_pointer (elem_state_v_ptr,       elem_state_v,       [np,np,2,nlev,timelevels,nelemd])
     call c_f_pointer (elem_derived_phi_ptr,   elem_derived_phi,   [np,np,nlev,nelemd])
     call c_f_pointer (elem_derived_pecnd_ptr, elem_derived_pecnd, [np,np,nlev,nelemd])
-
-    ! Setup the derivative
-    deriv%dvv = dvv
 
     do ie=nets,nete
       ! ==============================================

@@ -54,6 +54,37 @@ module prim_driver_mod
 
 contains
 
+#ifdef USE_KOKKOS_KERNELS
+  subroutine init_caar_derivative_c (deriv)
+    use iso_c_binding       , only : c_ptr, c_loc
+    use derivative_mod_base , only : derivative_t, integration_matrix, boundary_interp_matrix
+    interface
+      subroutine init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr) bind(c)
+        use iso_c_binding, only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+      end subroutine init_derivative_c
+    end interface
+    !
+    ! Inputs
+    !
+    type (derivative_t), intent(in) :: deriv
+    !
+    ! Locals
+    !
+    type (c_ptr) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+
+    dvv_ptr = c_loc(deriv%dvv)
+    integr_mat_ptr = c_loc(integration_matrix)
+    bd_interp_mat_ptr = c_loc(boundary_interp_matrix)
+
+    call init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr)
+
+  end subroutine init_caar_derivative_f90
+#endif
+
   subroutine prim_init1(elem, fvm, par, dom_mt, Tl)
 
     use bndry_mod,          only: sort_neighbor_buffer_mapping
@@ -261,7 +292,7 @@ contains
     call initMetaGraph(iam,MetaVertex(1),GridVertex,GridEdge)
 
     nelemd = LocalElemCount(MetaVertex(1))
-    if(par%masterproc .and. Debug) then 
+    if(par%masterproc .and. Debug) then
         call PrintMetaVertex(MetaVertex(1))
     endif
 
@@ -548,7 +579,7 @@ contains
 
 #ifndef CAM
     use column_model_mod,     only: InitColumnModel
-    use control_mod,          only: pertlim                     
+    use control_mod,          only: pertlim
 #endif
 
 #ifdef TRILINOS
@@ -839,10 +870,10 @@ contains
                    do j=1,np
                       dp = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
                            ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
-                      
+
                       elem(ie)%state%Qdp(i,j,k,q,1)=elem(ie)%state%Q(i,j,k,q)*dp
                       elem(ie)%state%Qdp(i,j,k,q,2)=elem(ie)%state%Q(i,j,k,q)*dp
-                      
+
                    enddo
                 enddo
              enddo
@@ -937,6 +968,12 @@ contains
 
     call solver_init2(elem(:), deriv(hybrid%ithr))
     call Prim_Advec_Init2(elem(:), hvcoord, hybrid)
+
+#ifdef USE_KOKKOS_KERNELS
+    call init_caar_derivative_c(deriv(hybrid%ithr))
+#else
+    call init_caar_derivative_f90(deriv(hybrid%ithr))
+#endif
 
   end subroutine prim_init2
 
@@ -1470,13 +1507,13 @@ contains
     if (ntrac>0.and.rstep==1) then
        !
        ! save velocity at time t for fvm trajectory algorithm
-       !       
+       !
        do ie=nets,nete
           fvm(ie)%vn0=elem(ie)%state%v(:,:,:,:,tl%n0)
           elem(ie)%sub_elem_mass_flux=0
        end do
     end if
- 
+
     ! ===============
     ! initialize mean flux accumulation variables and save some variables at n0
     ! for use by advection
@@ -1547,7 +1584,7 @@ contains
       do ie=nets,nete
       do k=1,nlev
         tempdp3d = elem(ie)%state%dp3d(:,:,k,tl%np1) - &
-                   elem(ie)%derived%dp(:,:,k) 
+                   elem(ie)%derived%dp(:,:,k)
         tempmass = subcell_integration(tempdp3d, np, nc, elem(ie)%metdet)
         tempflux = dt_q*elem(ie)%sub_elem_mass_flux(:,:,:,k)
         do i=1,nc
@@ -1575,23 +1612,22 @@ contains
     !        state%v(:,:,:,np1)      = velocity on reference levels
     !        state%ps_v(:,:,:,np1)   = ps
     ! rsplit>0
-    !        state%v(:,:,:,np1)      = velocity on lagrangian levels 
+    !        state%v(:,:,:,np1)      = velocity on lagrangian levels
     !        state%dp3d(:,:,:,np1)   = dp3d
     !
 
 
     ! ===============
-    ! Tracer Advection.  
+    ! Tracer Advection.
     ! in addition, this routine will apply the DSS to:
     !        derived%eta_dot_dpdn    =  mean vertical velocity (used for remap below)
     !        derived%omega           =
-    ! Tracers are always vertically lagrangian.  
-    ! For rsplit=0: 
+    ! Tracers are always vertically lagrangian.
+    ! For rsplit=0:
     !   if tracer scheme needs v on lagrangian levels it has to vertically interpolate
     !   if tracer scheme needs dp3d, it needs to derive it from ps_v
     ! ===============
-    ! Advect tracers if their count is > 0.  
-    ! special case in CAM: if CSLAM tracers are turned on , qsize=1 but this tracer should 
+    ! Advect tracers if their count is > 0.
     ! not be advected.  This will be cleaned up when the physgrid is merged into CAM trunk
     ! Currently advecting all species
     call t_startf("prim_step_advec")
