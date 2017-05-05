@@ -10,19 +10,31 @@ namespace Homme {
 using Real   = double;
 using RCPtr  = Real* const;
 using CRCPtr = const Real* const;
-using F90Ptr = const Real* const; // Using this in a function signature emphasizes that the ordering is Fortran
+using F90Ptr  = Real* const; // Using this in a function signature emphasizes that the ordering is Fortran
+using CF90Ptr = const Real* const; // Using this in a function signature emphasizes that the ordering is Fortran
 
 // Selecting the execution space. If no specific request, use Kokkos default exec space
 #ifdef HOMMEXX_CUDA_SPACE
 using ExecSpace = Kokkos::Cuda;
+// CUDA Can't have less than 32 threads per warp or less than 1 warp per block
+static constexpr const int Default_Threads_Per_Team = 2;
+static constexpr const int Default_Vectors_Per_Thread = 16;
 #elif defined(HOMMEXX_OPENMP_SPACE)
 using ExecSpace = Kokkos::OpenMP;
+static constexpr const int Default_Threads_Per_Team = 1;
+static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_THREADS_SPACE)
 using ExecSpace = Kokkos::Threads;
+static constexpr const int Default_Threads_Per_Team = 1;
+static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_SERIAL_SPACE)
 using ExecSpace = Kokkos::Serial;
+static constexpr const int Default_Threads_Per_Team = 1;
+static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_DEFAULT_SPACE)
 using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
+static constexpr const int Default_Threads_Per_Team = 1;
+static constexpr const int Default_Vectors_Per_Thread = 1;
 #else
 #error "No valid execution space choice"
 #endif
@@ -31,6 +43,9 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 using ExecMemSpace    = ExecSpace::memory_space;
 using ScratchMemSpace = ExecSpace::scratch_memory_space;
 using HostMemSpace    = Kokkos::HostSpace;
+
+// A team member type
+using TeamMember = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
 // Short name for views with layout right
 template <typename DataType, typename... Types>

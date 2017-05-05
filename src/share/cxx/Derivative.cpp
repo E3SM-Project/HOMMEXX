@@ -15,7 +15,7 @@ Derivative::Derivative ()
   // Nothing to be done here
 }
 
-void Derivative::init (F90Ptr& dvv_ptr, F90Ptr& integration_mat_ptr, F90Ptr& bd_interpolation_mat_ptr)
+void Derivative::init (CF90Ptr& dvv_ptr, CF90Ptr& integration_mat_ptr, CF90Ptr& bd_interpolation_mat_ptr)
 {
   HostViewManaged<Real[NP][NP]>     dvv_host ("dvv");
   HostViewManaged<Real[NC][NP]>     integ_mat_host ("dvv");
@@ -101,16 +101,5 @@ Derivative& get_derivative ()
 
   return deriv;
 }
-
-extern "C"
-{
-void init_derivative_c (F90Ptr& dvv, F90Ptr& integration_matrix, F90Ptr& boundary_interp_matrix)
-{
-  Derivative* deriv = &get_derivative ();
-  deriv->init(dvv,integration_matrix,boundary_interp_matrix);
-}
-
-} // extern "C"
-
 
 } // namespace Homme
