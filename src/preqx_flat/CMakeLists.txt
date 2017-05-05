@@ -61,7 +61,7 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/caar_subroutines_mod.F90
-  ${SRC_SHARE_DIR}/caar_subroutines_orig_mod.F90
+  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
@@ -139,7 +139,10 @@ SET(PREQX_FLAT_DEPS_C
 )
 
 SET(PREQX_FLAT_DEPS_CXX
-  ${SRC_SHARE_DIR}/cxx/caar_helpers.cpp
+  ${SRC_SHARE_DIR}/cxx/caar_cxx_f90_interface.cpp
+  ${SRC_SHARE_DIR}/cxx/caar_subroutines.cpp
+  ${SRC_SHARE_DIR}/cxx/CaarControl.cpp
+  ${SRC_SHARE_DIR}/cxx/CaarRegion.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
 )
@@ -186,6 +189,8 @@ SET(EXEC_SOURCES ${PREQX_FLAT_SRCS})
 IF (${ENABLE_HORIZ_OPENMP} AND ${ENABLE_COLUMN_OPENMP})
   SET(NESTED_OPENMP TRUE CACHE BOOL "Both horizontal and column threading")
 ENDIF ()
+
+SET (CAAR_MONOLITHIC TRUE)
 
 MESSAGE (STATUS " +------------ Ending execution of PREQX_FLAT_SETUP -------------+")
 

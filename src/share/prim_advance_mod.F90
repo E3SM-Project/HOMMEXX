@@ -236,6 +236,7 @@ contains
     np1   = tl%np1
     nstep = tl%nstep
 
+print *, "---------> TIME STEP ", nstep
     ! get timelevel for accessing tracer mass Qdp() to compute virtual temperature
 
     qn0 = -1    ! -1 = disabled (assume dry dynamics)
@@ -411,7 +412,6 @@ contains
        call compute_and_apply_rhs(nm1,n0,n0,qn0,dt/5,elem,hvcoord,hybrid,&
             deriv,nets,nete,compute_diagnostics,eta_ave_w/4)
        ! u2 = u0 + dt/5 RHS(u1)
-
        !
        ! phl: rhs: t=t+dt/5
        !
@@ -2606,11 +2606,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 
   end subroutine advance_hypervis_lf
 
-#ifdef CAAR_ORIG
-#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_orig
-#else
-#define COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE compute_and_apply_rhs_pre_exchange_f90
-#endif
   !
   ! phl notes: output is stored in first argument. Advances from 2nd argument using tendencies evaluated at 3rd rgument:
   ! phl: for offline winds use time at 3rd argument (same as rhs currently)
@@ -2644,9 +2639,6 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   !
   ! ===================================
 
-#ifdef CAAR_ORIG
-  use caar_subroutines_orig_mod, only: compute_and_apply_rhs_pre_exchange_orig
-#endif
   use kinds,          only : real_kind
   use bndry_mod,      only : bndry_exchangev
   use derivative_mod, only : derivative_t, subcell_dss_fluxes
@@ -2655,6 +2647,9 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   use edgetype_mod,   only : edgedescriptor_t
   use element_mod,    only : element_t
   use hybvcoord_mod,  only : hvcoord_t
+#ifdef CAAR_MONOLITHIC
+  use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic
+#endif
 
   implicit none
 
@@ -2680,8 +2675,13 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 !pw call t_adj_detailf(+1)
   call t_startf('compute_and_apply_rhs')
 
-  call COMPUTE_AND_APPLY_RHS_PRE_EXCHANGE (np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+#ifdef CAAR_MONOLITHIC
+  call caar_pre_exchange_monolithic (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
+#else
+  call compute_and_apply_rhs_pre_exchange (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                            deriv,nets,nete,compute_diagnostics,eta_ave_w)
+#endif
 
   do ie=nets,nete
      ! =========================================================
@@ -2818,8 +2818,8 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
 #endif
 
 
-  subroutine compute_and_apply_rhs_pre_exchange_f90(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
-                                                    deriv,nets,nete,compute_diagnostics,eta_ave_w)
+  subroutine compute_and_apply_rhs_pre_exchange(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                                deriv,nets,nete,compute_diagnostics,eta_ave_w)
 
   use kinds,                  only : real_kind
   use control_mod,            only : use_cpstar
@@ -3211,7 +3211,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   ! ======================================
 
   call t_startf ("caar_compute_vort_and_div")
-  call CAAR_COMPUTE_VORT_AND_DIV (nets, nete, nelemd, n0, eta_ave_w                    &
+  call CAAR_COMPUTE_VORT_AND_DIV (nets, nete, nelemd, n0, eta_ave_w,                   &
                                   elem_D_ptr, elem_Dinv_ptr,                           &
                                   elem_metdet_ptr, elem_rmetdet_ptr,                   &
                                   p_ptr, elem_state_dp3d_ptr, grad_p_ptr,              &
@@ -3297,7 +3297,7 @@ subroutine prim_advance_si(elem, nets, nete, cg, blkjac, red, &
   call caar_flip_f90_array (elem_sub_elem_mass_flux, elem_sub_elem_mass_flux_c, .FALSE. )
 #endif
 
-  end subroutine compute_and_apply_rhs_pre_exchange_f90
+  end subroutine compute_and_apply_rhs_pre_exchange
 
   subroutine distribute_flux_at_corners(cflux, corners, getmapP)
     use kinds,          only : int_kind, real_kind

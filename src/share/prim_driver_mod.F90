@@ -70,7 +70,7 @@ contains
     !
     ! Inputs
     !
-    type (derivative_t), intent(in) :: deriv
+    type (derivative_t), intent(in), target :: deriv
     !
     ! Locals
     !
@@ -82,7 +82,7 @@ contains
 
     call init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr)
 
-  end subroutine init_caar_derivative_f90
+  end subroutine init_caar_derivative_c
 #endif
 
   subroutine prim_init1(elem, fvm, par, dom_mt, Tl)
@@ -582,6 +582,15 @@ contains
     use control_mod,          only: pertlim
 #endif
 
+#ifdef CAAR_MONOLITHIC
+    use caar_subroutines_mod, only: init_caar_derivative_f90
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, elem_metdet, elem_state_phis
+    use iso_c_binding,        only: c_ptr, c_loc
+#endif
+
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
@@ -621,6 +630,11 @@ contains
     integer :: nfrc
     integer :: n0_qdp
 
+#ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
+    type (c_ptr) :: elem_spheremp_ptr, elem_metdet_ptr, elem_state_phis_ptr
+#endif
+
 #ifdef TRILINOS
      integer :: lenx
     real (c_double) ,allocatable, dimension(:) :: xstate(:)
@@ -655,6 +669,21 @@ contains
       type(c_ptr)                   :: j_container  !analytic jacobian ptr
     end subroutine noxinit
 
+  end interface
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+  interface
+    subroutine init_region_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
+                                 elem_spheremp_ptr, elem_metdet_ptr, phis_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      integer      , intent(in) :: nelemd
+      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
+      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_metdet_ptr, phis_ptr
+    end subroutine init_region_2d_c
   end interface
 #endif
 
@@ -887,24 +916,24 @@ contains
       ! should be optimize and combined with the above caculation
       do ie=nets,nete
         do k=1,nlev
-	    do i=1,np
-	      do j=1,np
-		  elem(ie)%derived%dp(i,j,k)=( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-		       ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
-	      enddo
-	    enddo
+          do i=1,np
+            do j=1,np
+              elem(ie)%derived%dp(i,j,k)=( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
+            enddo
+          enddo
           !write air density in dp_fvm field of FVM
           fvm(ie)%dp_fvm(1:nc,1:nc,k,n0_fvm)=interpolate_gll2fvm_points(elem(ie)%derived%dp(:,:,k),deriv(hybrid%ithr))
         enddo
       enddo
       call fvm_init3(elem,fvm,hybrid,nets,nete,n0_fvm) !boundary exchange
       do ie=nets,nete
-	    do i=1-nhc,nc+nhc
-	      do j=1-nhc,nc+nhc
-          !phl is it necessary to compute psc here?
-	        fvm(ie)%psc(i,j) = sum(fvm(ie)%dp_fvm(i,j,:,n0_fvm)) +  hvcoord%hyai(1)*hvcoord%ps0
-	      enddo
-	    enddo
+        do i=1-nhc,nc+nhc
+          do j=1-nhc,nc+nhc
+            !phl is it necessary to compute psc here?
+            fvm(ie)%psc(i,j) = sum(fvm(ie)%dp_fvm(i,j,:,n0_fvm)) +  hvcoord%hyai(1)*hvcoord%ps0
+          enddo
+        enddo
       enddo
       if (hybrid%masterthread) then
          write(iulog,*) 'FVM tracers initialized.'
@@ -971,6 +1000,16 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
     call init_caar_derivative_c(deriv(hybrid%ithr))
+
+    elem_D_ptr          = c_loc(elem_D)
+    elem_Dinv_ptr       = c_loc(elem_Dinv)
+    elem_fcor_ptr       = c_loc(elem_fcor)
+    elem_spheremp_ptr   = c_loc(elem_spheremp)
+    elem_metdet_ptr     = c_loc(elem_metdet)
+    elem_state_phis_ptr = c_loc(elem_state_phis)
+    call init_region_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
+                           elem_fcor_ptr, elem_spheremp_ptr,  &
+                           elem_metdet_ptr, elem_state_phis_ptr)
 #else
     call init_caar_derivative_f90(deriv(hybrid%ithr))
 #endif
