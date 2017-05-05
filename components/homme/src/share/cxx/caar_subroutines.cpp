@@ -93,7 +93,7 @@ void caar_compute_pressure_c (const int& nets, const int& nete,
 
 void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& nelemd, const int& n0,
                                   const Real& eta_ave_w, CRCPtr& D_ptr, CRCPtr& Dinv_ptr,
-                                  CRCPtr& metdet_ptr, CRCPtr& rmetdet_ptr, CRCPtr& p_ptr, CRCPtr& dp_ptr,
+                                  CRCPtr& metdet_ptr, CRCPtr& /*rmetdet_ptr*/, CRCPtr& p_ptr, CRCPtr& dp_ptr,
                                   RCPtr& grad_p_ptr, RCPtr& vgrad_p_ptr, CRCPtr& v_ptr, RCPtr& vn0_ptr,
                                   RCPtr& vdp_ptr, RCPtr& div_vdp_ptr, RCPtr& vort_ptr)
 {
@@ -104,7 +104,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   HostViewUnmanaged<const Real*[2][2][NP][NP]>                        D_host       (D_ptr,       nelemd);
   HostViewUnmanaged<const Real*[2][2][NP][NP]>                        Dinv_host    (Dinv_ptr,    nelemd);
   HostViewUnmanaged<const Real*[NP][NP]>                              metdet_host  (metdet_ptr,  nelemd);
-  HostViewUnmanaged<const Real*[NP][NP]>                              rmetdet_host (rmetdet_ptr, nelemd);
   HostViewUnmanaged<const Real*[NUM_LEV][NP][NP]>                     p_host       (p_ptr,       nelemd);
   HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][NP][NP]>    dp_host      (dp_ptr,      nelemd);
   HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NUM_LEV][2][NP][NP]> v_host       (v_ptr,       nelemd);
@@ -121,7 +120,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   auto D_exec       = Kokkos::create_mirror_view (exec_space, D_host       );
   auto Dinv_exec    = Kokkos::create_mirror_view (exec_space, Dinv_host    );
   auto metdet_exec  = Kokkos::create_mirror_view (exec_space, metdet_host  );
-  auto rmetdet_exec = Kokkos::create_mirror_view (exec_space, rmetdet_host );
   auto p_exec       = Kokkos::create_mirror_view (exec_space, p_host       );
   auto dp_exec      = Kokkos::create_mirror_view (exec_space, dp_host      );
   auto v_exec       = Kokkos::create_mirror_view (exec_space, v_host       );
@@ -137,7 +135,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
   deep_copy_mirror_view(D_exec,       D_host);
   deep_copy_mirror_view(Dinv_exec,    Dinv_host);
   deep_copy_mirror_view(metdet_exec,  metdet_host);
-  deep_copy_mirror_view(rmetdet_exec, rmetdet_host);
   deep_copy_mirror_view(p_exec,       p_host);
   deep_copy_mirror_view(dp_exec,      dp_host);
   deep_copy_mirror_view(v_exec,       v_host);
@@ -169,7 +166,6 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
       ExecViewUnmanaged<const Real[2][2][NP][NP]>       D_ie       = subview(D_exec,       ie,ALL(),ALL(),ALL(),ALL());
       ExecViewUnmanaged<const Real[2][2][NP][NP]>       Dinv_ie    = subview(Dinv_exec,    ie,ALL(),ALL(),ALL(),ALL());
       ExecViewUnmanaged<const Real[NP][NP]>             metdet_ie  = subview(metdet_exec,  ie,ALL(),ALL());
-      ExecViewUnmanaged<const Real[NP][NP]>             rmetdet_ie  = subview(rmetdet_exec,  ie,ALL(),ALL());
       ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]>    p_ie       = subview(p_exec,       ie,ALL(),ALL(),ALL());
       ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]>    dp_ie      = subview(dp_exec,      ie,n0_c,ALL(),ALL(),ALL());
       ExecViewUnmanaged<const Real[NUM_LEV][2][NP][NP]> v_ie       = subview(v_exec,       ie,n0_c,ALL(),ALL(),ALL(),ALL());
@@ -212,13 +208,13 @@ void caar_compute_vort_and_div_c (const int& nets, const int& nete, const int& n
           // Extract level slice since divergence_sphere acts on a single level
           ExecViewUnmanaged<Real[NP][NP]>    div_vdp_ilev = subview(div_vdp_ie, ilev, ALL(), ALL());
           ExecViewUnmanaged<Real[2][NP][NP]> vdp_ilev     = subview(vdp_ie, ilev, ALL(), ALL(), ALL());
-          divergence_sphere(team_member, vdp_ilev, dvv_exec, metdet_ie, rmetdet_ie, Dinv_ie, div_vdp_ilev);
+          divergence_sphere(team_member, vdp_ilev, dvv_exec, metdet_ie, Dinv_ie, div_vdp_ilev);
 
           // Extract level slice since vorticity_sphere acts on a single level (and (u,v) separated)
           ExecViewUnmanaged<const Real[NP][NP]> U_ilev    = subview(v_ie, ilev, 0, ALL(), ALL());
           ExecViewUnmanaged<const Real[NP][NP]> V_ilev    = subview(v_ie, ilev, 1, ALL(), ALL());
           ExecViewUnmanaged<Real[NP][NP]>       vort_ilev = subview(vort_ie, ilev, ALL(), ALL());
-          vorticity_sphere(team_member, U_ilev, V_ilev, dvv_exec, rmetdet_ie, D_ie, vort_ilev);
+          vorticity_sphere(team_member, U_ilev, V_ilev, dvv_exec, metdet_ie, D_ie, vort_ilev);
         }
       );
     }
