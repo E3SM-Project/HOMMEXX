@@ -8,7 +8,7 @@ namespace Homme
 {
 
 template<int N1, int N2>
-void flip_f90_array_2d_12 (F90Ptr& array, HostViewUnmanaged<Real[N1][N2]> view)
+void flip_f90_array_2d_12 (CF90Ptr& array, HostViewUnmanaged<Real[N1][N2]> view)
 {
   int idx = 0;
   for (int j=0; j<N2; ++j)
@@ -21,7 +21,7 @@ void flip_f90_array_2d_12 (F90Ptr& array, HostViewUnmanaged<Real[N1][N2]> view)
 }
 
 template<int N1, int N2, int N3>
-void flip_f90_array_3d_123 (F90Ptr& array, HostViewUnmanaged<Real[N1][N2][N3]> view)
+void flip_f90_array_3d_123 (CF90Ptr& array, HostViewUnmanaged<Real[N1][N2][N3]> view)
 {
   int idx = 0;
   for (int k=0; k<N3; ++k)
@@ -37,7 +37,7 @@ void flip_f90_array_3d_123 (F90Ptr& array, HostViewUnmanaged<Real[N1][N2][N3]> v
 }
 
 template<int N1, int N2, int N3>
-void flip_f90_array_3d_312 (F90Ptr& array, HostViewUnmanaged<Real[N3][N1][N2]> view)
+void flip_f90_array_3d_312 (CF90Ptr& array, HostViewUnmanaged<Real[N3][N1][N2]> view)
 {
   int idx = 0;
   for (int k=0; k<N3; ++k)
@@ -53,7 +53,7 @@ void flip_f90_array_3d_312 (F90Ptr& array, HostViewUnmanaged<Real[N3][N1][N2]> v
 }
 
 template<int N1, int N2, int N3>
-void flip_f90_array_3d_213 (F90Ptr& array, HostViewUnmanaged<Real[N2][N1][N3]> view)
+void flip_f90_array_3d_213 (CF90Ptr& array, HostViewUnmanaged<Real[N2][N1][N3]> view)
 {
   int idx = 0;
   for (int k=0; k<N3; ++k)
@@ -63,6 +63,25 @@ void flip_f90_array_3d_213 (F90Ptr& array, HostViewUnmanaged<Real[N2][N1][N3]> v
       for (int i=0; i<N1; ++i)
       {
         view(j,i,k) = array[idx++];
+      }
+    }
+  }
+}
+
+template<int N1, int N2, int N3, int N4>
+void flip_f90_array_4d_3412 (CF90Ptr& array, HostViewUnmanaged<Real[N3][N4][N1][N2]> view)
+{
+  int idx = 0;
+  for (int l=0; l<N4; ++l)
+  {
+    for (int k=0; k<N3; ++k)
+    {
+      for (int j=0; j<N2; ++j)
+      {
+        for (int i=0; i<N1; ++i)
+        {
+          view(k,l,i,j) = array[idx++];
+        }
       }
     }
   }

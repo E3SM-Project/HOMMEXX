@@ -13,7 +13,7 @@ public:
 
   Derivative ();
 
-  void init (F90Ptr& dvv, F90Ptr& integration_matrix, F90Ptr& boundary_interp_matrix);
+  void init (CF90Ptr& dvv, CF90Ptr& integration_matrix, CF90Ptr& boundary_interp_matrix);
 
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<const Real[NP][NP]> get_dvv () const { return m_dvv_exec; }
@@ -39,11 +39,6 @@ void subcell_div_fluxes (const Kokkos::TeamPolicy<ExecSpace>::member_type& team_
                          const ExecViewUnmanaged<const Real[2][NP][NP]>    u,
                          const ExecViewUnmanaged<const Real[NP][NP]>       metdet,
                          ExecViewUnmanaged<Real[4][NC][NC]>                flux);
-
-extern "C"
-{
-void init_derivative_c (F90Ptr& dvv, F90Ptr& integration_matrix, F90Ptr& boundary_interp_matrix);
-} // extern "C"
 
 } // namespace Homme
 
