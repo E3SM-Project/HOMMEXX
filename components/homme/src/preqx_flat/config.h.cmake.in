@@ -68,3 +68,6 @@
 
 /* Fortran or C++ loops */
 #cmakedefine USE_KOKKOS_KERNELS
+
+/* Whether compute_and_apply_rhs should be monolithic or split into subroutines */
+#cmakedefine CAAR_MONOLITHIC

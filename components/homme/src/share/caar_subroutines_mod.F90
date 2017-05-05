@@ -8,9 +8,10 @@ module caar_subroutines_mod
 
   implicit none
 
-  private
+  public
 
-  type (derivative_t) :: deriv
+  ! The derivative structure, build from a pointer
+  type (derivative_t), private :: deriv
 
   interface caar_flip_f90_array
     module procedure caar_flip_f90_array_2D
