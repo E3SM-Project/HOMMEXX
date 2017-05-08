@@ -323,6 +323,7 @@ struct CaarFunctor {
       preq_hydrostatic(kv);
       preq_omega_ps(kv);
     }
+    kv.team.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION
