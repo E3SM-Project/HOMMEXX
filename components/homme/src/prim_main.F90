@@ -88,6 +88,11 @@ program prim_main
   call prim_init1(elem,  fvm, par,dom_mt,tl)
   call t_stopf('prim_init1')
 
+#ifdef USE_KOKKOS_KERNELS
+  ! Kokkos has to be initialize before it is used, and before fortran initializes OpenMP
+  call init_kokkos(vert_num_threads)
+#endif
+
   ! =====================================
   ! Begin threaded region so each thread can print info
   ! =====================================
@@ -106,10 +111,6 @@ program prim_main
 #if (defined HORIZ_OPENMP)
   !$OMP PARALLEL NUM_THREADS(nthreads), DEFAULT(SHARED), PRIVATE(ithr,nets,nete,hybrid)
   call omp_set_num_threads(vert_num_threads)
-#endif
-#ifdef USE_KOKKOS_KERNELS
-  ! Kokkos has to be initialize before it is used
-  call init_kokkos(vert_num_threads)
 #endif
   ithr=omp_get_thread_num()
   nets=dom_mt(ithr)%start
