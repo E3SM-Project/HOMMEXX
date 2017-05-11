@@ -375,6 +375,84 @@ vorticity_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
   });
 }
 
+
+//analog of fortran's laplace_wk_sphere
+KOKKOS_INLINE_FUNCTION void
+laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+                 const ExecViewUnmanaged<const Real[NP][NP]> field, //input
+                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,   //for grad, div
+                 const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv, //for grad, div
+                 const ExecViewUnmanaged<const Real[NP][NP]> metDet,//for div
+                 ExecViewUnmanaged<Real[2][NP][NP]> gv,//temp for div
+                 ExecViewUnmanaged<Real[NP][NP]> div_v, //temp to store div
+                 ExecViewUnmanaged<Real[2][NP][NP]> temp_v, //temp for grad
+                 ExecViewUnmanaged<Real[2][NP][NP]> grad_s, //temp to store grad
+//let's reduce num of temps later
+//output
+                 ExecViewUnmanaged<Real[NP][NP]> laplace) {
+//let's ignore var coef and tensor hv
+  gradient_sphere(team, field, dvv, DInv, temp_v, grad_s);
+  divergence_sphere(team, grad_s, dvv, metDet, DInv, gv, laplace);
+}
+
+/*
+  function laplace_sphere_wk(s,deriv,elem,var_coef) result(laplace)
+!
+!   input:  s = scalar
+!   ouput:  -< grad(PHI), grad(s) >   = weak divergence of grad(s)
+!     note: for this form of the operator, grad(s) does not need to be made C0
+!
+    real(kind=real_kind), intent(in) :: s(np,np)
+    logical, intent(in) :: var_coef
+    type (derivative_t), intent(in) :: deriv
+    type (element_t), intent(in) :: elem
+    real(kind=real_kind)             :: laplace(np,np)
+    real(kind=real_kind)             :: laplace2(np,np)
+    integer i,j
+
+    ! Local
+    real(kind=real_kind) :: grads(np,np,2), oldgrads(np,np,2)
+
+    grads=gradient_sphere(s,deriv,elem%Dinv)
+
+    if (var_coef) then
+       if (hypervis_power/=0 ) then
+          ! scalar viscosity with variable coefficient
+          grads(:,:,1) = grads(:,:,1)*elem%variable_hyperviscosity(:,:)
+          grads(:,:,2) = grads(:,:,2)*elem%variable_hyperviscosity(:,:)
+       else if (hypervis_scaling /=0 ) then
+          ! tensor hv, (3)
+          oldgrads=grads
+          do j=1,np
+             do i=1,np
+!JMD                grads(i,j,1) = sum(oldgrads(i,j,:)*elem%tensorVisc(i,j,1,:))
+!JMD                grads(i,j,2) = sum(oldgrads(i,j,:)*elem%tensorVisc(i,j,2,:))
+                grads(i,j,1) = oldgrads(i,j,1)*elem%tensorVisc(i,j,1,1) + &
+                               oldgrads(i,j,2)*elem%tensorVisc(i,j,1,2)
+                grads(i,j,2) = oldgrads(i,j,1)*elem%tensorVisc(i,j,2,1) + &
+                               oldgrads(i,j,2)*elem%tensorVisc(i,j,2,2)
+             end do
+          end do
+       else
+          ! do nothing: constant coefficient viscsoity
+       endif
+    endif
+
+    ! note: divergnece_sphere and divergence_sphere_wk are identical *after* bndry_exchange
+    ! if input is C_0.  Here input is not C_0, so we should use divergence_sphere_wk().
+    laplace=divergence_sphere_wk(grads,deriv,elem)
+end function
+*/
+
+
+
+
+
+
+
+
+
+
 } // namespace Homme
 
 #endif // HOMMEXX_SPHERE_OPERATORS_HPP
