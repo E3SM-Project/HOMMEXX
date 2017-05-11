@@ -89,33 +89,6 @@ void caar_pre_exchange_monolithic_c()
   ExecSpace::fence();
 }
 
-
-/*
- *void caar_pre_exchange_monolithic_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
- *                                     F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
- *                                     F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
- *                                     F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
- *{
- *  // Get the region
- *  CaarRegion& r = get_region();
- *
- *  // Copy data from f90 pointers to cxx views
- *  r.pull_from_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
- *                           elem_derived_phi_ptr,elem_derived_pecnd_ptr,
- *                           elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
- *                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
- *
- *  // Compute and apply rhs
- *  compute_and_apply_rhs_c();
- *
- *  // Copy results from cxx views to f90 pointers
- *  r.push_to_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
- *                         elem_derived_phi_ptr,elem_derived_pecnd_ptr,
- *                         elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
- *                         elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
- *}
- */
-
 } // extern "C"
 
 } // namespace Homme

@@ -236,7 +236,6 @@ contains
     np1   = tl%np1
     nstep = tl%nstep
 
-print *, "---------> TIME STEP ", nstep
     ! get timelevel for accessing tracer mass Qdp() to compute virtual temperature
 
     qn0 = -1    ! -1 = disabled (assume dry dynamics)
