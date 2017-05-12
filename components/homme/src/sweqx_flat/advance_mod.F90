@@ -344,7 +344,7 @@ contains
     end do
   end subroutine rk_stage_f90
 
-  !DEC$ ATTRIBUTE NOINLINE :: loop7_f90
+  !DEC$ ATTRIBUTES NOINLINE :: loop7_f90
   subroutine loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, &
        pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, &
        metdet_ptr, rmetdet_ptr, fcor_ptr, &
