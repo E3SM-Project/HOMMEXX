@@ -76,6 +76,12 @@ struct CaarFunctor {
     // Nothing to be done here
   }
 
+  // dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+  //      ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
+  // dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -&
+  //      elem(ie)%derived%eta_dot_dpdn(:,:,k))
+
+
   // Depends on PHI (after preq_hydrostatic), PECND
   // Modifies Ephi_grad
   KOKKOS_INLINE_FUNCTION void
@@ -273,8 +279,7 @@ struct CaarFunctor {
          *vgrad_p += m_region.V(ie, m_data.n0, ilev, igp, jgp) *
          *           grad_p(1, igp, jgp);
          *vgrad_p -= integral(igp, jgp);
-         *vgrad_p += -0.5 * m_scratch.div_vdp(ie, ilev,
-         *                                 igp, jgp);
+         *vgrad_p += -0.5 * m_scratch.div_vdp(ie, ilev, igp, jgp);
          */
 
         m_scratch.omega_p(kv.ie, ilev, igp, jgp) = vgrad_p / p_ilev(igp, jgp);
@@ -296,17 +301,10 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      kv.scalar_buf_1(0, 0) = m_data.hybrid_a(0) * m_data.ps0;
-      kv.scalar_buf_1(0, 1) = 0.5 * m_region.DP3D(kv.ie, m_data.n0, 0, igp, jgp);
-      pressure(0, igp, jgp) = kv.scalar_buf_1(0, 0) + kv.scalar_buf_1(0, 1);
+      pressure(0, igp, jgp) = m_data.hybrid_a(0) * m_data.ps0 + 0.5 * m_region.DP3D(kv.ie, m_data.n0, 0, igp, jgp);
 
       // TODO: change the sum into p(k) = p(k-1) + 0.5*( dp(k)+dp(k-1) ) to increase accuracy
       for (kv.ilev = 1; kv.ilev < NUM_LEV; ++kv.ilev) {
-        /*
-         *kv.scalar_buf_1(0, 0) =
-         *    0.5 * (m_region.DP3D(kv.ie, m_data.n0, kv.ilev - 1, kv.igp, kv.jgp) +
-         *           m_region.DP3D(kv.ie, m_data.n0, kv.ilev, kv.igp, kv.jgp));
-         */
         pressure(kv.ilev, igp, jgp) = pressure(kv.ilev - 1, igp, jgp) +
                                       0.5 * m_region.DP3D(kv.ie, m_data.n0, kv.ilev - 1, igp, jgp) +
                                       0.5 * m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
