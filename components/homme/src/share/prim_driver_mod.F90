@@ -1069,7 +1069,8 @@ contains
     use hybvcoord_mod, only : hvcoord_t
     use time_mod, only : TimeLevel_t, timelevel_update, smooth
     use control_mod, only: statefreq, integration, ftype, qsplit, disable_diagnostics
-    use prim_advance_mod, only : prim_advance_exp, prim_advance_si, preq_robert3
+    use prim_advance_mod, only : prim_advance_si, preq_robert3
+    use prim_advance_exp_mod, only : prim_advance_exp
     use prim_state_mod, only : prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: deriv
     use parallel_mod, only : abortmp
@@ -1513,7 +1514,8 @@ contains
     use fvm_mod,            only: fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: prim_advance_exp, overwrite_SEdensity
+    use prim_advance_mod,   only: overwrite_SEdensity
+    use prim_advance_exp_mod, only: prim_advance_exp
     use prim_advection_mod, only: prim_advec_tracers_fvm
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax

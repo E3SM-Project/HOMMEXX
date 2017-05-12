@@ -321,7 +321,6 @@ struct CaarFunctor {
       preq_hydrostatic(kv);
       preq_omega_ps(kv);
     }
-    kv.team.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -517,8 +516,10 @@ struct CaarFunctor {
     KernelVariables kv(team);
 
     compute_temperature_div_vdp(kv);
+    kv.team.team_barrier();
 
     compute_scan_properties(kv);
+    kv.team.team_barrier();
 
     compute_phase_3(kv);
   }

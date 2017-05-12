@@ -101,6 +101,9 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/physics_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
