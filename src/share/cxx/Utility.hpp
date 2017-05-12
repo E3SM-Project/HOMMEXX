@@ -69,11 +69,10 @@ void deep_copy_mirror_view(ViewOut view_out, ViewIn view_in)
   Impl::DeepCopyImpl<ViewOut,ViewIn,do_copy>::copy(view_out, view_in);
 }
 
-template<typename DataType, typename Layout, typename MemoryManagement>
-Real compute_host_view_norm (const Kokkos::View<DataType, Layout, HostMemSpace, MemoryManagement> view)
+template<typename ViewType>
+Real compute_view_norm (const ViewType view)
 {
-  typedef Kokkos::View<DataType, Layout, HostMemSpace, MemoryManagement>     HostViewType;
-  typename HostViewType::pointer_type data = view.data();
+  typename ViewType::pointer_type data = view.data();
 
   size_t length = view.size();
 
