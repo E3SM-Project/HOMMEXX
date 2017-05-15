@@ -43,16 +43,16 @@ module prim_advance_exp_mod
     use time_mod,       only: timelevel_qdp, tevolve
     use diffusion_mod,  only: prim_diffusion
 
-  #ifdef TRILINOS
+#ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
-  #endif
+#endif
 
-  #ifdef CAM
+#ifdef CAM
     use control_mod,    only: prescribed_vertwind
-  #else
+#else
     use asp_tests,      only: asp_advection_vertical
-  #endif
+#endif
 
     implicit none
 
