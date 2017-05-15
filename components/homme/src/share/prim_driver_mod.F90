@@ -582,7 +582,7 @@ contains
     use control_mod,          only: pertlim
 #endif
 
-#ifdef CAAR_MONOLITHIC
+#ifndef CAAR_MONOLITHIC
     use caar_subroutines_mod, only: init_caar_derivative_f90
 #endif
 
@@ -1011,7 +1011,9 @@ contains
                            elem_fcor_ptr, elem_spheremp_ptr,  &
                            elem_metdet_ptr, elem_state_phis_ptr)
 #else
+#ifndef CAAR_MONOLITHIC
     call init_caar_derivative_f90(deriv(hybrid%ithr))
+#endif
 #endif
 
   end subroutine prim_init2
