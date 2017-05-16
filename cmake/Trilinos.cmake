@@ -120,7 +120,7 @@ macro(link_to_trilinos targetName)
   TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
 
   IF("${ENABLE_CUDA}")
-    TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda)
+    TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda -DCUDA_BUILD)
   ENDIF()
 
   IF(TARGET Trilinos)
