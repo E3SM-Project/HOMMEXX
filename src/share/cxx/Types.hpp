@@ -4,6 +4,10 @@
 #include <Kokkos_Core.hpp>
 #include <Hommexx_config.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h.c"
+#endif
+
 namespace Homme {
 
 // Usual typedef for real scalar type
@@ -16,27 +20,59 @@ using CF90Ptr = const Real* const; // Using this in a function signature emphasi
 // Selecting the execution space. If no specific request, use Kokkos default exec space
 #ifdef HOMMEXX_CUDA_SPACE
 using ExecSpace = Kokkos::Cuda;
-// CUDA Can't have less than 32 threads per warp or less than 1 warp per block
-static constexpr const int Default_Threads_Per_Team = 2;
-static constexpr const int Default_Vectors_Per_Thread = 16;
 #elif defined(HOMMEXX_OPENMP_SPACE)
 using ExecSpace = Kokkos::OpenMP;
-static constexpr const int Default_Threads_Per_Team = 1;
-static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_THREADS_SPACE)
 using ExecSpace = Kokkos::Threads;
-static constexpr const int Default_Threads_Per_Team = 1;
-static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_SERIAL_SPACE)
 using ExecSpace = Kokkos::Serial;
-static constexpr const int Default_Threads_Per_Team = 1;
-static constexpr const int Default_Vectors_Per_Thread = 1;
 #elif defined(HOMMEXX_DEFAULT_SPACE)
 using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
-static constexpr const int Default_Threads_Per_Team = 1;
-static constexpr const int Default_Vectors_Per_Thread = 1;
 #else
 #error "No valid execution space choice"
+#endif
+
+template<typename ExecSpace>
+struct DefaultThreadsDistribution
+{
+  static void init () { Max_Threads_Per_Team = ExecSpace::thread_pool_size(); }
+
+  static constexpr int vectors_per_thread () { return 1; }
+
+  static int threads_per_team (const int num_elems) {
+#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
+    if (Max_Threads_Per_Team>=num_elems)
+      return Max_Threads_Per_Team / num_elems;
+    else
+      return 1;
+#else
+    (void) num_elems;
+    return 1;
+#endif
+  }
+
+private:
+  static int Max_Threads_Per_Team;
+};
+
+template<typename ExecSpace>
+int DefaultThreadsDistribution<ExecSpace>::Max_Threads_Per_Team;
+
+#ifdef KOKKOS_CUDA_HPP
+template<>
+struct DefaultThreadsDistribution<Kokkos::Cuda>
+{
+  static void init () {}
+
+  static constexpr int vectors_per_thread () { return 16; }
+
+  static int threads_per_team (const int /*num_elems*/) {
+    return Max_Threads_Per_Team;
+  }
+
+private:
+  static constexpr int Max_Threads_Per_Team = 8;
+};
 #endif
 
 // The memory spaces

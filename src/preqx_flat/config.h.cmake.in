@@ -71,3 +71,6 @@
 
 /* Whether compute_and_apply_rhs should be monolithic or split into subroutines */
 #cmakedefine CAAR_MONOLITHIC
+
+/* Whether to let kokkos parallelize also on elements (not just vertical levels) */
+#cmakedefine KOKKOS_PARALLELIZE_ON_ELEMENTS

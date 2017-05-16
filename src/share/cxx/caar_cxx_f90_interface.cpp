@@ -71,14 +71,14 @@ void caar_pre_exchange_monolithic_c()
   // Get CAAR data
   CaarControl& data  = get_control();
 
+  // Retrieve the team size
+  DefaultThreadsDistribution<ExecSpace>::init();
+  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+  const int threads_per_team   = DefaultThreadsDistribution<ExecSpace>::threads_per_team(data.nete-data.nets);
+
   // Setup the policy
-  int vectors_per_thread = Default_Vectors_Per_Thread;
-#ifdef USE_KOKKOS_ON_ELEMENTS
-  int threads_per_team   = Default_Threads_Per_Team;
-#else
-  int threads_per_team   = ExecSpace::thread_pool_size() / Default_Vectors_Per_Thread;
-#endif
   Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
+  policy.set_chunk_size(1);
 
   // Create the functor
   CaarFunctor func(data);
