@@ -5,6 +5,50 @@ function (prc var)
   message("${var} ${${var}}")
 endfunction ()
 
+# Macro to create config file. The macro creates a temporary config
+# file first. If the config file in the build directory does not
+# exist or it is different from the temporary one, then the config
+# file is updated. This avoid rebuilding the (almost) entire homme
+# every time cmake is run.
+
+MACRO (HommeConfigFile CONFIG_FILE_IN CONFIG_FILE_C CONFIG_FILE_F90)
+
+  CONFIGURE_FILE (${CONFIG_FILE_IN} ${CONFIG_FILE_C}.tmp)
+
+  # Assume by default that config file is out of date
+  SET (OUT_OF_DATE TRUE)
+
+  # If config file in binary dir exists, we check whether the new one would be different
+  IF (EXISTS ${CONFIG_FILE_C})
+
+    # We rely on FILE macro rather than running diff, since it is
+    # more portable (guaranteed to work regardless of underlying system)
+    FILE (READ ${CONFIG_FILE_C} CONFIG_FILE_C_STR)
+    FILE (READ ${CONFIG_FILE_C}.tmp CONFIG_FILE_C_TMP_STR)
+
+    IF (${CONFIG_FILE_C_STR} STREQUAL ${CONFIG_FILE_C_TMP_STR})
+      # config file was present and appears unchanged
+      SET (OUT_OF_DATE FALSE)
+    ENDIF()
+
+    FILE (REMOVE ${CONFIG_FILE_C}.tmp)
+  ENDIF ()
+
+  # If out of date (either missing or different), adjust
+  IF (OUT_OF_DATE)
+
+    # Run the configure macro
+    CONFIGURE_FILE (${CONFIG_FILE_IN} ${CONFIG_FILE_C})
+
+    # Run sed to change '/*...*/' comments into '!/*...*/'
+    EXECUTE_PROCESS(COMMAND sed "s;^/;!/;g"
+                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                    INPUT_FILE ${CONFIG_FILE_C}
+                    OUTPUT_FILE ${CONFIG_FILE_F90})
+  ENDIF()
+
+ENDMACRO (HommeConfigFile)
+
 # Macro to create the individual tests
 macro(createTestExec execName execType macroNP macroNC macroPLEV
                      macroUSE_PIO macroWITH_ENERGY macroQSIZE_D linkLang)
@@ -54,17 +98,19 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
 
 
   # This is needed to compile the test executables with the correct options
+  SET(THIS_CONFIG_IN ${HOMME_SOURCE_DIR}/src/${execType}/config.h.cmake.in)
   SET(THIS_CONFIG_HC ${CMAKE_CURRENT_BINARY_DIR}/config.h.c)
   SET(THIS_CONFIG_H ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-  # First configure the file (which formats the file as C)
-  CONFIGURE_FILE(${HOMME_SOURCE_DIR}/src/${execType}/config.h.cmake.in ${THIS_CONFIG_HC})
+  HommeConfigFile (${THIS_CONFIG_IN} ${THIS_CONFIG_HC} ${THIS_CONFIG_H} )
+  ## First configure the file (which formats the file as C)
+  #CONFIGURE_FILE(${HOMME_SOURCE_DIR}/src/${execType}/config.h.cmake.in ${THIS_CONFIG_HC})
 
-  # Next reformat the file as Fortran by appending comment lines with an exclamation mark
-  EXECUTE_PROCESS(COMMAND sed "s;^/;!/;g"
-                     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                     INPUT_FILE ${THIS_CONFIG_HC}
-                     OUTPUT_FILE ${THIS_CONFIG_H})
+  ## Next reformat the file as Fortran by appending comment lines with an exclamation mark
+  #EXECUTE_PROCESS(COMMAND sed "s;^/;!/;g"
+                     #WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                     #INPUT_FILE ${THIS_CONFIG_HC}
+                     #OUTPUT_FILE ${THIS_CONFIG_H})
 
   ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 

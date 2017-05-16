@@ -43,21 +43,21 @@ contains
 
     ! local
     real (kind=real_kind)                   :: pmid,r0,r1,dtf_q,dp,rdp,FQ
-    real (kind=real_kind), dimension(np,np) :: psfrc 
+    real (kind=real_kind), dimension(np,np) :: psfrc
     integer                                 :: nm1,nfrc,n0
     integer                                 :: i,j,k,q
 
     nm1   = tl%nm1  ! always store Forcing tendencies in tl%nm1
 
     ! PROCESS SPLIT:
-    !  U(t+1) - U(t-1) = 2dt ( RHS(t)  +  F(U(t-1)) ) 
+    !  U(t+1) - U(t-1) = 2dt ( RHS(t)  +  F(U(t-1)) )
     !
     ! TIME SPLIT:
     !  U(*) - U(t-1) = 2dt RHS(t)      advection step to t+1
     !  U(t+1) = U(*) + 2dt F(U(t+1))   forcing step
     !
-    ! time split can be written as: 
-    !  U(t+1) - U(t-1) = 2dt ( RHS(t)  +  F(U(*)) ) 
+    ! time split can be written as:
+    !  U(t+1) - U(t-1) = 2dt ( RHS(t)  +  F(U(*)) )
     !
 
     nfrc  = nm1    ! PROCESS SPLIT
@@ -66,11 +66,11 @@ contains
 
     ! RK2 advection  switch to TIME SPLIT and since Q is advected
     ! with RK2, use dt instead of 2dt
-    if (tstep_type == 1) then  
-       nfrc=tl%np1     ! TIME SPLIT 
+    if (tstep_type == 1) then
+       nfrc=tl%np1     ! TIME SPLIT
        dtf_q = dt
     endif
-        
+
     do j=1,np
        do i=1,np
           psfrc(i,j) = EXP(elemin%state%lnps(i,j,nfrc))
@@ -79,17 +79,17 @@ contains
 
     elemin%derived%FT(:,:,:,nm1) = elemin%derived%FT(:,:,:,nm1) + &
          hs_T_forcing(hvcoord,psfrc(1,1),               &
-         elemin%state%T(1,1,1,nfrc),elemin%spherep,np, nlev)
-    
+         elemin%state%T(:,:,:,nfrc),elemin%spherep,np, nlev)
+
     elemin%derived%FM(:,:,:,:,nm1)= elemin%derived%FM(:,:,:,:,nm1) + &
-         hs_v_forcing(hvcoord,psfrc(1,1),& 
-         elemin%state%v(1,1,1,1,nfrc),np,nlev)
+         hs_v_forcing(hvcoord,psfrc(1,1),&
+         elemin%state%v(:,:,:,:,nfrc),np,nlev)
 
     if (qsize>=1) then
        ! HS with tracer  (Galewsky type forcing, with flux of  2.3e-5 kg/m^2/s
-       ! MASS in kg/m^2   = < Q dp_in_Pa / g >   
-       ! flux in kg/m^2/s = < FQ dp_in_Pa / g >   
-       ! We want < FQ dp_in_Pa / g > = 2.3e-5  so:  FQ = 2.3e-5*g/dp_in_Pa 
+       ! MASS in kg/m^2   = < Q dp_in_Pa / g >
+       ! flux in kg/m^2/s = < FQ dp_in_Pa / g >
+       ! We want < FQ dp_in_Pa / g > = 2.3e-5  so:  FQ = 2.3e-5*g/dp_in_Pa
 
        ! lowest layer thickness, in Pa
        dp = ( hvcoord%hyai(nlev+1) - hvcoord%hyai(nlev) ) + &
@@ -117,7 +117,7 @@ contains
        enddo
     endif
 
-    
+
   end subroutine hs_forcing
 
   function hs_v_forcing(hvcoord,ps,v,npts,nlevels) result(hs_v_frc)
@@ -262,11 +262,11 @@ contains
 
 #if 0
              ! ======================================
-             ! This is a smooth forcing 
+             ! This is a smooth forcing
              ! for debugging purposes only...
              ! ======================================
 
-             k_t(i,j)= k_a 
+             k_t(i,j)= k_a
              pratk   = EXP(0.081*(logprat))
              Teq     = (315.0D0 - dT_y*snlatsq(i,j))*pratk
 #endif
@@ -275,7 +275,7 @@ contains
 #endif /* _USE_VECTOR */
        end do
     end do
-      
+
   end function hs_T_forcing
 
   subroutine hs0_init_state(elem, hybrid, hvcoord,nets,nete,Tinit)
@@ -288,10 +288,10 @@ contains
     real (kind=real_kind),  intent(in)    :: Tinit
 
     ! Local variables
-    
+
     integer ie,i,j,k,q
-    integer :: nm1 
-    integer :: n0 
+    integer :: nm1
+    integer :: n0
     integer :: np1
     real (kind=real_kind) :: lat_mtn,lon_mtn,r_mtn,h_mtn,rsq,lat,lon
 

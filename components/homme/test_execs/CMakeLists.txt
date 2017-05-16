@@ -153,6 +153,9 @@ IF (${HOMME_QUEUING})
 
 ENDIF ()
 
+# Test some stuff in the shared folder
+ADD_SUBDIRECTORY (share_ut)
+
 # Add the test exec subdirs for the sweqx executable
 IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(swtcA)
@@ -180,6 +183,14 @@ IF(${BUILD_HOMME_PREQX})
   IF(${BUILD_HOMME_PREQX_ACC})
     ADD_SUBDIRECTORY(baroCam-acc)
   ENDIF()
+ENDIF()
+
+IF(${BUILD_HOMME_PREQX_FLAT})
+  ADD_SUBDIRECTORY(preqx_flat_ut)
+  ADD_SUBDIRECTORY(prtcA_flat)
+  ADD_SUBDIRECTORY(prtcA_flat_c)
+  ADD_SUBDIRECTORY(prtcB_flat)
+  ADD_SUBDIRECTORY(prtcB_flat_c)
 ENDIF()
 
 # Add the test exec subdirs for the prim executable

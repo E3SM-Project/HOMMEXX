@@ -35,8 +35,8 @@ private
      real (kind=real_kind) :: M_t(np,np)
   end type derivative_stag_t
 
-  real (kind=real_kind), allocatable :: integration_matrix(:,:)
-  real (kind=real_kind), allocatable :: boundary_interp_matrix(:,:,:)
+  real (kind=real_kind), allocatable, target, public :: integration_matrix(:,:)
+  real (kind=real_kind), allocatable, target, public :: boundary_interp_matrix(:,:,:)
 
 ! ======================================
 ! Public Interfaces
@@ -1897,7 +1897,7 @@ end do
 
     do j=1,np
        do i=1,np
-          vort(i,j)=(vort(i,j)-vtemp(i,j))*(elem%rmetdet(i,j)*rrearth)
+          vort(i,j)=(vort(i,j)-vtemp(i,j))*(1/elem%metdet(i,j)*rrearth)
        end do
     end do
 
@@ -1918,7 +1918,7 @@ end do
 
     deriv%dvv = dvv
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
     allocate(elem%rmetdet(np, np))
 #endif
@@ -1927,7 +1927,7 @@ end do
 
     vort = vorticity_sphere(v, deriv, elem)
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%rmetdet)
 #endif
@@ -1994,7 +1994,6 @@ end do
 !   ouput:  div(v)  spherical divergence of v
 !
 
-
     real(kind=real_kind), intent(in) :: v(np,np,2)  ! in lat-lon coordinates
     type (derivative_t), intent(in) :: deriv
     type (element_t), intent(in) :: elem
@@ -2034,7 +2033,7 @@ end do
     end do
 
 !dir$ simd
-    div(:,:)=(div(:,:)+vvtemp(:,:))*(elem%rmetdet(:,:)*rrearth)
+    div(:,:)=(div(:,:)+vvtemp(:,:))*(1/elem%metdet(:,:)*rrearth)
 
   end function divergence_sphere
 
@@ -2054,7 +2053,7 @@ end do
 
     deriv%dvv = dvv
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%metdet(np, np))
     allocate(elem%rmetdet(np, np))
@@ -2065,7 +2064,7 @@ end do
 
     div = divergence_sphere(v, deriv, elem)
 
-#if SW_USE_FLAT_ARRAYS
+#ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
     deallocate(elem%rmetdet)

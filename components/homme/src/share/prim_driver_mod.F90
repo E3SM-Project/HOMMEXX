@@ -54,6 +54,37 @@ module prim_driver_mod
 
 contains
 
+#ifdef USE_KOKKOS_KERNELS
+  subroutine init_caar_derivative_c (deriv)
+    use iso_c_binding       , only : c_ptr, c_loc
+    use derivative_mod_base , only : derivative_t, integration_matrix, boundary_interp_matrix
+    interface
+      subroutine init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr) bind(c)
+        use iso_c_binding, only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+      end subroutine init_derivative_c
+    end interface
+    !
+    ! Inputs
+    !
+    type (derivative_t), intent(in), target :: deriv
+    !
+    ! Locals
+    !
+    type (c_ptr) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+
+    dvv_ptr = c_loc(deriv%dvv)
+    integr_mat_ptr = c_loc(integration_matrix)
+    bd_interp_mat_ptr = c_loc(boundary_interp_matrix)
+
+    call init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr)
+
+  end subroutine init_caar_derivative_c
+#endif
+
   subroutine prim_init1(elem, fvm, par, dom_mt, Tl)
 
     use bndry_mod,          only: sort_neighbor_buffer_mapping
@@ -261,7 +292,7 @@ contains
     call initMetaGraph(iam,MetaVertex(1),GridVertex,GridEdge)
 
     nelemd = LocalElemCount(MetaVertex(1))
-    if(par%masterproc .and. Debug) then 
+    if(par%masterproc .and. Debug) then
         call PrintMetaVertex(MetaVertex(1))
     endif
 
@@ -548,7 +579,16 @@ contains
 
 #ifndef CAM
     use column_model_mod,     only: InitColumnModel
-    use control_mod,          only: pertlim                     
+    use control_mod,          only: pertlim
+#endif
+
+#ifndef CAAR_MONOLITHIC
+    use caar_subroutines_mod, only: init_caar_derivative_f90
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, elem_metdet, elem_state_phis
+    use iso_c_binding,        only: c_ptr, c_loc
 #endif
 
 #ifdef TRILINOS
@@ -590,6 +630,11 @@ contains
     integer :: nfrc
     integer :: n0_qdp
 
+#ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
+    type (c_ptr) :: elem_spheremp_ptr, elem_metdet_ptr, elem_state_phis_ptr
+#endif
+
 #ifdef TRILINOS
      integer :: lenx
     real (c_double) ,allocatable, dimension(:) :: xstate(:)
@@ -624,6 +669,21 @@ contains
       type(c_ptr)                   :: j_container  !analytic jacobian ptr
     end subroutine noxinit
 
+  end interface
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+  interface
+    subroutine init_region_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
+                                 elem_spheremp_ptr, elem_metdet_ptr, phis_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      integer      , intent(in) :: nelemd
+      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
+      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_metdet_ptr, phis_ptr
+    end subroutine init_region_2d_c
   end interface
 #endif
 
@@ -839,10 +899,10 @@ contains
                    do j=1,np
                       dp = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
                            ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
-                      
+
                       elem(ie)%state%Qdp(i,j,k,q,1)=elem(ie)%state%Q(i,j,k,q)*dp
                       elem(ie)%state%Qdp(i,j,k,q,2)=elem(ie)%state%Q(i,j,k,q)*dp
-                      
+
                    enddo
                 enddo
              enddo
@@ -856,24 +916,24 @@ contains
       ! should be optimize and combined with the above caculation
       do ie=nets,nete
         do k=1,nlev
-	    do i=1,np
-	      do j=1,np
-		  elem(ie)%derived%dp(i,j,k)=( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-		       ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
-	      enddo
-	    enddo
+          do i=1,np
+            do j=1,np
+              elem(ie)%derived%dp(i,j,k)=( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
+            enddo
+          enddo
           !write air density in dp_fvm field of FVM
           fvm(ie)%dp_fvm(1:nc,1:nc,k,n0_fvm)=interpolate_gll2fvm_points(elem(ie)%derived%dp(:,:,k),deriv(hybrid%ithr))
         enddo
       enddo
       call fvm_init3(elem,fvm,hybrid,nets,nete,n0_fvm) !boundary exchange
       do ie=nets,nete
-	    do i=1-nhc,nc+nhc
-	      do j=1-nhc,nc+nhc
-          !phl is it necessary to compute psc here?
-	        fvm(ie)%psc(i,j) = sum(fvm(ie)%dp_fvm(i,j,:,n0_fvm)) +  hvcoord%hyai(1)*hvcoord%ps0
-	      enddo
-	    enddo
+        do i=1-nhc,nc+nhc
+          do j=1-nhc,nc+nhc
+            !phl is it necessary to compute psc here?
+            fvm(ie)%psc(i,j) = sum(fvm(ie)%dp_fvm(i,j,:,n0_fvm)) +  hvcoord%hyai(1)*hvcoord%ps0
+          enddo
+        enddo
       enddo
       if (hybrid%masterthread) then
          write(iulog,*) 'FVM tracers initialized.'
@@ -938,6 +998,24 @@ contains
     call solver_init2(elem(:), deriv(hybrid%ithr))
     call Prim_Advec_Init2(elem(:), hvcoord, hybrid)
 
+#ifdef USE_KOKKOS_KERNELS
+    call init_caar_derivative_c(deriv(hybrid%ithr))
+
+    elem_D_ptr          = c_loc(elem_D)
+    elem_Dinv_ptr       = c_loc(elem_Dinv)
+    elem_fcor_ptr       = c_loc(elem_fcor)
+    elem_spheremp_ptr   = c_loc(elem_spheremp)
+    elem_metdet_ptr     = c_loc(elem_metdet)
+    elem_state_phis_ptr = c_loc(elem_state_phis)
+    call init_region_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
+                           elem_fcor_ptr, elem_spheremp_ptr,  &
+                           elem_metdet_ptr, elem_state_phis_ptr)
+#else
+#ifndef CAAR_MONOLITHIC
+    call init_caar_derivative_f90(deriv(hybrid%ithr))
+#endif
+#endif
+
   end subroutine prim_init2
 
 !=======================================================================================================!
@@ -993,7 +1071,8 @@ contains
     use hybvcoord_mod, only : hvcoord_t
     use time_mod, only : TimeLevel_t, timelevel_update, smooth
     use control_mod, only: statefreq, integration, ftype, qsplit, disable_diagnostics
-    use prim_advance_mod, only : prim_advance_exp, prim_advance_si, preq_robert3
+    use prim_advance_mod, only : prim_advance_si, preq_robert3
+    use prim_advance_exp_mod, only : prim_advance_exp
     use prim_state_mod, only : prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: deriv
     use parallel_mod, only : abortmp
@@ -1437,7 +1516,8 @@ contains
     use fvm_mod,            only: fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: prim_advance_exp, overwrite_SEdensity
+    use prim_advance_mod,   only: overwrite_SEdensity
+    use prim_advance_exp_mod, only: prim_advance_exp
     use prim_advection_mod, only: prim_advec_tracers_fvm
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
@@ -1470,13 +1550,13 @@ contains
     if (ntrac>0.and.rstep==1) then
        !
        ! save velocity at time t for fvm trajectory algorithm
-       !       
+       !
        do ie=nets,nete
           fvm(ie)%vn0=elem(ie)%state%v(:,:,:,:,tl%n0)
           elem(ie)%sub_elem_mass_flux=0
        end do
     end if
- 
+
     ! ===============
     ! initialize mean flux accumulation variables and save some variables at n0
     ! for use by advection
@@ -1547,7 +1627,7 @@ contains
       do ie=nets,nete
       do k=1,nlev
         tempdp3d = elem(ie)%state%dp3d(:,:,k,tl%np1) - &
-                   elem(ie)%derived%dp(:,:,k) 
+                   elem(ie)%derived%dp(:,:,k)
         tempmass = subcell_integration(tempdp3d, np, nc, elem(ie)%metdet)
         tempflux = dt_q*elem(ie)%sub_elem_mass_flux(:,:,:,k)
         do i=1,nc
@@ -1575,23 +1655,22 @@ contains
     !        state%v(:,:,:,np1)      = velocity on reference levels
     !        state%ps_v(:,:,:,np1)   = ps
     ! rsplit>0
-    !        state%v(:,:,:,np1)      = velocity on lagrangian levels 
+    !        state%v(:,:,:,np1)      = velocity on lagrangian levels
     !        state%dp3d(:,:,:,np1)   = dp3d
     !
 
 
     ! ===============
-    ! Tracer Advection.  
+    ! Tracer Advection.
     ! in addition, this routine will apply the DSS to:
     !        derived%eta_dot_dpdn    =  mean vertical velocity (used for remap below)
     !        derived%omega           =
-    ! Tracers are always vertically lagrangian.  
-    ! For rsplit=0: 
+    ! Tracers are always vertically lagrangian.
+    ! For rsplit=0:
     !   if tracer scheme needs v on lagrangian levels it has to vertically interpolate
     !   if tracer scheme needs dp3d, it needs to derive it from ps_v
     ! ===============
-    ! Advect tracers if their count is > 0.  
-    ! special case in CAM: if CSLAM tracers are turned on , qsize=1 but this tracer should 
+    ! Advect tracers if their count is > 0.
     ! not be advected.  This will be cleaned up when the physgrid is merged into CAM trunk
     ! Currently advecting all species
     call t_startf("prim_step_advec")

@@ -6,11 +6,19 @@ module utils_mod
 
 implicit none
 private
-      
+
        public :: InsertIntoArray
        public :: RemoveFromArray
-
-contains 
+  interface FrobeniusNorm
+    module procedure FrobeniusNorm_1D
+    module procedure FrobeniusNorm_2D
+    module procedure FrobeniusNorm_3D
+    module procedure FrobeniusNorm_4D
+    module procedure FrobeniusNorm_5D
+    module procedure FrobeniusNorm_6D
+  end interface FrobeniusNorm
+       public :: FrobeniusNorm
+contains
 
    subroutine LinearFind(array,value,found,indx)
       integer, intent(in)  :: array(:)
@@ -41,7 +49,7 @@ contains
             ! Already in list
             ! ===============
             found = .TRUE.
-            indx = i 
+            indx = i
             return
          else if((array(i) < value) .and. (value < array(i+1)) ) then
             ! =====================================
@@ -126,8 +134,115 @@ contains
         enddo
 
         deallocate(tmp)
-               
+
    end subroutine RemoveFromArray
 
+  function FrobeniusNorm_1D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    real (kind=real_kind) :: temp, c, y
+    integer :: i, length
+
+    length = SIZE(A)
+    ! Note: use Kahan summation to maintain accuracy
+    norm = 0
+    c = 0
+    y = 0
+    do i=1,length
+      y = A(i)**2 - c
+      temp = norm + y
+      c = (temp - norm) - y
+      norm = temp
+    enddo
+
+    norm = sqrt(norm)
+  end function FrobeniusNorm_1D
+
+  function FrobeniusNorm_2D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:,:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    integer :: length
+
+    length = PRODUCT(SHAPE(A))
+    norm = FrobeniusNorm(RESHAPE(A,[length]))
+  end function FrobeniusNorm_2D
+
+  function FrobeniusNorm_3D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:,:,:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    integer :: length
+
+    length = PRODUCT(SHAPE(A))
+    norm = FrobeniusNorm(RESHAPE(A,[length]))
+  end function FrobeniusNorm_3D
+
+  function FrobeniusNorm_4D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:,:,:,:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    integer :: length
+
+    length = PRODUCT(SHAPE(A))
+    norm = FrobeniusNorm(RESHAPE(A,[length]))
+  end function FrobeniusNorm_4D
+
+  function FrobeniusNorm_5D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:,:,:,:,:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    integer :: length
+
+    length = PRODUCT(SHAPE(A))
+    norm = FrobeniusNorm(RESHAPE(A,[length]))
+  end function FrobeniusNorm_5D
+
+  function FrobeniusNorm_6D (A) result(norm)
+    use kinds, only : real_kind
+    !
+    ! Inputs/Outputs
+    !
+    real (kind=real_kind), intent(in), dimension(:,:,:,:,:,:) :: A
+    real (kind=real_kind) :: norm
+    !
+    ! Locals
+    !
+    integer :: length
+
+    length = PRODUCT(SHAPE(A))
+    norm = FrobeniusNorm(RESHAPE(A,[length]))
+  end function FrobeniusNorm_6D
 
 end module utils_mod

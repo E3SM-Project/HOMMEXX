@@ -40,6 +40,18 @@ program prim_main
 #endif
 
   implicit none
+  interface
+     subroutine init_kokkos(num_threads) bind(c)
+       use iso_c_binding, only : c_int
+       !
+       ! Input(s)
+       !
+       integer (kind=c_int), intent(in) :: num_threads
+     end subroutine init_kokkos
+
+     subroutine finalize_kokkos() bind(c)
+     end subroutine finalize_kokkos
+  end interface
 
   type (element_t),  pointer  :: elem(:)
   type (fvm_struct), pointer  :: fvm(:)
@@ -55,12 +67,12 @@ program prim_main
   integer ithr
   integer ierr
   integer nstep
-  
+
   character (len=20) :: numproc_char
   character (len=20) :: numtrac_char
-  
+
   logical :: dir_e ! boolean existence of directory where output netcdf goes
-  
+
   ! =====================================================
   ! Begin executable code set distributed memory world...
   ! =====================================================
@@ -70,11 +82,16 @@ program prim_main
   ! Set number of threads...
   ! =====================================
   call t_initf('input.nl',LogPrint=par%masterproc, &
-	Mpicom=par%comm, MasterTask=par%masterproc)
+  Mpicom=par%comm, MasterTask=par%masterproc)
   call t_startf('Total')
   call t_startf('prim_init1')
   call prim_init1(elem,  fvm, par,dom_mt,tl)
   call t_stopf('prim_init1')
+
+#ifdef USE_KOKKOS_KERNELS
+  ! Kokkos has to be initialize before it is used, and before fortran initializes OpenMP
+  call init_kokkos(vert_num_threads)
+#endif
 
   ! =====================================
   ! Begin threaded region so each thread can print info
@@ -100,14 +117,14 @@ program prim_main
   nete=dom_mt(ithr)%end
   ! ================================================
   ! Initialize thread decomposition
-  ! Note: The OMP Critical is required for threading since the Fortran 
+  ! Note: The OMP Critical is required for threading since the Fortran
   !   standard prohibits multiple I/O operations on the same unit.
   ! ================================================
 #if (defined HORIZ_OPENMP)
   !$OMP CRITICAL
 #endif
-  if (par%rank<100) then 
-     write(6,9) par%rank,ithr,omp_get_max_threads(),nets,nete 
+  if (par%rank<100) then
+     write(6,9) par%rank,ithr,omp_get_max_threads(),nets,nete
   endif
 9 format("process: ",i2,1x,"horiz thread id: ",i2,1x,"# vert threads: ",i2,1x,&
        "element limits: ",i5,"-",i5)
@@ -115,7 +132,7 @@ program prim_main
   !$OMP END CRITICAL
   !$OMP END PARALLEL
 #endif
-  
+
   ! setup fake threading so we can call routines that require 'hybrid'
   ithr=omp_get_thread_num()
   hybrid = hybrid_create(par,ithr,1)
@@ -161,18 +178,18 @@ program prim_main
   ithr=omp_get_thread_num()
   hybrid = hybrid_create(par,ithr,1)
   nets=1
-  nete=nelemd 
+  nete=nelemd
 
 
 
-  
+
   ! Here we get sure the directory specified
-  ! in the input namelist file in the 
+  ! in the input namelist file in the
   ! variable 'output_dir' does exist.
-  ! this avoids a abort deep within the PIO 
+  ! this avoids a abort deep within the PIO
   ! library (SIGABRT:signal 6) which in most
   ! architectures produces a core dump.
-  if (par%masterproc) then 
+  if (par%masterproc) then
      open(unit=447,file=trim(output_dir) // "/output_dir_test",iostat=ierr)
      if ( ierr==0 ) then
         print *,'Directory ',trim(output_dir), ' does exist: initialing IO'
@@ -192,7 +209,7 @@ program prim_main
      call haltmp("Please get sure the directory exist or specify one via output_dir in the namelist file.")
   end if
 #endif
-  
+
 
 #ifdef PIO_INTERP
   ! initialize history files.  filename constructed with restart time
@@ -220,7 +237,7 @@ program prim_main
         call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
      endif
   endif
-  
+
 
   if(par%masterproc) print *,"Entering main timestepping loop"
   call t_startf('prim_main_loop')
@@ -233,7 +250,7 @@ program prim_main
      hybrid = hybrid_create(par,ithr,nthreads)
      nets=dom_mt(ithr)%start
      nete=dom_mt(ithr)%end
-     
+
      nstep = nextoutputstep(tl)
 !JMD     call vprof_start()
      do while(tl%nstep<nstep)
@@ -253,7 +270,7 @@ program prim_main
      ithr=omp_get_thread_num()
      hybrid = hybrid_create(par,ithr,1)
      nets=1
-     nete=nelemd 
+     nete=nelemd
 
 
 #ifdef PIO_INTERP
@@ -265,12 +282,12 @@ program prim_main
 
 #ifdef _REFSOLN
      call prim_printstate_par(elem, tl,hybrid,hvcoord,nets,nete, par)
-#endif 
+#endif
 
      ! ============================================================
-     ! Write restart files if required 
+     ! Write restart files if required
      ! ============================================================
-     if((restartfreq > 0) .and. (MODULO(tl%nstep,restartfreq) ==0)) then 
+     if((restartfreq > 0) .and. (MODULO(tl%nstep,restartfreq) ==0)) then
         call WriteRestart(elem, ithr,1,nelemd,tl)
      endif
   end do
@@ -290,7 +307,7 @@ program prim_main
   if(par%masterproc) print *,"writing timing data"
 !   write(numproc_char,*) par%nprocs
 !   write(numtrac_char,*) ntrac
-!   call system('mkdir -p '//'time/'//trim(adjustl(numproc_char))//'-'//trim(adjustl(numtrac_char))) 
+!   call system('mkdir -p '//'time/'//trim(adjustl(numproc_char))//'-'//trim(adjustl(numtrac_char)))
 !   call t_prf('time/HommeFVMTime-'//trim(adjustl(numproc_char))//'-'//trim(adjustl(numtrac_char)),par%comm)
   call t_prf('HommeTime', par%comm)
   if(par%masterproc) print *,"calling t_finalizef"

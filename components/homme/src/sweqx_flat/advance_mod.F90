@@ -344,7 +344,7 @@ contains
     end do
   end subroutine rk_stage_f90
 
-  !DEC$ ATTRIBUTE NOINLINE :: loop7_f90
+  !DEC$ ATTRIBUTES NOINLINE :: loop7_f90
   subroutine loop7_f90(nets, nete, n0, numelems, tracer_advection_formulation, &
        pmean, dtstage, dvv_ptr, d_ptr, dinv_ptr, &
        metdet_ptr, rmetdet_ptr, fcor_ptr, &
@@ -382,7 +382,7 @@ contains
     type(element_t) :: elem
     type(derivative_t) :: deriv
 
-#if SW_USE_FLAT_ARRAYS
+#if HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np,np,2,2))
     allocate(elem%Dinv(np,np,2,2))
     allocate(elem%metdet(np,np))
@@ -450,7 +450,7 @@ contains
           ptens(:,:,k,ie - nets + 1) = p(:,:,k,n0,ie - nets + 1) + dtstage*ptens(:,:,k,ie - nets + 1)
        end do!end of loop over levels
     end do
-#if SW_USE_FLAT_ARRAYS
+#if HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
