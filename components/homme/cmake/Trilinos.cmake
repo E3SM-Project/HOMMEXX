@@ -105,19 +105,23 @@ IF(USE_TRILINOS)
   ENDIF()
 
 ELSE(USE_TRILINOS)
-  MESSAGE("Trilinos turned off")
+  MESSAGE(STATUS "Trilinos turned off")
   IF(KOKKOS_PATH)
     SET(TRILINOS_INSTALL_DIR ${KOKKOS_PATH})
     SET(Kokkos_LIBRARIES "kokkos")
     SET(Kokkos_TPL_LIBRARIES "dl")
   ELSE()
-    MESSAGE(FATAL_ERROR "Kokkos is required; either specify KOKKOS_PATH or enable finding Trilinos with USE_TRILINOS and TRILINOS_INSTALL_DIR")
+    MESSAGE(FATAL_ERROR "Kokkos is required; either specify KOKKOS_PATH or enable finding/installing Trilinos with USE_TRILINOS and TRILINOS_INSTALL_DIR")
   ENDIF()
 ENDIF()
 
 macro(link_to_trilinos targetName)
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
   TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
+
+  IF("${ENABLE_CUDA}")
+    TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda)
+  ENDIF()
 
   IF(TARGET Trilinos)
     # In case we are building Trilinos with ExternalProject, we need to compile this after the fact
