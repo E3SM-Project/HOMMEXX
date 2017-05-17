@@ -90,7 +90,7 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
         {
           for (int igp=0; igp<NP; ++igp, ++k_3d_vectors)
           {
-            h_3d_scalars(ie, idim, ilev, igp, jgp) = derived_v[k_3d_scalars];
+            h_3d_scalars(ie, idim, ilev, igp, jgp) = derived_v[k_3d_vectors];
           }
         }
       }
@@ -98,7 +98,7 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
     // Extra level of eta_dot_dpdn
     for (int jgp=0; jgp<NP; ++jgp)
     {
-      for (int igp=0; igp<NP; ++igp, ++k_3d_scalars, ++k_eta_dot_dp_dn)
+      for (int igp=0; igp<NP; ++igp, ++k_eta_dot_dp_dn)
       {
         h_eta_dot_dpdn (ie, NUM_LEV, igp, jgp) = derived_eta_dot_dpdn[k_eta_dot_dp_dn];
       }
@@ -201,7 +201,7 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
         {
           for (int igp=0; igp<NP; ++igp, ++k_3d_vectors)
           {
-            derived_v[k_3d_scalars] = h_3d_scalars(ie, idim, ilev, igp, jgp);
+            derived_v[k_3d_vectors] = h_3d_scalars(ie, idim, ilev, igp, jgp);
           }
         }
       }
@@ -209,7 +209,7 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
     // Extra level of eta_dot_dpdn
     for (int jgp=0; jgp<NP; ++jgp)
     {
-      for (int igp=0; igp<NP; ++igp, ++k_3d_scalars, ++k_eta_dot_dp_dn)
+      for (int igp=0; igp<NP; ++igp, ++k_eta_dot_dp_dn)
       {
         derived_eta_dot_dpdn[k_eta_dot_dp_dn] = h_eta_dot_dpdn (ie, NUM_LEV, igp, jgp);
       }
