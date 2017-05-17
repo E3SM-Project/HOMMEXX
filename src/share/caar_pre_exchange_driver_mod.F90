@@ -96,6 +96,8 @@ contains
     real (kind=real_kind), intent(in)            :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
 
 #ifdef USE_KOKKOS_KERNELS
+    call t_startf("caar overhead")
+
     hvcoord_a_ptr             = c_loc(hvcoord%hyai)
     call init_control_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,hvcoord_a_ptr)
 
@@ -112,22 +114,26 @@ contains
                                          elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar overhead")
 #endif
-
-    call t_startf("caar pre exchange")
+    !og disabling this for now to keep # of timers low
+    !call t_startf("caar pre exchange")
 #ifdef USE_KOKKOS_KERNELS
     call caar_pre_exchange_monolithic_c ()
 #else
     call caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                           deriv,nets,nete,compute_diagnostics,eta_ave_w)
 #endif
-    call t_stopf("caar pre exchange")
+    !og disabling this for now to keep # of timers low
+    !call t_stopf("caar pre exchange")
 
 #ifdef USE_KOKKOS_KERNELS
+    call t_startf("caar overhead")
     call caar_copy_region_data_to_f90_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                          elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar overhead")
 #endif
 
   end subroutine caar_pre_exchange_monolithic
