@@ -222,6 +222,8 @@ module prim_advance_caar_mod
 
   end subroutine compute_and_apply_rhs
 
+#ifndef CAAR_MONOLITHIC
+
 #ifdef USE_KOKKOS_KERNELS
 #define CAAR_COMPUTE_PRESSURE           caar_compute_pressure_c
 #define CAAR_COMPUTE_VORT_AND_DIV       caar_compute_vort_and_div_c
@@ -241,7 +243,6 @@ module prim_advance_caar_mod
 #define CAAR_COMPUTE_PHI_KINETIC_ENERGY caar_compute_phi_kinetic_energy_f90
 #define CAAR_UPDATE_STATES              caar_update_states_f90
 #endif
-
 
   subroutine compute_and_apply_rhs_pre_exchange(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                                 deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -723,6 +724,8 @@ module prim_advance_caar_mod
 #endif
 
   end subroutine compute_and_apply_rhs_pre_exchange
+! ifdef CAAR_MONOLITHIC
+#endif
 
   subroutine distribute_flux_at_corners(cflux, corners, getmapP)
     use kinds,          only : int_kind, real_kind
