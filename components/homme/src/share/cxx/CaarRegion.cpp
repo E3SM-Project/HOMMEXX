@@ -21,8 +21,8 @@ void CaarRegion::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& sph
 {
   int k_scalars = 0;
   int k_tensors = 0;
-  HostViewManaged<Real *[NUM_2D_SCALARS][NP][NP]>       h_2d_scalars("host 2d scalars",m_num_elems);
-  HostViewManaged<Real *[NUM_2D_TENSORS][2][2][NP][NP]> h_2d_tensors("host 2d tensors",m_num_elems);
+  ExecViewManaged<Real * [NUM_2D_SCALARS][NP][NP]>::HostMirror h_2d_scalars = Kokkos::create_mirror_view(m_2d_scalars);
+  ExecViewManaged<Real *[NUM_2D_TENSORS][2][2][NP][NP]>::HostMirror h_2d_tensors = Kokkos::create_mirror_view(m_2d_tensors);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
     // 2d scalars
@@ -67,8 +67,8 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
   int k_3d_scalars    = 0;
   int k_3d_vectors    = 0;
   int k_eta_dot_dp_dn = 0;
-  HostViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]> h_3d_scalars ("host 3d scalars",m_num_elems);
-  HostViewManaged<Real *[NUM_LEV_P][NP][NP]> h_eta_dot_dpdn ("host eta_dot_dpdn",m_num_elems);
+  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
+  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
     for (int ilev=0; ilev<NUM_LEV; ++ilev)
@@ -104,13 +104,14 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
       }
     }
   }
+  // what():  deep_copy given views that would require a temporary allocation
   Kokkos::deep_copy (m_3d_scalars, h_3d_scalars);
   Kokkos::deep_copy (m_eta_dot_dpdn, h_eta_dot_dpdn);
 
   // 4d scalars
   int k_4d_scalars = 0;
   int k_4d_vectors = 0;
-  HostViewManaged<Real *[NUM_TIME_LEVELS][NUM_3D_SCALARS][NUM_LEV][NP][NP]> h_4d_scalars ("host 3d scalars",m_num_elems);
+  ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_4d_scalars = Kokkos::create_mirror_view(m_4d_scalars);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
     for (int tl=0; tl<NUM_TIME_LEVELS; ++tl)
@@ -143,7 +144,7 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
 
   // Qdp
   int k_qdp = 0;
-  HostViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> h_Qdp ("host Qdp", m_num_elems);
+  ExecViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror h_Qdp = Kokkos::create_mirror_view(m_Qdp);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
     for (int qni=0; qni<Q_NUM_TIME_LEVELS; ++qni)
@@ -175,8 +176,8 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
   int k_3d_scalars    = 0;
   int k_3d_vectors    = 0;
   int k_eta_dot_dp_dn = 0;
-  HostViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]> h_3d_scalars ("host 3d scalars",m_num_elems);
-  HostViewManaged<Real *[NUM_LEV_P][NP][NP]> h_eta_dot_dpdn ("host eta_dot_dpdn",m_num_elems);
+  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
+  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
   Kokkos::deep_copy (h_3d_scalars, m_3d_scalars);
   Kokkos::deep_copy (h_eta_dot_dpdn, m_eta_dot_dpdn);
   for (int ie=0; ie<m_num_elems; ++ie)
@@ -218,7 +219,7 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
   // 4d scalars
   int k_4d_scalars = 0;
   int k_4d_vectors = 0;
-  HostViewManaged<Real *[NUM_TIME_LEVELS][NUM_3D_SCALARS][NUM_LEV][NP][NP]> h_4d_scalars ("host 3d scalars",m_num_elems);
+  ExecViewManaged<Real *[NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_4d_scalars = Kokkos::create_mirror_view(m_4d_scalars);
   Kokkos::deep_copy (h_4d_scalars, m_4d_scalars);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
@@ -251,7 +252,7 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
 
   // Qdp
   int k_qdp = 0;
-  HostViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> h_Qdp ("host Qdp", m_num_elems);
+  ExecViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror h_Qdp = Kokkos::create_mirror_view(m_Qdp);
   Kokkos::deep_copy (h_Qdp, m_Qdp);
   for (int ie=0; ie<m_num_elems; ++ie)
   {
