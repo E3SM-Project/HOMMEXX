@@ -20,7 +20,7 @@ Real Virtual_Specific_Heat(const Real rin)
   return PhysicalConstants::cp*(1.0 + (PhysicalConstants::Cpwater_vapor/PhysicalConstants::cp - 1.0)*rin);
 }
 
-static constexpr ExecSpace exec_space;
+static const ExecSpace exec_space;
 
 extern "C" {
 
