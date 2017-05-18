@@ -22,7 +22,7 @@ void init_control_c (const int& nets, const int& nete, const int& num_elems,
   int nete_c = nete;  // F90 ranges are closed, c ranges are open on the right
   int n0_c = n0-1;
   int nm1_c = nm1-1;
-  int qn0_c = qn0-1;
+  int qn0_c = qn0==-1 ? qn0 : qn0-1;  // the -1 index has a special meaning, and -2 is not even contemplated
   int np1_c = np1-1;
   control.init(nets_c, nete_c, num_elems, nm1_c, n0_c, np1_c, qn0_c, dt2, ps0, compute_diagonstics, eta_ave_w, hybrid_a_ptr);
 }
