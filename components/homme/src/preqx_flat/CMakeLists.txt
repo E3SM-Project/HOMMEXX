@@ -141,7 +141,9 @@ SET(PREQX_FLAT_DEPS_C
   ${SRC_BASE_DIR}/jrio.c
 )
 
-OPTION (CAAR_MONOLITHIC "Whether to build the monolithic implementation of Kokkos compute and apply rhs" TRUE)
+IF (NOT DEFINED CAAR_MONOLITHIC)
+  OPTION (CAAR_MONOLITHIC "Whether to build the monolithic implementation of Kokkos compute and apply rhs" TRUE)
+ENDIF()
 
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/caar_cxx_f90_interface.cpp
