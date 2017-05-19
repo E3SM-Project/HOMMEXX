@@ -1359,7 +1359,7 @@ contains
 
     ! initialize dp3d from ps
     if (rsplit>0) then
-      call t_startf("init_dp3d_from_ps")
+      !call t_startf("init_dp3d_from_ps")
       do ie=nets,nete
          do k=1,nlev
             elem(ie)%state%dp3d(:,:,k,tl%n0)=&
@@ -1370,7 +1370,7 @@ contains
          ! vertical_remap.  so to this for debugging:
          ! elem(ie)%state%ps_v(:,:,tl%n0)=-9e9 !outcommented so the pre_scribed winds work with rsplit>0
       enddo
-      call t_stopf("init_dp3d_from_ps")
+      !call t_stopf("init_dp3d_from_ps")
     endif
 
 #if (USE_OPENACC)
@@ -1545,7 +1545,7 @@ contains
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
 
-    call t_startf("prim_step_init")
+    !call t_startf("prim_step_init")
     dt_q = dt*qsplit
     if (ntrac>0.and.rstep==1) then
        !
@@ -1605,7 +1605,7 @@ contains
          elem(ie)%derived%dp(:,:,:)=elem(ie)%state%dp3d(:,:,:,tl%n0)
       endif
     enddo
-    call t_stopf("prim_step_init")
+    !call t_stopf("prim_step_init")
 
     ! ===============
     ! Dynamical Step

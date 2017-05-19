@@ -64,7 +64,7 @@ contains
     integer                 :: n,j
     logical, parameter      :: Debug = .FALSE.
 
-    call t_startf('taylor_filter_create')
+    !call t_startf('taylor_filter_create')
     allocate(gammaP(np))
 
     allocate(legP(np,np))
@@ -100,7 +100,7 @@ contains
     deallocate(legP)
     deallocate(AP)
     deallocate(AinvP)
-    call t_stopf('taylor_filter_create')
+    !call t_stopf('taylor_filter_create')
 
   end function taylor_filter_create
 
@@ -227,7 +227,7 @@ contains
     real (kind=real_kind) :: arg
     real (kind=real_kind) :: rat
 
-    call t_startf('bv_transfer')
+    !call t_startf('bv_transfer')
     do k=1,npts
        rat = REAL(k,kind=real_kind)/REAL(npts,kind=real_kind)
        if (rat<s) then
@@ -240,7 +240,7 @@ contains
           T(k)= bvsigma(p,min(arg,one))
        end if
     end do
-    call t_stopf('bv_transfer')
+    !call t_stopf('bv_transfer')
 
   end function bv_transfer
 
@@ -267,7 +267,7 @@ contains
     real (kind=real_kind) :: xfac
     real (kind=real_kind) :: arg
 
-    call t_startf('bvsigma')
+    !call t_startf('bvsigma')
 
     om=ABS(x)-0.5D0
 
@@ -281,7 +281,7 @@ contains
        arg = 2.0D0*SQRT(p)*om*xfac
        sigma = 0.50D0*erfc(arg)
     end if
-    call t_stopf('bvsigma')
+    !call t_stopf('bvsigma')
 
   end function bvsigma
 
