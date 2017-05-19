@@ -3,7 +3,6 @@
 
 #include "CaarRegion.hpp"
 #include "CaarControl.hpp"
-#include "CaarScratch.hpp"
 #include "Derivative.hpp"
 
 #include "Types.hpp"
@@ -19,10 +18,13 @@ struct CaarFunctor {
 
   const CaarControl m_data;
   const CaarRegion  m_region;
-  const CaarScratch m_scratch;
   const Derivative  m_deriv;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
+  static constexpr int PRESSURE = 0;
+  static constexpr int OMEGA_P  = 1;
+  static constexpr int T_V      = 2;
+  static constexpr int DIV_VDP  = 3;
 
   struct KernelVariables {
     KOKKOS_INLINE_FUNCTION
@@ -70,7 +72,6 @@ struct CaarFunctor {
   CaarFunctor(const CaarControl &data)
     : m_data    (data)
     , m_region  (get_region())
-    , m_scratch (data.num_elems)
     , m_deriv   (get_derivative())
   {
     // Nothing to be done here
@@ -139,7 +140,7 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
     ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
-        m_scratch.pressure(kv.ie, kv.ilev);
+        m_region.get_3d_buffer(kv.ie, PRESSURE, kv.ilev);
 
     gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(), m_region.DINV(kv.ie),
                     kv.vector_buf_1, kv.vector_buf_2);
@@ -149,7 +150,7 @@ struct CaarFunctor {
       const int igp = (idx / NP) % NP;
       const int jgp = idx % NP;
 
-      kv.vector_buf_2(hgp, igp, jgp) *= PhysicalConstants::Rgas*( m_scratch.T_v(kv.ie,kv.ilev,igp,jgp)/p_ilev(igp,jgp) ) ;
+      kv.vector_buf_2(hgp, igp, jgp) *= PhysicalConstants::Rgas*( m_region.get_3d_buffer(kv.ie,T_V,kv.ilev,igp,jgp)/p_ilev(igp,jgp) ) ;
       //kv.vector_buf_2(hgp, igp, jgp) *= m_scratch.T_v(
           //kv.ie, kv.ilev, igp, jgp);
       //kv.vector_buf_2(hgp, igp, jgp) /=
@@ -210,8 +211,8 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void preq_hydrostatic(KernelVariables &kv) const
   {
-    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> pressure = m_scratch.pressure(kv.ie);
-    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T_v = m_scratch.T_v(kv.ie);
+    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> pressure = m_region.get_3d_buffer(kv.ie,PRESSURE);
+    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T_v = m_region.get_3d_buffer(kv.ie,T_V);
     const ExecViewUnmanaged<const Real[NP][NP]> phis = m_region.PHIS(kv.ie);
     const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> dp_n0 = m_region.DP3D(kv.ie, m_data.n0);
 
@@ -264,7 +265,7 @@ struct CaarFunctor {
       integral(igp, jgp) = 0.0;
     });
     for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      ExecViewUnmanaged<const Real[NP][NP]> p_ilev = m_scratch.pressure(kv.ie, ilev);
+      ExecViewUnmanaged<const Real[NP][NP]> p_ilev = m_region.get_3d_buffer(kv.ie, PRESSURE, ilev);
 
       gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(),
                       m_region.DINV(kv.ie), kv.vector_buf_2, grad_p);
@@ -282,12 +283,13 @@ struct CaarFunctor {
          *vgrad_p += -0.5 * m_scratch.div_vdp(ie, ilev, igp, jgp);
          */
 
-        m_scratch.omega_p(kv.ie, ilev, igp, jgp) = vgrad_p / p_ilev(igp, jgp);
+        m_region.get_3d_buffer(kv.ie, OMEGA_P, ilev, igp, jgp) = vgrad_p / p_ilev(igp, jgp);
 
 ////////////////////////
-        m_scratch.omega_p(kv.ie, ilev, igp, jgp) -= (  1.0 / p_ilev(igp, jgp) * integral(igp, jgp) + (0.5/ p_ilev(igp, jgp))*m_scratch.div_vdp(kv.ie, ilev, igp, jgp) );
+        m_region.get_3d_buffer(kv.ie, OMEGA_P, ilev, igp, jgp) -= ( 1.0 / p_ilev(igp, jgp) * integral(igp, jgp) + (0.5/ p_ilev(igp, jgp))
+                                                                *  m_region.get_3d_buffer(kv.ie, DIV_VDP, ilev, igp, jgp) );
 ////////////////////////
-        integral(igp, jgp) += m_scratch.div_vdp(kv.ie, ilev, igp, jgp);
+        integral(igp, jgp) += m_region.get_3d_buffer(kv.ie, DIV_VDP, ilev, igp, jgp);
       });
     }
   }
@@ -295,8 +297,7 @@ struct CaarFunctor {
   // Depends on DP3D
   KOKKOS_INLINE_FUNCTION
   void compute_pressure(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> pressure =
-        m_scratch.pressure(kv.ie);
+    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> pressure = m_region.get_3d_buffer(kv.ie, PRESSURE);
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -325,18 +326,18 @@ struct CaarFunctor {
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_no_tracers_helper(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> T_v = m_scratch.T_v(kv.team.league_rank());
+    ExecViewUnmanaged<Real[NP][NP]> T_v = m_region.get_3d_buffer(kv.ie, T_V, kv.ilev);
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      T_v(kv.ilev, igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+      T_v(igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp);
     });
   }
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_tracers_helper(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> T_v = m_scratch.T_v(kv.team.league_rank());
+    ExecViewUnmanaged<Real[NP][NP]> T_v = m_region.get_3d_buffer(kv.ie, T_V, kv.ilev);
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -347,7 +348,7 @@ struct CaarFunctor {
            m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
       Qt *= PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0;
       Qt += 1.0;
-      T_v(kv.ilev, igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp) * Qt;
+      T_v(igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp) * Qt;
     });
   }
 
@@ -378,7 +379,7 @@ struct CaarFunctor {
 
     divergence_sphere(kv.team, kv.vector_buf_2, m_deriv.get_dvv(),
                       m_region.METDET(kv.ie), m_region.DINV(kv.ie),
-                      kv.vector_buf_1, m_scratch.div_vdp(kv.ie,kv.ilev) );
+                      kv.vector_buf_1, m_region.get_3d_buffer(kv.ie,DIV_VDP,kv.ilev) );
 
   }
 
@@ -409,7 +410,7 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      m_region.OMEGA_P(kv.ie, kv.ilev, igp, jgp) += m_data.eta_ave_w * m_scratch.omega_p(kv.ie, kv.ilev, igp, jgp);
+      m_region.OMEGA_P(kv.ie, kv.ilev, igp, jgp) += m_data.eta_ave_w * m_region.get_3d_buffer(kv.ie, OMEGA_P, kv.ilev, igp, jgp);
     });
   }
 
@@ -438,7 +439,7 @@ struct CaarFunctor {
 
       // vgrad_t + kappa * T_v * omega_p
       Real &ttens = kv.temp[0];
-      ttens = -vgrad_t + PhysicalConstants::kappa * m_scratch.T_v(kv.ie,kv.ilev,igp,jgp) * m_scratch.omega_p(kv.ie,kv.ilev,igp,jgp);
+      ttens = -vgrad_t + PhysicalConstants::kappa * m_region.get_3d_buffer(kv.ie,T_V,kv.ilev,igp,jgp) * m_region.get_3d_buffer(kv.ie,OMEGA_P,kv.ilev,igp,jgp);
 
       Real &temp_np1 = kv.temp[0];
       temp_np1  = ttens * m_data.dt2 + m_region.T(kv.ie,m_data.nm1,kv.ilev,igp,jgp);
@@ -457,7 +458,7 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Real tmp = m_region.DP3D(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-           tmp-= m_data.dt2 * m_scratch.div_vdp(kv.ie, kv.ilev, igp, jgp);
+           tmp-= m_data.dt2 * m_region.get_3d_buffer(kv.ie, DIV_VDP, kv.ilev, igp, jgp);
       m_region.DP3D(kv.ie, m_data.np1, kv.ilev, igp, jgp) = m_region.SPHEREMP(kv.ie, igp, jgp) * tmp;
     });
   }

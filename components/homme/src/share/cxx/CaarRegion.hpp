@@ -21,6 +21,8 @@ private:
     NUM_2D_SCALARS = 4,
     NUM_2D_TENSORS = 2,
 
+    NUM_3D_BUFFERS = 4,
+
     // Some constexpr for the index of different variables in the views
     // 4D Scalars
     IDX_U = 0,
@@ -61,6 +63,8 @@ private:
   ExecViewManaged<Real * [NUM_LEV_P][NP][NP]> m_eta_dot_dpdn;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::Impl::ALL_t();
+
+  ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> m_3d_buffers;
 
 public:
 
@@ -250,6 +254,21 @@ public:
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<const Real[2][2][NP][NP]> DINV(const int ie) const {
     return Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_DINV), ALL, ALL, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> get_3d_buffer (const int ie, const int ibuff) const {
+    return Kokkos::subview(m_3d_buffers, ie, ibuff, ALL, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[NP][NP]> get_3d_buffer (const int ie, const int ibuff, const int ilev) const {
+    return Kokkos::subview(m_3d_buffers, ie, ibuff, ilev, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  Real & get_3d_buffer (const int ie, const int ibuff, const int ilev, const int igp, const int jgp) const {
+    return m_3d_buffers (ie, ibuff, ilev, igp, jgp);
   }
 };
 
