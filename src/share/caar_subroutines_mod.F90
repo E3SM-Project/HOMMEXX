@@ -472,8 +472,42 @@ contains
     end do
   end subroutine caar_compute_eta_dot_dpdn_f90
 
-  subroutine caar_compute_energy_grad(ie, n0, k, elem_state_v, elem_derived_phi, elem_derived_pecnd, elem_Dinv, T_v, p, grad_p, vtemp)
+  subroutine caar_compute_energy_grad_c_int(nelemd, ie, n0, k, elem_state_v_ptr, elem_derived_phi_ptr, elem_derived_pecnd_ptr, elem_Dinv_ptr, T_v_ptr, p_ptr, grad_p_ptr, vtemp_ptr)
     use iso_c_binding,      only : c_int, c_ptr, c_f_pointer
+    use element_mod,        only : timelevels
+    use dimensions_mod,     only : np, nlev
+    use physical_constants, only : Rgas
+    integer (kind=c_int), intent(in) :: nelemd, ie, n0, k
+    type (c_ptr), intent(in) :: elem_state_v_ptr
+    type (c_ptr), intent(in) :: elem_Dinv_ptr
+    type (c_ptr), intent(in) :: grad_p_ptr
+    type (c_ptr), intent(in) :: elem_derived_phi_ptr
+    type (c_ptr), intent(in) :: elem_derived_pecnd_ptr
+    type (c_ptr), intent(in) :: T_v_ptr
+    type (c_ptr), intent(in) :: p_ptr
+    type (c_ptr), intent(in) :: vtemp_ptr
+
+    real (kind=real_kind), dimension(:, :, :, :, :, :), pointer :: elem_state_v
+    real (kind=real_kind), dimension(:, :, :, :, :), pointer :: elem_Dinv
+    real (kind=real_kind), dimension(:, :, :, :, :), pointer :: grad_p
+    real (kind=real_kind), dimension(:, :, :, :), pointer :: elem_derived_phi
+    real (kind=real_kind), dimension(:, :, :, :), pointer :: elem_derived_pecnd
+    real (kind=real_kind), dimension(:, :, :, :), pointer :: T_v
+    real (kind=real_kind), dimension(:, :, :, :), pointer :: p
+    real (kind=real_kind), dimension(:, :, :), pointer :: vtemp
+    call c_f_pointer(elem_state_v_ptr, elem_state_v, [np, np, 2, nlev, timelevels, nelemd])
+    call c_f_pointer(elem_Dinv_ptr, elem_Dinv, [np, np, 2, 2, nelemd])
+    call c_f_pointer(grad_p_ptr, grad_p, [np, np, 2, nlev, nelemd])
+    call c_f_pointer(elem_derived_phi_ptr, elem_derived_phi, [np, np, nlev, nelemd])
+    call c_f_pointer(elem_derived_pecnd_ptr, elem_derived_pecnd, [np, np, nlev, nelemd])
+    call c_f_pointer(T_v_ptr, T_v, [np, np, nlev, nelemd])
+    call c_f_pointer(p_ptr, p, [np, np, nlev, nelemd])
+    call c_f_pointer(vtemp_ptr, vtemp, [np, np, 2])
+    call caar_compute_energy_grad(ie, n0, k, elem_state_v, elem_derived_phi, elem_derived_pecnd, elem_Dinv, T_v, p, grad_p, vtemp)
+  end subroutine caar_compute_energy_grad_c_int
+
+  subroutine caar_compute_energy_grad(ie, n0, k, elem_state_v, elem_derived_phi, elem_derived_pecnd, elem_Dinv, T_v, p, grad_p, vtemp)
+    use iso_c_binding,      only : c_int
     use derivative_mod,     only : gradient_sphere
     use dimensions_mod,     only : np, nlev
     use physical_constants, only : Rgas
@@ -485,7 +519,7 @@ contains
     real (kind=real_kind), dimension(:, :, :, :) :: elem_derived_pecnd
     real (kind=real_kind), dimension(:, :, :, :) :: T_v
     real (kind=real_kind), dimension(:, :, :, :) :: p
-    real (kind=real_kind), dimension(:, :, :)    :: vtemp
+    real (kind=real_kind), dimension(:, :, :) :: vtemp
 
     integer (kind=c_int) :: j, i
     real (kind=real_kind), dimension(np, np) :: Ephi
