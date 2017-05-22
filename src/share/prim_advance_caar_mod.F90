@@ -107,6 +107,7 @@ module prim_advance_caar_mod
   call compute_and_apply_rhs_pre_exchange (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                            deriv,nets,nete,compute_diagnostics,eta_ave_w)
 #endif
+  call t_stopf('compute_and_apply_rhs')
 
   do ie=nets,nete
      ! =========================================================
@@ -217,7 +218,6 @@ module prim_advance_caar_mod
 !$OMP BARRIER
 #endif
 #endif
-  call t_stopf('compute_and_apply_rhs')
 !pw  call t_adj_detailf(-1)
 
   end subroutine compute_and_apply_rhs
