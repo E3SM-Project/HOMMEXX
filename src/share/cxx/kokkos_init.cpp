@@ -6,7 +6,7 @@ namespace Homme {
 
 extern "C" {
 
-void init_kokkos(const int& num_threads, bool print_configuration = false) {
+void init_kokkos(const int& num_threads, bool print_configuration = true) {
   /* Set OpenMP Environment variables to control how many
    * threads/processors Kokkos uses */
 
