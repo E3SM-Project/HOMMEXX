@@ -41,12 +41,7 @@ program prim_main
 
   implicit none
   interface
-     subroutine init_kokkos(num_threads) bind(c)
-       use iso_c_binding, only : c_int
-       !
-       ! Input(s)
-       !
-       integer (kind=c_int), intent(in) :: num_threads
+     subroutine init_kokkos() bind(c)
      end subroutine init_kokkos
 
      subroutine finalize_kokkos() bind(c)
@@ -90,7 +85,7 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   ! Kokkos has to be initialize before it is used, and before fortran initializes OpenMP
-  call init_kokkos(vert_num_threads)
+  call init_kokkos()
 #endif
 
   ! =====================================
