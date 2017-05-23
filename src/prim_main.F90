@@ -68,6 +68,11 @@ program prim_main
 
   logical :: dir_e ! boolean existence of directory where output netcdf goes
 
+#ifdef USE_KOKKOS_KERNELS
+  ! Kokkos has to be initialized before it is used, and before fortran initializes anything in OpenMP
+  call init_kokkos()
+#endif
+
   ! =====================================================
   ! Begin executable code set distributed memory world...
   ! =====================================================
@@ -82,11 +87,6 @@ program prim_main
   call t_startf('prim_init1')
   call prim_init1(elem,  fvm, par,dom_mt,tl)
   call t_stopf('prim_init1')
-
-#ifdef USE_KOKKOS_KERNELS
-  ! Kokkos has to be initialize before it is used, and before fortran initializes OpenMP
-  call init_kokkos()
-#endif
 
   ! =====================================
   ! Begin threaded region so each thread can print info
