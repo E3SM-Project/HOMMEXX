@@ -24,6 +24,11 @@ void CaarControl::init (const int nets_in, const int nete_in, const int num_elem
 
   HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a (hybrid_a_ptr);
   Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+
+  if (team_size==-1)
+  {
+    team_size = DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete-nets);
+  }
 }
 
 CaarControl& get_control ()
