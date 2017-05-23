@@ -117,7 +117,7 @@ contains
     call t_stopf("caar_overhead")
 #endif
     !og disabling this for now to keep # of timers low
-    !call t_startf("caar pre exchange")
+    call t_startf("caar_pre_exchange")
 #ifdef USE_KOKKOS_KERNELS
     call caar_pre_exchange_monolithic_c ()
 #else
@@ -125,7 +125,7 @@ contains
                                           deriv,nets,nete,compute_diagnostics,eta_ave_w)
 #endif
     !og disabling this for now to keep # of timers low
-    !call t_stopf("caar pre exchange")
+    call t_stopf("caar_pre_exchange")
 
 #ifdef USE_KOKKOS_KERNELS
     call t_startf("caar_overhead")
