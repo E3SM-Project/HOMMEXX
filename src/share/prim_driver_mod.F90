@@ -582,10 +582,6 @@ contains
     use control_mod,          only: pertlim
 #endif
 
-#ifndef CAAR_MONOLITHIC
-    use caar_subroutines_mod, only: init_caar_derivative_f90
-#endif
-
 #ifdef USE_KOKKOS_KERNELS
     use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, elem_metdet, elem_state_phis
     use iso_c_binding,        only: c_ptr, c_loc
@@ -1010,10 +1006,6 @@ contains
     call init_region_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
                            elem_fcor_ptr, elem_spheremp_ptr,  &
                            elem_metdet_ptr, elem_state_phis_ptr)
-#else
-#ifndef CAAR_MONOLITHIC
-    call init_caar_derivative_f90(deriv(hybrid%ithr))
-#endif
 #endif
 
   end subroutine prim_init2
