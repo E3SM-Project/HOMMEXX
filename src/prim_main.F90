@@ -302,6 +302,9 @@ program prim_main
   call prim_movie_finish
 #endif
 
+#ifdef USE_KOKKOS_KERNELS
+  call finalize_kokkos()
+#endif
 
   call t_stopf('Total')
   if(par%masterproc) print *,"writing timing data"

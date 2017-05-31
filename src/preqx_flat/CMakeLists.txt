@@ -60,7 +60,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_BASE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
-  ${SRC_SHARE_DIR}/caar_subroutines_mod.F90
   ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
   ${SRC_SHARE_DIR}/control_mod.F90
@@ -141,10 +140,6 @@ SET(PREQX_FLAT_DEPS_C
   ${SRC_BASE_DIR}/jrio.c
 )
 
-IF (NOT DEFINED CAAR_MONOLITHIC)
-  OPTION (CAAR_MONOLITHIC "Whether to build the monolithic implementation of Kokkos compute and apply rhs" TRUE)
-ENDIF()
-
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/caar_cxx_f90_interface.cpp
   ${SRC_SHARE_DIR}/cxx/CaarControl.cpp
@@ -152,13 +147,6 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
 )
-
-IF (NOT ${CAAR_MONOLITHIC})
-  SET(PREQX_FLAT_DEPS_CXX
-    ${PREQX_FLAT_DEPS_CXX}
-    ${SRC_SHARE_DIR}/cxx/caar_subroutines.cpp
-  )
-ENDIF ()
 
 # If the user specified a file for custom compiler options use those
 IF (DEFINED PREQX_FLAT_CUSTOM_FLAGS_FILE)

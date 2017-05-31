@@ -4,6 +4,14 @@ SET (CMAKE_BUILD_TYPE RELEASE CACHE STRING "Select build type.")
 
 PROJECT(HOMME C CXX Fortran)
 
+# Print the sha of the last commit (useful to double check which version was tested on CDash)
+EXECUTE_PROCESS (COMMAND git rev-parse HEAD
+                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                 OUTPUT_VARIABLE LAST_GIT_COMMIT_SHA
+                 OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+MESSAGE (STATUS "The sha of the last commit is ${LAST_GIT_COMMIT_SHA}")
+
 INCLUDE(FortranCInterface)
 
 # CTest For Nightly/Experimental Builds
