@@ -15,6 +15,8 @@ void CaarRegion::init(const int num_elems)
 
   m_Qdp          = ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> ("qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Real * [NUM_LEV_P][NP][NP]> ("eta_dot_dpdn", m_num_elems);
+
+  m_3d_buffers = ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> ("buffers", m_num_elems);
 }
 
 void CaarRegion::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)

@@ -582,10 +582,6 @@ contains
     use control_mod,          only: pertlim
 #endif
 
-#ifndef CAAR_MONOLITHIC
-    use caar_subroutines_mod, only: init_caar_derivative_f90
-#endif
-
 #ifdef USE_KOKKOS_KERNELS
     use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, elem_metdet, elem_state_phis
     use iso_c_binding,        only: c_ptr, c_loc
@@ -1010,10 +1006,6 @@ contains
     call init_region_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
                            elem_fcor_ptr, elem_spheremp_ptr,  &
                            elem_metdet_ptr, elem_state_phis_ptr)
-#else
-#ifndef CAAR_MONOLITHIC
-    call init_caar_derivative_f90(deriv(hybrid%ithr))
-#endif
 #endif
 
   end subroutine prim_init2
@@ -1359,7 +1351,7 @@ contains
 
     ! initialize dp3d from ps
     if (rsplit>0) then
-      call t_startf("init_dp3d_from_ps")
+      !call t_startf("init_dp3d_from_ps")
       do ie=nets,nete
          do k=1,nlev
             elem(ie)%state%dp3d(:,:,k,tl%n0)=&
@@ -1370,7 +1362,7 @@ contains
          ! vertical_remap.  so to this for debugging:
          ! elem(ie)%state%ps_v(:,:,tl%n0)=-9e9 !outcommented so the pre_scribed winds work with rsplit>0
       enddo
-      call t_stopf("init_dp3d_from_ps")
+      !call t_stopf("init_dp3d_from_ps")
     endif
 
 #if (USE_OPENACC)
@@ -1545,7 +1537,7 @@ contains
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
 
-    call t_startf("prim_step_init")
+    !call t_startf("prim_step_init")
     dt_q = dt*qsplit
     if (ntrac>0.and.rstep==1) then
        !
@@ -1605,7 +1597,7 @@ contains
          elem(ie)%derived%dp(:,:,:)=elem(ie)%state%dp3d(:,:,:,tl%n0)
       endif
     enddo
-    call t_stopf("prim_step_init")
+    !call t_stopf("prim_step_init")
 
     ! ===============
     ! Dynamical Step

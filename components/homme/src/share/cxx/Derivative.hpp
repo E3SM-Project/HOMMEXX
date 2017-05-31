@@ -13,6 +13,7 @@ public:
 
   Derivative ();
 
+  void init (CF90Ptr& dvv);
   void init (CF90Ptr& dvv, CF90Ptr& integration_matrix, CF90Ptr& boundary_interp_matrix);
 
   KOKKOS_INLINE_FUNCTION

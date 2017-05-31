@@ -537,9 +537,9 @@ do ie=nets,nete
    call edgeVpack(edge1, zeta(1,1,1,ie),nlev,kptr,ie)
 enddo
 
-call t_startf('makeC02d_bexchV')
+!call t_startf('makeC02d_bexchV')
 call bndry_exchangeV(hybrid,edge1)
-call t_stopf('makeC02d_bexchV')
+!call t_stopf('makeC02d_bexchV')
 
 do ie=nets,nete
    kptr=0

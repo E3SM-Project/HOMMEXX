@@ -1,5 +1,6 @@
 #include <catch/catch.hpp>
 
+<<<<<<< HEAD
 #include <limits>
 #include <random>
 #include <iostream>
