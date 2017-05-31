@@ -124,7 +124,7 @@ module prim_advance_caar_mod
   end do
 
   ! =============================================================
-    ! Insert communications here: for shared memory, just a single
+  ! Insert communications here: for shared memory, just a single
   ! sync is required
   ! =============================================================
 
