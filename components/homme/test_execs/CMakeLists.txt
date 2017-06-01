@@ -210,6 +210,8 @@ INCLUDE(${HOMME_SOURCE_DIR}/test/reg_test/run_tests/test-list.cmake)
 SET(TEST_DIR_LIST "")
 createTests(HOMME_TESTS)
 
+CREATE_CXX_VS_F90_TESTS(${HOMMEXX_TESTS})
+
 IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
   # add a test dependency here:
   set_property(TEST baroCamMoist-acc APPEND PROPERTY DEPENDS baroCamMoist)
