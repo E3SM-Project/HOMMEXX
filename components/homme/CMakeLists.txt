@@ -176,7 +176,6 @@ ENDIF ()
 
 # Use ccsm_utils FindNETCDF path
 SET (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cime/externals/CMake" ${CMAKE_MODULE_PATH})
-MESSAGE ("NETCDF PATH:${Netcdf_INCLUDE_DIR}")
 FIND_PACKAGE(NETCDF)
 # For pio - allow the user to set HDF5_DIR to find libhdf5 etc.
 IF (HDF5_DIR)
