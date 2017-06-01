@@ -139,37 +139,54 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(n0, k, dvv_ptr, Dinv_ptr, pecnd_ptr, v_ptr, vtemp_ptr)
+  subroutine caar_compute_energy_grad_c_int(n0, k, dvv_ptr, Dinv_ptr, pecnd_ptr, p_ptr, T_v_ptr, phi_ptr, v_ptr, vtemp_ptr)
     use iso_c_binding, only : c_int, c_ptr, c_f_pointer
+    use kinds, only : real_kind
+    use element_mod, only : timelevels
+    use dimensions_mod, only : np, nlev
+    use derivative_mod, only : derivative_t
     integer (kind=c_int), intent(in) :: n0, k
-    c_ptr, intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, v_ptr, vtemp_ptr
+    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, p_ptr, T_v_ptr, phi_ptr, v_ptr, vtemp_ptr
 
-    real, pointer :: dvv(:,:) ! (np,np)
-    real, pointer :: Dinv(:,:,:,:) ! (np,np,2,2)
-    real, pointer :: pecnd(:,:,:) ! (np,np,nlev)
-    real, pointer :: v(:,:,:,:,:) ! (np,np,2,nlev,timelevels)
+    real (kind=real_kind), pointer :: Dinv(:,:,:,:) ! (np,np,2,2)
+    real (kind=real_kind), pointer :: pecnd(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), pointer :: T_v(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), pointer :: p(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), pointer :: phi(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), pointer :: v(:,:,:,:,:) ! (np,np,2,nlev,timelevels)
+    real (kind=real_kind), pointer :: vtemp(:,:,:) ! (np,np,2)
     type (derivative_t) :: deriv
-    call c_f_pointer(dvv_ptr, dvv, [np,np])
+    call c_f_pointer(dvv_ptr, deriv%dvv, [np,np])
     call c_f_pointer(Dinv_ptr, Dinv, [np,np,2,2])
     call c_f_pointer(pecnd_ptr, pecnd, [np,np,nlev])
+    call c_f_pointer(p_ptr, p, [np,np,nlev])
+    call c_f_pointer(T_v_ptr, T_v, [np,np,nlev])
+    call c_f_pointer(phi_ptr, phi, [np,np,nlev])
     call c_f_pointer(v_ptr, v, [np,np,2,nlev,timelevels])
-    call caar_compute_energy_grad(n0, k, deriv, Dinv, pecnd, v, vtemp)
+    call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
+    call caar_compute_energy_grad(n0, k, deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
   end subroutine caar_compute_energy_grad_c_int
 
-  subroutine caar_compute_energy_grad(n0, k, deriv, Dinv, pecnd, v, vtemp)
+  subroutine caar_compute_energy_grad(n0, k, deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
     use iso_c_binding, only : c_int
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
     use derivative_mod, only : derivative_t, gradient_sphere
+    use physical_constants, only : Rgas
     integer (kind=c_int), intent(in) :: n0, k
     type (derivative_t), intent(in) :: deriv
     real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np,np,2,2)
     real (kind=real_kind), intent(in) :: pecnd(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), intent(in) :: T_v(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), intent(in) :: phi(:,:,:) ! (np,np,nlev)
+    real (kind=real_kind), intent(in) :: p(:,:,:) ! (np,np,nlev)
     real (kind=real_kind), intent(in) :: v(:,:,:,:,:) ! (np,np,2,nlev,timelevels)
     real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
 
     integer (kind=c_int) :: i, j
     real (kind=real_kind), dimension(np,np) :: Ephi
     real (kind=real_kind), dimension(np,np,2) :: glnps
-    real (kind=real_kind) :: gpterm
+    real (kind=real_kind) :: gpterm, v1, v2, E
     do j=1,np
       do i=1,np
         v1 = v(i,j,1,k,n0)
@@ -180,17 +197,17 @@ contains
     end do
     vtemp = gradient_sphere(Ephi(:,:), deriv, Dinv)
 
-    glnps = gradient_sphere(p(:,:), deriv, Dinv)
+    glnps = gradient_sphere(p, deriv, Dinv)
 
     do j=1, np
       do i=1, np
         gpterm = Rgas*T_v(i,j,k)/p(i,j,k)
-        glnps(i,j,1) = glnps(i,j,1)*gpterm*grad_p(i,j,1,k)
-        glnps(i,j,2) = glnps(i,j,1)*gpterm*grad_p(i,j,2,k)
+        glnps(i,j,1) = glnps(i,j,1)*gpterm
+        glnps(i,j,2) = glnps(i,j,1)*gpterm
       end do
     end do
 
-    vtemp += glnps
+    vtemp = vtemp + glnps
   end subroutine caar_compute_energy_grad
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
@@ -515,7 +532,7 @@ contains
             end do
          end do
 
-         call caar_compute_energy_grad(n0, k, deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd, elem(ie)%state%v, vtemp)
+         call caar_compute_energy_grad(n0, k, deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd, T_v, p, phi, elem(ie)%state%v, vtemp)
 
          do j=1,np
             do i=1,np
