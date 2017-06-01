@@ -332,9 +332,9 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
     for (int itest=0; itest<num_rand_test; ++itest)
     {
       // Initialize input(s)
-      genRandArray(vector_f90, NP*NP*2, engine, dreal);
-      genRandArray(D_f90, NP*NP*2*2, engine, dreal);
-      genRandArray(metdet_f90, NP*NP, engine, dreal);
+      genRandArray(vector_f90, nelems*NP*NP*2, engine, dreal);
+      genRandArray(D_f90, nelems*NP*NP*2*2, engine, dreal);
+      genRandArray(metdet_f90, nelems*NP*NP, engine, dreal);
 
       // Flip inputs for cxx
       flip_f90_array_4d_4312<NP,NP,2>    (vector_f90, vector_cxx);
