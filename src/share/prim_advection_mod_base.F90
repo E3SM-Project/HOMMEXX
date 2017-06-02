@@ -72,7 +72,7 @@ module prim_advection_mod_base
         nu_q, nu_p, limiter_option, hypervis_subcycle_q, rsplit
   use edge_mod, only           : edgevpack, edgerotate, edgevunpack, initedgebuffer, initedgesbuffer, &
         edgevunpackmin, initghostbuffer3D
- 
+
   use edgetype_mod, only       : EdgeDescriptor_t, EdgeBuffer_t, ghostbuffer3D_t
   use hybrid_mod, only         : hybrid_t
   use bndry_mod, only          : bndry_exchangev
@@ -103,7 +103,76 @@ module prim_advection_mod_base
 
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
+  interface
+    subroutine euler_copy_f90_data_to_region_c(Ustar_ptr, Vstar_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: Ustar_ptr,Vstar_ptr
+    end subroutine euler_copy_f90_data_to_region_c
+    subroutine euler_copy_region_data_to_f90_c(Ustar_ptr, Vstar_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: Ustar_ptr,Vstar_ptr
+    end subroutine euler_copy_region_data_to_f90_c
+    subroutine advance_qdp_c(nets,nete,n0_qdp,dt,Ustar_ptr,Vstar_ptr,Qtens_ptr) bind(c)
+      use iso_c_binding, only : c_int, c_ptr
+      use kinds,         only : real_kind
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp
+      real (kind=real_kind), intent(in) :: dt
+      type (c_ptr),          intent(in) :: Ustar_ptr,Vstar_ptr, Qtens_ptr
+    end subroutine advance_qdp_c
+  end interface
+
 contains
+
+  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
+    use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
+    use kinds,          only : real_kind
+    use derivative_mod, only : derivative_t
+    use element_mod,    only : element_t
+    !
+    ! Inputs
+    !
+    real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Ustar
+    real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Vstar
+    real (kind=real_kind), intent(out), dimension(np,np,nlev,nets:nete) :: Qtens
+    type (element_t),      intent(in),  dimension(:) :: elem
+    type (derivative_t),   intent(in) :: deriv
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in) :: nets, nete, n0_qdp
+    !
+    ! Locals
+    !
+    real (kind=real_kind), dimension(np,np,2) :: gradQ
+    real (kind=real_kind), dimension(np,np)   :: dp_star
+    integer :: ie, k, q
+    !
+    ! Routine body
+    !
+#if (defined COLUMN_OPENMP)
+ !$omp parallel do private(q,k,gradQ,dp_star,qtens)
+#endif
+    do ie=nets,nete
+      do q = 1 , qsize
+        do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
+          ! div( U dp Q),
+          gradQ(:,:,1) = Ustar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          gradQ(:,:,2) = Vstar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          dp_star(:,:) = divergence_sphere( gradQ , deriv , elem(ie) )
+          Qtens(:,:,k,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
+        enddo
+      enddo
+    enddo
+
+  end subroutine advance_qdp_f90
+
 
   subroutine Prim_Advec_Init1(par, elem, n_domains)
     use dimensions_mod, only : nlev, qsize, nelemd
@@ -134,8 +203,8 @@ contains
     call initEdgeBuffer(par,edgeAdv1,elem,nlev)
     call initEdgeBuffer(par,edgeveloc,elem,2*nlev)
 
-    ! This is a different type of buffer pointer allocation 
-    ! used for determine the minimum and maximum value from 
+    ! This is a different type of buffer pointer allocation
+    ! used for determine the minimum and maximum value from
     ! neighboring  elements
     call initEdgeSBuffer(par,edgeAdvQminmax,elem,qsize*nlev*2)
 
@@ -215,7 +284,7 @@ contains
 
     real (kind=real_kind), dimension(np,np,nlev)    :: dp_star
     real (kind=real_kind), dimension(np,np,nlev)    :: dp
-    real (kind=real_kind)                           :: eta_dot_dpdn(np,np,nlevp) 
+    real (kind=real_kind)                           :: eta_dot_dpdn(np,np,nlevp)
     integer :: np1,ie,k
 
     real (kind=real_kind)  :: vstar(np,np,2)
@@ -231,7 +300,7 @@ contains
     !
     ! fvm%v0:        velocity at beginning of tracer timestep (time n0_qdp)
     !                this was saved before the (possibly many) dynamics steps
-    ! elem%derived%vstar:    
+    ! elem%derived%vstar:
     !                velocity at end of tracer timestep (time np1 = np1_qdp)
     !                for lagrangian dynamics, this is on lagrangian levels
     !                for eulerian dynamcis, this is on reference levels
@@ -295,8 +364,8 @@ contains
        end do
     else
        ! do nothing
-       ! for rsplit>0:  dynamics is also vertically Lagrangian, so we do not need 
-       ! to interpolate v(np1). 
+       ! for rsplit>0:  dynamics is also vertically Lagrangian, so we do not need
+       ! to interpolate v(np1).
     endif
 
 
@@ -313,7 +382,7 @@ contains
 !     call t_stopf('fvm_depalg')
 
 !------------------------------------------------------------------------------------
-    
+
     ! fvm departure calcluation should use vstar.
     ! from c(n0) compute c(np1):
     if (tracer_transport_type == TRACERTRANSPORT_FLUXFORM_FVM) then
@@ -451,14 +520,14 @@ subroutine  Prim_Advec_Tracers_remap_ALE( elem , deriv , hybrid , dt , tl , nets
         do j=1,np
           ! interpolate tracers to deperature grid
           call interpolate_tracers     (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f)
-          elem(ie)%state%Q(i,j,k,:) = f 
+          elem(ie)%state%Q(i,j,k,:) = f
 !         call minmax_tracers          (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f,g)
           do q=1,qsize
             f(q) = MINVAL(neigh_q(:,:,q,elem_indexes(i,j)))
             g(q) = MAXVAL(neigh_q(:,:,q,elem_indexes(i,j)))
-          end do 
-          minq(i,j,k,:,ie) = f 
-          maxq(i,j,k,:,ie) = g 
+          end do
+          minq(i,j,k,:,ie) = f
+          maxq(i,j,k,:,ie) = g
         enddo
         enddo
 
@@ -562,7 +631,7 @@ subroutine VDOT(rp,Que,rho,mass,hybrid,nets,nete)
 
   integer                                       :: k,n,q,ie
 
-  global_shared_buf = 0 
+  global_shared_buf = 0
   do ie=nets,nete
     n=0
     do q=1,qsize
@@ -582,10 +651,10 @@ subroutine VDOT(rp,Que,rho,mass,hybrid,nets,nete)
     rp(k,q) = global_shared_sum(n) - mass(k,q)
   enddo
   enddo
-  
+
 end subroutine VDOT
 
-subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete) 
+subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 
   use parallel_mod,        only: global_shared_buf, global_shared_sum
   use global_norms_mod,    only: wrap_repro_sum
@@ -602,8 +671,8 @@ subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
   type (hybrid_t)     , intent(in)              :: hybrid
 
   integer,                            parameter :: max_clip = 50
-  real(kind=real_kind),               parameter :: eta = 1D-08           
-  real(kind=real_kind),               parameter :: hfd = 1D-10             
+  real(kind=real_kind),               parameter :: eta = 1D-08
+  real(kind=real_kind),               parameter :: hfd = 1D-10
   real(kind=real_kind)                          :: lambda_p          (nlev,qsize)
   real(kind=real_kind)                          :: lambda_c          (nlev,qsize)
   real(kind=real_kind)                          :: rp                (nlev,qsize)
@@ -637,10 +706,10 @@ subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
   call VDOT(rc,Que,rho,mass,hybrid,nets,nete)
 
   rd = rc-rp
-  if (MAXVAL(ABS(rd)).eq.0) return 
-  
+  if (MAXVAL(ABS(rd)).eq.0) return
+
   alpha = 0
-  WHERE (rd.ne.0) alpha = hfd / rd 
+  WHERE (rd.ne.0) alpha = hfd / rd
 
   lambda_p = 0
   lambda_c =  -alpha*rp
@@ -664,7 +733,7 @@ subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
     if (MAXVAL(ABS(rd)).eq.0) exit
 
     alpha = 0
-    WHERE (rd.ne.0) alpha = (lambda_p - lambda_c) / rd 
+    WHERE (rd.ne.0) alpha = (lambda_p - lambda_c) / rd
 
     rp       = rc
     lambda_p = lambda_c
@@ -675,7 +744,7 @@ subroutine Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 end subroutine Cobra_SLBQP
 
 
-subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete) 
+subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 
   use parallel_mod,        only: global_shared_buf, global_shared_sum
   use global_norms_mod,    only: wrap_repro_sum
@@ -692,8 +761,8 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
   type (hybrid_t)     , intent(in)              :: hybrid
 
   integer,                            parameter :: max_clip = 50
-  real(kind=real_kind),               parameter :: eta = 1D-10           
-  real(kind=real_kind),               parameter :: hfd = 1D-08             
+  real(kind=real_kind),               parameter :: eta = 1D-10
+  real(kind=real_kind),               parameter :: hfd = 1D-08
   real(kind=real_kind)                          :: lambda_p          (nlev,qsize,nets:nete)
   real(kind=real_kind)                          :: lambda_c          (nlev,qsize,nets:nete)
   real(kind=real_kind)                          :: rp                (nlev,qsize,nets:nete)
@@ -739,10 +808,10 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
   end do
 
   rd = rc-rp
-  if (MAXVAL(ABS(rd)).eq.0) return 
-  
+  if (MAXVAL(ABS(rd)).eq.0) return
+
   alpha = 0
-  WHERE (rd.ne.0) alpha = hfd / rd 
+  WHERE (rd.ne.0) alpha = hfd / rd
 
   lambda_p = 0
   lambda_c =  -alpha*rp
@@ -786,7 +855,7 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
     end do
     end do
 
-    
+
     mloc = MAXLOC(ABS(rc))
 !   if (hybrid%par%masterproc) print *,__FILE__,__LINE__," MAXVAL(ABS(rc)):",MAXVAL(ABS(rc)), mloc, nclip
 
@@ -795,7 +864,7 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 !   if (MAXVAL(ABS(rd)).eq.0) exit
 
     alpha = 0
-    WHERE (rd.ne.0) alpha = (lambda_p - lambda_c) / rd 
+    WHERE (rd.ne.0) alpha = (lambda_p - lambda_c) / rd
 !   WHERE (alpha.eq.0.and.MAXVAL(ABS(rc)).gt.eta) alpha=10;
 
     rp       = rc
@@ -811,7 +880,7 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 !   if (hybrid%par%masterproc) print *
   enddo
 ! if (hybrid%par%masterproc) print *,__FILE__,__LINE__," MAXVAL(ABS(rc)):",MAXVAL(ABS(rc)),eta," nclip:",nclip
-end subroutine Cobra_Elem 
+end subroutine Cobra_Elem
 
 ! ----------------------------------------------------------------------------------!
 !SUBROUTINE ALE_RKDSS-----------------------------------------------CE-for FVM!
@@ -949,7 +1018,7 @@ subroutine ALE_departure_from_gll(acart, vstar, elem, dt)
   ! crude, 1st order accurate approximation.  to be improved
   do i=1,np
      do j=1,np
-        acart(i,j) = change_coordinates(elem%spherep(i,j)) 
+        acart(i,j) = change_coordinates(elem%spherep(i,j))
         acart(i,j)%x = acart(i,j)%x - dt*uxyz(i,j,1)/rearth
         acart(i,j)%y = acart(i,j)%y - dt*uxyz(i,j,2)/rearth
         acart(i,j)%z = acart(i,j)%z - dt*uxyz(i,j,3)/rearth
@@ -1019,7 +1088,7 @@ end subroutine ALE_elems_with_dep_points
 function  shape_fcn_deriv(pc) result(dNds)
   real (kind=real_kind), intent(in)  ::  pc(2)
   real (kind=real_kind)              :: dNds(4,2)
- 
+
   dNds(1, 1) = - 0.25 * (1.0 - pc(2))
   dNds(1, 2) = - 0.25 * (1.0 - pc(1))
 
@@ -1031,7 +1100,7 @@ function  shape_fcn_deriv(pc) result(dNds)
 
   dNds(4, 1) = - 0.25 * (1.0 + pc(2))
   dNds(4, 2) =   0.25 * (1.0 - pc(1))
-end function   
+end function
 
 function inv_2x2(A) result(A_inv)
   real (kind=real_kind), intent(in)  :: A    (2,2)
@@ -1072,10 +1141,10 @@ subroutine shape_fcn(N, pc)
   real (kind=real_kind), intent(in)  :: pc(2)
 
   ! shape function for each node evaluated at param_coords
-  N(1) = 0.25 * (1.0 - pc(1)) * (1.0 - pc(2)) 
-  N(2) = 0.25 * (1.0 + pc(1)) * (1.0 - pc(2)) 
-  N(3) = 0.25 * (1.0 + pc(1)) * (1.0 + pc(2)) 
-  N(4) = 0.25 * (1.0 - pc(1)) * (1.0 + pc(2)) 
+  N(1) = 0.25 * (1.0 - pc(1)) * (1.0 - pc(2))
+  N(2) = 0.25 * (1.0 + pc(1)) * (1.0 - pc(2))
+  N(3) = 0.25 * (1.0 + pc(1)) * (1.0 + pc(2))
+  N(4) = 0.25 * (1.0 - pc(1)) * (1.0 + pc(2))
 end subroutine
 
 
@@ -1091,14 +1160,14 @@ end function
 function  DF(coords, pc) result(dxds)
   real (kind=real_kind), intent(in)  :: coords(4,3)
   real (kind=real_kind), intent(in)  :: pc(2)
- 
+
   real (kind=real_kind)              :: dxds(3,2)
   real (kind=real_kind)              :: dNds(4,2)
   real (kind=real_kind)              ::  dds(3,2)
   real (kind=real_kind)              ::    c(2)
   real (kind=real_kind)              ::    x(3)
   real (kind=real_kind)              ::   xc(3,2)
-  real (kind=real_kind)              :: nx, nx2 
+  real (kind=real_kind)              :: nx, nx2
   integer                            :: i,j
 
   dNds = shape_fcn_deriv  (pc)
@@ -1115,7 +1184,7 @@ function  DF(coords, pc) result(dxds)
   end do
   dxds = nx2*dds - xc
   dxds = dxds/(nx*nx2)
-end function   
+end function
 
 
 function cartesian_parametric_coordinates(sphere, corners3D) result (ref)
@@ -1133,13 +1202,13 @@ function cartesian_parametric_coordinates(sphere, corners3D) result (ref)
   type (cartesian3D_t)             :: cart
   real (kind=real_kind)            :: coords(4,3), dxds(3,2), dsdx(2,3)
   real (kind=real_kind)            :: p(3), pc(2), dx(3), x(3), ds(2)
-  real (kind=real_kind)            :: dist, step                          
-  
+  real (kind=real_kind)            :: dist, step
+
   integer                          :: i,j,k,iter
-  do i=1,4                               
-    coords(i,1) = corners3D(i)%x 
-    coords(i,2) = corners3D(i)%y 
-    coords(i,3) = corners3D(i)%z 
+  do i=1,4
+    coords(i,1) = corners3D(i)%x
+    coords(i,2) = corners3D(i)%y
+    coords(i,3) = corners3D(i)%z
   end do
 
   pc = 0
@@ -1148,7 +1217,7 @@ function cartesian_parametric_coordinates(sphere, corners3D) result (ref)
 
   p(1) = cart%x
   p(2) = cart%y
-  p(3) = cart%z 
+  p(3) = cart%z
 
   dx   = 0
   ds   = 0
@@ -1158,9 +1227,9 @@ function cartesian_parametric_coordinates(sphere, corners3D) result (ref)
   !*-------------------------------------------------------------------------*!
 
   ! Initial guess, center of element
-  dist = 9999999.                         
-  step = 9999999.                         
-  iter = 0 
+  dist = 9999999.
+  step = 9999999.
+  iter = 0
 
   do while  (TOL*TOL.lt.dist .and. iter.lt.MAXIT .and. TOL*TOL.lt.step)
     iter = iter + 1
@@ -1293,7 +1362,7 @@ end subroutine ALE_parametric_coords
     !       and a DSS'ed version stored in derived%div(:,:,:,2)
 
     call t_startf('precomput_divdp')
-    call precompute_divdp( elem , hybrid , deriv , dt , nets , nete , n0_qdp )   
+    call precompute_divdp( elem , hybrid , deriv , dt , nets , nete , n0_qdp )
     call t_stopf('precomput_divdp')
 
     !rhs_multiplier is for obtaining dp_tracers at each stage:
@@ -1347,11 +1416,11 @@ end subroutine ALE_parametric_coords
     integer              , intent(in   ) :: nets , nete , n0_qdp
     integer :: ie , k
 
-    do ie = nets , nete 
+    do ie = nets , nete
       do k = 1 , nlev   ! div( U dp Q),
         elem(ie)%derived%divdp(:,:,k) = divergence_sphere(elem(ie)%derived%vn0(:,:,:,k),deriv,elem(ie))
         elem(ie)%derived%divdp_proj(:,:,k) = elem(ie)%derived%divdp(:,:,k)
-      enddo  
+      enddo
     enddo
   end subroutine precompute_divdp
 !-----------------------------------------------------------------------------
@@ -1399,6 +1468,9 @@ end subroutine ALE_parametric_coords
   ! DSSopt = DSSeta or DSSomega:   also DSS eta_dot_dpdn or omega
   !
   ! ===================================
+#ifdef USE_KOKKOS_KERNELS
+  use iso_c_binding  , only : c_ptr, c_loc
+#endif
   use kinds          , only : real_kind
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
@@ -1408,7 +1480,21 @@ end subroutine ALE_parametric_coords
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
   use parallel_mod, only : abortmp, iam
+
   implicit none
+
+  interface
+    subroutine init_control_euler_c (nets, nete, n0_qdp, dt) bind(c)
+      use iso_c_binding, only : c_int
+      use kinds,         only : real_kind
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp
+      real (kind=real_kind), intent(in) :: dt
+    end subroutine init_control_euler_c
+  end interface
+
   integer              , intent(in   )         :: np1_qdp, n0_qdp
   real (kind=real_kind), intent(in   )         :: dt
   type (element_t)     , intent(inout), target :: elem(:)
@@ -1421,17 +1507,21 @@ end subroutine ALE_parametric_coords
   integer              , intent(in   )         :: rhs_multiplier
 
   ! local
-  real(kind=real_kind), dimension(np,np                       ) :: divdp, dpdiss
-  real(kind=real_kind), dimension(np,np,nlev) :: dpdissk
-  real(kind=real_kind), dimension(np,np,2                     ) :: gradQ
-  real(kind=real_kind), dimension(np,np,2,nlev                ) :: Vstar
-  real(kind=real_kind), dimension(np,np  ,nlev                ) :: Qtens
-  real(kind=real_kind), dimension(np,np  ,nlev                ) :: dp,dp_star
-  real(kind=real_kind), dimension(np,np  ,nlev,qsize,nets:nete) :: Qtens_biharmonic
-  real(kind=real_kind), pointer, dimension(:,:,:)               :: DSSvar
-  real(kind=real_kind) :: dp0(nlev)
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target :: Ustar
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target :: Vstar
+  real(kind=real_kind), dimension(np,np,nlev          ), target :: Qtens
+  real(kind=real_kind), dimension(np,np,nlev)                   :: dpdissk
+  real(kind=real_kind), dimension(np,np  )                      :: divdp, dpdiss
+  real(kind=real_kind), dimension(np,np,2)                      :: gradQ
+  real(kind=real_kind), dimension(np,np,nlev                )   :: dp,dp_star
+  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete)   :: Qtens_biharmonic
+  real(kind=real_kind), dimension(:,:,:), pointer               :: DSSvar
+  real(kind=real_kind), dimension(nlev)                         :: dp0
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
+#ifdef USE_KOKKOS_KERNELS
+  type (c_ptr) :: Ustar_ptr, Vstar_ptr, Qtens_ptr
+#endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
 OMP_SIMD
@@ -1551,15 +1641,15 @@ OMP_SIMD
 
 !   Previous version of biharmonic_wk_scalar_minmax included a min/max
 !   calculation into the boundary exchange.  This was causing cache issues.
-!   Split the single operation into two separate calls 
+!   Split the single operation into two separate calls
 !      call neighbor_minmax()
-!      call biharmonic_wk_scalar() 
-! 
+!      call biharmonic_wk_scalar()
+!
 !      call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
 !           nets , nete , qmin(:,:,nets:nete) , qmax(:,:,nets:nete) )
-#ifdef OVERLAP 
+#ifdef OVERLAP
       call neighbor_minmax_start(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete) 
+      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
       do ie = nets , nete
 #if (defined COLUMN_OPENMP_notB4B)
 !$omp parallel do private(k, q)
@@ -1577,7 +1667,7 @@ OMP_SIMD
       call t_startf('eus_neighbor_minmax2')
       call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
       call t_stopf('eus_neighbor_minmax2')
-      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete) 
+      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
 
       do ie = nets , nete
 #if (defined COLUMN_OPENMP)
@@ -1596,7 +1686,7 @@ OMP_SIMD
     endif
     call t_stopf('bihmix_qminmax')
   endif  ! compute biharmonic mixing term and qmin/qmax
-  ! end of limiter_option == 8 
+  ! end of limiter_option == 8
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !   2D Advection step
@@ -1617,8 +1707,8 @@ OMP_SIMD
       ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
       ! but that's ok because rhs_multiplier=0 on the first stage:
       dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
-      Vstar(:,:,1,k) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
-      Vstar(:,:,2,k) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
+      Ustar(:,:,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
+      Vstar(:,:,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
 
       if ( limiter_option == 8) then
         ! Note that the term dpdissk is independent of Q
@@ -1642,18 +1732,34 @@ OMP_SIMD
       DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
     enddo
     call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
+  enddo
 
-    ! advance Qdp
+#ifdef USE_KOKKOS_KERNELS
+  Qtens_ptr = c_loc(Qtens)
+  Ustar_ptr = c_loc(Ustar)
+  Vstar_ptr = c_loc(Vstar)
+  call init_control_euler_c (nets, nete, n0_qdp, dt)
+
+  call euler_copy_f90_data_to_region_c(Ustar_ptr, Vstar_ptr)
+
+  call t_startf("advance_qdp")
+  call advance_qdp_c(nets,nete,n0_qdp,dt,Ustar_ptr,Vstar_ptr,Qtens_ptr)
+  call t_stopf("advance_qdp")
+
+  call euler_copy_region_data_to_f90_c(Ustar_ptr, Vstar_ptr)
+#else
+  call t_startf("advance_qdp")
+  call advance_qdp_f90(nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
+  call t_stopf("advance_qdp")
+#endif
+
+  do ie=nets,nete
+
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,gradQ,dp_star,qtens)
 #endif
-    do q = 1 , qsize
-      do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
-        ! div( U dp Q),
-        gradQ(:,:,1) = Vstar(:,:,1,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        gradQ(:,:,2) = Vstar(:,:,2,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        dp_star(:,:,k) = divergence_sphere( gradQ , deriv , elem(ie) )
-        Qtens(:,:,k) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:,k)
+    do q=1,qsize
+      do k=1,nlev
         ! optionally add in hyperviscosity computed above:
         if ( rhs_viss /= 0 ) Qtens(:,:,k) = Qtens(:,:,k) + Qtens_biharmonic(:,:,k,q,ie)
       enddo
@@ -1869,7 +1975,7 @@ OMP_SIMD
             enddo
           enddo
         enddo
-        
+
         if (limiter_option .ne. 0 ) then
            ! smooth some of the negativities introduced by diffusion:
            call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,nt_qdp) )
