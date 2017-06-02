@@ -8,7 +8,7 @@
 
 namespace Homme {
 
-struct CaarControl {
+struct Control {
 
   CaarControl ()
   {
@@ -48,8 +48,8 @@ struct CaarControl {
   // Tracers timelevel, inclusive range of 0-1
   int qn0;
 
-  // Time step squared
-  Real dt2;
+  // Time step
+  Real dt;
 
   // Weight for eta_dot_dpdn mean flux
   Real eta_ave_w;
@@ -66,7 +66,7 @@ struct CaarControl {
   ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
 };
 
-CaarControl& get_control ();
+Control& get_control ();
 
 } // Namespace Homme
 

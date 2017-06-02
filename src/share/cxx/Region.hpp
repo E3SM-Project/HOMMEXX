@@ -6,14 +6,13 @@
 #include "Types.hpp"
 
 #include <Kokkos_Core.hpp>
-#include "CaarControl.hpp"
-
 #include <random>
+#include "Control.hpp"
 
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
-class CaarRegion {
+class Region {
 private:
 
   enum : int {
@@ -57,7 +56,7 @@ private:
   /* Contains D, DINV */
   ExecViewManaged<Real * [NUM_2D_TENSORS][2][2][NP][NP]> m_2d_tensors;
   /* Contains OMEGA_P, PECND, PHI, DERIVED_UN0, DERIVED_VN0, QDP, ETA_DPDN */
-  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]> m_3d_scalars;
+  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]>     m_3d_scalars;
   /* Contains U, V, T, DP3D */
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]> m_4d_scalars;
 
@@ -70,7 +69,7 @@ private:
 
 public:
 
-  CaarRegion () = default;
+  Region () = default;
 
   void init(const int num_elems);
 
@@ -94,6 +93,12 @@ public:
 
   void d(Real *d_ptr, int ie);
   void dinv(Real *dinv_ptr, int ie);
+
+  // Fill the buffers exec space views with data coming from F90 pointers
+  void pull_from_f90_buffers(CF90Ptr& buff1, CF90Ptr& buff2, CF90Ptr& buff3, CF90Ptr& buff4);
+
+  // Push the results from the buffers exec space views to the F90 pointers
+  void push_to_f90_buffers (F90Ptr& buff1, F90Ptr& buff2, F90Ptr& buff3, F90Ptr& buff4) const;
 
   // v is the tracer we're working with, 0 <= v < QSIZE_D
   // qn0 is the timelevel, 0 <= qn0 < Q_NUM_TIME_LEVELS
@@ -279,8 +284,7 @@ public:
   }
 };
 
-// TODO: DON'T USE SINGLETONS
-CaarRegion& get_region();
+Region& get_region();
 
 } // Homme
 
