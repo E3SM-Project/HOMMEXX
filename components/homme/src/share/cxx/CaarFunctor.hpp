@@ -1,8 +1,8 @@
 #ifndef CAAR_FUNCTOR_HPP
 #define CAAR_FUNCTOR_HPP
 
-#include "CaarControl.hpp"
-#include "CaarRegion.hpp"
+#include "Region.hpp"
+#include "Control.hpp"
 #include "Derivative.hpp"
 
 #include "SphereOperators.hpp"
@@ -15,33 +15,37 @@
 namespace Homme {
 
 struct CaarFunctor {
-  CaarControl m_data;
-  const CaarRegion m_region;
-  const Derivative m_deriv;
+
+  const Control     m_data;
+  const Region      m_region;
+  const Derivative  m_deriv;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
   static constexpr int PRESSURE = 0;
-  static constexpr int OMEGA_P = 1;
-  static constexpr int T_V = 2;
-  static constexpr int DIV_VDP = 3;
+  static constexpr int OMEGA_P  = 1;
+  static constexpr int T_V      = 2;
+  static constexpr int DIV_VDP  = 3;
 
   struct KernelVariables {
     KOKKOS_INLINE_FUNCTION
     KernelVariables(const TeamMember &team_in)
-        : team(team_in), scalar_buf_1(allocate_thread<Real, Real[NP][NP]>()),
+        : team(team_in),
+          scalar_buf_1(allocate_thread<Real, Real[NP][NP]>()),
           scalar_buf_2(allocate_thread<Real, Real[NP][NP]>()),
           vector_buf_1(allocate_thread<Real, Real[2][NP][NP]>()),
           vector_buf_2(allocate_thread<Real, Real[2][NP][NP]>()),
           ie(team.league_rank()), ilev(-1) {} //, igp(-1), jgp(-1) {}
 
     template <typename Primitive, typename Data>
-    KOKKOS_INLINE_FUNCTION Primitive *allocate_team() const {
+    KOKKOS_INLINE_FUNCTION
+    Primitive* allocate_team() const {
       ScratchView<Data> view(team.team_scratch(0));
       return view.data();
     }
 
     template <typename Primitive, typename Data>
-    KOKKOS_INLINE_FUNCTION Primitive *allocate_thread() const {
+    KOKKOS_INLINE_FUNCTION
+    Primitive* allocate_thread() const {
       ScratchView<Data> view(team.thread_scratch(0));
       return view.data();
     }
@@ -53,7 +57,7 @@ struct CaarFunctor {
       return mem_size;
     }
 
-    const TeamMember &team;
+    const TeamMember& team;
 
     // Temporary buffers
     ExecViewUnmanaged<Real[NP][NP]> scalar_buf_1;
@@ -64,7 +68,11 @@ struct CaarFunctor {
   }; // KernelVariables
 
   KOKKOS_INLINE_FUNCTION
-  CaarFunctor() : m_data(), m_region(get_region()), m_deriv(get_derivative()) {
+  CaarFunctor(const Control &data)
+    : m_data    (data)
+    , m_region  (get_region())
+    , m_deriv   (get_derivative())
+  {
     // Nothing to be done here
   }
 
@@ -101,7 +109,8 @@ struct CaarFunctor {
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
-  KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
+  KOKKOS_INLINE_FUNCTION void
+  compute_phase_3(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                          [&](const int &ilev) {
                            kv.ilev = ilev;
@@ -247,22 +256,15 @@ struct CaarFunctor {
         });
   }
 
-  // Depends on pressure, U_current, V_current, div_vdp,
-  // omega_p
+  // Depends on pressure, U_current, V_current, div_vdp, omega_p
   KOKKOS_INLINE_FUNCTION
   void preq_omega_ps(KernelVariables &kv) const {
-    // NOTE: we can't use a single TeamThreadRange loop,
-    // since
-    //       gradient_sphere requires a 'consistent'
-    // pressure,
-    //       meaning that we cannot update the different
-    // pressure
-    //       points within a level before the gradient is
-    // complete!
-    // Uses kv.scalar_buf_1 for intermediate computations
-    // registers
-    //      kv.scalar_buf_2 to store the intermediate
-    // integration
+    // NOTE: we can't use a single TeamThreadRange loop, since
+    //       gradient_sphere requires a 'consistent' pressure,
+    //       meaning that we cannot update the different pressure
+    //       points within a level before the gradient is complete!
+    // Uses kv.scalar_buf_1 for intermediate computations registers
+    //      kv.scalar_buf_2 to store the intermediate integration
     //      kv.vector_buf_1 to store the gradient
     //      kv.vector_buf_2 for the gradient buffer
     //
@@ -421,8 +423,7 @@ struct CaarFunctor {
                       m_region.get_3d_buffer(kv.ie, DIV_VDP, kv.ilev));
   }
 
-  // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
-  // DINV
+  // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET, DINV
   // Might depend on QDP, DP3D_current
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_div_vdp(KernelVariables &kv) const {
@@ -455,8 +456,7 @@ struct CaarFunctor {
         });
   }
 
-  // Depends on T (global), OMEGA_P (global), U (global), V
-  // (global),
+  // Depends on T (global), OMEGA_P (global), U (global), V (global),
   // SPHEREMP (global), T_v, and omega_p
   // block_3d_scalars
   KOKKOS_INLINE_FUNCTION
