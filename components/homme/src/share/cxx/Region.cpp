@@ -1,11 +1,9 @@
-#include "CaarRegion.hpp"
+#include "Region.hpp"
 #include "Utility.hpp"
-
-#include <assert.h>
 
 namespace Homme {
 
-void CaarRegion::init(const int num_elems)
+void Region::init(const int num_elems)
 {
   m_num_elems = num_elems;
 
@@ -21,7 +19,7 @@ void CaarRegion::init(const int num_elems)
   m_3d_buffers = ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> ("buffers", m_num_elems);
 }
 
-void CaarRegion::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
+void Region::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
 {
   int k_scalars = 0;
   int k_tensors = 0;
@@ -133,6 +131,7 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
 
 
 void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
+void Region::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
                                     CF90Ptr& derived_phi, CF90Ptr& derived_pecnd,
                                     CF90Ptr& derived_omega_p, CF90Ptr& derived_v,
                                     CF90Ptr& derived_eta_dot_dpdn, CF90Ptr& state_Qdp)
@@ -239,7 +238,7 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
   Kokkos::deep_copy (m_Qdp, h_Qdp);
 }
 
-void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& state_dp3d,
+void Region::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& state_dp3d,
                                       F90Ptr& derived_phi, F90Ptr& derived_pecnd,
                                       F90Ptr& derived_omega_p, F90Ptr& derived_v,
                                       F90Ptr& derived_eta_dot_dpdn, F90Ptr& state_Qdp) const
@@ -379,9 +378,79 @@ void CaarRegion::dinv(Real *dinv_ptr, int ie) {
   }
 }
 
-CaarRegion& get_region()
+void Region::pull_from_f90_buffers(CF90Ptr& buff1, CF90Ptr& buff2, CF90Ptr& buff3, CF90Ptr& buff4)
 {
-  static CaarRegion r;
+  int buf_pos = 0;
+  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    for (int ilev=0; ilev<NUM_LEV; ++ilev)
+    {
+      for (int jgp=0; jgp<NP; ++jgp)
+      {
+        for (int igp=0; igp<NP; ++igp, ++buf_pos)
+        {
+          if (buff1!=nullptr)
+          {
+            h_3d_buffers(ie, 0, ilev, igp, jgp) = buff1[buf_pos];
+          }
+          if (buff2!=nullptr)
+          {
+            h_3d_buffers(ie, 1, ilev, igp, jgp) = buff2[buf_pos];
+          }
+          if (buff3!=nullptr)
+          {
+            h_3d_buffers(ie, 2, ilev, igp, jgp) = buff3[buf_pos];
+          }
+          if (buff4!=nullptr)
+          {
+            h_3d_buffers(ie, 3, ilev, igp, jgp) = buff4[buf_pos];
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(m_3d_buffers, h_3d_buffers);
+}
+
+void Region::push_to_f90_buffers (F90Ptr& buff1, F90Ptr& buff2, F90Ptr& buff3, F90Ptr& buff4) const
+{
+  int buf_pos = 0;
+  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
+  Kokkos::deep_copy(h_3d_buffers, m_3d_buffers);
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    for (int ilev=0; ilev<NUM_LEV; ++ilev)
+    {
+      for (int jgp=0; jgp<NP; ++jgp)
+      {
+        for (int igp=0; igp<NP; ++igp, ++buf_pos)
+        {
+          if (buff1!=nullptr)
+          {
+             buff1[buf_pos] = h_3d_buffers(ie, 0, ilev, igp, jgp);
+          }
+          if (buff2!=nullptr)
+          {
+             buff2[buf_pos] = h_3d_buffers(ie, 1, ilev, igp, jgp);
+          }
+          if (buff3!=nullptr)
+          {
+             buff3[buf_pos] = h_3d_buffers(ie, 2, ilev, igp, jgp);
+          }
+          if (buff4!=nullptr)
+          {
+             buff4[buf_pos] = h_3d_buffers(ie, 3, ilev, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+}
+
+Region& get_region()
+{
+  static Region r;
   return r;
 }
 
