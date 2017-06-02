@@ -133,7 +133,6 @@ module prim_advection_mod_base
 contains
 
   subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
-    use iso_c_binding,  only : c_int, c_ptr, c_f_pointer
     use kinds,          only : real_kind
     use derivative_mod, only : derivative_t
     use element_mod,    only : element_t
@@ -142,7 +141,7 @@ contains
     !
     real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Ustar
     real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Vstar
-    real (kind=real_kind), intent(out), dimension(np,np,nlev,nets:nete) :: Qtens
+    real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
     type (element_t),      intent(in),  dimension(:) :: elem
     type (derivative_t),   intent(in) :: deriv
     real (kind=real_kind), intent(in) :: dt
@@ -156,17 +155,17 @@ contains
     !
     ! Routine body
     !
-#if (defined COLUMN_OPENMP)
- !$omp parallel do private(q,k,gradQ,dp_star,qtens)
-#endif
     do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+ !$omp parallel do private(q,k,gradQ,dp_star)
+#endif
       do q = 1 , qsize
         do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
           ! div( U dp Q),
           gradQ(:,:,1) = Ustar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
           gradQ(:,:,2) = Vstar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
           dp_star(:,:) = divergence_sphere( gradQ , deriv , elem(ie) )
-          Qtens(:,:,k,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
+          Qtens(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
         enddo
       enddo
     enddo
@@ -1507,16 +1506,16 @@ end subroutine ALE_parametric_coords
   integer              , intent(in   )         :: rhs_multiplier
 
   ! local
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target :: Ustar
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target :: Vstar
-  real(kind=real_kind), dimension(np,np,nlev          ), target :: Qtens
-  real(kind=real_kind), dimension(np,np,nlev)                   :: dpdissk
-  real(kind=real_kind), dimension(np,np  )                      :: divdp, dpdiss
-  real(kind=real_kind), dimension(np,np,2)                      :: gradQ
-  real(kind=real_kind), dimension(np,np,nlev                )   :: dp,dp_star
-  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete)   :: Qtens_biharmonic
-  real(kind=real_kind), dimension(:,:,:), pointer               :: DSSvar
-  real(kind=real_kind), dimension(nlev)                         :: dp0
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete),       target :: Ustar
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete),       target :: Vstar
+  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete)               :: dpdissk
+  real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
+  real(kind=real_kind), dimension(np,np,2)                            :: gradQ
+  real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
+  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete)         :: Qtens_biharmonic
+  real(kind=real_kind), dimension(:,:,:), pointer                     :: DSSvar
+  real(kind=real_kind), dimension(nlev)                               :: dp0
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
@@ -1625,14 +1624,14 @@ OMP_SIMD
 #endif
           do k = 1 , nlev
             ! NOTE: divide by dp0 since we multiply by dp0 below
-            dpdissk(:,:,k) = elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+            dpdissk(:,:,k,ie) = elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
           enddo
 #if (defined COLUMN_OPENMP)
         !$omp parallel do private(q,k) collapse(2)
 #endif
           do q = 1 , qsize
             do k = 1 , nlev
-              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)*dpdissk(:,:,k)
+              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)*dpdissk(:,:,k,ie)
             enddo
           enddo
 #endif
@@ -1713,12 +1712,12 @@ OMP_SIMD
       if ( limiter_option == 8) then
         ! Note that the term dpdissk is independent of Q
         ! UN-DSS'ed dp at timelevel n0+1:
-        dpdissk(:,:,k) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
+        dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
         if ( nu_p > 0 .and. rhs_viss /= 0 ) then
           ! add contribution from UN-DSS'ed PS dissipation
 !          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
 !          elem(ie)%derived%psdiss_biharmonic(:,:)
-          dpdissk(:,:,k) = dpdissk(:,:,k) - rhs_viss * dt * nu_q &
+          dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
                            * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
         endif
         ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
@@ -1754,27 +1753,26 @@ OMP_SIMD
 #endif
 
   do ie=nets,nete
-
 #if (defined COLUMN_OPENMP)
- !$omp parallel do private(q,k,gradQ,dp_star,qtens)
+ !$omp parallel do private(q,k,dp_star)
 #endif
     do q=1,qsize
       do k=1,nlev
         ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k) = Qtens(:,:,k) + Qtens_biharmonic(:,:,k,q,ie)
+        if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
       enddo
 
       if ( limiter_option == 8) then
         ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dpdissk )
+        call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
+                                      qmax(:,q,ie) , dpdissk(:,:,:,ie) )
       endif
 
       ! apply mass matrix, overwrite np1 with solution:
       ! dont do this earlier, since we allow np1_qdp == n0_qdp
       ! and we dont want to overwrite n0_qdp until we are done using it
       do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k)
+        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
       enddo
 
       if ( limiter_option == 4 ) then
