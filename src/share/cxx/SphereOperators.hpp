@@ -7,11 +7,9 @@
 
 #include <Kokkos_Core.hpp>
 
-#include <assert.h>
 
 namespace Homme {
 
-// Pass the temporary vector for contravariant gradient
 KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                 const ExecViewUnmanaged<const Real[NP][NP]> scalar,
