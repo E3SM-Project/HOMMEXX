@@ -1,5 +1,13 @@
 #include <catch/catch.hpp>
 
+#include <Dimensions.hpp>
+#include <Types.hpp>
+#include <CaarControl.hpp>
+#include <CaarRegion.hpp>
+#include <CaarFunctor.hpp>
+
+using namespace Homme;
+
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   Real denom = 1.0;
   if (relative_coeff > 0.0 && target != 0.0) {
@@ -35,13 +43,8 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   control.init(nets, nete, num_elems, nm1, n0, np1, qn0, dt2, ps0, false,
                eta_ave_w, &hybrid_a[0]);
   CaarRegion &region = get_region();
-  region.init(control.num_elems);
-  region.init_2d(D_ptr, Dinv_ptr, fcor_ptr, spheremp_ptr, metdet_ptr, phis_ptr);
-  region.pull_from_f90_ptrs(state_v_ptr, state_t_ptr, state_dp3d_ptr,
-                            derived_phi_ptr, derived_pecnd_ptr,
-                            derived_omega_p_ptr, derived_v_ptr,
-                            derived_eta_dot_dpdn_ptr, state_Qdp_ptr);
+
   CaarFunctor functor(control);
-  Kokkos::TeamPolicy<ExecSpace> policy;
-  Kokkos::parallel_for(
+  Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
+  Kokkos::parallel_for(policy, functor);
 }
