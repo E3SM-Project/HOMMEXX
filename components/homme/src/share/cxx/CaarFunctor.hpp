@@ -95,7 +95,7 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION void compute_energy_grad(
       KernelVariables &kv) const {
     ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
-        m_region.get_3d_buffer(kv.ie.PRESSURE, kv.ilev);
+        m_region.get_3d_buffer(kv.ie, PRESSURE, kv.ilev);
 
     ExecViewUnmanaged<Real[NP][NP]> Ephi = kv.scalar_buf_1;
     Kokkos::parallel_for(
