@@ -8,6 +8,10 @@
 #include <Kokkos_Core.hpp>
 #include "CaarControl.hpp"
 
+namespace std {
+  class UniformRandomBitGenerator;
+}
+
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
@@ -75,6 +79,8 @@ public:
   // Fill the exec space views with data coming from F90 pointers
   void init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                 CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis);
+
+  void random_init(int num_elems, std::mt19937_64 &engine);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
