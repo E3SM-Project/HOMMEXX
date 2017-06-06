@@ -139,7 +139,7 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(n0, k, dvv_ptr, Dinv_ptr, pecnd_ptr, p_ptr, T_v_ptr, phi_ptr, v_ptr, vtemp_ptr)
+  subroutine caar_compute_energy_grad_c_int(n0, k, dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, phi_ptr, v_ptr, vtemp_ptr)
     use iso_c_binding, only : c_int, c_ptr, c_f_pointer
     use kinds, only : real_kind
     use element_mod, only : timelevels
