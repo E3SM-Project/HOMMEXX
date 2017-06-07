@@ -8,12 +8,16 @@
 
 using namespace Homme;
 
+extern "C" {
+
 void caar_compute_energy_grad_c_int(
-    int n0, int level, Real((*const &dvv)[NP]), const Real * &Dinv,
+    int n0, int level, Real((*const &dvv)[NP]), const Real *&Dinv,
     Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NUM_LEV][NP][NP]),
-    const Real * &pressure, Real((*const &phi)[NP][NP]),
+    const Real *&pressure, Real((*const &phi)[NP][NP]),
     Real((*const &velocity)[NUM_LEV][2][NP][NP]),
-    Real((* &vtemp)[NUM_LEV][2][NP][NP]));
+    Real (*&vtemp)[NUM_LEV][2][NP][NP]);
+
+}
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   Real denom = 1.0;
@@ -40,16 +44,8 @@ public:
     nete = udi_type(nets + 1, num_elems)(engine);
   }
 
-  void test() {
-    Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
-    Kokkos::parallel_for(policy, *this);
-
-    results = Kokkos::create_mirror_view(energy_grad);
-    Kokkos::deep_copy(results, energy_grad);
-  }
-
   KOKKOS_INLINE_FUNCTION
-  void operator()(TeamMember &team) {
+  void operator()(TeamMember team) const {
     CaarFunctor::KernelVariables kv(team);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NUM_LEV),
                          [&](const int &level) {
@@ -64,6 +60,10 @@ public:
                              }
                            }
                          });
+    Kokkos::deep_copy(Kokkos::subview(results, kv.ie, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL),
+                      Kokkos::subview(energy_grad, kv.ie, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
   }
 
   ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror results;
@@ -91,7 +91,9 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const int num_elems = 10;
 
   compute_energy_grad_test test_functor(10);
-  test_functor.test();
+
+  Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
+  Kokkos::parallel_for(policy, test_functor);
 
   Real(*velocity)[NUM_LEV][2][NP][NP] = new Real[num_elems][NUM_LEV][2][NP][NP];
   Real(*temperature)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
@@ -117,7 +119,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   get_derivative().dvv(reinterpret_cast<Real *>(dvv));
 
   Real(*vtemp)[NUM_LEV][2][NP][NP] = new Real[num_elems][NUM_LEV][2][NP][NP];
-  int vtemp_i = 0;
   for (int ie = 0; ie < num_elems; ie++) {
     const Real *Dinv = region.DINV(ie).data();
     for (int level = 0; level < NUM_LEV; level++) {
@@ -129,9 +130,8 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       for (int dim = 0; dim < 2; ++dim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            REQUIRE(vtemp[vtemp_i] ==
-                    test_functor.results(ie, level, dim.igp, jgp));
-            ++vtemp_i;
+            REQUIRE(vtemp[ie][level][dim][igp][jgp] ==
+                    test_functor.results(ie, level, dim, igp, jgp));
           }
         }
       }
