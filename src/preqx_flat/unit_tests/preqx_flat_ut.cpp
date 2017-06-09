@@ -8,15 +8,15 @@
 
 using namespace Homme;
 
+using rngAlg = std::mt19937_64;
+
 extern "C" {
 
 void caar_compute_energy_grad_c_int(
     int n0, int level, Real((*const &dvv)[NP]), const Real *&Dinv,
-    Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NUM_LEV][NP][NP]),
+    Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NP][NP]),
     const Real *&pressure, Real((*const &phi)[NP][NP]),
-    Real((*const &velocity)[NUM_LEV][2][NP][NP]),
-    Real (*&vtemp)[NUM_LEV][2][NP][NP]);
-
+    Real((*const &velocity)[NUM_LEV][2][NP][NP]), Real (*&vtemp)[NP][NP]);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -30,15 +30,10 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
 
 class compute_energy_grad_test {
 public:
-  compute_energy_grad_test(int num_elems)
-      : control(), functor(control), energy_grad("Energy gradient", num_elems) {
-    std::random_device rd;
-    using rngAlg = std::mt19937_64;
-    rngAlg engine(rd());
+  compute_energy_grad_test(int num_elems, rngAlg &engine)
+      : results("Kokkos results", num_elems), control(), functor(control),
+        energy_grad("Energy gradient", num_elems) {
     using udi_type = std::uniform_int_distribution<int>;
-
-    get_region().random_init(num_elems, engine);
-    get_derivative().random_init(engine);
 
     nets = udi_type(0, num_elems - 1)(engine);
     nete = udi_type(nets + 1, num_elems)(engine);
@@ -90,22 +85,42 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
 
-  compute_energy_grad_test test_functor(10);
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  // void caar_compute_energy_grad_c_int(
+  //     int n0, int level, Real((*const &dvv)[NP]), const Real *&Dinv,
+  //     Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NP][NP]),
+  //     const Real *&pressure, Real((*const &phi)[NP][NP]),
+  //     Real((*const &velocity)[NUM_LEV][2][NP][NP]),
+  //     Real (*&vtemp)[NP][NP]);
+
+  Real(*velocity)[NUM_TIME_LEVELS][NUM_LEV][2][NP][NP] =
+      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][2][NP][NP];
+  Real(*temperature)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
+      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
+  Real(*dp3d)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
+      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
+  Real(*phi)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
+  Real(*pecnd)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
+  Real(*omega_p)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
+  Real(*derived_v)[NUM_LEV][2][NP][NP] =
+      new Real[num_elems][NUM_LEV][2][NP][NP];
+  Real(*eta_dpdn)[NUM_LEV_P][NP][NP] = new Real[num_elems][NUM_LEV_P][NP][NP];
+  Real(*qdp)[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP] =
+      new Real[num_elems][Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP];
+  Real(*dvv)[NP] = new Real[NP][NP];
+  Real(*vtemp)[NP][NP] = new Real[2][NP][NP];
+
+  get_region().random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  get_derivative().dvv(reinterpret_cast<Real *>(dvv));
+
+  compute_energy_grad_test test_functor(10, engine);
 
   Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
   Kokkos::parallel_for(policy, test_functor);
-
-  Real(*velocity)[NUM_LEV][2][NP][NP] = new Real[num_elems][NUM_LEV][2][NP][NP];
-  Real(*temperature)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
-  Real(*dp3d)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
-      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
-  Real(*phi)[NP][NP] = new Real[NUM_LEV][NP][NP];
-  Real(*pecnd)[NP][NP] = new Real[NUM_LEV][NP][NP];
-  Real(*omega_p)[NP][NP] = new Real[NUM_LEV][NP][NP];
-  Real(*derived_v)[NUM_LEV][2][NP][NP] =
-      new Real[num_elems][NUM_LEV][2][NP][NP];
-  Real(*eta_dpdn)[NP][NP] = new Real[NUM_LEV_P][NP][NP];
-  Real(*qdp)[QSIZE_D][NUM_LEV][NP][NP] = new Real[2][QSIZE_D][NUM_LEV][NP][NP];
 
   CaarRegion region = get_region();
   region.push_to_f90_pointers(
@@ -115,22 +130,19 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       reinterpret_cast<Real *>(derived_v), reinterpret_cast<Real *>(eta_dpdn),
       reinterpret_cast<Real *>(qdp));
 
-  Real(*dvv)[NP] = new Real[NP][NP];
-  get_derivative().dvv(reinterpret_cast<Real *>(dvv));
-
-  Real(*vtemp)[NUM_LEV][2][NP][NP] = new Real[num_elems][NUM_LEV][2][NP][NP];
   for (int ie = 0; ie < num_elems; ie++) {
     const Real *Dinv = region.DINV(ie).data();
     for (int level = 0; level < NUM_LEV; level++) {
       const Real *pressure =
           region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data();
-      caar_compute_energy_grad_c_int(test_functor.n0, level, dvv, Dinv, pecnd,
-                                     temperature, pressure, phi, velocity,
-                                     vtemp);
+      caar_compute_energy_grad_c_int(test_functor.n0, level, dvv, Dinv,
+                                     pecnd[ie],
+                                     temperature[ie][test_functor.n0], pressure,
+                                     phi[ie], velocity[ie], vtemp);
       for (int dim = 0; dim < 2; ++dim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            REQUIRE(vtemp[ie][level][dim][igp][jgp] ==
+            REQUIRE(vtemp[dim][igp][jgp] ==
                     test_functor.results(ie, level, dim, igp, jgp));
           }
         }
@@ -147,3 +159,24 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   delete[] qdp;
   delete[] dvv;
 }
+
+
+// dvv:         0xbe0f630
+// dinv:        0xbe11280
+// pecnd:       0xbdee7f0
+// pressure:    0xbe55880
+// temperature: 0xbddcf30 *** Different from Fortran
+// phi:         0xbdebfb0
+// velocity:    0xbdcdef0
+// vtemp:       0xbe0f6f0
+
+
+
+// dvv         199292464
+// dinv        199299712
+// pecnd       199157744
+// pressure    199579776
+// temperature 199086896
+// phi         199147440
+// velocity    199024368 
+// vtemp       199292656

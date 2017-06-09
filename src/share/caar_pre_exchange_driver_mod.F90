@@ -155,8 +155,11 @@ contains
     real (kind=real_kind), pointer :: phi(:,:,:) ! (np,np,nlev)
     real (kind=real_kind), pointer :: v(:,:,:,:,:) ! (np,np,2,nlev,timelevels)
     real (kind=real_kind), pointer :: vtemp(:,:,:) ! (np,np,2)
+    real (kind=real_kind), pointer :: dvv(:,:) ! (np,np)
+
     type (derivative_t) :: deriv
-    call c_f_pointer(dvv_ptr, deriv%dvv, [np,np])
+
+    call c_f_pointer(dvv_ptr, dvv, [np,np])
     call c_f_pointer(Dinv_ptr, Dinv, [np,np,2,2])
     call c_f_pointer(pecnd_ptr, pecnd, [np,np,nlev])
     call c_f_pointer(p_ptr, p, [np,np,nlev])
@@ -164,6 +167,9 @@ contains
     call c_f_pointer(phi_ptr, phi, [np,np,nlev])
     call c_f_pointer(v_ptr, v, [np,np,2,nlev,timelevels])
     call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
+
+    deriv%dvv = dvv
+
     call caar_compute_energy_grad(n0, k, deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
   end subroutine caar_compute_energy_grad_c_int
 
