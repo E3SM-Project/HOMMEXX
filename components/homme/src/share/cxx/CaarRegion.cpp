@@ -70,6 +70,10 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
 
   ExecViewManaged<Real * [NUM_2D_SCALARS][NP][NP]>::HostMirror h_2d_scalars = Kokkos::create_mirror_view(m_2d_scalars);
   ExecViewManaged<Real *[NUM_2D_TENSORS][2][2][NP][NP]>::HostMirror h_2d_tensors = Kokkos::create_mirror_view(m_2d_tensors);
+  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
+  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
+  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
+
   for (int ie=0; ie<m_num_elems; ++ie)
   {
     // 2d scalars
@@ -81,10 +85,20 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
         h_2d_scalars(ie, static_cast<int>(IDX_SPHEREMP), igp, jgp) = random_dist(engine);
         h_2d_scalars(ie, static_cast<int>(IDX_METDET),   igp, jgp) = random_dist(engine);
         h_2d_scalars(ie, static_cast<int>(IDX_PHIS),     igp, jgp) = random_dist(engine);
+
+        for(int ilev = 0; ilev < NUM_LEV; ++ilev) {
+          h_3d_scalars(ie, static_cast<int>(IDX_OMEGA_P), ilev, igp, jgp) = random_dist(engine);
+          h_3d_scalars(ie, static_cast<int>(IDX_PECND), ilev, igp, jgp) = random_dist(engine);
+          h_3d_scalars(ie, static_cast<int>(IDX_PHI), ilev, igp, jgp) = random_dist(engine);
+          for(int idx_3d = 0; idx_3d < NUM_3D_BUFFERS; ++idx_3d) {
+            h_3d_buffers(ie, idx_3d, ilev, igp, jgp) = random_dist(engine);
+          }
+        }
+        for(int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
+          h_eta_dot_dpdn(ie, ilev, igp, jgp) = random_dist(engine);
+        }
       }
     }
-
-    int k_tensors = 0;
 
     // 2d tensors
     for (int jdim=0; jdim<2; ++jdim)
@@ -93,7 +107,7 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
       {
         for (int jgp=0; jgp<NP; ++jgp)
         {
-          for (int igp=0; igp<NP; ++igp, ++k_tensors)
+          for (int igp=0; igp<NP; ++igp)
           {
             h_2d_tensors(ie,static_cast<int>(IDX_D),   idim,jdim,igp,jgp) = random_dist(engine);
             h_2d_tensors(ie,static_cast<int>(IDX_DINV),idim,jdim,igp,jgp) = random_dist(engine);
@@ -105,6 +119,9 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
 
   Kokkos::deep_copy(m_2d_scalars, h_2d_scalars);
   Kokkos::deep_copy(m_2d_tensors, h_2d_tensors);
+  Kokkos::deep_copy(m_3d_scalars, h_3d_scalars);
+  Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
+  Kokkos::deep_copy(m_3d_buffers, h_3d_buffers);
   return;
 }
 

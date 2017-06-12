@@ -8,10 +8,6 @@
 #include <Kokkos_Core.hpp>
 #include "CaarControl.hpp"
 
-namespace std {
-  class UniformRandomBitGenerator;
-}
-
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
@@ -59,7 +55,7 @@ private:
   /* Contains D, DINV */
   ExecViewManaged<Real * [NUM_2D_TENSORS][2][2][NP][NP]> m_2d_tensors;
   /* Contains OMEGA_P, PECND, PHI, DERIVED_UN0, DERIVED_VN0, QDP, ETA_DPDN */
-  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]>     m_3d_scalars;
+  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]> m_3d_scalars;
   /* Contains U, V, T, DP3D */
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]> m_4d_scalars;
 
