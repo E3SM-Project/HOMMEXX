@@ -6,6 +6,9 @@
 #include <Dimensions.hpp>
 #include <Types.hpp>
 
+#include <stdio.h>
+#include <assert.h>
+
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
@@ -51,14 +54,17 @@ public:
                                for (int jgp = 0; jgp < NP; ++jgp) {
                                  energy_grad(kv.ie, kv.ilev, dim, igp, jgp) =
                                      kv.vector_buf_2(dim, igp, jgp);
+                                 assert(!isnan(kv.vector_buf_2(dim, igp, jgp)));
                                }
                              }
                            }
                          });
-    Kokkos::deep_copy(Kokkos::subview(results, kv.ie, Kokkos::ALL, Kokkos::ALL,
-                                      Kokkos::ALL, Kokkos::ALL),
-                      Kokkos::subview(energy_grad, kv.ie, Kokkos::ALL,
-                                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+  }
+
+  void run_functor() const {
+    Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
+    Kokkos::parallel_for(policy, *this);
+    Kokkos::deep_copy(results, energy_grad);
   }
 
   ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror results;
@@ -111,9 +117,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   get_derivative().dvv(reinterpret_cast<Real *>(dvv));
 
   compute_energy_grad_test test_functor(10, engine);
-
-  Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
-  Kokkos::parallel_for(policy, test_functor);
+  test_functor.run_functor();
 
   CaarRegion region = get_region();
   region.push_to_f90_pointers(
@@ -152,24 +156,3 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   delete[] qdp;
   delete[] dvv;
 }
-
-
-// dvv:         0xbe0f630
-// dinv:        0xbe11280
-// pecnd:       0xbdee7f0
-// pressure:    0xbe55880
-// temperature: 0xbddcf30 *** Different from Fortran
-// phi:         0xbdebfb0
-// velocity:    0xbdcdef0
-// vtemp:       0xbe0f6f0
-
-
-
-// dvv         199292464
-// dinv        199299712
-// pecnd       199157744
-// pressure    199579776
-// temperature 199086896
-// phi         199147440
-// velocity    199024368 
-// vtemp       199292656
