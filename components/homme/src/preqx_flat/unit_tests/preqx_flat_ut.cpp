@@ -13,7 +13,7 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 void caar_compute_energy_grad_c_int(
-    int n0, int level, Real((*const &dvv)[NP]), const Real *&Dinv,
+    const int &n0, const int &level, Real((*const &dvv)[NP]), const Real *&Dinv,
     Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NP][NP]),
     const Real *&pressure, Real((*const &phi)[NP][NP]),
     Real((*const &velocity)[NUM_LEV][2][NP][NP]), Real (*&vtemp)[NP][NP]);
@@ -87,13 +87,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
 
   std::random_device rd;
   rngAlg engine(rd());
-
-  // void caar_compute_energy_grad_c_int(
-  //     int n0, int level, Real((*const &dvv)[NP]), const Real *&Dinv,
-  //     Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NP][NP]),
-  //     const Real *&pressure, Real((*const &phi)[NP][NP]),
-  //     Real((*const &velocity)[NUM_LEV][2][NP][NP]),
-  //     Real (*&vtemp)[NP][NP]);
 
   Real(*velocity)[NUM_TIME_LEVELS][NUM_LEV][2][NP][NP] =
       new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][2][NP][NP];
