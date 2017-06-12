@@ -1920,15 +1920,18 @@ end do
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
     allocate(elem%rmetdet(np, np))
 #endif
     elem%D = d
     elem%rmetdet = rmetdet
+    elem%metdet = 1.0 / rmetdet
 
     vort = vorticity_sphere(v, deriv, elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
+    deallocate(elem%metdet)
     deallocate(elem%rmetdet)
 #endif
   end subroutine vorticity_sphere_c_callable
