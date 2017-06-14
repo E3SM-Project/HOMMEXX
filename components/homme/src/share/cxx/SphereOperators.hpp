@@ -98,15 +98,9 @@ gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
     for (int i = 0; i < NP; ++i) {
       dsdx += dvv(i, l) * scalar(i, j);
       dsdy += dvv(i, l) * scalar(j, i);
-      assert(!isnan(dvv(i, l)));
-      assert(!isnan(scalar(i, j)));
-      assert(!isnan(dsdx));
-      assert(!isnan(dsdy));
     }
     temp_v(0, l, j) = dsdx * PhysicalConstants::rrearth;
     temp_v(1, j, l) = dsdy * PhysicalConstants::rrearth;
-    assert(!isnan(temp_v(0, l, j)));
-    assert(!isnan(temp_v(1, j, l)));
   });
 
   constexpr int grad_iters = 2 * NP * NP;
@@ -116,9 +110,6 @@ gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
     const int i = (loop_idx / NP) % NP;
     const int j = loop_idx % NP;
     grad_s(h,i,j) = DInv(0,h,i,j) * temp_v(0,i,j) + DInv(1,h,i,j) * temp_v(1,i,j);
-    assert(!isnan(DInv(0, h, i, j)));
-    assert(!isnan(DInv(1, h, i, j)));
-    assert(!isnan(grad_s(h, i, j)));
   });
 }
 
@@ -138,15 +129,9 @@ gradient_sphere_update(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
     for (int i = 0; i < NP; ++i) {
       dsdx += dvv(i, l) * scalar(i, j);
       dsdy += dvv(i, l) * scalar(j, i);
-      assert(!isnan(dvv(i, l)));
-      assert(!isnan(scalar(i, j)));
-      assert(!isnan(dsdx));
-      assert(!isnan(dsdy));
     }
     temp_v(0, l, j) = dsdx * PhysicalConstants::rrearth;
     temp_v(1, j, l) = dsdy * PhysicalConstants::rrearth;
-    assert(!isnan(temp_v(0, l, j)));
-    assert(!isnan(temp_v(1, j, l)));
   });
 
   constexpr int grad_iters = 2 * NP * NP;
@@ -155,11 +140,7 @@ gradient_sphere_update(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
     const int h = (loop_idx / NP) / NP;
     const int i = (loop_idx / NP) % NP;
     const int j = loop_idx % NP;
-    assert(!isnan(grad_s(h, i, j)));
     grad_s(h,i,j) += DInv(0,h,i,j) * temp_v(0,i,j) + DInv(1,h,i,j) * temp_v(1,i,j);
-    assert(!isnan(DInv(0, h, i, j)));
-    assert(!isnan(DInv(1, h, i, j)));
-    assert(!isnan(grad_s(h, i, j)));
   });
 }
 
