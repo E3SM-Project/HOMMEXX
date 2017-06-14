@@ -6,8 +6,8 @@
 #include <Dimensions.hpp>
 #include <Types.hpp>
 
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 
 using namespace Homme;
 
@@ -16,10 +16,10 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 void caar_compute_energy_grad_c_int(
-    const int &n0, const int &level, Real((*const &dvv)[NP]), const Real *&Dinv,
-    Real((*const &pecnd)[NP][NP]), Real((*const &temperature)[NP][NP]),
-    const Real *&pressure, Real((*const &phi)[NP][NP]),
-    Real((*const &velocity)[NUM_LEV][2][NP][NP]), Real (*&vtemp)[NP][NP]);
+    Real((*const &dvv)[NP]), const Real *&Dinv, Real((*const &pecnd)[NP]),
+    Real((*const &temperature)[NP]), Real((*const &pressure)[NP]),
+    Real((*const &grad_p)[NP][NP]), Real((*const &phi)[NP]),
+    Real((*const &velocity)[NP][NP]), Real (*&vtemp)[NP][NP]);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -34,12 +34,16 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
 class compute_energy_grad_test {
 public:
   compute_energy_grad_test(int num_elems, rngAlg &engine)
-      : results("Kokkos results", num_elems), control(), functor(control),
+      : results("Kokkos results", num_elems), functor(),
         energy_grad("Energy gradient", num_elems) {
     using udi_type = std::uniform_int_distribution<int>;
 
     nets = udi_type(0, num_elems - 1)(engine);
     nete = udi_type(nets + 1, num_elems)(engine);
+
+    Real hybrid_a[NUM_LEV_P] = {0};
+    functor.m_data.init(0, num_elems, num_elems, nm1, n0, np1, qn0, ps0, dt2,
+                        false, eta_ave_w, hybrid_a);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -54,7 +58,6 @@ public:
                                for (int jgp = 0; jgp < NP; ++jgp) {
                                  energy_grad(kv.ie, kv.ilev, dim, igp, jgp) =
                                      kv.vector_buf_2(dim, igp, jgp);
-                                 assert(!isnan(kv.vector_buf_2(dim, igp, jgp)));
                                }
                              }
                            }
@@ -62,19 +65,17 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(num_elems, 8, 1);
+    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 1, 1);
     Kokkos::parallel_for(policy, *this);
     Kokkos::deep_copy(results, energy_grad);
   }
 
   ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror results;
 
-  CaarControl control;
   CaarFunctor functor;
 
   ExecViewManaged<Real * [NUM_LEV][2][NP][NP]> energy_grad;
 
-  static constexpr const int num_elems = 10;
   static constexpr const int nm1 = 0;
   static constexpr const int n0 = 1;
   static constexpr const int np1 = 2;
@@ -89,7 +90,7 @@ public:
 
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 1;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -100,6 +101,8 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
   Real(*dp3d)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
       new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
+  Real(*grad_p)[NUM_LEV][2][NP][NP] =
+      new Real[num_elems][NUM_LEV][2][NP][NP];
   Real(*phi)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
   Real(*pecnd)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
   Real(*omega_p)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
@@ -111,15 +114,13 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   Real(*dvv)[NP] = new Real[NP][NP];
   Real(*vtemp)[NP][NP] = new Real[2][NP][NP];
 
-  get_region().random_init(num_elems, engine);
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
-
   get_derivative().dvv(reinterpret_cast<Real *>(dvv));
 
-  compute_energy_grad_test test_functor(10, engine);
-  test_functor.run_functor();
-
-  CaarRegion region = get_region();
   region.push_to_f90_pointers(
       reinterpret_cast<Real *>(velocity), reinterpret_cast<Real *>(temperature),
       reinterpret_cast<Real *>(dp3d), reinterpret_cast<Real *>(phi),
@@ -127,15 +128,21 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       reinterpret_cast<Real *>(derived_v), reinterpret_cast<Real *>(eta_dpdn),
       reinterpret_cast<Real *>(qdp));
 
-  for (int ie = 0; ie < num_elems; ie++) {
+  compute_energy_grad_test test_functor(num_elems, engine);
+
+  test_functor.run_functor();
+
+  printf("\n\n");
+
+  for (int ie = 0; ie < num_elems; ++ie) {
     const Real *Dinv = region.DINV(ie).data();
-    for (int level = 0; level < NUM_LEV; level++) {
-      const Real *pressure =
-          region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data();
-      caar_compute_energy_grad_c_int(test_functor.n0, level, dvv, Dinv,
-                                     pecnd[ie],
-                                     temperature[ie][test_functor.n0], pressure,
-                                     phi[ie], velocity[ie], vtemp);
+    for (int level = 0; level < NUM_LEV; ++level) {
+      Real(*const pressure)[NP] = reinterpret_cast<Real(*)[NP]>(
+          region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data());
+      caar_compute_energy_grad_c_int(
+          dvv, Dinv, pecnd[ie][level], temperature[ie][test_functor.n0][level],
+          pressure, grad_p[ie][level], phi[ie][level],
+          velocity[ie][test_functor.n0][level], vtemp);
       for (int dim = 0; dim < 2; ++dim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
