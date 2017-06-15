@@ -274,6 +274,7 @@ public:
   }
 };
 
+// TODO: DON'T USE SINGLETONS
 CaarRegion& get_region();
 
 } // Homme
