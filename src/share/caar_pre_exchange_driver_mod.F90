@@ -190,10 +190,9 @@ contains
     real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
     real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
 
-    integer (kind=c_int) :: i, j
-    real (kind=real_kind), dimension(np,np) :: Ephi
-    real (kind=real_kind), dimension(np,np,2) :: glnps
-    real (kind=real_kind) :: gpterm, v1, v2, E
+    integer (kind=c_int) :: h, i, j
+    real (kind=real_kind), dimension(np,np) :: Ephi, gpterm
+    real (kind=real_kind) :: v1, v2, E
     do j=1,np
       do i=1,np
         v1 = v(i,j,1)
@@ -202,17 +201,22 @@ contains
         Ephi(i,j)=E+(phi(i,j)+pecnd(i,j))
       end do
     end do
-    vtemp = gradient_sphere(Ephi(:,:), deriv, Dinv)
 
     do j=1, np
       do i=1, np
-        gpterm = Rgas*T_v(i,j)/p(i,j)
-        glnps(i,j,1) = grad_p(i,j,1)*gpterm
-        glnps(i,j,2) = grad_p(i,j,2)*gpterm
+        gpterm(i, j) = Rgas*T_v(i, j)/p(i, j)
       end do
     end do
 
-    vtemp = vtemp + glnps
+    vtemp = gradient_sphere(Ephi(:,:), deriv, Dinv)
+
+    do h=1, 2
+      do j=1, np
+        do i=1, np
+          vtemp(i, j, h) = vtemp(i, j, h) + grad_p(i, j, h) * gpterm(i, j)
+        end do
+      end do
+    end do
   end subroutine caar_compute_energy_grad
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
@@ -522,7 +526,7 @@ contains
       ! ==============================================
 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,j,v1,v2,E,Ephi,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
+!$omp parallel do private(k,i,j,v1,v2,E,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
 #endif
       vertloop: do k=1,nlev
          ! ================================================
