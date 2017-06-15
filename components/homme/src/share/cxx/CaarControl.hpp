@@ -40,6 +40,10 @@ struct CaarControl {
 
   int ps0;
 
+  // For vertically lagrangian dynamics,
+  // apply remap every rsplit tracer timesteps
+  int rsplit;
+
   // hybryd a
   ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
 };
