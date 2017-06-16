@@ -139,19 +139,18 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, grad_p_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
     use iso_c_binding, only : c_int, c_ptr, c_f_pointer
     use kinds, only : real_kind
     use element_mod, only : timelevels
     use dimensions_mod, only : np, nlev
     use derivative_mod, only : derivative_t
-    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, grad_p_ptr, phi_ptr, v_ptr, vtemp_ptr
+    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, phi_ptr, v_ptr, vtemp_ptr
 
     real (kind=real_kind), pointer :: Dinv(:,:,:,:) ! (np,np,2,2)
     real (kind=real_kind), pointer :: pecnd(:,:) ! (np,np)
     real (kind=real_kind), pointer :: T_v(:,:) ! (np,np)
     real (kind=real_kind), pointer :: p(:,:) ! (np,np)
-    real (kind=real_kind), pointer :: grad_p(:,:,:) ! (np,np,2)
     real (kind=real_kind), pointer :: phi(:,:) ! (np,np)
     real (kind=real_kind), pointer :: v(:,:,:) ! (np,np,2)
     real (kind=real_kind), pointer :: vtemp(:,:,:) ! (np,np,2)
@@ -164,17 +163,16 @@ contains
     call c_f_pointer(pecnd_ptr, pecnd, [np,np])
     call c_f_pointer(T_v_ptr, T_v, [np,np])
     call c_f_pointer(p_ptr, p, [np,np])
-    call c_f_pointer(grad_p_ptr, grad_p, [np,np,2])
     call c_f_pointer(phi_ptr, phi, [np,np])
     call c_f_pointer(v_ptr, v, [np,np,2])
     call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
 
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, grad_p, phi, v, vtemp)
+    call caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
   end subroutine caar_compute_energy_grad_c_int
 
-  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, grad_p, phi, v, vtemp)
+  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
     use iso_c_binding, only : c_int
     use kinds, only : real_kind
     use dimensions_mod, only : np
@@ -186,7 +184,6 @@ contains
     real (kind=real_kind), intent(in) :: T_v(:,:) ! (np,np)
     real (kind=real_kind), intent(in) :: phi(:,:) ! (np,np)
     real (kind=real_kind), intent(in) :: p(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: grad_p(:,:,:) ! (np,np,2)
     real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
     real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
 
@@ -201,22 +198,7 @@ contains
         Ephi(i,j)=E+(phi(i,j)+pecnd(i,j))
       end do
     end do
-
-    do j=1, np
-      do i=1, np
-        gpterm(i, j) = Rgas*T_v(i, j)/p(i, j)
-      end do
-    end do
-
-    vtemp = gradient_sphere(Ephi(:,:), deriv, Dinv)
-
-    do h=1, 2
-      do j=1, np
-        do i=1, np
-          vtemp(i, j, h) = vtemp(i, j, h) + grad_p(i, j, h) * gpterm(i, j)
-        end do
-      end do
-    end do
+    vtemp = gradient_sphere(Ephi, deriv, Dinv)
   end subroutine caar_compute_energy_grad
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
@@ -295,7 +277,7 @@ contains
 
     real (kind=real_kind) ::  cp2,cp_ratio,E,de,Qt,v1,v2
     real (kind=real_kind) ::  glnps1,glnps2,gpterm
-    integer :: i,j,k,kptr,ie
+    integer :: h,i,j,k,kptr,ie
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
 
     do ie=nets,nete
@@ -540,26 +522,29 @@ contains
                vgrad_T(i,j) =  v1*vtemp(i,j,1) + v2*vtemp(i,j,2)
             end do
          end do
-
-         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), T_v(:,:,k), p(:,:,k), grad_p(:,:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
+         ! vtemp = grad ( E + PHI )
+         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), T_v(:,:,k), p(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
          do j=1,np
             do i=1,np
   !             gpterm = hvcoord%hybm(k)*T_v(i,j,k)/p(i,j,k)
   !             glnps1 = Rgas*gpterm*grad_ps(i,j,1)
   !             glnps2 = Rgas*gpterm*grad_ps(i,j,2)
+               gpterm = T_v(i,j,k)/p(i,j,k)
+               glnps1 = Rgas*gpterm*grad_p(i,j,1,k)
+               glnps2 = Rgas*gpterm*grad_p(i,j,2,k)
 
                v1     = elem(ie)%state%v(i,j,1,k,n0)
                v2     = elem(ie)%state%v(i,j,2,k,n0)
                vtens1(i,j,k) = & !  - v_vadv(i,j,1,k)                           &
                     + v2*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
-                    - vtemp(i,j,1)
+                    - (vtemp(i,j,1) + glnps1)
                !
                ! phl: add forcing term to zonal wind u
                !
                vtens2(i,j,k) =   - v_vadv(i,j,2,k)                            &
                     - v1*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
-                    - vtemp(i,j,2)
+                    - (vtemp(i,j,2) + glnps2)
                !
                ! phl: add forcing term to meridional wind v
                !

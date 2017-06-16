@@ -95,26 +95,9 @@ struct CaarFunctor {
                            m_region.PECND(kv.ie, kv.ilev, igp, jgp);
         });
 
-    ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
-        m_region.get_3d_buffer(kv.ie, PRESSURE, kv.ilev);
-
-    ExecViewUnmanaged<Real[2][NP][NP]> gpterm = kv.vector_buf_2;
-    gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(), m_region.DINV(kv.ie),
-                    kv.vector_buf_1, gpterm);
-
-    Kokkos::parallel_for(
-        Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP), [&](const int idx) {
-          const int hgp = (idx / NP) / NP;
-          const int igp = (idx / NP) % NP;
-          const int jgp = idx % NP;
-          gpterm(hgp, igp, jgp) *=
-              PhysicalConstants::Rgas *
-              (m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) /
-               p_ilev(igp, jgp));
-        });
-
     gradient_sphere_update(kv.team, Ephi, m_deriv.get_dvv(),
-                           m_region.DINV(kv.ie), kv.vector_buf_1, gpterm);
+                           m_region.DINV(kv.ie), kv.vector_buf_1,
+                           kv.vector_buf_2);
   }
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -138,7 +121,21 @@ struct CaarFunctor {
     ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
         m_region.get_3d_buffer(kv.ie, PRESSURE, kv.ilev);
 
-    // kv.vector_buf_2 -> grad_E_phi + R T_v grad_p / p
+    gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(), m_region.DINV(kv.ie),
+                    kv.vector_buf_1, kv.vector_buf_2);
+    Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP), [&](const int idx) {
+          const int hgp = (idx / NP) / NP;
+          const int igp = (idx / NP) % NP;
+          const int jgp = idx % NP;
+
+          kv.vector_buf_2(hgp, igp, jgp) *=
+              PhysicalConstants::Rgas *
+              (m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) /
+               p_ilev(igp, jgp));
+        });
+
+    // kv.vector_buf_2 -> grad(E + phi) + R T_v grad(p) / p
     compute_energy_grad(kv);
 
     const ExecViewUnmanaged<Real[NP][NP]> vort = kv.scalar_buf_2;
