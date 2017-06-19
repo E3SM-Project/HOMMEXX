@@ -29,14 +29,17 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
   control.init(nets_c, nete_c, num_elems, nm1_c, n0_c, np1_c, qn0_c, dt2, ps0, compute_diagonstics, eta_ave_w, hybrid_a_ptr);
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& qn0)
+void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
 {
   Control& control = get_control ();
 
   // Adjust indices
-  control.nets = nets-1;
-  control.nete = nete;  // F90 ranges are closed, c ranges are open on the right, so this can stay the same
-  control.qn0  = qn0-1;
+  control.nets  = nets-1;
+  control.nete  = nete;  // F90 ranges are closed, c ranges are open on the right, so this can stay the same
+  control.qn0   = qn0-1;
+
+  control.qsize = qsize;
+  control.dt    = dt;
 }
 
 void init_derivative_c (CF90Ptr& dvv, CF90Ptr& integration_matrix, CF90Ptr& boundary_interp_matrix)
@@ -53,7 +56,7 @@ void init_region_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr&
   r.init_2d(D,Dinv,fcor,spheremp,metdet,phis);
 }
 
-void caar_copy_f90_data_to_region_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
+void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
                                      CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_pecnd_ptr,
                                      CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
                                      CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
@@ -66,7 +69,7 @@ void caar_copy_f90_data_to_region_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_st
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void caar_copy_region_data_to_f90_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
+void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
                                      F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
                                      F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                                      F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
@@ -78,17 +81,20 @@ void caar_copy_region_data_to_f90_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_stat
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_copy_f90_data_to_region_c (CF90Ptr& ustar, CF90Ptr& vstar)
+void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& ustar_ptr, CF90Ptr& vstar_ptr)
 {
   Region& r = get_region();
   // Copy data from f90 pointers to cxx views
-  r.pull_from_f90_buffers(ustar, vstar, nullptr, nullptr);
+
+  r.pull_3d_buffer<EulerStepFunctor::USTAR>(ustar_ptr);
+  r.pull_3d_buffer<EulerStepFunctor::VSTAR>(vstar_ptr);
+  r.pull_qdp(elem_state_Qdp_ptr);
 }
 
-void euler_copy_region_data_to_f90_c (F90Ptr& ustar, F90Ptr& vstar)
+void euler_push_results_c (F90Ptr& qtens_ptr)
 {
   Region& r = get_region();
-  r.push_to_f90_buffers(ustar, vstar, nullptr, nullptr);
+  r.push_q_buffer(qtens_ptr);
 }
 
 void caar_pre_exchange_monolithic_c()
