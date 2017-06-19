@@ -104,29 +104,21 @@ module prim_advection_mod_base
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_copy_f90_data_to_region_c(Ustar_ptr, Vstar_ptr) bind(c)
+    subroutine euler_pull_data_c(elem_state_Qdp_ptr,Ustar_ptr, Vstar_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: Ustar_ptr,Vstar_ptr
-    end subroutine euler_copy_f90_data_to_region_c
-    subroutine euler_copy_region_data_to_f90_c(Ustar_ptr, Vstar_ptr) bind(c)
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Ustar_ptr,Vstar_ptr
+    end subroutine euler_pull_data_c
+    subroutine euler_push_results_c(Qtens_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: Ustar_ptr,Vstar_ptr
-    end subroutine euler_copy_region_data_to_f90_c
-    subroutine advance_qdp_c(nets,nete,n0_qdp,dt,Ustar_ptr,Vstar_ptr,Qtens_ptr) bind(c)
-      use iso_c_binding, only : c_int, c_ptr
-      use kinds,         only : real_kind
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp
-      real (kind=real_kind), intent(in) :: dt
-      type (c_ptr),          intent(in) :: Ustar_ptr,Vstar_ptr, Qtens_ptr
+      type (c_ptr), intent(in) :: Qtens_ptr
+    end subroutine euler_push_results_c
+    subroutine advance_qdp_c() bind(c)
     end subroutine advance_qdp_c
   end interface
 
@@ -1473,7 +1465,7 @@ end subroutine ALE_parametric_coords
   use kinds          , only : real_kind
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
-  use element_mod    , only : element_t
+  use element_mod    , only : element_t, elem_state_Qdp
   use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, limiter_optim_iter_full
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
@@ -1483,13 +1475,13 @@ end subroutine ALE_parametric_coords
   implicit none
 
   interface
-    subroutine init_control_euler_c (nets, nete, n0_qdp, dt) bind(c)
+    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt) bind(c)
       use iso_c_binding, only : c_int
       use kinds,         only : real_kind
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp
+      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize
       real (kind=real_kind), intent(in) :: dt
     end subroutine init_control_euler_c
   end interface
@@ -1519,7 +1511,7 @@ end subroutine ALE_parametric_coords
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Ustar_ptr, Vstar_ptr, Qtens_ptr
+  type (c_ptr) :: Ustar_ptr, Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1734,18 +1726,19 @@ OMP_SIMD
   enddo
 
 #ifdef USE_KOKKOS_KERNELS
-  Qtens_ptr = c_loc(Qtens)
   Ustar_ptr = c_loc(Ustar)
   Vstar_ptr = c_loc(Vstar)
-  call init_control_euler_c (nets, nete, n0_qdp, dt)
+  elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt)
 
-  call euler_copy_f90_data_to_region_c(Ustar_ptr, Vstar_ptr)
+  call euler_pull_data_c(elem_state_Qdp_ptr, Ustar_ptr, Vstar_ptr)
 
   call t_startf("advance_qdp")
-  call advance_qdp_c(nets,nete,n0_qdp,dt,Ustar_ptr,Vstar_ptr,Qtens_ptr)
+  call advance_qdp_c()
   call t_stopf("advance_qdp")
 
-  call euler_copy_region_data_to_f90_c(Ustar_ptr, Vstar_ptr)
+  Qtens_ptr = c_loc(Qtens)
+  call euler_push_results_c(Qtens_ptr)
 #else
   call t_startf("advance_qdp")
   call advance_qdp_f90(nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
