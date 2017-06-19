@@ -70,7 +70,7 @@ void deep_copy_mirror_view(ViewOut view_out, ViewIn view_in)
 }
 
 template<typename ViewType>
-Real compute_view_norm (const ViewType view)
+Real frobenius_norm (const ViewType view)
 {
   typename ViewType::pointer_type data = view.data();
 
