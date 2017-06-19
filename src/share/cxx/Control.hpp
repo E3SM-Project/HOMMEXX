@@ -48,6 +48,9 @@ struct Control {
   // Tracers timelevel, inclusive range of 0-1
   int qn0;
 
+  // Number of tracers (may be lower than QSIZE_D)
+  int qsize;
+
   // Time step
   Real dt;
 
