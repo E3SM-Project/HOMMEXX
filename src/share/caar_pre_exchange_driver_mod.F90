@@ -139,18 +139,16 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
     use iso_c_binding, only : c_int, c_ptr, c_f_pointer
     use kinds, only : real_kind
     use element_mod, only : timelevels
     use dimensions_mod, only : np, nlev
     use derivative_mod, only : derivative_t
-    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, T_v_ptr, p_ptr, phi_ptr, v_ptr, vtemp_ptr
+    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, phi_ptr, v_ptr, vtemp_ptr
 
     real (kind=real_kind), pointer :: Dinv(:,:,:,:) ! (np,np,2,2)
     real (kind=real_kind), pointer :: pecnd(:,:) ! (np,np)
-    real (kind=real_kind), pointer :: T_v(:,:) ! (np,np)
-    real (kind=real_kind), pointer :: p(:,:) ! (np,np)
     real (kind=real_kind), pointer :: phi(:,:) ! (np,np)
     real (kind=real_kind), pointer :: v(:,:,:) ! (np,np,2)
     real (kind=real_kind), pointer :: vtemp(:,:,:) ! (np,np,2)
@@ -161,19 +159,16 @@ contains
     call c_f_pointer(dvv_ptr, dvv, [np,np])
     call c_f_pointer(Dinv_ptr, Dinv, [np,np,2,2])
     call c_f_pointer(pecnd_ptr, pecnd, [np,np])
-    call c_f_pointer(T_v_ptr, T_v, [np,np])
-    call c_f_pointer(p_ptr, p, [np,np])
     call c_f_pointer(phi_ptr, phi, [np,np])
     call c_f_pointer(v_ptr, v, [np,np,2])
     call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
 
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
+    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
   end subroutine caar_compute_energy_grad_c_int
 
-  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, T_v, p, phi, v, vtemp)
-    use iso_c_binding, only : c_int
+  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use derivative_mod, only : derivative_t, gradient_sphere
@@ -181,21 +176,19 @@ contains
     type (derivative_t), intent(in) :: deriv
     real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np,np,2,2)
     real (kind=real_kind), intent(in) :: pecnd(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: T_v(:,:) ! (np,np)
     real (kind=real_kind), intent(in) :: phi(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: p(:,:) ! (np,np)
     real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
     real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
 
-    integer (kind=c_int) :: h, i, j
+    integer :: h, i, j
     real (kind=real_kind), dimension(np,np) :: Ephi, gpterm
     real (kind=real_kind) :: v1, v2, E
-    do j=1,np
-      do i=1,np
-        v1 = v(i,j,1)
-        v2 = v(i,j,2)
-        E = 0.5D0*( v1*v1 + v2*v2 )
-        Ephi(i,j)=E+(phi(i,j)+pecnd(i,j))
+    do j = 1, np
+      do i = 1, np
+        v1 = v(i, j, 1)
+        v2 = v(i, j, 2)
+        E = 0.5D0 * (v1 * v1 + v2 * v2)
+        Ephi(i, j)=E + (phi(i, j) + pecnd(i, j))
       end do
     end do
     vtemp = gradient_sphere(Ephi, deriv, Dinv)
@@ -523,7 +516,7 @@ contains
             end do
          end do
          ! vtemp = grad ( E + PHI )
-         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), T_v(:,:,k), p(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
+         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
          do j=1,np
             do i=1,np

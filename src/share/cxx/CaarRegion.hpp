@@ -90,6 +90,9 @@ public:
                             F90Ptr& derived_omega_p, F90Ptr& derived_v,
                             F90Ptr& derived_eta_dot_dpdn, F90Ptr& state_Qdp) const;
 
+  void d(Real *d_ptr, int ie);
+  void dinv(Real *dinv_ptr, int ie);
+
   // v is the tracer we're working with, 0 <= v < QSIZE_D
   // qn0 is the timelevel, 0 <= qn0 < Q_NUM_TIME_LEVELS
   KOKKOS_INLINE_FUNCTION
