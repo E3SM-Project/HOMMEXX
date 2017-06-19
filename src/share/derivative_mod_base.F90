@@ -1272,10 +1272,11 @@ end do
        end do
     end do
     ! convert covarient to latlon
-    do j=1,np
-       do i=1,np
-          ds(i,j,1)=Dinv(i,j,1,1)*v1(i,j) + Dinv(i,j,2,1)*v2(i,j)
-          ds(i,j,2)=Dinv(i,j,1,2)*v1(i,j) + Dinv(i,j,2,2)*v2(i,j)
+    do l=1,2
+       do j=1,np
+          do i=1,np
+             ds(i,j,l)=Dinv(i,j,1,l)*v1(i,j) + Dinv(i,j,2,l)*v2(i,j)
+          enddo
        enddo
     enddo
 
@@ -2724,3 +2725,4 @@ end do
 
 
 end module derivative_mod_base
+                                                                                                     

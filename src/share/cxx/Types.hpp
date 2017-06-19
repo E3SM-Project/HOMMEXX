@@ -83,6 +83,9 @@ using HostMemSpace    = Kokkos::HostSpace;
 // A team member type
 using TeamMember = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
+using FortranLayout = Kokkos::LayoutLeft;
+using CXXLayout = Kokkos::LayoutRight;
+
 // Short name for views with layout right
 template <typename DataType, typename... Types>
 using ViewType = Kokkos::View<DataType,Kokkos::LayoutRight,Types...>;

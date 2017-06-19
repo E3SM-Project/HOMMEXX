@@ -1,5 +1,7 @@
 #include <catch/catch.hpp>
 
+#include <limits>
+
 #include <CaarControl.hpp>
 #include <CaarFunctor.hpp>
 #include <CaarRegion.hpp>
@@ -20,7 +22,6 @@ void caar_compute_energy_grad_c_int(Real((*const &dvv)[NP]), const Real *&Dinv,
                                     Real((*const &phi)[NP]),
                                     Real((*const &velocity)[NP][NP]),
                                     Real (*&vtemp)[NP][NP]);
-void caar_print_ephi(Homme::Real((*const Ephi)[NP]));
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -146,19 +147,15 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       Real(*const pressure)[NP] = reinterpret_cast<Real(*)[NP]>(
           region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data());
       caar_compute_energy_grad_c_int(
-                                     dvv, const_dinv, pecnd[ie][level], phi[ie][level],
+          dvv, const_dinv, pecnd[ie][level], phi[ie][level],
           velocity[ie][test_functor.n0][level], vtemp);
       for (int dim = 0; dim < 2; ++dim) {
-        if(level == 0) {
-          printf("Dimension %d\nCaar Results:\n", dim);
-          caar_print_ephi(reinterpret_cast<Real(*)[NP]>(Kokkos::subview(test_functor.results, ie, level, dim, Kokkos::ALL, Kokkos::ALL).data()));
-          printf("\nFortran Results:\n");
-          caar_print_ephi(vtemp[dim]);
-        }
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            REQUIRE(vtemp[dim][igp][jgp] ==
-                    test_functor.results(ie, level, dim, igp, jgp));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(
+                        vtemp[dim][igp][jgp],
+                        test_functor.results(ie, level, dim, jgp, igp), 4.0));
           }
         }
       }
