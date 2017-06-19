@@ -33,9 +33,12 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   return std::fabs(target - computed) / denom;
 }
 
-class compute_energy_grad_test {
+template <typename Results_T>
+class compute_subfunctor_test {
 public:
-  compute_energy_grad_test(int num_elems, rngAlg &engine)
+  using SubFunctor_T = void (CaarFunctor::*)(CaarFunctor::KernelVariables &);
+
+  compute_subfunctor_test(int num_elems, rngAlg &engine, SubFunctor_T subfunctor)
       : results("Kokkos results", num_elems), functor(),
         energy_grad("Energy gradient", num_elems) {
     using udi_type = std::uniform_int_distribution<int>;
@@ -79,11 +82,11 @@ public:
     Kokkos::deep_copy(results, energy_grad);
   }
 
-  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror results;
+  ExecViewManaged<Results_T>::HostMirror results;
 
   CaarFunctor functor;
 
-  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]> energy_grad;
+  ExecViewManaged<Results_T> energy_grad;
 
   static constexpr const int nm1 = 0;
   static constexpr const int n0 = 1;
