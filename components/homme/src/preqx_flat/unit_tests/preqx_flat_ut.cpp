@@ -15,11 +15,12 @@ using rngAlg = std::mt19937_64;
 
 extern "C" {
 
-void caar_compute_energy_grad_c_int(
-    Real((*const &dvv)[NP]), const Real *&Dinv, Real((*const &pecnd)[NP]),
-    Real((*const &temperature)[NP]), Real((*const &pressure)[NP]),
-    Real((*const &grad_p)[NP][NP]), Real((*const &phi)[NP]),
-    Real((*const &velocity)[NP][NP]), Real (*&vtemp)[NP][NP]);
+void caar_compute_energy_grad_c_int(Real((*const &dvv)[NP]), const Real *&Dinv,
+                                    Real((*const &pecnd)[NP]),
+                                    Real((*const &phi)[NP]),
+                                    Real((*const &velocity)[NP][NP]),
+                                    Real (*&vtemp)[NP][NP]);
+void caar_print_ephi(Homme::Real((*const Ephi)[NP]));
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -38,8 +39,8 @@ public:
         energy_grad("Energy gradient", num_elems) {
     using udi_type = std::uniform_int_distribution<int>;
 
-    nets = udi_type(0, num_elems - 1)(engine);
-    nete = udi_type(nets + 1, num_elems)(engine);
+    nets = 1;
+    nete = num_elems;
 
     Real hybrid_a[NUM_LEV_P] = {0};
     functor.m_data.init(0, num_elems, num_elems, nm1, n0, np1, qn0, ps0, dt2,
@@ -52,6 +53,13 @@ public:
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NUM_LEV),
                          [&](const int &level) {
                            kv.ilev = level;
+                           for (int dim = 0; dim < 2; ++dim) {
+                             for (int igp = 0; igp < NP; ++igp) {
+                               for (int jgp = 0; jgp < NP; ++jgp) {
+                                 kv.vector_buf_2(dim, igp, jgp) = 0.0;
+                               }
+                             }
+                           }
                            functor.compute_energy_grad(kv);
                            for (int dim = 0; dim < 2; ++dim) {
                              for (int igp = 0; igp < NP; ++igp) {
@@ -101,8 +109,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
   Real(*dp3d)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
       new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
-  Real(*grad_p)[NUM_LEV][2][NP][NP] =
-      new Real[num_elems][NUM_LEV][2][NP][NP];
   Real(*phi)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
   Real(*pecnd)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
   Real(*omega_p)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
@@ -132,18 +138,23 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
 
   test_functor.run_functor();
 
-  printf("\n\n");
-
+  Real *dinv = reinterpret_cast<Real *>(new Real[2][2][NP][NP]);
+  const Real *const_dinv = dinv;
   for (int ie = 0; ie < num_elems; ++ie) {
-    const Real *Dinv = region.DINV(ie).data();
+    region.dinv(dinv, ie);
     for (int level = 0; level < NUM_LEV; ++level) {
       Real(*const pressure)[NP] = reinterpret_cast<Real(*)[NP]>(
           region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data());
       caar_compute_energy_grad_c_int(
-          dvv, Dinv, pecnd[ie][level], temperature[ie][test_functor.n0][level],
-          pressure, grad_p[ie][level], phi[ie][level],
+                                     dvv, const_dinv, pecnd[ie][level], phi[ie][level],
           velocity[ie][test_functor.n0][level], vtemp);
       for (int dim = 0; dim < 2; ++dim) {
+        if(level == 0) {
+          printf("Dimension %d\nCaar Results:\n", dim);
+          caar_print_ephi(reinterpret_cast<Real(*)[NP]>(Kokkos::subview(test_functor.results, ie, level, dim, Kokkos::ALL, Kokkos::ALL).data()));
+          printf("\nFortran Results:\n");
+          caar_print_ephi(vtemp[dim]);
+        }
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(vtemp[dim][igp][jgp] ==
@@ -153,6 +164,8 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       }
     }
   }
+  delete[] dinv;
+
   delete[] temperature;
   delete[] dp3d;
   delete[] phi;

@@ -11,37 +11,6 @@
 
 namespace Homme {
 
-KOKKOS_INLINE_FUNCTION void
-gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
-                const ExecViewUnmanaged<const Real[NP][NP]> scalar,
-                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
-                ExecViewUnmanaged<Real[2][NP][NP]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void
-gradient_sphere_update(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
-                       const ExecViewUnmanaged<const Real[NP][NP]> scalar,
-                       const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                       const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
-                       ExecViewUnmanaged<Real[2][NP][NP]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void
-divergence_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
-                  const ExecViewUnmanaged<const Real[2][NP][NP]> v,
-                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                  const ExecViewUnmanaged<const Real[NP][NP]> metDet,
-                  const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
-                  ExecViewUnmanaged<Real[NP][NP]> div_v);
-
-KOKKOS_INLINE_FUNCTION void
-vorticity_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
-                 const ExecViewUnmanaged<const Real[NP][NP]> u,
-                 const ExecViewUnmanaged<const Real[NP][NP]> v,
-                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                 const ExecViewUnmanaged<const Real[NP][NP]> metDet,
-                 const ExecViewUnmanaged<const Real[2][2][NP][NP]> D,
-                 ExecViewUnmanaged<Real[NP][NP]> vort);
-
 // Pass the temporary vector for contravariant gradient
 KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,

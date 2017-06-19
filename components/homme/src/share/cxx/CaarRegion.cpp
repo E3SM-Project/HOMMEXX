@@ -347,6 +347,38 @@ void CaarRegion::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& 
   }
 }
 
+void CaarRegion::d(Real *d_ptr, int ie) {
+  ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_D), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror d_host = Kokkos::create_mirror_view(d_device),
+    d_wrapper(d_ptr);
+  Kokkos::deep_copy(d_host, d_device);
+  for(int m = 0; m < 2; ++m) {
+    for(int n = 0; n < 2; ++n) {
+      for(int igp = 0; igp < NP; ++igp) {
+        for(int jgp = 0; jgp < NP; ++jgp) {
+          d_wrapper(m, n, igp, jgp) = d_host(n, m, igp, jgp);
+        }
+      }
+    }
+  }
+}
+
+void CaarRegion::dinv(Real *dinv_ptr, int ie) {
+  ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_DINV), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host = Kokkos::create_mirror_view(dinv_device),
+    dinv_wrapper(dinv_ptr);
+  Kokkos::deep_copy(dinv_host, dinv_device);
+  for(int m = 0; m < 2; ++m) {
+    for(int n = 0; n < 2; ++n) {
+      for(int igp = 0; igp < NP; ++igp) {
+        for(int jgp = 0; jgp < NP; ++jgp) {
+          dinv_wrapper(m, n, jgp, igp) = dinv_host(n, m, igp, jgp);
+        }
+      }
+    }
+  }
+}
+
 CaarRegion& get_region()
 {
   static CaarRegion r;
