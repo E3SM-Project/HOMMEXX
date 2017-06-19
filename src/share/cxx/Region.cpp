@@ -17,6 +17,7 @@ void Region::init(const int num_elems)
   m_eta_dot_dpdn = ExecViewManaged<Real * [NUM_LEV_P][NP][NP]> ("eta_dot_dpdn", m_num_elems);
 
   m_3d_buffers = ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> ("buffers", m_num_elems);
+  m_q_buffer = ExecViewManaged<Real * [QSIZE_D][NUM_LEV][NP][NP]> ("q_buffer", m_num_elems);
 }
 
 void Region::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
@@ -131,6 +132,154 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
 
 
 void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
+void Region::pull_qdp (CF90Ptr& field_ptr)
+{
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp_ie_exec = Kokkos::subview(m_Qdp, ie, ALL, ALL, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qdp_ie_host = Kokkos::create_mirror_view(qdp_ie_exec);
+    for (int itl=0; itl<Q_NUM_TIME_LEVELS; ++itl)
+    {
+      for (int iq=0; iq<QSIZE_D; ++iq)
+      {
+        for (int k=0; k<NUM_LEV; ++k)
+        {
+          for (int j=0; j<NP; ++j)
+          {
+            for (int i=0; i<NP; ++i, ++iter)
+            {
+              qdp_ie_host(itl,iq,k,i,j) = field_ptr[iter];
+            }
+          }
+        }
+      }
+    }
+    Kokkos::deep_copy(qdp_ie_exec, qdp_ie_host);
+  }
+}
+
+void Region::push_qdp (F90Ptr&  field_ptr)
+{
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp_ie_exec = Kokkos::subview(m_Qdp, ie, ALL, ALL, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qdp_ie_host = Kokkos::create_mirror_view(qdp_ie_exec);
+    Kokkos::deep_copy(qdp_ie_host, qdp_ie_exec);
+    for (int itl=0; itl<Q_NUM_TIME_LEVELS; ++itl)
+    {
+      for (int iq=0; iq<QSIZE_D; ++iq)
+      {
+        for (int k=0; k<NUM_LEV; ++k)
+        {
+          for (int j=0; j<NP; ++j)
+          {
+            for (int i=0; i<NP; ++i, ++iter)
+            {
+              field_ptr[iter] = qdp_ie_host(itl,iq,k,i,j);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::pull_q_buffer (CF90Ptr& field_ptr)
+{
+  int iter=0;
+  int num_tracers = get_control().qsize;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> qb_ie_exec = Kokkos::subview(m_q_buffer, ie, ALL, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qb_ie_host = Kokkos::create_mirror_view(qb_ie_exec);
+    for (int iq=0; iq<num_tracers; ++iq)
+    {
+      for (int k=0; k<NUM_LEV; ++k)
+      {
+        for (int j=0; j<NP; ++j)
+        {
+          for (int i=0; i<NP; ++i, ++iter)
+          {
+            qb_ie_host(iq,k,i,j) = field_ptr[iter];
+          }
+        }
+      }
+    }
+    Kokkos::deep_copy(qb_ie_exec, qb_ie_host);
+  }
+}
+
+void Region::push_q_buffer (F90Ptr&  field_ptr)
+{
+  int iter=0;
+  int num_tracers = get_control().qsize;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> qb_ie_exec = Kokkos::subview(m_q_buffer, ie, ALL, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qb_ie_host = Kokkos::create_mirror_view(qb_ie_exec);
+    Kokkos::deep_copy(qb_ie_host, qb_ie_exec);
+    for (int iq=0; iq<num_tracers; ++iq)
+    {
+      for (int k=0; k<NUM_LEV; ++k)
+      {
+        for (int j=0; j<NP; ++j)
+        {
+          for (int i=0; i<NP; ++i, ++iter)
+          {
+            field_ptr[iter] = qb_ie_host(iq,k,i,j);
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::pull_eta_dot_dpdn (CF90Ptr& field_ptr)
+{
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]> eta_dot_dpdn_ie_exec = Kokkos::subview(m_eta_dot_dpdn, ie, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]>::HostMirror eta_dot_dpdn_ie_host = Kokkos::create_mirror_view(eta_dot_dpdn_ie_exec);
+
+    for (int k=0; k<NUM_LEV; ++k)
+    {
+      for (int j=0; j<NP; ++j)
+      {
+        for (int i=0; i<NP; ++i, ++iter)
+        {
+          eta_dot_dpdn_ie_host(k,i,j) = field_ptr[iter];
+        }
+      }
+    }
+    Kokkos::deep_copy(eta_dot_dpdn_ie_exec, eta_dot_dpdn_ie_host);
+  }
+}
+
+void Region::push_eta_dot_dpdn (F90Ptr&  field_ptr)
+{
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]> eta_dot_dpdn_ie_exec = Kokkos::subview(m_eta_dot_dpdn, ie, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]>::HostMirror eta_dot_dpdn_ie_host = Kokkos::create_mirror_view(eta_dot_dpdn_ie_exec);
+
+    Kokkos::deep_copy(eta_dot_dpdn_ie_host, eta_dot_dpdn_ie_exec);
+    for (int k=0; k<NUM_LEV; ++k)
+    {
+      for (int j=0; j<NP; ++j)
+      {
+        for (int i=0; i<NP; ++i, ++iter)
+        {
+          field_ptr[iter] = eta_dot_dpdn_ie_host(k,i,j);
+        }
+      }
+    }
+  }
+}
+
 void Region::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
                                     CF90Ptr& derived_phi, CF90Ptr& derived_pecnd,
                                     CF90Ptr& derived_omega_p, CF90Ptr& derived_v,

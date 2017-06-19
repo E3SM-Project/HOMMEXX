@@ -17,7 +17,6 @@ struct EulerStepFunctor
 
   static constexpr int USTAR = 0;
   static constexpr int VSTAR = 1;
-  static constexpr int QTENS = 2;
 
   struct KernelVariables
   {
@@ -26,7 +25,7 @@ struct EulerStepFunctor
           scalar_buf(allocate_thread<Real, Real[NP][NP]>()),
           vector_buf_1(allocate_thread<Real, Real[2][NP][NP]>()),
           vector_buf_2(allocate_thread<Real, Real[2][NP][NP]>()),
-          ie(team.league_rank()), ilev(-1)
+          ie(team.league_rank()), ilev(-1), iq(-1)
     {
       // Nothing else to be done here
     }
@@ -40,7 +39,7 @@ struct EulerStepFunctor
 
     KOKKOS_INLINE_FUNCTION
     static size_t shmem_size(int team_size) {
-      // One scalar buffer and two vector buffer
+      // One scalar buffer and two vector buffers
       size_t mem_size = (sizeof(Real[NP][NP]) + 2*sizeof(Real[2][NP][NP])) * team_size;
       return mem_size;
     }
@@ -52,7 +51,7 @@ struct EulerStepFunctor
     int ie, ilev, iq;
   };
 
-  EulerStepFunctor (Control& data)
+  EulerStepFunctor (const Control& data)
    : m_data    (data)
    , m_region  (get_region())
    , m_deriv   (get_derivative())
@@ -66,11 +65,11 @@ struct EulerStepFunctor
     KernelVariables kv(team);
 
     Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team,NUM_LEV*QSIZE_D),
+      Kokkos::TeamThreadRange(kv.team,NUM_LEV*m_data.qsize),
       [&] (const int lev_q)
       {
-        kv.ilev = lev_q / NUM_LEV;
-        kv.iq   = lev_q % NUM_LEV;
+        kv.iq   = lev_q / NUM_LEV;
+        kv.ilev = lev_q % NUM_LEV;
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (kv.team, NP*NP),
@@ -79,8 +78,8 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            kv.vector_buf_1(0,igp,jgp) = m_region.get_3d_buffer(kv.ie,USTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,kv.iq,m_data.qn0,kv.ilev,igp,jgp);
-            kv.vector_buf_1(1,igp,jgp) = m_region.get_3d_buffer(kv.ie,VSTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,kv.iq,m_data.qn0,kv.ilev,igp,jgp);
+            kv.vector_buf_1(0,igp,jgp) = m_region.get_3d_buffer(kv.ie,USTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp);
+            kv.vector_buf_1(1,igp,jgp) = m_region.get_3d_buffer(kv.ie,VSTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp);
           }
         );
 
@@ -95,7 +94,7 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            m_region.get_3d_buffer(kv.ie,QTENS,kv.ilev,igp,jgp) = m_region.QDP(kv.ie,kv.iq,m_data.qn0,kv.ilev,igp,jgp) - m_data.dt*kv.scalar_buf(igp,jgp);
+            m_region.get_q_buffer(kv.ie,kv.iq,kv.ilev,igp,jgp) = m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp) - m_data.dt*kv.scalar_buf(igp,jgp);
           }
         );
       }
