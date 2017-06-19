@@ -66,6 +66,7 @@ private:
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::Impl::ALL_t();
 
   ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> m_3d_buffers;
+  ExecViewManaged<Real * [QSIZE_D][NUM_LEV][NP][NP]> m_q_buffer;
 
 public:
 
@@ -78,6 +79,23 @@ public:
                 CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis);
 
   void random_init(int num_elems, std::mt19937_64 &engine);
+
+  template<int IDX>
+  void pull_4d_buffer (CF90Ptr& field_ptr);
+  template<int IDX>
+  void push_4d_buffer (F90Ptr&  field_ptr);
+
+  template<int IDX>
+  void pull_3d_buffer (CF90Ptr& field_ptr);
+  template<int IDX>
+  void push_3d_buffer (F90Ptr&  field_ptr);
+
+  void pull_qdp (CF90Ptr& field_ptr);
+  void push_qdp (F90Ptr&  field_ptr);
+  void pull_eta_dot_dpdn (CF90Ptr& field_ptr);
+  void push_eta_dot_dpdn (F90Ptr&  field_ptr);
+  void pull_q_buffer (CF90Ptr& field_ptr);
+  void push_q_buffer (F90Ptr&  field_ptr);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
@@ -282,9 +300,125 @@ public:
   Real & get_3d_buffer (const int ie, const int ibuff, const int ilev, const int igp, const int jgp) const {
     return m_3d_buffers (ie, ibuff, ilev, igp, jgp);
   }
+
+  KOKKOS_INLINE_FUNCTION
+  Real & get_q_buffer (const int ie, const int iq, const int ilev, const int igp, const int jgp) const {
+    return m_q_buffer (ie, iq, ilev, igp, jgp);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[NP][NP]> get_q_buffer (const int ie, const int iq, const int ilev) const {
+    return Kokkos::subview(m_q_buffer, ie, iq, ilev, ALL, ALL);
+  }
 };
 
 Region& get_region();
+
+template<int IDX>
+void Region::pull_4d_buffer (CF90Ptr& field_ptr)
+{
+  static_assert (IDX>=0 && IDX<static_cast<int>(NUM_4D_SCALARS), "Error! 4D scalar index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    for (int it=0; it<NUM_TIME_LEVELS; ++it)
+    {
+      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> s_ie_it_exec = Kokkos::subview(m_4d_scalars, ie, it, IDX, ALL, ALL, ALL);
+      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]>::HostMirror s_ie_it_host = Kokkos::create_mirror_view(s_ie_it_exec);
+
+      for (int k=0; k<NUM_LEV; ++k)
+      {
+        for (int j=0; j<NP; ++j)
+        {
+          for (int i=0; i<NP; ++i, ++iter)
+          {
+            s_ie_it_host(k,i,j) = field_ptr[iter];
+          }
+        }
+      }
+      Kokkos::deep_copy(s_ie_it_exec, s_ie_it_host);
+    }
+  }
+}
+
+template<int IDX>
+void Region::push_4d_buffer (F90Ptr&  field_ptr)
+{
+  static_assert (IDX>=0 && IDX<static_cast<int>(NUM_4D_SCALARS), "Error! 4D scalar index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    for (int it=0; it<NUM_TIME_LEVELS; ++it)
+    {
+      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> s_ie_it_exec = Kokkos::subview(m_4d_scalars, ie, it, IDX, ALL, ALL, ALL);
+      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]>::HostMirror s_ie_it_host = Kokkos::create_mirror_view(s_ie_it_exec);
+      Kokkos::deep_copy(s_ie_it_host, s_ie_it_exec);
+
+      for (int k=0; k<NUM_LEV; ++k)
+      {
+        for (int j=0; j<NP; ++j)
+        {
+          for (int i=0; i<NP; ++i, ++iter)
+          {
+            field_ptr[iter] = s_ie_it_host(k,i,j);
+          }
+        }
+      }
+    }
+  }
+}
+
+template<int IDX>
+void Region::pull_3d_buffer (CF90Ptr& field_ptr)
+{
+  static_assert (IDX>=0 && IDX<static_cast<int>(NUM_3D_SCALARS), "Error! 3D scalar index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> s_ie_exec = Kokkos::subview(m_3d_buffers, ie, IDX, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]>::HostMirror s_ie_host = Kokkos::create_mirror_view(s_ie_exec);
+
+    for (int k=0; k<NUM_LEV; ++k)
+    {
+      for (int j=0; j<NP; ++j)
+      {
+        for (int i=0; i<NP; ++i, ++iter)
+        {
+          s_ie_host(k,i,j) = field_ptr[iter];
+        }
+      }
+    }
+    Kokkos::deep_copy(s_ie_exec, s_ie_host);
+  }
+}
+
+template<int IDX>
+void Region::push_3d_buffer (F90Ptr&  field_ptr)
+{
+  static_assert (IDX>=0 && IDX<static_cast<int>(NUM_3D_BUFFERS), "Error! 3D buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> b_ie_exec = Kokkos::subview(m_3d_buffers, ie, IDX, ALL, ALL, ALL);
+    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]>::HostMirror b_ie_host = Kokkos::create_mirror_view(b_ie_exec);
+
+    Kokkos::deep_copy(b_ie_host, b_ie_exec);
+    for (int k=0; k<NUM_LEV; ++k)
+    {
+      for (int j=0; j<NP; ++j)
+      {
+        for (int i=0; i<NP; ++i, ++iter)
+        {
+          field_ptr[iter] = b_ie_host(k,i,j);
+        }
+      }
+    }
+  }
+}
 
 } // Homme
 
