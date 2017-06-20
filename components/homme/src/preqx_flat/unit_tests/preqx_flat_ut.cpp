@@ -33,14 +33,18 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   return std::fabs(target - computed) / denom;
 }
 
-template <typename Results_T>
-class compute_subfunctor_test {
+template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
-  using SubFunctor_T = void (CaarFunctor::*)(CaarFunctor::KernelVariables &);
-
-  compute_subfunctor_test(int num_elems, rngAlg &engine, SubFunctor_T subfunctor)
-      : results("Kokkos results", num_elems), functor(),
-        energy_grad("Energy gradient", num_elems) {
+  compute_subfunctor_test(int num_elems, rngAlg &engine)
+      : vector_results_1("Vector 1 output", num_elems),
+        vector_results_2("Vector 2 output", num_elems),
+        scalar_results_1("Scalar 1 output", num_elems),
+        scalar_results_2("Scalar 2 output", num_elems),
+        vector_output_1(Kokkos::create_mirror_view(vector_results_1)),
+        vector_output_2(Kokkos::create_mirror_view(vector_results_2)),
+        scalar_output_1(Kokkos::create_mirror_view(scalar_results_1)),
+        scalar_output_2(Kokkos::create_mirror_view(scalar_results_2)),
+        functor() {
     using udi_type = std::uniform_int_distribution<int>;
 
     nets = 1;
@@ -54,39 +58,57 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(TeamMember team) const {
     CaarFunctor::KernelVariables kv(team);
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NUM_LEV),
-                         [&](const int &level) {
-                           kv.ilev = level;
-                           for (int dim = 0; dim < 2; ++dim) {
-                             for (int igp = 0; igp < NP; ++igp) {
-                               for (int jgp = 0; jgp < NP; ++jgp) {
-                                 kv.vector_buf_2(dim, igp, jgp) = 0.0;
-                               }
-                             }
-                           }
-                           functor.compute_energy_grad(kv);
-                           for (int dim = 0; dim < 2; ++dim) {
-                             for (int igp = 0; igp < NP; ++igp) {
-                               for (int jgp = 0; jgp < NP; ++jgp) {
-                                 energy_grad(kv.ie, kv.ilev, dim, igp, jgp) =
-                                     kv.vector_buf_2(dim, igp, jgp);
-                               }
-                             }
-                           }
-                         });
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(team, NUM_LEV), [&](const int &level) {
+          kv.ilev = level;
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              for (int dim = 0; dim < 2; ++dim) {
+                kv.vector_buf_1(dim, igp, jgp) = 0.0;
+                kv.vector_buf_2(dim, igp, jgp) = 0.0;
+              }
+              kv.scalar_buf_1(igp, jgp) = 0.0;
+              kv.scalar_buf_2(igp, jgp) = 0.0;
+            }
+          }
+          TestFunctor_T::test_functor(functor, kv);
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              for (int dim = 0; dim < 2; ++dim) {
+                vector_output_1(kv.ie, kv.ilev, dim, igp, jgp) =
+                    kv.vector_buf_1(dim, igp, jgp);
+                vector_output_2(kv.ie, kv.ilev, dim, igp, jgp) =
+                    kv.vector_buf_2(dim, igp, jgp);
+              }
+              scalar_output_1(kv.ie, kv.ilev, igp, jgp) =
+                  kv.scalar_buf_1(igp, jgp);
+              scalar_output_2(kv.ie, kv.ilev, igp, jgp) =
+                  kv.scalar_buf_2(igp, jgp);
+            }
+          }
+        });
   }
 
   void run_functor() const {
     Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 1, 1);
     Kokkos::parallel_for(policy, *this);
-    Kokkos::deep_copy(results, energy_grad);
+    Kokkos::deep_copy(vector_output_1, vector_results_1);
+    Kokkos::deep_copy(vector_output_2, vector_results_2);
+    Kokkos::deep_copy(scalar_output_1, scalar_results_1);
+    Kokkos::deep_copy(scalar_output_2, scalar_results_2);
   }
 
-  ExecViewManaged<Results_T>::HostMirror results;
+  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]> vector_results_1;
+  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]> vector_results_2;
+  ExecViewManaged<Real * [NUM_LEV][NP][NP]> scalar_results_1;
+  ExecViewManaged<Real * [NUM_LEV][NP][NP]> scalar_results_2;
+
+  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror vector_output_1;
+  ExecViewManaged<Real * [NUM_LEV][2][NP][NP]>::HostMirror vector_output_2;
+  ExecViewManaged<Real * [NUM_LEV][NP][NP]>::HostMirror scalar_output_1;
+  ExecViewManaged<Real * [NUM_LEV][NP][NP]>::HostMirror scalar_output_2;
 
   CaarFunctor functor;
-
-  ExecViewManaged<Results_T> energy_grad;
 
   static constexpr const int nm1 = 0;
   static constexpr const int n0 = 1;
@@ -138,7 +160,16 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       reinterpret_cast<Real *>(derived_v), reinterpret_cast<Real *>(eta_dpdn),
       reinterpret_cast<Real *>(qdp));
 
-  compute_energy_grad_test test_functor(num_elems, engine);
+  class compute_energy_grad_test {
+  public:
+    KOKKOS_INLINE_FUNCTION
+    static void test_functor(const CaarFunctor &functor,
+                             CaarFunctor::KernelVariables &kv) {
+      functor.compute_energy_grad(kv);
+    }
+  };
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems,
+                                                                 engine);
 
   test_functor.run_functor();
 
@@ -158,7 +189,8 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         vtemp[dim][igp][jgp],
-                        test_functor.results(ie, level, dim, jgp, igp), 4.0));
+                        test_functor.vector_output_2(ie, level, dim, jgp, igp),
+                        4.0));
           }
         }
       }
