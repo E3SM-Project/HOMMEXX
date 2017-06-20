@@ -61,7 +61,6 @@ struct CaarFunctor {
     ExecViewUnmanaged<Real[2][NP][NP]> vector_buf_1;
     ExecViewUnmanaged<Real[2][NP][NP]> vector_buf_2;
     int ie, ilev;
-    Real temp[2];
   }; // KernelVariables
 
   KOKKOS_INLINE_FUNCTION
@@ -480,7 +479,7 @@ struct CaarFunctor {
                              grad_tmp(1, igp, jgp);
 
           // vgrad_t + kappa * T_v * omega_p
-          Real &ttens = kv.temp[0];
+          Real ttens;
           ttens = -vgrad_t +
                   PhysicalConstants::kappa *
                       m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) *
