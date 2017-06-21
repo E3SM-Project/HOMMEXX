@@ -1272,10 +1272,11 @@ end do
        end do
     end do
     ! convert covarient to latlon
-    do j=1,np
-       do i=1,np
-          ds(i,j,1)=Dinv(i,j,1,1)*v1(i,j) + Dinv(i,j,2,1)*v2(i,j)
-          ds(i,j,2)=Dinv(i,j,1,2)*v1(i,j) + Dinv(i,j,2,2)*v2(i,j)
+    do l=1,2
+       do j=1,np
+          do i=1,np
+             ds(i,j,l)=Dinv(i,j,1,l)*v1(i,j) + Dinv(i,j,2,l)*v2(i,j)
+          enddo
        enddo
     enddo
 
@@ -1920,15 +1921,18 @@ end do
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
     allocate(elem%rmetdet(np, np))
 #endif
     elem%D = d
     elem%rmetdet = rmetdet
+    elem%metdet = 1.0 / rmetdet
 
     vort = vorticity_sphere(v, deriv, elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
+    deallocate(elem%metdet)
     deallocate(elem%rmetdet)
 #endif
   end subroutine vorticity_sphere_c_callable
@@ -2721,3 +2725,4 @@ end do
 
 
 end module derivative_mod_base
+                                                                                                     

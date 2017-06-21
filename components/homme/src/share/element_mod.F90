@@ -955,6 +955,7 @@ contains
     allocate( elem_rmp                 (np,np, nelemd)           )
     allocate( elem_spheremp            (np,np, nelemd)           )
     allocate( elem_rspheremp           (np,np, nelemd)          )
+    allocate( elem_spherep             (np,np, nelemd)          )
     allocate( elem_fcor                (np,np, nelemd)          )
     do ie = 1 , nelemd
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
@@ -968,6 +969,7 @@ contains
       elem(ie)%rmp                    => elem_rmp(:,:,ie)
       elem(ie)%spheremp               => elem_spheremp(:,:,ie)
       elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
+      elem(ie)%spherep                => elem_spherep(:,:,ie)
       elem(ie)%fcor                   => elem_fcor(:,:,ie)
     enddo
 #endif

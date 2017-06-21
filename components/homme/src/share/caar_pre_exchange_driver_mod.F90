@@ -138,6 +138,59 @@ contains
 
   end subroutine caar_pre_exchange_monolithic
 
+  ! An interface to enable access from C/C++
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd_ptr, phi_ptr, v_ptr, vtemp) bind(c)
+    use iso_c_binding, only : c_int, c_ptr, c_f_pointer
+    use kinds, only : real_kind
+    use element_mod, only : timelevels
+    use dimensions_mod, only : np, nlev
+    use derivative_mod, only : derivative_t
+    type (c_ptr), intent(in) :: pecnd_ptr, phi_ptr, v_ptr
+    real (kind=real_kind), intent(in) :: Dinv(np,np,2,2)
+    real (kind=real_kind), intent(in) :: dvv(np,np)
+    real (kind=real_kind), intent(out) :: vtemp(np,np,2)
+
+    real (kind=real_kind), pointer :: pecnd(:,:) ! (np,np)
+    real (kind=real_kind), pointer :: phi(:,:) ! (np,np)
+    real (kind=real_kind), pointer :: v(:,:,:) ! (np,np,2)
+
+    type (derivative_t) :: deriv
+
+    call c_f_pointer(pecnd_ptr, pecnd, [np,np])
+    call c_f_pointer(phi_ptr, phi, [np,np])
+    call c_f_pointer(v_ptr, v, [np,np,2])
+
+    deriv%dvv = dvv
+
+    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+  end subroutine caar_compute_energy_grad_c_int
+
+  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
+    use derivative_mod, only : derivative_t, gradient_sphere
+    use physical_constants, only : Rgas
+    type (derivative_t), intent(in) :: deriv
+    real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np,np,2,2)
+    real (kind=real_kind), intent(in) :: pecnd(:,:) ! (np,np)
+    real (kind=real_kind), intent(in) :: phi(:,:) ! (np,np)
+    real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
+    real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
+
+    integer :: h, i, j
+    real (kind=real_kind), dimension(np,np) :: Ephi, gpterm
+    real (kind=real_kind) :: v1, v2, E
+    do j = 1, np
+      do i = 1, np
+        v1 = v(i, j, 1)
+        v2 = v(i, j, 2)
+        E = 0.5D0 * (v1 * v1 + v2 * v2)
+        Ephi(i, j)=E + (phi(i, j) + pecnd(i, j))
+      end do
+    end do
+    vtemp = gradient_sphere(Ephi, deriv, Dinv)
+  end subroutine caar_compute_energy_grad
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -190,7 +243,6 @@ contains
     real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !
     real (kind=real_kind), dimension(np,np,2     ):: v         !
     real (kind=real_kind), dimension(np,np)      :: vgrad_T    ! v.grad(T)
-    real (kind=real_kind), dimension(np,np)      :: Ephi       ! kinetic energy + PHI term
     real (kind=real_kind), dimension(np,np,2)      :: grad_ps    ! lat-lon coord version
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p- p_met)
@@ -215,7 +267,7 @@ contains
 
     real (kind=real_kind) ::  cp2,cp_ratio,E,de,Qt,v1,v2
     real (kind=real_kind) ::  glnps1,glnps2,gpterm
-    integer :: i,j,k,kptr,ie
+    integer :: h,i,j,k,kptr,ie
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
 
     do ie=nets,nete
@@ -446,17 +498,9 @@ contains
       ! ==============================================
 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,j,v1,v2,E,Ephi,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
+!$omp parallel do private(k,i,j,v1,v2,E,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
 #endif
       vertloop: do k=1,nlev
-         do j=1,np
-            do i=1,np
-               v1     = elem(ie)%state%v(i,j,1,k,n0)
-               v2     = elem(ie)%state%v(i,j,2,k,n0)
-               E = 0.5D0*( v1*v1 + v2*v2 )
-               Ephi(i,j)=E+(phi(i,j,k)+elem(ie)%derived%pecnd(i,j,k))
-            end do
-         end do
          ! ================================================
          ! compute gradp term (ps/p)*(dp/dps)*T
          ! ================================================
@@ -469,7 +513,8 @@ contains
             end do
          end do
          ! vtemp = grad ( E + PHI )
-         vtemp = gradient_sphere(Ephi(:,:),deriv,elem(ie)%Dinv)
+         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
+
          do j=1,np
             do i=1,np
   !             gpterm = hvcoord%hybm(k)*T_v(i,j,k)/p(i,j,k)

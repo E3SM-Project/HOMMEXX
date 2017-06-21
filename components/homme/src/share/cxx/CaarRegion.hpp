@@ -55,7 +55,7 @@ private:
   /* Contains D, DINV */
   ExecViewManaged<Real * [NUM_2D_TENSORS][2][2][NP][NP]> m_2d_tensors;
   /* Contains OMEGA_P, PECND, PHI, DERIVED_UN0, DERIVED_VN0, QDP, ETA_DPDN */
-  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]>     m_3d_scalars;
+  ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]> m_3d_scalars;
   /* Contains U, V, T, DP3D */
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]> m_4d_scalars;
 
@@ -76,6 +76,8 @@ public:
   void init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                 CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis);
 
+  void random_init(int num_elems, std::mt19937_64 &engine);
+
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
                               CF90Ptr& derived_phi, CF90Ptr& derived_pecnd,
@@ -87,6 +89,9 @@ public:
                             F90Ptr& derived_phi, F90Ptr& derived_pecnd,
                             F90Ptr& derived_omega_p, F90Ptr& derived_v,
                             F90Ptr& derived_eta_dot_dpdn, F90Ptr& state_Qdp) const;
+
+  void d(Real *d_ptr, int ie);
+  void dinv(Real *dinv_ptr, int ie);
 
   // v is the tracer we're working with, 0 <= v < QSIZE_D
   // qn0 is the timelevel, 0 <= qn0 < Q_NUM_TIME_LEVELS
@@ -272,6 +277,7 @@ public:
   }
 };
 
+// TODO: DON'T USE SINGLETONS
 CaarRegion& get_region();
 
 } // Homme

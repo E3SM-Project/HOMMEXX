@@ -4,6 +4,8 @@
 #include "BasicKernels.hpp"
 #include "PhysicalConstants.hpp"
 
+#include <random>
+
 namespace Homme
 {
 
@@ -35,6 +37,41 @@ void Derivative::init (CF90Ptr& dvv_ptr, CF90Ptr& integration_mat_ptr, CF90Ptr& 
   Kokkos::deep_copy (m_dvv_exec,           dvv_host);
   Kokkos::deep_copy (m_integ_mat_exec,     integ_mat_host);
   Kokkos::deep_copy (m_bd_interp_mat_exec, bd_interp_mat_host);
+}
+
+void Derivative::random_init(std::mt19937_64 &engine) {
+  std::uniform_real_distribution<Real> random_dist(16.0, 8192.0);
+  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host = Kokkos::create_mirror_view(m_dvv_exec);
+  for(int igp = 0; igp < NP; ++igp) {
+    for(int jgp = 0; jgp < NP; ++jgp) {
+      dvv_host(igp, jgp) = random_dist(engine);
+    }
+  }
+  Kokkos::deep_copy(m_dvv_exec, dvv_host);
+
+  ExecViewManaged<Real[NC][NP]>::HostMirror integ_mat_host = Kokkos::create_mirror_view(m_integ_mat_exec);
+  ExecViewManaged<Real[2][NC][NP]>::HostMirror bd_interp_mat_host = Kokkos::create_mirror_view(m_bd_interp_mat_exec);
+  for(int igp = 0; igp < NC; ++igp) {
+    for(int jgp = 0; jgp < NP; ++jgp) {
+      integ_mat_host(igp, jgp) = random_dist(engine);
+      for(int dim = 0; dim < 2; ++dim) {
+        bd_interp_mat_host(dim, igp, jgp) = random_dist(engine);
+      }
+    }
+  }
+  Kokkos::deep_copy(m_integ_mat_exec, integ_mat_host);
+  Kokkos::deep_copy(m_bd_interp_mat_exec, bd_interp_mat_host);
+}
+
+void Derivative::dvv(Real *dvv_ptr) {
+  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_cxx = Kokkos::create_mirror_view(m_dvv_exec),
+    dvv_wrapper(dvv_ptr);
+  Kokkos::deep_copy(dvv_cxx, m_dvv_exec);
+  for(int igp = 0; igp < NP; ++igp) {
+    for(int jgp = 0; jgp < NP; ++jgp) {
+      dvv_wrapper(jgp, igp) = dvv_cxx(igp, jgp);
+    }
+  }
 }
 
 void subcell_div_fluxes (const Kokkos::TeamPolicy<ExecSpace>::member_type& team_member,
