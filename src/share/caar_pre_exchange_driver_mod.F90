@@ -139,29 +139,26 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd_ptr, phi_ptr, v_ptr, vtemp) bind(c)
     use iso_c_binding, only : c_int, c_ptr, c_f_pointer
     use kinds, only : real_kind
     use element_mod, only : timelevels
     use dimensions_mod, only : np, nlev
     use derivative_mod, only : derivative_t
-    type (c_ptr), intent(in) :: dvv_ptr, Dinv_ptr, pecnd_ptr, phi_ptr, v_ptr, vtemp_ptr
+    type (c_ptr), intent(in) :: pecnd_ptr, phi_ptr, v_ptr
+    real (kind=real_kind), intent(in) :: Dinv(np,np,2,2)
+    real (kind=real_kind), intent(in) :: dvv(np,np)
+    real (kind=real_kind), intent(out) :: vtemp(np,np,2)
 
-    real (kind=real_kind), pointer :: Dinv(:,:,:,:) ! (np,np,2,2)
     real (kind=real_kind), pointer :: pecnd(:,:) ! (np,np)
     real (kind=real_kind), pointer :: phi(:,:) ! (np,np)
     real (kind=real_kind), pointer :: v(:,:,:) ! (np,np,2)
-    real (kind=real_kind), pointer :: vtemp(:,:,:) ! (np,np,2)
-    real (kind=real_kind), pointer :: dvv(:,:) ! (np,np)
 
     type (derivative_t) :: deriv
 
-    call c_f_pointer(dvv_ptr, dvv, [np,np])
-    call c_f_pointer(Dinv_ptr, Dinv, [np,np,2,2])
     call c_f_pointer(pecnd_ptr, pecnd, [np,np])
     call c_f_pointer(phi_ptr, phi, [np,np])
     call c_f_pointer(v_ptr, v, [np,np,2])
-    call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
 
     deriv%dvv = dvv
 
