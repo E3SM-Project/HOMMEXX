@@ -16,6 +16,10 @@ public:
   void init (CF90Ptr& dvv);
   void init (CF90Ptr& dvv, CF90Ptr& integration_matrix, CF90Ptr& boundary_interp_matrix);
 
+  void random_init(std::mt19937_64 &engine);
+
+  void dvv(Real *dvv);
+
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<const Real[NP][NP]> get_dvv () const { return m_dvv_exec; }
 
