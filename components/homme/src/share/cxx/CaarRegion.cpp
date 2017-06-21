@@ -1,6 +1,8 @@
 #include "CaarRegion.hpp"
 #include "Utility.hpp"
 
+#include <assert.h>
+
 #include <random>
 
 namespace Homme {
@@ -137,16 +139,16 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
                                     CF90Ptr& derived_omega_p, CF90Ptr& derived_v,
                                     CF90Ptr& derived_eta_dot_dpdn, CF90Ptr& state_Qdp)
 {
-  int k_eta_dot_dp_dn=0;
+
   ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
   ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  for (int ie=0; ie<m_num_elems; ++ie)
+  for (int ie=0, k_3d_scalars=0, k_3d_vectors=0, k_eta_dot_dp_dn=0; ie<m_num_elems; ++ie)
   {
     for (int ilev=0; ilev<NUM_LEV; ++ilev)
     {
       for (int jgp=0; jgp<NP; ++jgp)
       {
-        for (int igp=0, k_3d_scalars=0; igp<NP;
+        for (int igp=0; igp<NP;
              ++igp, ++k_3d_scalars, ++k_eta_dot_dp_dn)
         {
           h_3d_scalars(ie, static_cast<int>(IDX_OMEGA_P), ilev, igp, jgp) = derived_omega_p[k_3d_scalars];
@@ -160,7 +162,7 @@ void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90
       {
         for (int jgp=0; jgp<NP; ++jgp)
         {
-          for (int igp=0, k_3d_vectors=0; igp<NP; ++igp, ++k_3d_vectors)
+          for (int igp=0; igp<NP; ++igp, ++k_3d_vectors)
           {
             h_3d_scalars(ie, idim, ilev, igp, jgp) = derived_v[k_3d_vectors];
           }
@@ -356,7 +358,7 @@ void CaarRegion::d(Real *d_ptr, int ie) {
     for(int n = 0; n < 2; ++n) {
       for(int igp = 0; igp < NP; ++igp) {
         for(int jgp = 0; jgp < NP; ++jgp) {
-          d_wrapper(m, n, igp, jgp) = d_host(n, m, igp, jgp);
+          d_wrapper(m, n, jgp, igp) = d_host(n, m, igp, jgp);
         }
       }
     }

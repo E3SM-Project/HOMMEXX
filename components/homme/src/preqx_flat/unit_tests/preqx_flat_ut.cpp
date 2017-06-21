@@ -17,11 +17,10 @@ using rngAlg = std::mt19937_64;
 
 extern "C" {
 
-void caar_compute_energy_grad_c_int(Real((*const &dvv)[NP]), const Real *&Dinv,
-                                    Real((*const &pecnd)[NP]),
-                                    Real((*const &phi)[NP]),
-                                    Real((*const &velocity)[NP][NP]),
-                                    Real (*&vtemp)[NP][NP]);
+void caar_compute_energy_grad_c_int(const Real (&dvv)[NP][NP], Real *Dinv,
+                                    Real *const &pecnd, Real *const &phi,
+                                    Real *const &velocity,
+                                    Real (&vtemp)[2][NP][NP]);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -35,7 +34,7 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
 
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
-  compute_subfunctor_test(int num_elems, rngAlg &engine)
+  compute_subfunctor_test(int num_elems)
       : vector_results_1("Vector 1 output", num_elems),
         vector_results_2("Vector 2 output", num_elems),
         scalar_results_1("Scalar 1 output", num_elems),
@@ -44,15 +43,31 @@ public:
         vector_output_2(Kokkos::create_mirror_view(vector_results_2)),
         scalar_output_1(Kokkos::create_mirror_view(scalar_results_1)),
         scalar_output_2(Kokkos::create_mirror_view(scalar_results_2)),
-        functor() {
-    using udi_type = std::uniform_int_distribution<int>;
-
+        functor(), velocity("Velocity", num_elems),
+        temperature("Temperature", num_elems), dp3d("DP3D", num_elems),
+        phi("Phi", num_elems), pecnd("PE_CND", num_elems),
+        omega_p("Omega_P", num_elems), derived_v("Derived V?", num_elems),
+        eta_dpdn("Eta dot dp/deta", num_elems), qdp("QDP", num_elems),
+        dinv("DInv", num_elems) {
     nets = 1;
     nete = num_elems;
 
     Real hybrid_a[NUM_LEV_P] = {0};
     functor.m_data.init(0, num_elems, num_elems, nm1, n0, np1, qn0, ps0, dt2,
                         false, eta_ave_w, hybrid_a);
+
+    get_derivative().dvv(reinterpret_cast<Real *>(dvv));
+
+    get_region().push_to_f90_pointers(velocity.data(), temperature.data(),
+                                      dp3d.data(), phi.data(), pecnd.data(),
+                                      omega_p.data(), derived_v.data(),
+                                      eta_dpdn.data(), qdp.data());
+    for (int ie = 0; ie < num_elems; ++ie) {
+      get_region().dinv(Kokkos::subview(dinv, ie, Kokkos::ALL, Kokkos::ALL,
+                                        Kokkos::ALL, Kokkos::ALL)
+                            .data(),
+                        ie);
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -90,8 +105,9 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 1, 1);
+    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 16, 4);
     Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
     Kokkos::deep_copy(vector_output_1, vector_results_1);
     Kokkos::deep_copy(vector_output_2, vector_results_2);
     Kokkos::deep_copy(scalar_output_1, scalar_results_1);
@@ -110,6 +126,20 @@ public:
 
   CaarFunctor functor;
 
+  // Arrays used to pass data to and from Fortran
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][2][NP][NP]> velocity;
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> temperature;
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> dp3d;
+  HostViewManaged<Real * [NUM_LEV][NP][NP]> phi;
+  HostViewManaged<Real * [NUM_LEV][NP][NP]> pecnd;
+  HostViewManaged<Real * [NUM_LEV][NP][NP]> omega_p;
+  HostViewManaged<Real * [NUM_LEV][2][NP][NP]> derived_v;
+  HostViewManaged<Real * [NUM_LEV_P][NP][NP]> eta_dpdn;
+  HostViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp;
+  HostViewManaged<Real * [2][2][NP][NP]> dinv;
+
+  Real dvv[NP][NP];
+
   static constexpr const int nm1 = 0;
   static constexpr const int n0 = 1;
   static constexpr const int np1 = 2;
@@ -124,41 +154,16 @@ public:
 
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
-  constexpr const int num_elems = 1;
+  constexpr const int num_elems = 10;
 
   std::random_device rd;
   rngAlg engine(rd());
-
-  Real(*velocity)[NUM_TIME_LEVELS][NUM_LEV][2][NP][NP] =
-      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][2][NP][NP];
-  Real(*temperature)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
-      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
-  Real(*dp3d)[NUM_TIME_LEVELS][NUM_LEV][NP][NP] =
-      new Real[num_elems][NUM_TIME_LEVELS][NUM_LEV][NP][NP];
-  Real(*phi)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
-  Real(*pecnd)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
-  Real(*omega_p)[NUM_LEV][NP][NP] = new Real[num_elems][NUM_LEV][NP][NP];
-  Real(*derived_v)[NUM_LEV][2][NP][NP] =
-      new Real[num_elems][NUM_LEV][2][NP][NP];
-  Real(*eta_dpdn)[NUM_LEV_P][NP][NP] = new Real[num_elems][NUM_LEV_P][NP][NP];
-  Real(*qdp)[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP] =
-      new Real[num_elems][Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP];
-  Real(*dvv)[NP] = new Real[NP][NP];
-  Real(*vtemp)[NP][NP] = new Real[2][NP][NP];
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   CaarRegion &region = get_region();
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
-  get_derivative().dvv(reinterpret_cast<Real *>(dvv));
-
-  region.push_to_f90_pointers(
-      reinterpret_cast<Real *>(velocity), reinterpret_cast<Real *>(temperature),
-      reinterpret_cast<Real *>(dp3d), reinterpret_cast<Real *>(phi),
-      reinterpret_cast<Real *>(pecnd), reinterpret_cast<Real *>(omega_p),
-      reinterpret_cast<Real *>(derived_v), reinterpret_cast<Real *>(eta_dpdn),
-      reinterpret_cast<Real *>(qdp));
 
   class compute_energy_grad_test {
   public:
@@ -168,24 +173,36 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       functor.compute_energy_grad(kv);
     }
   };
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems,
-                                                                 engine);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems);
 
   test_functor.run_functor();
 
-  Real *dinv = reinterpret_cast<Real *>(new Real[2][2][NP][NP]);
-  const Real *const_dinv = dinv;
+  Real vtemp[2][NP][NP];
+
   for (int ie = 0; ie < num_elems; ++ie) {
-    region.dinv(dinv, ie);
     for (int level = 0; level < NUM_LEV; ++level) {
       Real(*const pressure)[NP] = reinterpret_cast<Real(*)[NP]>(
           region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data());
       caar_compute_energy_grad_c_int(
-          dvv, const_dinv, pecnd[ie][level], phi[ie][level],
-          velocity[ie][test_functor.n0][level], vtemp);
+          test_functor.dvv,
+          Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL)
+              .data(),
+          Kokkos::subview(test_functor.pecnd, ie, level, Kokkos::ALL,
+                          Kokkos::ALL)
+              .data(),
+          Kokkos::subview(test_functor.phi, ie, level, Kokkos::ALL, Kokkos::ALL)
+              .data(),
+          Kokkos::subview(test_functor.velocity, ie, test_functor.n0, level,
+                          Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
+              .data(),
+          vtemp);
       for (int dim = 0; dim < 2; ++dim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
+            REQUIRE(!std::isnan(vtemp[dim][igp][jgp]));
+            REQUIRE(!std::isnan(
+                test_functor.vector_output_2(ie, level, dim, jgp, igp)));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         vtemp[dim][igp][jgp],
@@ -196,15 +213,4 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       }
     }
   }
-  delete[] dinv;
-
-  delete[] temperature;
-  delete[] dp3d;
-  delete[] phi;
-  delete[] pecnd;
-  delete[] omega_p;
-  delete[] derived_v;
-  delete[] eta_dpdn;
-  delete[] qdp;
-  delete[] dvv;
 }
