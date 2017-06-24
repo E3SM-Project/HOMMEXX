@@ -1,0 +1,31 @@
+#!/bin/bash -f
+#SBATCH --job-name baro
+#SBATCH -p ec
+#SBATCH --time=00:20:00
+#SBATCH --nodes=4
+#SBATCH --output=sout%j
+#SBATCH --error=serr%j
+#SBATCH --account=FY150001
+
+source ~/.bash_profile
+
+dirXX=/ascldap/users/onguba/runhomme/bld-xx-testing/
+dirHomme=/ascldap/users/onguba/runhomme/bld-master-may18-baselines
+
+#RUNNING HOMME
+#run jw test with rsplit=3
+#mpiexec -n 64 ${dirHomme}/test_execs/baroC/baroC < input-baro-rsplit3-homme.nl > baro-r3-homme-out
+#run jw test with rsplit=0
+#mpiexec -n 64 ${dirHomme}/test_execs/baroC/baroC < input-baro-rsplit0-homme.nl > baro-r0-homme-out
+
+#COMPARING XX (already ran in submit-baro-compare-xx-execs.sh )
+#compare using homme cprnc since we already loaded homme modules
+mpiexec -n 1 ${dirHomme}/utils/cime/tools/cprnc/cprnc movies/homme-r3-jw_baroclinic1.nc movies/cxx-r3-jw_baroclinic1.nc &> compare-baro-homme-r3-file1
+mpiexec -n 1 ${dirHomme}/utils/cime/tools/cprnc/cprnc movies/homme-r3-jw_baroclinic2.nc movies/cxx-r3-jw_baroclinic2.nc &> compare-baro-homme-r3-file2
+
+mpiexec -n 1 ${dirHomme}/utils/cime/tools/cprnc/cprnc movies/homme-r0-jw_baroclinic1.nc movies/cxx-r0-jw_baroclinic1.nc &> compare-baro-homme-r0-file1
+mpiexec -n 1 ${dirHomme}/utils/cime/tools/cprnc/cprnc movies/homme-r0-jw_baroclinic2.nc movies/cxx-r0-jw_baroclinic2.nc &> compare-baro-homme-r0-file2
+
+
+
+

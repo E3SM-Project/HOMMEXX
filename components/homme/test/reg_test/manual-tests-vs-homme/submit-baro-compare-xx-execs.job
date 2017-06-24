@@ -1,0 +1,30 @@
+#!/bin/bash -f
+#SBATCH --job-name baro
+#SBATCH -p ec
+#SBATCH --time=00:60:00
+#SBATCH --nodes=4
+#SBATCH --output=sout%j
+#SBATCH --error=serr%j
+#SBATCH --account=FY150001
+
+source ~/tinman-modules.sh
+
+dirXX=/ascldap/users/onguba/runhomme/bld-xx-testing/
+
+#run jw test with rsplit=3
+mpiexec -n 64 ${dirXX}/test_execs/prtcA_flat_c/prtcA_flat_c < input-baro-rsplit3-c.nl > baro-r3-c-out
+mpiexec -n 64 ${dirXX}/test_execs/prtcA_flat/prtcA_flat < input-baro-rsplit3-f.nl > baro-r3-f-out
+#run with rsplit=0
+mpiexec -n 64 ${dirXX}/test_execs/prtcA_flat_c/prtcA_flat_c < input-baro-rsplit0-c.nl > baro-r0-c-out
+mpiexec -n 64 ${dirXX}/test_execs/prtcA_flat/prtcA_flat < input-baro-rsplit0-f.nl > baro-r0-f-out
+
+#compare
+mpiexec -n 1 ${dirXX}/utils/cprnc/cprnc movies/cxx-r3-jw_baroclinic1.nc movies/f-r3-jw_baroclinic1.nc &> compare-baro-c-f-r3-file1
+mpiexec -n 1 ${dirXX}/utils/cprnc/cprnc movies/cxx-r3-jw_baroclinic2.nc movies/f-r3-jw_baroclinic2.nc &> compare-baro-c-f-r3-file2
+
+mpiexec -n 1 ${dirXX}/utils/cprnc/cprnc movies/cxx-r0-jw_baroclinic1.nc movies/f-r0-jw_baroclinic1.nc &> compare-baro-c-f-r0-file1
+mpiexec -n 1 ${dirXX}/utils/cprnc/cprnc movies/cxx-r0-jw_baroclinic2.nc movies/f-r0-jw_baroclinic2.nc &> compare-baro-c-f-r0-file2
+
+
+
+
