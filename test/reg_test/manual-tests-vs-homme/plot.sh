@@ -13,9 +13,9 @@ export NCARG_ROOT=/projects/ccsm/ncl
 #plot xx-f r3
 /projects/ccsm/ncl/bin/ncl 'fnames="movies/f-r3-jw_baroclinic"' zeta.ncl
 #plot xx-c r0
-/projects/ccsm/ncl/bin/ncl 'fnames="movies/c-r0-jw_baroclinic"' zeta.ncl
+/projects/ccsm/ncl/bin/ncl 'fnames="movies/cxx-r0-jw_baroclinic"' zeta.ncl
 #plot xx-c r3
-/projects/ccsm/ncl/bin/ncl 'fnames="movies/c-r3-jw_baroclinic"' zeta.ncl
+/projects/ccsm/ncl/bin/ncl 'fnames="movies/cxx-r3-jw_baroclinic"' zeta.ncl
 
 
 
