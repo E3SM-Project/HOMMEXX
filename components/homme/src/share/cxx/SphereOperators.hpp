@@ -186,7 +186,7 @@ vorticity_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
 }
 
 
-//analog of fortran's laplace_wk_sphere
+//version of fortran's laplace_wk_sphere
 KOKKOS_INLINE_FUNCTION void
 laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                  const ExecViewUnmanaged<const Real[NP][NP]> field, //input
