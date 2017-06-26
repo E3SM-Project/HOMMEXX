@@ -3,8 +3,6 @@
 
 #include <assert.h>
 
-#include <random>
-
 namespace Homme {
 
 void CaarRegion::init(const int num_elems)
