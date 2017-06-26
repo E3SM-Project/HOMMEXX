@@ -10,7 +10,7 @@ namespace Homme {
 
 struct Control {
 
-  CaarControl ()
+  Control ()
   {
     const char* var = getenv("HOMMEXX_TEAM_SIZE");
     if (var!=0)
