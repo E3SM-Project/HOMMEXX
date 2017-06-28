@@ -257,6 +257,7 @@ ENDIF ()
 ##############################################################################
 OPTION(ENABLE_INTEL_PHI "Whether to build with Intel Xeon Phi (MIC) support" FALSE)
 IF (ENABLE_INTEL_PHI)
+  SET(AVX_VERSION "512")
   IF (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL Intel)
     MESSAGE(FATAL_ERROR "Intel Phi acceleration only supported through the Intel compiler")
   ELSE ()
@@ -282,9 +283,9 @@ ENDIF ()
 ##############################################################################
 # Allow the option to add compiler flags to those provided
 ##############################################################################
-SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${ADD_Fortran_FLAGS}")
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ADD_C_FLAGS}")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ADD_CXX_FLAGS}")
+SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${ADD_Fortran_FLAGS} -DAVX_VERSION=${AVX_VERSION}")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ADD_C_FLAGS} -DAVX_VERSION=${AVX_VERSION}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ADD_CXX_FLAGS} -DAVX_VERSION=${AVX_VERSION}")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ADD_LINKER_FLAGS}")
 
 ##############################################################################
