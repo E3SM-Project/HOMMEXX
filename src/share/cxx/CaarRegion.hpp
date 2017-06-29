@@ -17,33 +17,59 @@ namespace Homme {
 /* Per element data - specific velocity, temperature, pressure, etc. */
 class CaarRegion {
 public:
-  enum : int {
-    NUM_3D_BUFFERS = 4,
-  };
-
+  // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
+  // Differential geometry things
   ExecViewManaged<Real * [NP][NP]> m_spheremp;
   ExecViewManaged<Real * [NP][NP]> m_metdet;
+  // Prescrived surface geopotential height at eta = 1
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
+  // Differential geometry tensors
   ExecViewManaged<Real * [2][2][NP][NP]> m_d;
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
+  // Omega is the pressure vertical velocity
   ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_omega_p;
+  // ???
   ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_pecnd;
+  // Geopotential height field
   ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_phi;
+  // ???
   ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_derived_un0;
+  // ???
   ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_derived_vn0;
 
+  // Lateral Velocity
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
+  // Temperature
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
+  // ???
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
+  // q is the specific humidity
   ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
+  // eta is the vertical coordinate
+  // eta dot is the flux through the vertical level interface
+  //    (note there are NUM_LEV_P of them)
+  // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Real * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
-  ExecViewManaged<Real * [NUM_3D_BUFFERS][NP][NP][NUM_LEV]> m_3d_buffers;
+  struct BufferViews {
+    BufferViews() = default;
+    void init(const int num_elems);
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> pressure;
+    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> pressure_grad;
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> temperature_virt;
+    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> temperature_grad;
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> omega_p;
+    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> vdp;
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> div_vdp;
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> ephi;
+    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> energy_grad;
+    ExecViewManaged<Real * [NP][NP][NUM_LEV]> vorticity;
+  } buffers;
 
   CaarRegion() = default;
 

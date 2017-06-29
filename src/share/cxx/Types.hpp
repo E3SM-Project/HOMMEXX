@@ -4,6 +4,8 @@
 #include <Hommexx_config.h>
 #include <Kokkos_Core.hpp>
 
+#include "Dimensions.hpp"
+
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif
@@ -69,11 +71,21 @@ using ExecSpace = Kokkos::Serial;
 using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #else
 #error "No valid execution space choice"
-#endif
+#endif // HOMMEXX_EXEC_SPACE
 
 #endif // HOMMEXX_SPACE
 
-template<typename ExecSpace>
+#ifdef AVX_VERSION
+using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real>;
+#else
+using VectorTagType =
+    KokkosKernels::Batched::Experimental::SIMD<Real, VECTOR_SIZE>;
+#endif // AVX_VERSION
+
+using VectorType =
+    KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
+
+template <typename ExecSpace>
 int DefaultThreadsDistribution<ExecSpace>::Max_Threads_Per_Team;
 
 // The memory spaces

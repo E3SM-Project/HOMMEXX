@@ -20,18 +20,11 @@ struct CaarFunctor {
   const Derivative m_deriv;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
-  static constexpr int PRESSURE = 0;
-  static constexpr int OMEGA_P = 1;
-  static constexpr int T_V = 2;
-  static constexpr int DIV_VDP = 3;
 
   struct KernelVariables {
     KOKKOS_INLINE_FUNCTION
     KernelVariables(const TeamMember &team_in)
-        : team(team_in), scalar_buf_1(allocate_thread<Real, Real[NP][NP]>()),
-          scalar_buf_2(allocate_thread<Real, Real[NP][NP]>()),
-          vector_buf_1(allocate_thread<Real, Real[2][NP][NP]>()),
-          vector_buf_2(allocate_thread<Real, Real[2][NP][NP]>()),
+        : team(team_in), scratch_mem(allocate_thread<Real, Real[NP][NP]>()),
           ie(team.league_rank()), ilev(-1) {} //, igp(-1), jgp(-1) {}
 
     template <typename Primitive, typename Data>
@@ -48,18 +41,14 @@ struct CaarFunctor {
 
     KOKKOS_INLINE_FUNCTION
     static size_t shmem_size(int team_size) {
-      size_t mem_size =
-          (2 * sizeof(Real[2][NP][NP]) + 2 * sizeof(Real[NP][NP])) * team_size;
+      size_t mem_size = sizeof(Real[NP][NP]) * team_size;
       return mem_size;
     }
 
     const TeamMember &team;
 
     // Temporary buffers
-    ExecViewUnmanaged<Real[NP][NP]> scalar_buf_1;
-    ExecViewUnmanaged<Real[NP][NP]> scalar_buf_2;
-    ExecViewUnmanaged<Real[2][NP][NP]> vector_buf_1;
-    ExecViewUnmanaged<Real[2][NP][NP]> vector_buf_2;
+    ExecViewUnmanaged<Real[NP][NP]> scratch_mem;
     int ie, ilev;
   }; // KernelVariables
 
@@ -78,7 +67,6 @@ struct CaarFunctor {
   // Modifies Ephi_grad
   // Computes \nabla (E + phi) + \nabla (P) * Rgas * T_v / P
   KOKKOS_INLINE_FUNCTION void compute_energy_grad(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NP][NP]> Ephi = kv.scalar_buf_1;
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
@@ -86,17 +74,20 @@ struct CaarFunctor {
           // Kinetic energy + PHI (geopotential energy) +
           // PECND (potential energy?)
           Real k_energy =
-              0.5 * (m_region.U(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                         m_region.U(kv.ie, m_data.n0, kv.ilev, igp, jgp) +
-                     m_region.V(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                         m_region.V(kv.ie, m_data.n0, kv.ilev, igp, jgp));
-          Ephi(igp, jgp) = k_energy + m_region.PHI(kv.ie, kv.ilev, igp, jgp) +
-                           m_region.PECND(kv.ie, kv.ilev, igp, jgp);
+              0.5 * (m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+                         m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) +
+                     m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+                         m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev));
+          m_region.buffers.ephi(kv.ie, jgp, igp, kv.ilev) =
+              k_energy + m_region.m_phi(kv.ie, jgp, igp, kv.ilev) +
+              m_region.m_pecnd(kv.ie, jgp, igp, kv.ilev);
         });
 
-    gradient_sphere_update(kv.team, Ephi, m_deriv.get_dvv(),
-                           m_region.DINV(kv.ie), kv.vector_buf_1,
-                           kv.vector_buf_2);
+    gradient_sphere_update(kv.team, m_region.buffers.ephi, m_deriv.get_dvv(),
+                           Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
+                                           Kokkos::ALL, Kokkos::ALL,
+                                           Kokkos::ALL),
+                           m_region.buffers.energy_grad);
   }
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -117,31 +108,35 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
-        m_region.get_3d_buffer(kv.ie, PRESSURE, kv.ilev);
-
-    gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(), m_region.DINV(kv.ie),
-                    kv.vector_buf_1, kv.vector_buf_2);
+    gradient_sphere(kv.team, m_region.buffers.pressure, m_deriv.get_dvv(),
+                    Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
+                                    Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
+                    m_region.buffers.pressure_grad);
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP), [&](const int idx) {
           const int hgp = (idx / NP) / NP;
           const int igp = (idx / NP) % NP;
           const int jgp = idx % NP;
 
-          kv.vector_buf_2(hgp, igp, jgp) *=
+          m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev) *=
               PhysicalConstants::Rgas *
-              (m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) /
-               p_ilev(igp, jgp));
+              (m_region.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev) /
+               m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev));
         });
 
-    // kv.vector_buf_2 -> grad(E + phi) + R T_v grad(p) / p
     compute_energy_grad(kv);
 
-    const ExecViewUnmanaged<Real[NP][NP]> vort = kv.scalar_buf_2;
-    vorticity_sphere(kv.team, m_region.U(kv.ie, m_data.n0, kv.ilev),
-                     m_region.V(kv.ie, m_data.n0, kv.ilev), m_deriv.get_dvv(),
-                     m_region.METDET(kv.ie), m_region.D(kv.ie), kv.vector_buf_1,
-                     vort);
+    vorticity_sphere(
+        kv.team, Kokkos::subview(m_region.m_u, kv.ie, m_data.n0, Kokkos::ALL,
+                                 Kokkos::ALL, kv.ilev),
+        Kokkos::subview(m_region.m_v, kv.ie, m_data.n0, Kokkos::ALL,
+                        Kokkos::ALL, kv.ilev),
+        Kokkos::subview(m_region.m_metdet, kv.ie, Kokkos::ALL, Kokkos::ALL),
+        m_deriv.get_dvv(),
+        Kokkos::subview(m_region.m_d, kv.ie, Kokkos::ALL, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL),
+        Kokkos::subview(m_region.buffers.vorticity, kv.ie, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL));
 
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
@@ -149,31 +144,36 @@ struct CaarFunctor {
           const int jgp = idx % NP;
 
           // Recycle vort to contain (fcor+vort)
-          vort(igp, jgp) += m_region.FCOR(kv.ie, igp, jgp);
+          m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev) +=
+              m_region.m_fcor(kv.ie, igp, jgp);
 
-          kv.vector_buf_2(0, igp, jgp) *= -1;
-          kv.vector_buf_2(0, igp, jgp) +=
-              /* v_vadv(igp, jgp) + */ m_region.V(kv.ie, m_data.n0, kv.ilev,
-                                                  igp, jgp) *
-              vort(igp, jgp);
-          kv.vector_buf_2(1, igp, jgp) *= -1;
-          kv.vector_buf_2(1, igp, jgp) +=
-              /* v_vadv(igp, jgp) + */ -m_region.U(kv.ie, m_data.n0, kv.ilev,
-                                                   igp, jgp) *
-              vort(igp, jgp);
+          m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) *= -1;
+          m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) +=
+              /* v_vadv(igp, jgp) + */ m_region.m_v(kv.ie, m_data.n0, jgp, igp,
+                                                    kv.ilev) *
+              m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev);
+          m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) *= -1;
+          m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) +=
+              /* v_vadv(igp, jgp) + */ -m_region.m_u(kv.ie, m_data.n0, jgp, igp,
+                                                     kv.ilev) *
+              m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev);
 
-          kv.vector_buf_2(0, igp, jgp) *= m_data.dt2;
-          kv.vector_buf_2(0, igp, jgp) +=
-              m_region.U(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-          kv.vector_buf_2(1, igp, jgp) *= m_data.dt2;
-          kv.vector_buf_2(1, igp, jgp) +=
-              m_region.V(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
+          m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) *=
+              m_data.dt2;
+          m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) +=
+              m_region.m_u(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
+          m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) *=
+              m_data.dt2;
+          m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) +=
+              m_region.m_v(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
 
           // Velocity at np1 = spheremp * buffer
-          m_region.U(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
-              m_region.SPHEREMP(kv.ie, igp, jgp) * kv.vector_buf_2(0, igp, jgp);
-          m_region.V(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
-              m_region.SPHEREMP(kv.ie, igp, jgp) * kv.vector_buf_2(1, igp, jgp);
+          m_region.m_u(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
+              m_region.m_spheremp(kv.ie, jgp, igp) *
+              m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev);
+          m_region.m_v(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
+              m_region.m_spheremp(kv.ie, jgp, igp) *
+              m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev);
         });
   }
 
@@ -189,7 +189,8 @@ struct CaarFunctor {
                            // rsplit=0.
                            // m_region.ETA_DPDN += eta_ave_w*eta_dot_dpdn
 
-                           m_region.ETA_DPDN(kv.ie, kv.ilev, igp, jgp) = 0;
+                           m_region.m_eta_dot_dpdn(kv.ie, jgp, igp, kv.ilev) =
+                               0;
                          });
   }
 
@@ -197,52 +198,28 @@ struct CaarFunctor {
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
   void preq_hydrostatic(KernelVariables &kv) const {
-    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> pressure =
-        m_region.get_3d_buffer(kv.ie, PRESSURE);
-    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T_v =
-        m_region.get_3d_buffer(kv.ie, T_V);
-    const ExecViewUnmanaged<const Real[NP][NP]> phis = m_region.PHIS(kv.ie);
-    const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> dp_n0 =
-        m_region.DP3D(kv.ie, m_data.n0);
-
-    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> phi = m_region.PHI(kv.ie);
-
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int loop_idx) {
           const int igp = loop_idx / NP;
           const int jgp = loop_idx % NP;
-          kv.scalar_buf_1(igp, jgp) = 0.0;
-          for (int ilev = NUM_LEV - 1; ilev >= 0; --ilev) {
+          Real integration = 0.0;
+          for (kv.ilev = NUM_LEV - 1; kv.ilev >= 0; --kv.ilev) {
             // compute phi
-            phi(ilev, igp, jgp) =
-                phis(igp, jgp) + kv.scalar_buf_1(igp, jgp) +
-                PhysicalConstants::Rgas * T_v(ilev, igp, jgp) *
-                    (dp_n0(ilev, igp, jgp) * 0.5 / pressure(ilev, igp, jgp));
+            m_region.m_phi(kv.ie, jgp, igp, kv.ilev) =
+                m_region.m_phis(kv.ie, jgp, igp) + integration +
+                PhysicalConstants::Rgas *
+                    m_region.buffers.temperature_virt(kv.ie, jgp, igp,
+                                                      kv.ilev) *
+                    (m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+                     0.5 / m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev));
 
             // update phii
-            kv.scalar_buf_1(igp, jgp) +=
-                PhysicalConstants::Rgas * T_v(ilev, igp, jgp) * 2.0 *
-                (dp_n0(ilev, igp, jgp) * 0.5 / pressure(ilev, igp, jgp));
-            /*
-             *        kv.vector_buf_2(0, igp, jgp) =
-             *PhysicalConstants::Rgas /
-             *pressure(kv.ilev, igp, jgp);
-             *        kv.vector_buf_2(0, igp, jgp) *=
-             *T_v(kv.ilev, igp, jgp);
-             *        kv.vector_buf_2(0, igp, jgp) *=
-             *dp_n0(kv.ilev, igp, jgp);
-             *
-             *        phi(kv.ilev, igp, jgp) = phis(igp,
-             *jgp) +
-             *kv.scalar_buf_1(igp,
-             *jgp);
-             *        // FMA so no temporary register needed
-             *        phi(kv.ilev, igp, jgp) += 0.5 *
-             *kv.vector_buf_2(0, igp, jgp);
-             *
-             *        kv.scalar_buf_1(igp, jgp) +=
-             *kv.vector_buf_2(0, igp, jgp);
-             */
+            integration +=
+                PhysicalConstants::Rgas *
+                m_region.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev) *
+                2.0 *
+                (m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev) * 0.5 /
+                 m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev));
           }
         });
   }
@@ -252,65 +229,44 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void preq_omega_ps(KernelVariables &kv) const {
     // NOTE: we can't use a single TeamThreadRange loop,
-    // since
-    //       gradient_sphere requires a 'consistent'
-    // pressure,
-    //       meaning that we cannot update the different
-    // pressure
-    //       points within a level before the gradient is
+    // since gradient_sphere requires a 'consistent'
+    // pressure, meaning that we cannot update the different
+    // pressure points within a level before the gradient is
     // complete!
-    // Uses kv.scalar_buf_1 for intermediate computations
-    // registers
-    //      kv.scalar_buf_2 to store the intermediate
-    // integration
-    //      kv.vector_buf_1 to store the gradient
-    //      kv.vector_buf_2 for the gradient buffer
-    //
-    const ExecViewUnmanaged<Real[2][NP][NP]> grad_p = kv.vector_buf_1;
-    const ExecViewUnmanaged<Real[NP][NP]> integral = kv.scalar_buf_2;
+    Real integration;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
                            const int igp = loop_idx / NP;
                            const int jgp = loop_idx % NP;
-                           integral(igp, jgp) = 0.0;
+                           integration = 0.0;
                          });
-    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      ExecViewUnmanaged<const Real[NP][NP]> p_ilev =
-          m_region.get_3d_buffer(kv.ie, PRESSURE, ilev);
-
-      gradient_sphere(kv.team, p_ilev, m_deriv.get_dvv(), m_region.DINV(kv.ie),
-                      kv.vector_buf_2, grad_p);
+    for (kv.ilev = 0; kv.ilev < NUM_LEV; ++kv.ilev) {
+      gradient_sphere(kv.team, m_region.buffers.pressure, m_deriv.get_dvv(),
+                      Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
+                      m_region.buffers.pressure_grad);
 
       Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int loop_idx) {
             const int igp = loop_idx / NP;
             const int jgp = loop_idx % NP;
-            Real vgrad_p = m_region.U(kv.ie, m_data.n0, ilev, igp, jgp) *
-                               grad_p(0, igp, jgp) +
-                           m_region.V(kv.ie, m_data.n0, ilev, igp, jgp) *
-                               grad_p(1, igp, jgp);
-            /*
-             *vgrad_p += m_region.V(ie, m_data.n0, ilev,
-             *igp,
-             *jgp) *
-             *           grad_p(1, igp, jgp);
-             *vgrad_p -= integral(igp, jgp);
-             *vgrad_p += -0.5 * m_scratch.div_vdp(ie, ilev,
-             *igp,
-             *jgp);
-             */
+            Real vgrad_p =
+                m_region.m_u(kv.ie, m_data.n0, kv.ilev, jgp, igp) *
+                    m_region.buffers.pressure_grad(kv.ie, 0, jgp, igp,
+                                                   kv.ilev) +
+                m_region.m_v(kv.ie, m_data.n0, kv.ilev, jgp, igp) *
+                    m_region.buffers.pressure_grad(kv.ie, 1, jgp, igp, kv.ilev);
 
-            m_region.get_3d_buffer(kv.ie, OMEGA_P, ilev, igp, jgp) =
-                vgrad_p / p_ilev(igp, jgp);
+            m_region.buffers.omega_p(kv.ie, jgp, igp, kv.ilev) =
+                vgrad_p / m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev);
 
-            ////////////////////////
-            m_region.get_3d_buffer(kv.ie, OMEGA_P, ilev, igp, jgp) -=
-                (1.0 / p_ilev(igp, jgp) * integral(igp, jgp) +
-                 (0.5 / p_ilev(igp, jgp)) *
-                     m_region.get_3d_buffer(kv.ie, DIV_VDP, ilev, igp, jgp));
-            ////////////////////////
-            integral(igp, jgp) +=
-                m_region.get_3d_buffer(kv.ie, DIV_VDP, ilev, igp, jgp);
+            m_region.buffers.omega_p(kv.ie, jgp, igp, kv.ilev) -=
+                (1.0 / m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev) *
+                     integration +
+                 (0.5 / m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev)) *
+                     m_region.buffers.div_vdp(kv.ie, jgp, igp, kv.ilev));
+
+            integration += m_region.buffers.div_vdp(kv.ie, jgp, igp, kv.ilev);
           });
     }
   }
@@ -318,24 +274,22 @@ struct CaarFunctor {
   // Depends on DP3D
   KOKKOS_INLINE_FUNCTION
   void compute_pressure(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> pressure =
-        m_region.get_3d_buffer(kv.ie, PRESSURE);
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
-          pressure(0, igp, jgp) =
+          m_region.buffers.pressure(kv.ie, jgp, igp, 0) =
               m_data.hybrid_a(0) * m_data.ps0 +
-              0.5 * m_region.DP3D(kv.ie, m_data.n0, 0, igp, jgp);
+              0.5 * m_region.m_dp3d(kv.ie, m_data.n0, igp, jgp, 0);
 
           // TODO: change the sum into p(k) = p(k-1) + 0.5*(
           // dp(k)+dp(k-1) ) to
           // increase accuracy
           for (kv.ilev = 1; kv.ilev < NUM_LEV; ++kv.ilev) {
-            pressure(kv.ilev, igp, jgp) =
-                pressure(kv.ilev - 1, igp, jgp) +
-                0.5 * m_region.DP3D(kv.ie, m_data.n0, kv.ilev - 1, igp, jgp) +
-                0.5 * m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+            m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev) =
+                m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev - 1) +
+                0.5 * m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev - 1) +
+                0.5 * m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
           }
         });
   }
@@ -353,30 +307,28 @@ struct CaarFunctor {
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_no_tracers_helper(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NP][NP]> T_v =
-        m_region.get_3d_buffer(kv.ie, T_V, kv.ilev);
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
-          T_v(igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+          m_region.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev) =
+              m_region.m_t(kv.ie, m_data.n0, jgp, igp, kv.ilev);
         });
   }
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_tracers_helper(KernelVariables &kv) const {
-    ExecViewUnmanaged<Real[NP][NP]> T_v =
-        m_region.get_3d_buffer(kv.ie, T_V, kv.ilev);
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
 
-          Real Qt = m_region.QDP(kv.ie, m_data.qn0, 0, kv.ilev, igp, jgp) /
-                    m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+          Real Qt = m_region.m_qdp(kv.ie, m_data.qn0, 0, jgp, igp, kv.ilev) /
+                    m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
           Qt *= PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0;
           Qt += 1.0;
-          T_v(igp, jgp) = m_region.T(kv.ie, m_data.n0, kv.ilev, igp, jgp) * Qt;
+          m_region.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev) =
+              m_region.m_t(kv.ie, m_data.n0, jgp, igp, kv.ilev) * Qt;
         });
   }
 
@@ -386,39 +338,37 @@ struct CaarFunctor {
   // Requires NUM_LEV * 5 * NP * NP
   KOKKOS_INLINE_FUNCTION
   void compute_div_vdp(KernelVariables &kv) const {
-    // Create subviews to explicitly have static dimensions
-    // ExecViewUnmanaged<Real[2][NP][NP]> vdp_ilev =
-    // kv.vector_buf_2;
-
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
 
-          kv.vector_buf_2(0, igp, jgp) =
-              m_region.U(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-              m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
-          kv.vector_buf_2(1, igp, jgp) =
-              m_region.V(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-              m_region.DP3D(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+          m_region.buffers.vdp(kv.ie, 0, jgp, igp, kv.ilev) =
+              m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+              m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
 
-          kv.scalar_buf_1(igp, jgp) =
-              m_data.eta_ave_w * kv.vector_buf_2(0, igp, jgp);
-          m_region.DERIVED_UN0(kv.ie, kv.ilev, igp, jgp) =
-              m_region.DERIVED_UN0(kv.ie, kv.ilev, igp, jgp) +
-              kv.scalar_buf_1(igp, jgp);
+          m_region.buffers.vdp(kv.ie, 1, jgp, igp, kv.ilev) =
+              m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+              m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
 
-          kv.scalar_buf_1(igp, jgp) =
-              m_data.eta_ave_w * kv.vector_buf_2(1, igp, jgp);
-          m_region.DERIVED_VN0(kv.ie, kv.ilev, igp, jgp) =
-              m_region.DERIVED_VN0(kv.ie, kv.ilev, igp, jgp) +
-              kv.scalar_buf_1(igp, jgp);
+          m_region.m_derived_un0(kv.ie, jgp, igp, kv.ilev) =
+              m_region.m_derived_un0(kv.ie, jgp, igp, kv.ilev) +
+              m_data.eta_ave_w *
+                  m_region.buffers.vdp(kv.ie, 0, jgp, igp, kv.ilev);
+
+          m_region.m_derived_vn0(kv.ie, jgp, igp, kv.ilev) =
+              m_region.m_derived_vn0(kv.ie, jgp, igp, kv.ilev) +
+              m_data.eta_ave_w *
+                  m_region.buffers.vdp(kv.ie, 1, jgp, igp, kv.ilev);
         });
 
-    divergence_sphere(kv.team, kv.vector_buf_2, m_deriv.get_dvv(),
-                      m_region.METDET(kv.ie), m_region.DINV(kv.ie),
-                      kv.vector_buf_1,
-                      m_region.get_3d_buffer(kv.ie, DIV_VDP, kv.ilev));
+    divergence_sphere(
+        kv.team, m_region.buffers.vdp, m_deriv.get_dvv(),
+        Kokkos::subview(m_region.m_metdet, kv.ie, Kokkos::ALL, Kokkos::ALL),
+        Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL),
+        Kokkos::subview(m_region.buffers.div_vdp, kv.ie, Kokkos::ALL,
+                        Kokkos::ALL, kv.ilev));
   }
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -449,9 +399,9 @@ struct CaarFunctor {
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
-          m_region.OMEGA_P(kv.ie, kv.ilev, igp, jgp) +=
+          m_region.m_omega_p(kv.ie, jgp, igp, kv.ilev) +=
               m_data.eta_ave_w *
-              m_region.get_3d_buffer(kv.ie, OMEGA_P, kv.ilev, igp, jgp);
+              m_region.buffers.omega_p(kv.ie, jgp, igp, kv.ilev);
         });
   }
 
@@ -461,35 +411,36 @@ struct CaarFunctor {
   // block_3d_scalars
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_np1(KernelVariables &kv) const {
-    const ExecViewUnmanaged<const Real[NP][NP]> temperature =
-        Kokkos::subview(m_region.T(kv.ie, m_data.n0), kv.ilev, ALL, ALL);
-
-    const ExecViewUnmanaged<Real[2][NP][NP]> grad_tmp = kv.vector_buf_1;
-    gradient_sphere(kv.team, temperature, m_deriv.get_dvv(),
-                    m_region.DINV(kv.ie), kv.vector_buf_2, grad_tmp);
+    gradient_sphere(kv.team, m_region.m_t, m_deriv.get_dvv(),
+                    Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
+                                    Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
+                    m_region.buffers.temperature_grad);
 
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
 
-          Real vgrad_t = m_region.U(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                             grad_tmp(0, igp, jgp) +
-                         m_region.V(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                             grad_tmp(1, igp, jgp);
+          Real vgrad_t = m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+                             m_region.buffers.temperature_grad(kv.ie, 0, jgp,
+                                                               igp, kv.ilev) +
+                         m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
+                             m_region.buffers.temperature_grad(kv.ie, 1, jgp,
+                                                               igp, kv.ilev);
 
           // vgrad_t + kappa * T_v * omega_p
           Real ttens;
-          ttens = -vgrad_t +
-                  PhysicalConstants::kappa *
-                      m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) *
-                      m_region.get_3d_buffer(kv.ie, OMEGA_P, kv.ilev, igp, jgp);
+          ttens =
+              -vgrad_t +
+              PhysicalConstants::kappa *
+                  m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) *
+                  m_region.buffers.omega_p(kv.ie, igp, jgp, kv.ilev);
 
           Real temp_np1 = ttens * m_data.dt2 +
-                          m_region.T(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-          temp_np1 *= m_region.SPHEREMP(kv.ie, igp, jgp);
+                          m_region.m_t(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
+          temp_np1 *= m_region.m_spheremp(kv.ie, igp, jgp);
 
-          m_region.T(kv.ie, m_data.np1, kv.ilev, igp, jgp) = temp_np1;
+          m_region.m_t(kv.ie, m_data.np1, jgp, igp, kv.ilev) = temp_np1;
         });
   }
 
@@ -501,11 +452,11 @@ struct CaarFunctor {
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
           const int igp = idx / NP;
           const int jgp = idx % NP;
-          Real tmp = m_region.DP3D(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-          tmp -= m_data.dt2 *
-                 m_region.get_3d_buffer(kv.ie, DIV_VDP, kv.ilev, igp, jgp);
-          m_region.DP3D(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
-              m_region.SPHEREMP(kv.ie, igp, jgp) * tmp;
+          Real tmp = m_region.m_dp3d(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
+          tmp -=
+              m_data.dt2 * m_region.buffers.div_vdp(kv.ie, jgp, igp, kv.ilev);
+          m_region.m_dp3d(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
+              m_region.m_spheremp(kv.ie, jgp, igp) * tmp;
         });
   }
 

@@ -8,6 +8,8 @@ namespace Homme {
 void CaarRegion::init(const int num_elems) {
   m_num_elems = num_elems;
 
+  buffers.init(num_elems);
+
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
   m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
@@ -39,9 +41,6 @@ void CaarRegion::init(const int num_elems) {
       "qdp", m_num_elems);
   m_eta_dot_dpdn =
       ExecViewManaged<Real * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn", m_num_elems);
-
-  m_3d_buffers = ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]>(
-      "buffers", m_num_elems);
 }
 
 void CaarRegion::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
@@ -137,9 +136,6 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
   ExecViewManaged<Real * [NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
 
-  ExecViewManaged<Real * [NUM_3D_BUFFERS][NP][NP][NUM_LEV]>::HostMirror
-      h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
-
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
@@ -170,12 +166,6 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
             for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
               h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev) = random_dist(engine);
             }
-          }
-
-          for (int i_3d = 0; i_3d < NUM_3D_BUFFERS; ++i_3d) {
-            // Make certain these are initialized by the functor itself
-            h_3d_buffers(ie, i_3d, igp, jgp, ilev) =
-                std::numerical_limits<Real>::quiet_NaN();
           }
         }
 
@@ -223,7 +213,6 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
   Kokkos::deep_copy(m_dp3d, h_dp3d);
 
   Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
-  Kokkos::deep_copy(m_3d_buffers, h_3d_buffers);
   return;
 }
 
@@ -483,9 +472,8 @@ void CaarRegion::push_extra(F90Ptr &derived_eta_dot_dpdn,
 }
 
 void CaarRegion::d(Real *d_ptr, int ie) const {
-  ExecViewManaged<Real[2][2][NP][NP]> d_device =
-      Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_D), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(
+      m_d, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
       d_host = Kokkos::create_mirror_view(d_device),
       d_wrapper(d_ptr);
@@ -502,12 +490,11 @@ void CaarRegion::d(Real *d_ptr, int ie) const {
 }
 
 void CaarRegion::dinv(Real *dinv_ptr, int ie) const {
-  ExecViewManaged<Real[2][2][NP][NP]> dinv_device =
-      Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_DINV), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(
+      m_dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
-      dinv_host = Kokkos::create_mirror_view(dinv_device),
-      dinv_wrapper(dinv_ptr);
+      dinv_host = Kokkos::create_mirror_view(d_device),
+      dinv_wrapper(d_ptr);
   Kokkos::deep_copy(dinv_host, dinv_device);
   for (int m = 0; m < 2; ++m) {
     for (int n = 0; n < 2; ++n) {
@@ -518,6 +505,27 @@ void CaarRegion::dinv(Real *dinv_ptr, int ie) const {
       }
     }
   }
+}
+
+void BufferViews::init(int num_elems) {
+  pressure =
+      ExecViewManaged<Real * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
+  pressure_grad = ExecViewManaged<Real * [2][NP][NP][NUM_LEV]>(
+      "Gradient of pressure", num_elems);
+  temperature_virt = ExecViewManaged<Real * [NP][NP][NUM_LEV]>(
+      "Virtual Temperature", num_elems);
+  temperature_grad = ExecViewManaged<Real * [2][NP][NP][NUM_LEV]>(
+      "Gradient of temperature", num_elems);
+  omega_p = ExecViewManaged<Real * [NP][NP][NUM_LEV]>(
+      "Omega_P why two named the same thing???", num_elems);
+  vdp = ExecViewManaged<Real * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+  div_vdp = ExecViewManaged<Real * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
+                                                      num_elems);
+  ephi = ExecViewManaged<Real * [NP][NP][NUM_LEV]>(
+      "Kinetic Energy + Geopotential Energy", num_elems);
+  energy_grad = ExecViewManaged<Real * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
+                                                             num_elems);
+  vorticity = ExecViewManaged<Real * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 }
 
 CaarRegion &get_region() {
