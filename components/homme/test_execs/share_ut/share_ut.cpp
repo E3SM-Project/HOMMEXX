@@ -242,10 +242,9 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
 
         ExecViewUnmanaged<Real[NP][NP]>       scalar_ie = subview(scalar_cxx_exec, ie, ALL, ALL);
         ExecViewUnmanaged<Real[2][NP][NP]>    grad_ie   = subview(vector_cxx_exec, ie, ALL, ALL, ALL);
-        ExecViewUnmanaged<Real[2][NP][NP]>    tmp_ie    = subview(tmp_cxx, ie, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[2][2][NP][NP]> DInv_ie   = subview(DInv_cxx_exec, ie, ALL, ALL, ALL, ALL);
 
-        gradient_sphere (team_member, scalar_ie, deriv.get_dvv(), DInv_ie, tmp_ie, grad_ie);
+        gradient_sphere (team_member, scalar_ie, deriv.get_dvv(), DInv_ie, grad_ie);
       });
 
       // Compute f90
@@ -300,10 +299,9 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
         ExecViewUnmanaged<Real[2][NP][NP]>    vector_ie = subview(vector_cxx_exec, ie, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       metdet_ie = subview(metdet_cxx_exec, ie, ALL, ALL);
         ExecViewUnmanaged<Real[2][2][NP][NP]> DInv_ie   = subview(DInv_cxx_exec, ie, ALL, ALL, ALL, ALL);
-        ExecViewUnmanaged<Real[2][NP][NP]>    tmp_ie    = subview(tmp_cxx, ie, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       div_ie    = subview(scalar_cxx_exec, ie, ALL, ALL);
 
-        divergence_sphere (team_member, vector_ie, deriv.get_dvv(), metdet_ie, DInv_ie, tmp_ie, div_ie);
+        divergence_sphere (team_member, vector_ie, deriv.get_dvv(), metdet_ie, DInv_ie, div_ie);
       });
 
       // Compute f90
@@ -353,10 +351,9 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
         ExecViewUnmanaged<Real[NP][NP]>       vector_y_ie = subview(vector_cxx_exec, ie, 1, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       metdet_ie   = subview(metdet_cxx_exec, ie, ALL, ALL);
         ExecViewUnmanaged<Real[2][2][NP][NP]> D_ie        = subview(D_cxx_exec, ie, ALL, ALL, ALL, ALL);
-        ExecViewUnmanaged<Real[2][NP][NP]>    tmp_ie      = subview(tmp_cxx, ie, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       vort_ie     = subview(scalar_cxx_exec, ie, ALL, ALL);
 
-        vorticity_sphere (team_member, vector_x_ie, vector_y_ie, deriv.get_dvv(), metdet_ie, D_ie, tmp_ie, vort_ie);
+        vorticity_sphere (team_member, vector_x_ie, vector_y_ie, deriv.get_dvv(), metdet_ie, D_ie, vort_ie);
       });
 
       // Compute f90

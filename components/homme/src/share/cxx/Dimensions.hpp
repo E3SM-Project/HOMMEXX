@@ -21,9 +21,6 @@ namespace Homme {
 #define NUM_LEV NUM_PHYSICAL_LEV
 #define LEVEL_PADDING 0
 
-using VectorTagType =
-    KokkosKernels::Batched::Experimental::SIMD<double, VECTOR_SIZE>;
-
 #else
 
 #if !defined(AVX_VERSION) || AVX_VERSION == 0 // Technically equivalent
@@ -39,15 +36,7 @@ static constexpr const int VECTOR_SIZE = 4;
 #elif AVX_VERSION == 512
 static constexpr const int VECTOR_SIZE = 8;
 #endif
-
-template <typename RealType>
-using VectorTagType = KokkosKernels::Batched::Experimental::AVX<RealType>;
 #endif // AVX_VERSION
-
-template <typename RealType>
-using VectorType =
-    KokkosKernels::Batched::Experimental::VectorTag<VectorTagType<RealType>,
-                                                    VECTOR_SIZE>;
 
 static constexpr const int NUM_PHYSICAL_LEV = PLEV;
 static constexpr const int LEVEL_PADDING =

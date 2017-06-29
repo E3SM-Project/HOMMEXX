@@ -79,26 +79,14 @@ public:
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
               for (int dim = 0; dim < 2; ++dim) {
-                kv.vector_buf_1(dim, igp, jgp) = 0.0;
-                kv.vector_buf_2(dim, igp, jgp) = 0.0;
               }
-              kv.scalar_buf_1(igp, jgp) = 0.0;
-              kv.scalar_buf_2(igp, jgp) = 0.0;
             }
           }
           TestFunctor_T::test_functor(functor, kv);
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
               for (int dim = 0; dim < 2; ++dim) {
-                vector_output_1(kv.ie, kv.ilev, dim, igp, jgp) =
-                    kv.vector_buf_1(dim, igp, jgp);
-                vector_output_2(kv.ie, kv.ilev, dim, igp, jgp) =
-                    kv.vector_buf_2(dim, igp, jgp);
               }
-              scalar_output_1(kv.ie, kv.ilev, igp, jgp) =
-                  kv.scalar_buf_1(igp, jgp);
-              scalar_output_2(kv.ie, kv.ilev, igp, jgp) =
-                  kv.scalar_buf_2(igp, jgp);
             }
           }
         });
@@ -182,7 +170,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_LEV; ++level) {
       Real(*const pressure)[NP] = reinterpret_cast<Real(*)[NP]>(
-          region.get_3d_buffer(ie, CaarFunctor::PRESSURE, level).data());
+          region.buffers.pressure.data());
       caar_compute_energy_grad_c_int(
           test_functor.dvv,
           Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
