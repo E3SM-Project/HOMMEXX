@@ -8,6 +8,8 @@
 #include <Kokkos_Core.hpp>
 #include "CaarControl.hpp"
 
+#include <random>
+
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
