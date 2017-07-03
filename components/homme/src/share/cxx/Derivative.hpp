@@ -4,6 +4,8 @@
 #include "Dimensions.hpp"
 #include "Types.hpp"
 
+#include <random>
+
 namespace Homme
 {
 

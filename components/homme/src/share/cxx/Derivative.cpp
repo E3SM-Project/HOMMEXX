@@ -4,8 +4,6 @@
 #include "BasicKernels.hpp"
 #include "PhysicalConstants.hpp"
 
-#include <random>
-
 namespace Homme
 {
 

@@ -1029,6 +1029,8 @@ TEST_CASE("vorticity_sphere_random",
 
   constexpr const int numRandTests = 10;
 
+  constexpr real machine_precision = std::numeric_limits<real>::epsilon();
+
   std::random_device rd;
   using rngAlg = std::mt19937_64;
   rngAlg engine(rd());
@@ -1088,8 +1090,8 @@ TEST_CASE("vorticity_sphere_random",
       for(int j = 0; j < np; j++) {
         for(int i = 0; i < np; ++i) {
           REQUIRE(check_answer(vort_theory(i, j),
-                               vort_exper_host(i, j)) ==
-                  0.0);
+                               vort_exper_host(i, j)) <=
+                  machine_precision);
         }
       }
     }
@@ -1233,10 +1235,13 @@ TEST_CASE("divergence_sphere_random",
         std::uniform_real_distribution<real>(0, 1.0));
     Kokkos::deep_copy(metdet_kokkos, metdet_fortran);
 
-    genRandArray(
-        rmetdet_fortran.ptr_on_device(), np * np * numelems,
-        engine,
-        std::uniform_real_distribution<real>(0, 1.0));
+    for (int ip=0; ip<np; ++ip)
+      for (int jp=0; jp<np; ++jp)
+        for (int ie=0; ie<numelems; ++ie)
+        {
+          rmetdet_fortran(ip,jp,ie) = 1./metdet_fortran(ip,jp,ie);
+        }
+
     Kokkos::deep_copy(rmetdet_kokkos, rmetdet_fortran);
 
     for(int ie = 0; ie < numelems; ie++) {
