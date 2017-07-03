@@ -101,7 +101,8 @@ private
 ! public  :: curl_sphere_wk_testcontra  ! not coded
   public  :: divergence_sphere_wk
   public  :: laplace_sphere_wk
-  public  :: laplace_simple_sphere
+  public  :: laplace_simple
+  public  :: laplace_simple_c_int
   public  :: vlaplace_sphere_wk
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
@@ -2129,12 +2130,12 @@ end do
 ! make it not take elem in
   function laplace_simple(s,dvv,dinv,metdet,rmetdet) result(laplace)
     use element_mod, only: element_t
-    use derivative_mod, only: derivative_t
     real(kind=real_kind), intent(in) :: s(np,np)
     real(kind=real_kind), intent(in) :: dvv(np,np)
     real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
     real(kind=real_kind), intent(in) :: metdet(np, np)
     real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind)             :: laplace(np,np)
 
     ! Local
     type (element_t) :: elem
@@ -2144,18 +2145,23 @@ end do
     deriv%dvv = dvv
     grads=gradient_sphere(s,deriv,dinv)
     
+#ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%metdet(np, np))
     allocate(elem%rmetdet(np, np))
+#endif
+
     elem%Dinv = dinv
     elem%metdet = metdet
     elem%rmetdet = rmetdet
 
     laplace=divergence_sphere_wk(grads,deriv,elem)
 
+#ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
     deallocate(elem%rmetdet)
+#endif
 
   end function laplace_simple
 
@@ -2174,45 +2180,6 @@ end do
     laplace=laplace_simple(s,dvv,dinv,metdet,rmetdet)
 
   end subroutine laplace_simple_c_int
-
-  function laplace_simple_sphere_c_callable(s,dvv,dinv,metdet,rmetdet,laplace) bind(c)
-    use iso_c_binding, only: c_int
-    use dimensions_mod, only: np
-    use element_mod, only: element_t
-    real(kind=real_kind), intent(in) :: s(np,np)
-    real(kind=real_kind), intent(in) :: dvv(np,np)
-    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
-    real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
-    real(kind=real_kind), intent(out):: laplace(np,np)
-    integer i,j
-
-    ! Local
-    real(kind=real_kind) :: grads(np,np,2)
-    type(derivative_t) :: deriv
-    type(element_t) :: elem
-
-    deriv%dvv = dvv
-    grads=gradient_sphere(s,deriv,dinv)
-
-#ifdef HOMME_USE_FLAT_ARRAYS
-    allocate(elem%Dinv(np, np, 2, 2))
-    allocate(elem%metdet(np, np))
-    allocate(elem%rmetdet(np, np))
-#endif
-    elem%Dinv = dinv
-    elem%metdet = metdet
-    elem%rmetdet = rmetdet
-
-    laplace=divergence_sphere_wk(grads,deriv,elem)
-
-#ifdef HOMME_USE_FLAT_ARRAYS
-    deallocate(elem%Dinv)
-    deallocate(elem%metdet)
-    deallocate(elem%rmetdet)
-#endif
-  end function laplace_simple_sphere_c_callable
-
 
 !DIR$ ATTRIBUTES FORCEINLINE :: vlaplace_sphere_wk
   function vlaplace_sphere_wk(v,deriv,elem,var_coef,nu_ratio) result(laplace)
