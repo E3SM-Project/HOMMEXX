@@ -2126,26 +2126,55 @@ end do
   end function laplace_sphere_wk
 
 ! not a homme function, for debugging cxx
-  function laplace_simple_sphere(s,deriv,elem) result(laplace)
+! make it not take elem in
+  function laplace_simple(s,dvv,dinv,metdet,rmetdet) result(laplace)
+    use element_mod, only: element_t
+    use derivative_mod, only: derivative_t
     real(kind=real_kind), intent(in) :: s(np,np)
-    type (derivative_t), intent(in) :: deriv
-    type (element_t), intent(in) :: elem
-    real(kind=real_kind)             :: laplace(np,np)
-    integer i,j
+    real(kind=real_kind), intent(in) :: dvv(np,np)
+    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)
 
     ! Local
+    type (element_t) :: elem
+    type (derivative_t) :: deriv
     real(kind=real_kind) :: grads(np,np,2)
 
-    grads=gradient_sphere(s,deriv,elem%Dinv)
+    deriv%dvv = dvv
+    grads=gradient_sphere(s,deriv,dinv)
+    
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+    allocate(elem%rmetdet(np, np))
+    elem%Dinv = dinv
+    elem%metdet = metdet
+    elem%rmetdet = rmetdet
+
     laplace=divergence_sphere_wk(grads,deriv,elem)
 
-  end function laplace_simple_sphere
+    deallocate(elem%Dinv)
+    deallocate(elem%metdet)
+    deallocate(elem%rmetdet)
 
-!input
-!real *s, real *dvv,
-!real *dinv,
-!real *metdet, real *rmetdet,
-!real *laplace
+  end function laplace_simple
+
+!not a homme subroutine, to call from C++ unit testing
+  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,rmetdet,laplace) bind(c)
+    use kinds, only: real_kind
+    use dimensions_mod, only: np
+
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(in) :: dvv(np,np)
+    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)   
+    real(kind=real_kind), intent(out):: laplace(np,np)
+
+    laplace=laplace_simple(s,dvv,dinv,metdet,rmetdet)
+
+  end subroutine laplace_simple_c_int
+
   function laplace_simple_sphere_c_callable(s,dvv,dinv,metdet,rmetdet,laplace) bind(c)
     use iso_c_binding, only: c_int
     use dimensions_mod, only: np

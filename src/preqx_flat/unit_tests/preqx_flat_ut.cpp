@@ -21,6 +21,14 @@ void caar_compute_energy_grad_c_int(const Real (&dvv)[NP][NP], Real *Dinv,
                                     Real *const &pecnd, Real *const &phi,
                                     Real *const &velocity,
                                     Real (&vtemp)[2][NP][NP]);
+//what is _int here for?
+//why dvv is passed as real&[][], Dinv is real* , and phi as *const &?
+void laplace_simple_c_int(const Real (&scalar_field)[NP][NP],
+                          const Real (&dvv)[NP][NP],
+                          const Real (&dinv)[NP][NP][2][2],
+                          const Real (&metdet)[NP][NP],
+                          const Real (&rmetdet)[NP][NP],
+                                Real (&laplace)[NP][NP]);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
