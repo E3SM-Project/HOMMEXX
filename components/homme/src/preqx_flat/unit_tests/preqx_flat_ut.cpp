@@ -152,6 +152,15 @@ public:
   int nete = -1;
 };
 
+class compute_energy_grad_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor,
+                           CaarFunctor::KernelVariables &kv) {
+    functor.compute_energy_grad(kv);
+  }
+};
+
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
@@ -165,14 +174,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  class compute_energy_grad_test {
-  public:
-    KOKKOS_INLINE_FUNCTION
-    static void test_functor(const CaarFunctor &functor,
-                             CaarFunctor::KernelVariables &kv) {
-      functor.compute_energy_grad(kv);
-    }
-  };
   compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems);
 
   test_functor.run_functor();
