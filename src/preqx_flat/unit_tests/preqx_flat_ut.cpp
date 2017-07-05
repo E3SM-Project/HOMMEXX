@@ -6,6 +6,7 @@
 #include <CaarFunctor.hpp>
 #include <CaarRegion.hpp>
 #include <Dimensions.hpp>
+#include <KernelVariables.hpp>
 #include <Types.hpp>
 
 #include <assert.h>
@@ -72,7 +73,7 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TeamMember team) const {
-    CaarFunctor::KernelVariables kv(team);
+    KernelVariables kv(team);
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(team, NUM_LEV), [&](const int &level) {
           kv.ilev = level;
@@ -157,7 +158,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   public:
     KOKKOS_INLINE_FUNCTION
     static void test_functor(const CaarFunctor &functor,
-                             CaarFunctor::KernelVariables &kv) {
+                             KernelVariables &kv) {
       functor.compute_energy_grad(kv);
     }
   };

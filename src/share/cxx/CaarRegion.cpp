@@ -129,8 +129,8 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
       h_dp3d = Kokkos::create_mirror_view(m_dp3d);
 
-  ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP]
-                                            [NUM_LEV]>::HostMirror h_qdp =
+  ExecViewManaged<
+      Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
 
   ExecViewManaged<Real * [NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
@@ -221,7 +221,7 @@ void CaarRegion::pull_from_f90_pointers(
     CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
     CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
   pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v,
-          derieved_eta_dot_dpdn);
+          derived_eta_dot_dpdn);
   pull_4d(state_v, state_t, state_dp3d);
   pull_extra(derived_eta_dot_dpdn, state_qdp);
 }
@@ -322,8 +322,8 @@ void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
   }
   Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
 
-  ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP]
-                                            [NUM_LEV]>::HostMirror h_qdp =
+  ExecViewManaged<
+      Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
@@ -341,15 +341,12 @@ void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
   Kokkos::deep_copy(m_qdp, h_qdp);
 }
 
-void CaarRegion::push_to_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
-                                      CF90Ptr &state_dp3d, CF90Ptr &derived_phi,
-                                      CF90Ptr &derived_pecnd,
-                                      CF90Ptr &derived_omega_p,
-                                      CF90Ptr &derived_v,
-                                      CF90Ptr &derived_eta_dot_dpdn,
-                                      CF90Ptr &state_qdp) const {
+void CaarRegion::push_to_f90_pointers(
+    F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d, F90Ptr &derived_phi,
+    F90Ptr &derived_pecnd, F90Ptr &derived_omega_p, F90Ptr &derived_v,
+    F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const {
   push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v,
-          derieved_eta_dot_dpdn);
+          derived_eta_dot_dpdn);
   push_4d(state_v, state_t, state_dp3d);
   push_extra(derived_eta_dot_dpdn, state_qdp);
 }
@@ -452,8 +449,8 @@ void CaarRegion::push_extra(F90Ptr &derived_eta_dot_dpdn,
     }
   }
 
-  ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP]
-                                            [NUM_LEV]>::HostMirror h_qdp =
+  ExecViewManaged<
+      Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
   Kokkos::deep_copy(m_qdp, h_qdp);
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
@@ -493,8 +490,8 @@ void CaarRegion::dinv(Real *dinv_ptr, int ie) const {
   ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(
       m_dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
-      dinv_host = Kokkos::create_mirror_view(d_device),
-      dinv_wrapper(d_ptr);
+      dinv_host = Kokkos::create_mirror_view(dinv_device),
+      dinv_wrapper(dinv_ptr);
   Kokkos::deep_copy(dinv_host, dinv_device);
   for (int m = 0; m < 2; ++m) {
     for (int n = 0; n < 2; ++n) {
@@ -507,7 +504,7 @@ void CaarRegion::dinv(Real *dinv_ptr, int ie) const {
   }
 }
 
-void BufferViews::init(int num_elems) {
+void CaarRegion::BufferViews::init(int num_elems) {
   pressure =
       ExecViewManaged<Real * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
   pressure_grad = ExecViewManaged<Real * [2][NP][NP][NUM_LEV]>(
