@@ -1,12 +1,13 @@
 #ifndef CAAR_FUNCTOR_HPP
 #define CAAR_FUNCTOR_HPP
 
+#include "Types.hpp"
+
 #include "CaarControl.hpp"
 #include "CaarRegion.hpp"
 #include "Derivative.hpp"
-
+#include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
-#include "Types.hpp"
 
 #include "Utility.hpp"
 #include <fstream>
@@ -20,37 +21,6 @@ struct CaarFunctor {
   const Derivative m_deriv;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
-
-  struct KernelVariables {
-    KOKKOS_INLINE_FUNCTION
-    KernelVariables(const TeamMember &team_in)
-        : team(team_in), scratch_mem(allocate_thread<Real, Real[NP][NP]>()),
-          ie(team.league_rank()), ilev(-1) {} //, igp(-1), jgp(-1) {}
-
-    template <typename Primitive, typename Data>
-    KOKKOS_INLINE_FUNCTION Primitive *allocate_team() const {
-      ScratchView<Data> view(team.team_scratch(0));
-      return view.data();
-    }
-
-    template <typename Primitive, typename Data>
-    KOKKOS_INLINE_FUNCTION Primitive *allocate_thread() const {
-      ScratchView<Data> view(team.thread_scratch(0));
-      return view.data();
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    static size_t shmem_size(int team_size) {
-      size_t mem_size = sizeof(Real[NP][NP]) * team_size;
-      return mem_size;
-    }
-
-    const TeamMember &team;
-
-    // Temporary buffers
-    ExecViewUnmanaged<Real[NP][NP]> scratch_mem;
-    int ie, ilev;
-  }; // KernelVariables
 
   KOKKOS_INLINE_FUNCTION
   CaarFunctor() : m_data(), m_region(get_region()), m_deriv(get_derivative()) {
@@ -83,11 +53,11 @@ struct CaarFunctor {
               m_region.m_pecnd(kv.ie, jgp, igp, kv.ilev);
         });
 
-    gradient_sphere_update(kv.team, m_region.buffers.ephi, m_deriv.get_dvv(),
-                           Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
-                                           Kokkos::ALL, Kokkos::ALL,
-                                           Kokkos::ALL),
-                           m_region.buffers.energy_grad);
+    gradient_sphere_update(
+        kv, m_region, m_deriv.get_dvv(),
+        Kokkos::subview(m_region.buffers.ephi, kv.ie, ALL, ALL, ALL),
+        Kokkos::subview(m_region.buffers.energy_grad, kv.ie, ALL, ALL, ALL,
+                        ALL));
   }
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -108,10 +78,11 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    gradient_sphere(kv.team, m_region.buffers.pressure, m_deriv.get_dvv(),
-                    Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
-                                    Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
-                    m_region.buffers.pressure_grad);
+    gradient_sphere(
+        kv, m_region, m_deriv.get_dvv(),
+        Kokkos::subview(m_region.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        Kokkos::subview(m_region.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
+                        ALL));
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP), [&](const int idx) {
           const int hgp = (idx / NP) / NP;
@@ -127,16 +98,10 @@ struct CaarFunctor {
     compute_energy_grad(kv);
 
     vorticity_sphere(
-        kv.team, Kokkos::subview(m_region.m_u, kv.ie, m_data.n0, Kokkos::ALL,
-                                 Kokkos::ALL, kv.ilev),
-        Kokkos::subview(m_region.m_v, kv.ie, m_data.n0, Kokkos::ALL,
-                        Kokkos::ALL, kv.ilev),
-        Kokkos::subview(m_region.m_metdet, kv.ie, Kokkos::ALL, Kokkos::ALL),
-        m_deriv.get_dvv(),
-        Kokkos::subview(m_region.m_d, kv.ie, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL),
-        Kokkos::subview(m_region.buffers.vorticity, kv.ie, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL));
+        kv, m_region, m_deriv.get_dvv(),
+        Kokkos::subview(m_region.m_u, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Kokkos::subview(m_region.m_v, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Kokkos::subview(m_region.buffers.vorticity, kv.ie, ALL, ALL, ALL));
 
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {
@@ -241,10 +206,11 @@ struct CaarFunctor {
                            integration = 0.0;
                          });
     for (kv.ilev = 0; kv.ilev < NUM_LEV; ++kv.ilev) {
-      gradient_sphere(kv.team, m_region.buffers.pressure, m_deriv.get_dvv(),
-                      Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
-                                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
-                      m_region.buffers.pressure_grad);
+      gradient_sphere(
+          kv, m_region, m_deriv.get_dvv(),
+          Kokkos::subview(m_region.buffers.pressure, kv.ie, ALL, ALL, ALL),
+          Kokkos::subview(m_region.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
+                          ALL));
 
       Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int loop_idx) {
@@ -363,12 +329,9 @@ struct CaarFunctor {
         });
 
     divergence_sphere(
-        kv.team, m_region.buffers.vdp, m_deriv.get_dvv(),
-        Kokkos::subview(m_region.m_metdet, kv.ie, Kokkos::ALL, Kokkos::ALL),
-        Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL),
-        Kokkos::subview(m_region.buffers.div_vdp, kv.ie, Kokkos::ALL,
-                        Kokkos::ALL, kv.ilev));
+        kv, m_region, m_deriv.get_dvv(),
+        Kokkos::subview(m_region.buffers.vdp, kv.ie, ALL, ALL, ALL, ALL),
+        Kokkos::subview(m_region.buffers.div_vdp, kv.ie, ALL, ALL, ALL));
   }
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -411,10 +374,10 @@ struct CaarFunctor {
   // block_3d_scalars
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_np1(KernelVariables &kv) const {
-    gradient_sphere(kv.team, m_region.m_t, m_deriv.get_dvv(),
-                    Kokkos::subview(m_region.m_dinv, kv.ie, Kokkos::ALL,
-                                    Kokkos::ALL, Kokkos::ALL, Kokkos::ALL),
-                    m_region.buffers.temperature_grad);
+    gradient_sphere(kv, m_region, m_deriv.get_dvv(),
+                    Kokkos::subview(m_region.m_t, kv.ie, m_data.n0, ALL, ALL, ALL),
+                    Kokkos::subview(m_region.buffers.temperature_grad, kv.ie,
+                                    ALL, ALL, ALL, ALL));
 
     Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NP * NP), [&](const int idx) {

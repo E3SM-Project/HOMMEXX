@@ -6,6 +6,8 @@
 
 #include "Dimensions.hpp"
 
+#include <vector/KokkosKernels_Vector.hpp>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif

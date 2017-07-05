@@ -6,7 +6,6 @@
 #endif
 
 #include <Kokkos_Core.hpp>
-#include <vector/KokkosKernels_Vector.hpp>
 
 namespace Homme {
 
@@ -25,8 +24,6 @@ namespace Homme {
 
 #if !defined(AVX_VERSION) || AVX_VERSION == 0 // Technically equivalent
 static constexpr const int VECTOR_SIZE = 1;
-template <typenmae RealType>
-using VectorTagType = KokkosKernels::Batched::Experimental::SIMD<RealType>;
 #else
 
 #if AVX_VERSION == 1
