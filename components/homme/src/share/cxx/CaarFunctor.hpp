@@ -16,7 +16,7 @@ namespace Homme {
 
 struct CaarFunctor {
 
-  const Control     m_data;
+  Control           m_data;
   const Region      m_region;
   const Derivative  m_deriv;
 
@@ -68,8 +68,8 @@ struct CaarFunctor {
   }; // KernelVariables
 
   KOKKOS_INLINE_FUNCTION
-  CaarFunctor(const Control &data)
-    : m_data    (data)
+  CaarFunctor()
+    : m_data    (get_control())
     , m_region  (get_region())
     , m_deriv   (get_derivative())
   {
@@ -77,8 +77,11 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  CaarFunctor(const CaarControl &data)
-      : m_data(data), m_region(get_region()), m_deriv(get_derivative()) {
+  CaarFunctor(const Control &data)
+      : m_data(data)
+      , m_region(get_region())
+      , m_deriv(get_derivative())
+  {
     // Nothing to be done here
   }
 
@@ -171,10 +174,10 @@ struct CaarFunctor {
                                                    igp, jgp) *
               vort(igp, jgp);
 
-          kv.vector_buf_2(0, igp, jgp) *= m_data.dt2;
+          kv.vector_buf_2(0, igp, jgp) *= m_data.dt;
           kv.vector_buf_2(0, igp, jgp) +=
               m_region.U(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-          kv.vector_buf_2(1, igp, jgp) *= m_data.dt2;
+          kv.vector_buf_2(1, igp, jgp) *= m_data.dt;
           kv.vector_buf_2(1, igp, jgp) +=
               m_region.V(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
 
@@ -485,7 +488,7 @@ struct CaarFunctor {
                       m_region.get_3d_buffer(kv.ie, T_V, kv.ilev, igp, jgp) *
                       m_region.get_3d_buffer(kv.ie, OMEGA_P, kv.ilev, igp, jgp);
 
-          Real temp_np1 = ttens * m_data.dt2 +
+          Real temp_np1 = ttens * m_data.dt +
                           m_region.T(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
           temp_np1 *= m_region.SPHEREMP(kv.ie, igp, jgp);
 
@@ -502,7 +505,7 @@ struct CaarFunctor {
           const int igp = idx / NP;
           const int jgp = idx % NP;
           Real tmp = m_region.DP3D(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-          tmp -= m_data.dt2 *
+          tmp -= m_data.dt *
                  m_region.get_3d_buffer(kv.ie, DIV_VDP, kv.ilev, igp, jgp);
           m_region.DP3D(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
               m_region.SPHEREMP(kv.ie, igp, jgp) * tmp;
