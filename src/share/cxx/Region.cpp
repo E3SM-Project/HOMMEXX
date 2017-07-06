@@ -61,7 +61,7 @@ void Region::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spherem
   Kokkos::deep_copy(m_2d_tensors, h_2d_tensors);
 }
 
-void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
+void Region::random_init(const int num_elems, std::mt19937_64 &engine) {
   init(num_elems);
   std::uniform_real_distribution<Real> random_dist(0.0625, 1.0);
 
@@ -131,7 +131,6 @@ void CaarRegion::random_init(const int num_elems, std::mt19937_64 &engine) {
 }
 
 
-void CaarRegion::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
 void Region::pull_qdp (CF90Ptr& field_ptr)
 {
   int iter=0;
@@ -495,7 +494,7 @@ void Region::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& stat
   }
 }
 
-void CaarRegion::d(Real *d_ptr, int ie) {
+void Region::d(Real *d_ptr, int ie) {
   ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_D), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror d_host = Kokkos::create_mirror_view(d_device),
     d_wrapper(d_ptr);
@@ -511,7 +510,7 @@ void CaarRegion::d(Real *d_ptr, int ie) {
   }
 }
 
-void CaarRegion::dinv(Real *dinv_ptr, int ie) {
+void Region::dinv(Real *dinv_ptr, int ie) {
   ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_DINV), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host = Kokkos::create_mirror_view(dinv_device),
     dinv_wrapper(dinv_ptr);

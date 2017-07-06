@@ -2,9 +2,9 @@
 
 #include <limits>
 
-#include <CaarControl.hpp>
+#include <Control.hpp>
 #include <CaarFunctor.hpp>
-#include <CaarRegion.hpp>
+#include <Region.hpp>
 #include <Dimensions.hpp>
 #include <Types.hpp>
 
@@ -161,7 +161,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
+  Region &region = get_region();
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
