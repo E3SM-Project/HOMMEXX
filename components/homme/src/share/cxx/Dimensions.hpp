@@ -12,28 +12,25 @@ namespace Homme {
 // Until whenever CUDA supports constexpr properly
 #ifdef CUDA_BUILD
 
-#define NUM_PHYSICAL_LEV PLEV
-#define NUM_LEV_P (NUM_LEV + 1)
-#define NUM_TIME_LEVELS 3
-#define Q_NUM_TIME_LEVELS 2
+#define NUM_PHYSICAL_LEV    PLEV
+#define NUM_LEV_P           (NUM_LEV + 1)
+#define NUM_TIME_LEVELS     3
+#define Q_NUM_TIME_LEVELS   2
 
-#define NUM_LEV NUM_PHYSICAL_LEV
-#define LEVEL_PADDING 0
+#define NUM_LEV             NUM_PHYSICAL_LEV
+#define LEVEL_PADDING       0
 
 #else
 
-#if !defined(AVX_VERSION) || AVX_VERSION == 0 // Technically equivalent
+#if   (AVX_VERSION == 0)
 static constexpr const int VECTOR_SIZE = 1;
-#else
-
-#if AVX_VERSION == 1
+#elif (AVX_VERSION == 1)
 static constexpr const int VECTOR_SIZE = 2;
-#elif AVX_VERSION == 2
+#elif (AVX_VERSION == 2)
 static constexpr const int VECTOR_SIZE = 4;
-#elif AVX_VERSION == 512
+#elif (AVX_VERSION == 512)
 static constexpr const int VECTOR_SIZE = 8;
 #endif
-#endif // AVX_VERSION
 
 static constexpr const int NUM_PHYSICAL_LEV = PLEV;
 static constexpr const int LEVEL_PADDING =
