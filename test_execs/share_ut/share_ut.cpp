@@ -219,6 +219,7 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
   Kokkos::TeamPolicy<ExecSpace> policy(nelems,threads_per_team,vectors_per_thread);
   policy.set_chunk_size(1);
 
+  CaarRegion region;
   SECTION ("gradient sphere")
   {
     for (int itest=0; itest<num_rand_test; ++itest)
@@ -229,22 +230,32 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
       genRandArray(DInv_f90, nelems*NP*NP*2*2, engine, dreal);
 
       // Flip inputs for cxx
-      flip_f90_array_3d_312<NP,NP>       (scalar_f90, scalar_cxx);
-      flip_f90_array_5d_53412<NP,NP,2,2> (DInv_f90, DInv_cxx);
+      for (int ie=0, it_s=0, it_dinv=0; ie<nelems; ++ie)
+      {
+        for (int jdim=0; jdim<2; ++jdim)
+          for (int idim=0; idim<2; ++idim)
+            for (int jp=0; jp<NP; ++jp)
+              for (int ip=0; ip<NP; ++ip, ++it_dinv)
+                DInv_cxx(ie,jdim,idim,jp,ip) = DInv_f90[it_dinv];
+        for (int jp=0; jp<NP; ++jp)
+          for (int ip=0; ip<NP; ++ip, ++it_s)
+            scalar_cxx(ie,jp,ip) = scalar_f90[it_s];
+      }
+      //flip_f90_array_3d_312<NP,NP>       (scalar_f90, scalar_cxx);
+      //flip_f90_array_5d_53412<NP,NP,2,2> (DInv_f90, DInv_cxx);
 
       Kokkos::deep_copy(scalar_cxx_exec,scalar_cxx);
       Kokkos::deep_copy(DInv_cxx_exec,DInv_cxx);
 
       // Compute cxx
-      policy.set_chunk_size(1);
+      region.m_dinv = DInv_cxx_exec;
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         const int ie = team_member.league_rank();
 
         ExecViewUnmanaged<Real[NP][NP]>       scalar_ie = subview(scalar_cxx_exec, ie, ALL, ALL);
         ExecViewUnmanaged<Real[2][NP][NP]>    grad_ie   = subview(vector_cxx_exec, ie, ALL, ALL, ALL);
-        ExecViewUnmanaged<Real[2][2][NP][NP]> DInv_ie   = subview(DInv_cxx_exec, ie, ALL, ALL, ALL, ALL);
 
-        gradient_sphere (team_member, scalar_ie, deriv.get_dvv(), DInv_ie, grad_ie);
+        gradient_sphere (team_member, region, deriv.get_dvv(), scalar_ie, grad_ie);
       });
 
       // Compute f90
@@ -263,7 +274,7 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
           {
             for (int i=0; i<NP; ++i, ++iter)
             {
-              REQUIRE(compare_answers(vector_f90[iter],vector_cxx(ie,dim,i,j)) == 0.0);
+              REQUIRE(compare_answers(vector_f90[iter],vector_cxx(ie,dim,j,i)) == 0.0);
             }
           }
         }
@@ -293,15 +304,15 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
       Kokkos::deep_copy(metdet_cxx_exec,metdet_cxx);
 
       // Compute cxx
+      region.m_dinv = DInv_cxx_exec;
+      region.m_metdet = metdet_cxx_exec;
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         const int ie = team_member.league_rank();
 
         ExecViewUnmanaged<Real[2][NP][NP]>    vector_ie = subview(vector_cxx_exec, ie, ALL, ALL, ALL);
-        ExecViewUnmanaged<Real[NP][NP]>       metdet_ie = subview(metdet_cxx_exec, ie, ALL, ALL);
-        ExecViewUnmanaged<Real[2][2][NP][NP]> DInv_ie   = subview(DInv_cxx_exec, ie, ALL, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       div_ie    = subview(scalar_cxx_exec, ie, ALL, ALL);
 
-        divergence_sphere (team_member, vector_ie, deriv.get_dvv(), metdet_ie, DInv_ie, div_ie);
+        divergence_sphere (team_member, region, deriv.get_dvv(), vector_ie, div_ie);
       });
 
       // Compute f90
@@ -343,17 +354,18 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
       Kokkos::deep_copy(D_cxx_exec,D_cxx);
       Kokkos::deep_copy(metdet_cxx_exec,metdet_cxx);
 
+      region.m_d = D_cxx_exec;
+      region.m_metdet = metdet_cxx_exec;
+
       // Compute cxx
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         const int ie = team_member.league_rank();
 
         ExecViewUnmanaged<Real[NP][NP]>       vector_x_ie = subview(vector_cxx_exec, ie, 0, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       vector_y_ie = subview(vector_cxx_exec, ie, 1, ALL, ALL);
-        ExecViewUnmanaged<Real[NP][NP]>       metdet_ie   = subview(metdet_cxx_exec, ie, ALL, ALL);
-        ExecViewUnmanaged<Real[2][2][NP][NP]> D_ie        = subview(D_cxx_exec, ie, ALL, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]>       vort_ie     = subview(scalar_cxx_exec, ie, ALL, ALL);
 
-        vorticity_sphere (team_member, vector_x_ie, vector_y_ie, deriv.get_dvv(), metdet_ie, D_ie, vort_ie);
+        vorticity_sphere (team_member, region, deriv.get_dvv(), vector_x_ie, vector_y_ie, vort_ie);
       });
 
       // Compute f90
