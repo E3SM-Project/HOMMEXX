@@ -87,6 +87,8 @@ using VectorTagType =
 using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
 
+using Scalar = VectorType;
+
 template <typename ExecSpace>
 int DefaultThreadsDistribution<ExecSpace>::Max_Threads_Per_Team;
 

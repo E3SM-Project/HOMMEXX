@@ -32,7 +32,7 @@ divergence_sphere(const KernelVariables &kv, const CaarRegion &region,
                   const ExecViewUnmanaged<const Real[2][NP][NP][NUM_LEV]> v,
                   ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> div_v);
 
-KOKKOS_FUNCTION void
+KOKKOS_INLINE_FUNCTION void
 vorticity_sphere(const KernelVariables &kv, const CaarRegion &region,
                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
                  const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> u,
@@ -51,26 +51,27 @@ gradient_sphere(const KernelVariables &kv, const CaarRegion &region,
   Real temp_v[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
-                         const int j = loop_idx / NP;
-                         const int l = loop_idx % NP;
-                         Real dsdx(0), dsdy(0);
-                         for (int i = 0; i < NP; ++i) {
-                           dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
-                           dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
-                         }
-                         temp_v[0][j][l] = dsdx * PhysicalConstants::rrearth;
-                         temp_v[1][l][j] = dsdy * PhysicalConstants::rrearth;
-                       });
+    const int j = loop_idx / NP;
+    const int l = loop_idx % NP;
+    Real dsdx(0), dsdy(0);
+    for (int i = 0; i < NP; ++i) {
+      dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
+      dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
+    }
+    temp_v[0][j][l] = dsdx * PhysicalConstants::rrearth;
+    temp_v[1][l][j] = dsdy * PhysicalConstants::rrearth;
+  });
 
   constexpr int grad_iters = 2 * NP * NP;
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, grad_iters), [&](const int loop_idx) {
-        const int h = (loop_idx / NP) / NP;
-        const int i = (loop_idx / NP) % NP;
-        const int j = loop_idx % NP;
-        grad_s(h, j, i, kv.ilev) = region.m_dinv(kv.ie, 0, h, j, i) * temp_v[0][j][i] +
-                                   region.m_dinv(kv.ie, 1, h, j, i) * temp_v[1][j][i];
-      });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, grad_iters),
+                       [&](const int loop_idx) {
+    const int h = (loop_idx / NP) / NP;
+    const int i = (loop_idx / NP) % NP;
+    const int j = loop_idx % NP;
+    grad_s(h, j, i, kv.ilev) =
+        region.m_dinv(kv.ie, 0, h, j, i) * temp_v[0][j][i] +
+        region.m_dinv(kv.ie, 1, h, j, i) * temp_v[1][j][i];
+  });
 }
 
 KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
@@ -82,26 +83,27 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
   Real temp_v[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
-                         const int j = loop_idx / NP;
-                         const int l = loop_idx % NP;
-                         Real dsdx(0), dsdy(0);
-                         for (int i = 0; i < NP; ++i) {
-                           dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
-                           dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
-                         }
-                         temp_v[0][j][l] = dsdx * PhysicalConstants::rrearth;
-                         temp_v[1][l][j] = dsdy * PhysicalConstants::rrearth;
-                       });
+    const int j = loop_idx / NP;
+    const int l = loop_idx % NP;
+    Real dsdx(0), dsdy(0);
+    for (int i = 0; i < NP; ++i) {
+      dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
+      dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
+    }
+    temp_v[0][j][l] = dsdx * PhysicalConstants::rrearth;
+    temp_v[1][l][j] = dsdy * PhysicalConstants::rrearth;
+  });
 
   constexpr int grad_iters = 2 * NP * NP;
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, grad_iters), [&](const int loop_idx) {
-        const int h = (loop_idx / NP) / NP;
-        const int i = (loop_idx / NP) % NP;
-        const int j = loop_idx % NP;
-        grad_s(h, j, i, kv.ilev) += region.m_dinv(kv.ie, 0, h, j, i) * temp_v[0][j][i] +
-                                    region.m_dinv(kv.ie, 1, h, j, i) * temp_v[1][j][i];
-      });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, grad_iters),
+                       [&](const int loop_idx) {
+    const int h = (loop_idx / NP) / NP;
+    const int i = (loop_idx / NP) % NP;
+    const int j = loop_idx % NP;
+    grad_s(h, j, i, kv.ilev) +=
+        region.m_dinv(kv.ie, 0, h, j, i) * temp_v[0][j][i] +
+        region.m_dinv(kv.ie, 1, h, j, i) * temp_v[1][j][i];
+  });
 }
 
 KOKKOS_INLINE_FUNCTION void
@@ -111,36 +113,35 @@ divergence_sphere(const KernelVariables &kv, const CaarRegion &region,
                   ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> div_v) {
   constexpr int contra_iters = NP * NP * 2;
   Real gv[2][NP][NP];
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, contra_iters),
-      [&](const int loop_idx) {
-        const int hgp = (loop_idx / NP) / NP;
-        const int igp = (loop_idx / NP) % NP;
-        const int jgp = loop_idx % NP;
-        gv[hgp][jgp][igp] =
-            region.m_metdet(kv.ie, jgp, igp) *
-            (region.m_dinv(kv.ie, hgp, 0, jgp, igp) * v(0, jgp, igp, kv.ilev) +
-             region.m_dinv(kv.ie, hgp, 1, jgp, igp) * v(1, jgp, igp, kv.ilev));
-      });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
+                       [&](const int loop_idx) {
+    const int hgp = (loop_idx / NP) / NP;
+    const int igp = (loop_idx / NP) % NP;
+    const int jgp = loop_idx % NP;
+    gv[hgp][jgp][igp] =
+        region.m_metdet(kv.ie, jgp, igp) *
+        (region.m_dinv(kv.ie, hgp, 0, jgp, igp) * v(0, jgp, igp, kv.ilev) +
+         region.m_dinv(kv.ie, hgp, 1, jgp, igp) * v(1, jgp, igp, kv.ilev));
+  });
 
   constexpr int div_iters = NP * NP;
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, div_iters), [&](const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Real dudx = 0.0, dvdy = 0.0;
-        for (int kgp = 0; kgp < NP; ++kgp) {
-          dudx += dvv(igp, kgp) * gv[0][jgp][kgp];
-          dvdy += dvv(jgp, kgp) * gv[1][kgp][igp];
-        }
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, div_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    Real dudx = 0.0, dvdy = 0.0;
+    for (int kgp = 0; kgp < NP; ++kgp) {
+      dudx += dvv(igp, kgp) * gv[0][jgp][kgp];
+      dvdy += dvv(jgp, kgp) * gv[1][kgp][igp];
+    }
 
-        div_v(jgp, igp, kv.ilev) =
-            (dudx + dvdy) *
-            ((1.0 / region.m_metdet(kv.ie, jgp, igp)) * PhysicalConstants::rrearth);
-      });
+    div_v(jgp, igp, kv.ilev) =
+        (dudx + dvdy) *
+        ((1.0 / region.m_metdet(kv.ie, jgp, igp)) * PhysicalConstants::rrearth);
+  });
 }
 
-KOKKOS_FUNCTION void
+KOKKOS_INLINE_FUNCTION void
 vorticity_sphere(const KernelVariables &kv, const CaarRegion &region,
                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
                  const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> u,
@@ -148,40 +149,41 @@ vorticity_sphere(const KernelVariables &kv, const CaarRegion &region,
                  ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> vort) {
   constexpr int covar_iters = NP * NP;
   Real vcov[2][NP][NP];
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, covar_iters), [&](const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        vcov[0][jgp][igp] = region.m_d(kv.ie, 0, 0, jgp, igp) * u(jgp, igp, kv.ilev) +
-                            region.m_d(kv.ie, 1, 0, jgp, igp) * v(jgp, igp, kv.ilev);
-        vcov[1][jgp][igp] = region.m_d(kv.ie, 0, 1, jgp, igp) * u(jgp, igp, kv.ilev) +
-                            region.m_d(kv.ie, 1, 1, jgp, igp) * v(jgp, igp, kv.ilev);
-      });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, covar_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    vcov[0][jgp][igp] =
+        region.m_d(kv.ie, 0, 0, jgp, igp) * u(jgp, igp, kv.ilev) +
+        region.m_d(kv.ie, 1, 0, jgp, igp) * v(jgp, igp, kv.ilev);
+    vcov[1][jgp][igp] =
+        region.m_d(kv.ie, 0, 1, jgp, igp) * u(jgp, igp, kv.ilev) +
+        region.m_d(kv.ie, 1, 1, jgp, igp) * v(jgp, igp, kv.ilev);
+  });
 
   constexpr int vort_iters = NP * NP;
-  Kokkos::parallel_for(
-      Kokkos::ThreadVectorRange(kv.team, vort_iters), [&](const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Real dudy = 0.0;
-        Real dvdx = 0.0;
-        for (int kgp = 0; kgp < NP; ++kgp) {
-          dvdx += dvv(igp, kgp) * vcov[1][jgp][kgp];
-          dudy += dvv(jgp, kgp) * vcov[0][kgp][igp];
-        }
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, vort_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    Real dudy = 0.0;
+    Real dvdx = 0.0;
+    for (int kgp = 0; kgp < NP; ++kgp) {
+      dvdx += dvv(igp, kgp) * vcov[1][jgp][kgp];
+      dudy += dvv(jgp, kgp) * vcov[0][kgp][igp];
+    }
 
-        vort(jgp, igp, kv.ilev) =
-            (dvdx - dudy) *
-            ((1.0 / region.m_metdet(kv.ie, jgp, igp)) * PhysicalConstants::rrearth);
-      });
+    vort(jgp, igp, kv.ilev) =
+        (dvdx - dudy) *
+        ((1.0 / region.m_metdet(kv.ie, jgp, igp)) * PhysicalConstants::rrearth);
+  });
 }
 
 // analog of fortran's laplace_wk_sphere
 KOKKOS_INLINE_FUNCTION void laplace_wk(
-    const KernelVariables &kv,
-    const CaarRegion &region,
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,        // for grad, div
-    const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> field,      // input
+    const KernelVariables &kv, const CaarRegion &region,
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,            // for grad, div
+    const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> field, // input
     ExecViewUnmanaged<Real[2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
     // let's reduce num of temps later
     // output
