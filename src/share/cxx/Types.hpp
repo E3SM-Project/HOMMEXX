@@ -122,6 +122,13 @@ template <typename DataType>
 using HostViewUnmanaged =
     ViewType<DataType, HostMemSpace, Kokkos::MemoryUnmanaged>;
 
+template <typename DataType>
+using FortranViewManaged =
+    ViewType<DataType, HostMemSpace, Kokkos::MemoryManaged, FortranLayout>;
+template <typename DataType>
+using FortranViewUnmanaged =
+    ViewType<DataType, HostMemSpace, Kokkos::MemoryUnmanaged, FortranLayout>;
+
 // The scratch view type: always unmanaged, and always with c pointers
 template <typename DataType>
 using ScratchView =
