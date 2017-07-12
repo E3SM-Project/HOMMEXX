@@ -17,8 +17,7 @@ Derivative::Derivative ()
 
 void Derivative::init (CF90Ptr& dvv_ptr)
 {
-  HostViewManaged<Real[NP][NP]> dvv_host ("dvv");
-  flip_f90_array_2d_12<NP,NP> (dvv_ptr, dvv_host);
+  HostViewUnmanaged<const Real[NP][NP]> dvv_host (dvv_ptr);
   Kokkos::deep_copy (m_dvv_exec, dvv_host);
 }
 

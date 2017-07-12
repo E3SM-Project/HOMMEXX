@@ -7,6 +7,7 @@
 #include "FortranArrayUtils.hpp"
 #include "Derivative.hpp"
 #include "SphereOperators.hpp"
+#include "KernelVariables.hpp"
 
 using namespace Homme;
 
@@ -28,6 +29,14 @@ template <typename rngAlg, typename PDF>
 void genRandArray(Real *const x, int length, rngAlg &engine, PDF &pdf) {
   for (int i = 0; i < length; ++i) {
     x[i] = pdf(engine);
+  }
+}
+
+template <typename ViewType, typename rngAlg, typename PDF>
+void genRandArray(ViewType view, rngAlg &engine, PDF &pdf) {
+  Real *data = view.data();
+  for (int i = 0; i < view.size(); ++i) {
+    data[i] = pdf(engine);
   }
 }
 
@@ -152,32 +161,28 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   using Kokkos::subview;
   using Kokkos::ALL;
 
-  constexpr int nelems = 10;
+  constexpr int nelems = 1;
   constexpr int num_rand_test = 10;
 
-  // Raw pointers
-  Real *scalar_f90 = new Real[nelems * NP * NP];
-  Real *vector_f90 = new Real[nelems * NP * NP * 2];
-  Real *dvv_f90 = new Real[nelems * NP * NP];
-  Real *D_f90 = new Real[nelems * NP * NP * 2 * 2];
-  Real *DInv_f90 = new Real[nelems * NP * NP * 2 * 2];
-  Real *metdet_f90 = new Real[nelems * NP * NP];
+  // Fortran host views
+  HostViewManaged<Real * [NP][NP]> scalar_h("scalar_host", nelems);
+  HostViewManaged<Real * [2][NP][NP]> vector_h("vector_host", nelems);
+  HostViewManaged<Real * [NP][NP]> dvv_h("dvv_host", nelems);
+  HostViewManaged<Real * [2][2][NP][NP]> D_h("d_host", nelems);
+  HostViewManaged<Real * [2][2][NP][NP]> DInv_h("dinv_host", nelems);
+  HostViewManaged<Real * [NP][NP]> metdet_h("metdet_host", nelems);
 
-  // Host views
-  HostViewManaged<Real * [NP][NP]> scalar_cxx("scalar_cxx", nelems);
-  HostViewManaged<Real * [2][NP][NP]> vector_cxx("vector_cxx", nelems);
-  HostViewManaged<Real * [2][2][NP][NP]> DInv_cxx("DInv_cxx", nelems);
-  HostViewManaged<Real * [2][2][NP][NP]> D_cxx("D_cxx", nelems);
-  HostViewManaged<Real * [NP][NP]> metdet_cxx("metdet_cxx", nelems);
-
-  // Exec views
-  ExecViewManaged<Real * [NP][NP]> scalar_cxx_exec("scalar_cxx_exec", nelems);
-  ExecViewManaged<Real * [2][NP][NP]> vector_cxx_exec("vector_cxx_exec",
-                                                      nelems);
-  ExecViewManaged<Real * [2][2][NP][NP]> DInv_cxx_exec("DInv_cxx_exec", nelems);
-  ExecViewManaged<Real * [2][2][NP][NP]> D_cxx_exec("D_cxx_exec", nelems);
-  ExecViewManaged<Real * [NP][NP]> metdet_cxx_exec("metdet_cxx_exec", nelems);
-  ExecViewManaged<Real * [2][NP][NP]> tmp_cxx("tmp_cxx", nelems);
+  // Input exec views
+  ExecViewManaged<Real * [NP][NP]> scalar_exec("scalar_cxx_exec", nelems);
+  ExecViewManaged<Real * [2][NP][NP]> vector_exec("vector_cxx_exec", nelems);
+  ExecViewManaged<Real * [2][2][NP][NP]> DInv_exec("DInv_cxx_exec", nelems);
+  ExecViewManaged<Real * [2][2][NP][NP]> D_exec("D_cxx_exec", nelems);
+  ExecViewManaged<Real * [NP][NP]> metdet_exec("metdet_cxx_exec", nelems);
+  ExecViewManaged<Real * [2][NP][NP]> tmp_exec("tmp_cxx", nelems);
+  // Output exec views
+  HostViewManaged<Real * [NP][NP]> scalar_output("scalar_exec_output", nelems);
+  HostViewManaged<Real * [2][NP][NP]> vector_output("vector_exec_output",
+                                                    nelems);
 
   // Random numbers generators
   std::random_device rd;
@@ -186,9 +191,9 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   std::uniform_real_distribution<Real> dreal(0, 1);
 
   // Initialize derivative
-  init_deriv_f90(dvv_f90);
-  Derivative &deriv = get_derivative();
-  deriv.init(dvv_f90);
+  init_deriv_f90(dvv_h.data());
+  Derivative deriv;
+  deriv.init(dvv_h.data());
 
   // Execution policy
   DefaultThreadsDistribution<ExecSpace>::init();
@@ -199,59 +204,39 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
                                        vectors_per_thread);
   policy.set_chunk_size(1);
 
-  CaarRegion region;
   SECTION("gradient sphere") {
     for (int itest = 0; itest < num_rand_test; ++itest) {
 
       // Initialize input(s)
-      genRandArray(scalar_f90, nelems * NP * NP, engine, dreal);
-      genRandArray(DInv_f90, nelems * NP * NP * 2 * 2, engine, dreal);
+      genRandArray(scalar_h, engine, dreal);
+      genRandArray(DInv_h, engine, dreal);
 
-      // Flip inputs for cxx
-      for (int ie = 0, it_s = 0, it_dinv = 0; ie < nelems; ++ie) {
-        for (int jdim = 0; jdim < 2; ++jdim)
-          for (int idim = 0; idim < 2; ++idim)
-            for (int jp = 0; jp < NP; ++jp)
-              for (int ip = 0; ip < NP; ++ip, ++it_dinv)
-                DInv_cxx(ie, jdim, idim, jp, ip) = DInv_f90[it_dinv];
-        for (int jp = 0; jp < NP; ++jp)
-          for (int ip = 0; ip < NP; ++ip, ++it_s)
-            scalar_cxx(ie, jp, ip) = scalar_f90[it_s];
-      }
-      // flip_f90_array_3d_312<NP,NP>       (scalar_f90, scalar_cxx);
-      // flip_f90_array_5d_53412<NP,NP,2,2> (DInv_f90, DInv_cxx);
-
-      Kokkos::deep_copy(scalar_cxx_exec, scalar_cxx);
-      Kokkos::deep_copy(DInv_cxx_exec, DInv_cxx);
+      Kokkos::deep_copy(scalar_exec, scalar_h);
+      Kokkos::deep_copy(DInv_exec, DInv_h);
 
       // Compute cxx
-      region.m_dinv = DInv_cxx_exec;
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
-        const int ie = team_member.league_rank();
+        KernelVariables kv(team_member);
 
-        ExecViewManaged<Real[NP][NP]> scalar_ie =
-            subview(scalar_cxx_exec, ie, ALL, ALL);
-        ExecViewManaged<Real[2][NP][NP]> grad_ie =
-            subview(vector_cxx_exec, ie, ALL, ALL, ALL);
-
-        gradient_sphere_sl(team_member, region, deriv.get_dvv(), scalar_ie,
-                           grad_ie);
+        gradient_sphere_sl(kv, DInv_exec, deriv.get_dvv(),
+                           Kokkos::subview(scalar_exec, kv.ie, ALL, ALL),
+                           Kokkos::subview(vector_exec, kv.ie, ALL, ALL, ALL));
       });
 
-      // Compute f90
-      gradient_sphere_f90(scalar_f90, DInv_f90, vector_f90, nelems);
-
       // Deep copy back to host
-      Kokkos::deep_copy(vector_cxx, vector_cxx_exec);
+      Kokkos::deep_copy(vector_output, vector_exec);
+
+      // Compute f90
+      gradient_sphere_f90(scalar_h.data(), DInv_h.data(), vector_h.data(),
+                          nelems);
 
       // Check the answer
-      int iter = 0;
       for (int ie = 0; ie < nelems; ++ie) {
         for (int dim = 0; dim < 2; ++dim) {
           for (int j = 0; j < NP; ++j) {
-            for (int i = 0; i < NP; ++i, ++iter) {
-              REQUIRE(compare_answers(vector_f90[iter],
-                                      vector_cxx(ie, dim, j, i)) == 0.0);
+            for (int i = 0; i < NP; ++i) {
+              REQUIRE(compare_answers(vector_h(ie, dim, j, i),
+                                      vector_output(ie, dim, j, i)) == 0.0);
             }
           }
         }
@@ -265,48 +250,40 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
 
     for (int itest = 0; itest < num_rand_test; ++itest) {
       // Initialize input(s)
-      genRandArray(vector_f90, NP * NP * 2 * nelems, engine, dreal);
-      genRandArray(DInv_f90, NP * NP * 2 * 2 * nelems, engine, dreal);
-      genRandArray(metdet_f90, NP * NP * nelems, engine, dreal);
+      genRandArray(vector_h, engine, dreal);
+      genRandArray(DInv_h, engine, dreal);
+      genRandArray(metdet_h, engine, dreal);
 
-      // Flip inputs for cxx
-      flip_f90_array_4d_4312<NP, NP, 2>(vector_f90, vector_cxx);
-      flip_f90_array_5d_53412<NP, NP, 2, 2>(DInv_f90, DInv_cxx);
-      flip_f90_array_3d_312<NP, NP>(metdet_f90, metdet_cxx);
-
-      Kokkos::deep_copy(vector_cxx_exec, vector_cxx);
-      Kokkos::deep_copy(DInv_cxx_exec, DInv_cxx);
-      Kokkos::deep_copy(metdet_cxx_exec, metdet_cxx);
+      Kokkos::deep_copy(vector_exec, vector_h);
+      Kokkos::deep_copy(DInv_exec, DInv_h);
+      Kokkos::deep_copy(metdet_exec, metdet_h);
 
       // Compute cxx
-      region.m_dinv = DInv_cxx_exec;
-      region.m_metdet = metdet_cxx_exec;
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
-        const int ie = team_member.league_rank();
+        KernelVariables kv(team_member);
 
         ExecViewUnmanaged<Real[2][NP][NP]> vector_ie =
-            subview(vector_cxx_exec, ie, ALL, ALL, ALL);
+            subview(vector_exec, kv.ie, ALL, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]> div_ie =
-            subview(scalar_cxx_exec, ie, ALL, ALL);
+            subview(scalar_exec, kv.ie, ALL, ALL);
 
-        divergence_sphere_sl(team_member, region, deriv.get_dvv(), vector_ie,
-                             div_ie);
+        divergence_sphere_sl(kv, DInv_exec, metdet_exec, deriv.get_dvv(),
+                             vector_ie, div_ie);
       });
 
-      // Compute f90
-      divergence_sphere_f90(vector_f90, DInv_f90, metdet_f90, scalar_f90,
-                            nelems);
-
       // Deep copy back to host
-      Kokkos::deep_copy(scalar_cxx, scalar_cxx_exec);
+      Kokkos::deep_copy(scalar_output, scalar_exec);
+
+      // Compute f90
+      divergence_sphere_f90(vector_h.data(), DInv_h.data(), metdet_h.data(),
+                            scalar_h.data(), nelems);
 
       // Check the answer
-      int iter = 0;
       for (int ie = 0; ie < nelems; ++ie) {
         for (int j = 0; j < NP; ++j) {
-          for (int i = 0; i < NP; ++i, ++iter) {
-            REQUIRE(compare_answers(scalar_f90[iter], scalar_cxx(ie, i, j)) ==
-                    0.0);
+          for (int i = 0; i < NP; ++i) {
+            REQUIRE(compare_answers(scalar_h(ie, i, j),
+                                    scalar_output(ie, i, j)) == 0.0);
           }
         }
       }
@@ -316,61 +293,45 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   SECTION("vorticity sphere") {
     for (int itest = 0; itest < num_rand_test; ++itest) {
       // Initialize input(s)
-      genRandArray(vector_f90, nelems * NP * NP * 2, engine, dreal);
-      genRandArray(D_f90, nelems * NP * NP * 2 * 2, engine, dreal);
-      genRandArray(metdet_f90, nelems * NP * NP, engine, dreal);
+      genRandArray(vector_h, engine, dreal);
+      genRandArray(D_h, engine, dreal);
+      genRandArray(metdet_h, engine, dreal);
 
-      // Flip inputs for cxx
-      flip_f90_array_4d_4312<NP, NP, 2>(vector_f90, vector_cxx);
-      flip_f90_array_5d_53412<NP, NP, 2, 2>(D_f90, D_cxx);
-      flip_f90_array_3d_312<NP, NP>(metdet_f90, metdet_cxx);
-
-      Kokkos::deep_copy(vector_cxx_exec, vector_cxx);
-      Kokkos::deep_copy(D_cxx_exec, D_cxx);
-      Kokkos::deep_copy(metdet_cxx_exec, metdet_cxx);
-
-      region.m_d = D_cxx_exec;
-      region.m_metdet = metdet_cxx_exec;
+      Kokkos::deep_copy(vector_exec, vector_h);
+      Kokkos::deep_copy(D_exec, D_h);
+      Kokkos::deep_copy(metdet_exec, metdet_h);
 
       // Compute cxx
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
-        const int ie = team_member.league_rank();
+        KernelVariables kv(team_member);
 
         ExecViewUnmanaged<Real[NP][NP]> vector_x_ie =
-            subview(vector_cxx_exec, ie, 0, ALL, ALL);
+            subview(vector_exec, kv.ie, 0, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]> vector_y_ie =
-            subview(vector_cxx_exec, ie, 1, ALL, ALL);
+            subview(vector_exec, kv.ie, 1, ALL, ALL);
         ExecViewUnmanaged<Real[NP][NP]> vort_ie =
-            subview(scalar_cxx_exec, ie, ALL, ALL);
+            subview(scalar_exec, kv.ie, ALL, ALL);
 
-        vorticity_sphere_sl(team_member, region, deriv.get_dvv(), vector_x_ie,
-                            vector_y_ie, vort_ie);
+        vorticity_sphere_sl(kv, D_exec, metdet_exec, deriv.get_dvv(),
+                            vector_x_ie, vector_y_ie, vort_ie);
       });
 
       // Compute f90
-      vorticity_sphere_f90(vector_f90, D_f90, metdet_f90, scalar_f90, nelems);
+      vorticity_sphere_f90(vector_h.data(), D_h.data(), metdet_h.data(),
+                           scalar_h.data(), nelems);
 
       // Deep copy back to host
-      Kokkos::deep_copy(scalar_cxx, scalar_cxx_exec);
+      Kokkos::deep_copy(scalar_output, scalar_exec);
 
       // Check the answer
-      int iter = 0;
       for (int ie = 0; ie < nelems; ++ie) {
-        for (int j = 0; j < NP; ++j) {
-          for (int i = 0; i < NP; ++i, ++iter) {
-            REQUIRE(compare_answers(scalar_f90[iter], scalar_cxx(ie, i, j)) ==
-                    0.0);
+        for (int i = 0; i < NP; ++i) {
+          for (int j = 0; j < NP; ++j) {
+            REQUIRE(compare_answers(scalar_h(ie, i, j),
+                                    scalar_output(ie, i, j)) == 0.0);
           }
         }
       }
     }
   }
-
-  // Cleanup
-  delete[] scalar_f90;
-  delete[] vector_f90;
-  delete[] dvv_f90;
-  delete[] DInv_f90;
-  delete[] D_f90;
-  delete[] metdet_f90;
 }
