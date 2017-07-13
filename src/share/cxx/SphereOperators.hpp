@@ -193,16 +193,17 @@ laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,   //for grad, div
                  const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv, //for grad, div
                  const ExecViewUnmanaged<const Real[NP][NP]> metDet,//for div
-                 ExecViewUnmanaged<Real[2][NP][NP]> gv,//temp for div
-                 ExecViewUnmanaged<Real[NP][NP]> div_v, //temp to store div
-                 ExecViewUnmanaged<Real[2][NP][NP]> temp_v, //temp for grad
-                 ExecViewUnmanaged<Real[2][NP][NP]> grad_s, //temp to store grad
+                 ExecViewUnmanaged<Real[2][NP][NP]> temp_gv,//temp for div
+                 ExecViewUnmanaged<Real[2][NP][NP]> temp_temp, //temp for grad
+                 ExecViewUnmanaged<Real[2][NP][NP]> temp_grad, //temp to store grad
 //let's reduce num of temps later
 //output
                  ExecViewUnmanaged<Real[NP][NP]> laplace) {
 //let's ignore var coef and tensor hv
-  gradient_sphere(team, field, dvv, DInv, temp_v, grad_s);
-  divergence_sphere(team, grad_s, dvv, metDet, DInv, gv, laplace);
+  gradient_sphere(team, field, dvv, DInv, temp_temp, temp_grad);
+
+//has to be divergence_wk!
+  divergence_sphere(team, temp_grad, dvv, metDet, DInv, temp_gv, laplace);
 }
 
 /*
