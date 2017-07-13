@@ -2128,13 +2128,12 @@ end do
 
 ! not a homme function, for debugging cxx
 ! make it not take elem in
-  function laplace_simple(s,dvv,dinv,metdet,rmetdet) result(laplace)
+  function laplace_simple(s,dvv,dinv,metdet) result(laplace)
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: s(np,np)
     real(kind=real_kind), intent(in) :: dvv(np,np)
     real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
     real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
     real(kind=real_kind)             :: laplace(np,np)
 
     ! Local
@@ -2148,25 +2147,23 @@ end do
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%metdet(np, np))
-    allocate(elem%rmetdet(np, np))
 #endif
 
     elem%Dinv = dinv
     elem%metdet = metdet
-    elem%rmetdet = rmetdet
 
-    laplace=divergence_sphere_wk(grads,deriv,elem)
+!    laplace=divergence_sphere_wk(grads,deriv,elem)
+    laplace=divergence_sphere(grads,deriv,elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
-    deallocate(elem%rmetdet)
 #endif
 
   end function laplace_simple
 
 !not a homme subroutine, to call from C++ unit testing
-  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,rmetdet,laplace) bind(c)
+  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
     use kinds, only: real_kind
     use dimensions_mod, only: np
 
@@ -2174,7 +2171,6 @@ end do
     real(kind=real_kind), intent(in) :: dvv(np,np)
     real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
     real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)   
     real(kind=real_kind), intent(out):: laplace(np,np)
 
     laplace=laplace_simple(s,dvv,dinv,metdet,rmetdet)
