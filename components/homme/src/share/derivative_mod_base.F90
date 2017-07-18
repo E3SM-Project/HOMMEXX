@@ -2173,7 +2173,7 @@ end do
     real(kind=real_kind), intent(in) :: metdet(np, np)
     real(kind=real_kind), intent(out):: laplace(np,np)
 
-    laplace=laplace_simple(s,dvv,dinv,metdet,rmetdet)
+    laplace=laplace_simple(s,dvv,dinv,metdet)
 
   end subroutine laplace_simple_c_int
 

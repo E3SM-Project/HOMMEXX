@@ -10,6 +10,9 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <random>
+
+
 
 using namespace Homme;
 
@@ -23,13 +26,12 @@ void caar_compute_energy_grad_c_int(const Real (&dvv)[NP][NP], Real *Dinv,
                                     Real (&vtemp)[2][NP][NP]);
 //what is _int here for?
 //why dvv is passed as real&[][], Dinv is real* , and phi as *const &?
-/*
 void laplace_simple_c_int(const Real (&scalar_field)[NP][NP],
                           const Real (&dvv)[NP][NP],
                           const Real (&dinv)[NP][NP][2][2],
                           const Real (&metdet)[NP][NP],
                                 Real (&laplace)[NP][NP]);
-*/
+
 }//extern C
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -40,6 +42,34 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
 
   return std::fabs(target - computed) / denom;
 }//compare_answers
+
+
+
+
+//template <typename rngAlg, typename dist>
+//void genRandArray(Real *arr, int arr_len, rngAlg &engine, dist &pdf) {
+void genRandArray(Real *arr, int arr_len, rngAlg &engine, std::uniform_real_distribution<Real> pdf){
+  for(int i = 0; i < arr_len; ++i) {
+    arr[i] = pdf(engine);
+  }
+}
+/*
+ template <typename rngAlg, typename dist, typename number>
+void genRandArray(number *arr, int arr_len, rngAlg &engine,
+                  dist &&pdf) {
+  for(int i = 0; i < arr_len; ++i) {
+    arr[i] = pdf(engine);
+  }
+}
+*/
+
+
+
+
+
+
+
+
 
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
@@ -227,7 +257,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
 
 
 /*
-  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,rmetdet,laplace) bind(c)
+  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
     use kinds, only: real_kind
     use dimensions_mod, only: np
 
@@ -235,59 +265,148 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     real(kind=real_kind), intent(in) :: dvv(np,np)
     real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
     real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
     real(kind=real_kind), intent(out):: laplace(np,np)
 */
-/*
+
+
+//template <typename TestFunctor_T> class compute_sphop_test {
+class compute_sphop_test {
+public:
+  compute_sphop_test(int some_index)
+    : scalar_input_d("scalar input", some_index),
+      dinv_d("dinv", some_index),
+      metdet_d("metdet", some_index),
+      dvv_d("dvv", some_index),
+      scalar_output_d("scalar output", some_index),
+      vector_output_d("vector output", some_index),
+      temp1_d("temp1", some_index),
+      temp2_d("temp2", some_index),
+      temp3_d("temp3", some_index),
+      scalar_input_host(Kokkos::create_mirror_view(scalar_input_d)),
+      dinv_host(Kokkos::create_mirror_view(dinv_d)),
+      metdet_host(Kokkos::create_mirror_view(metdet_d)),
+      dvv_host(Kokkos::create_mirror_view(dvv_d)),
+      scalar_output_host(Kokkos::create_mirror_view(scalar_output_d)),
+      vector_output_host(Kokkos::create_mirror_view(vector_output_d)),
+      temp1_host(Kokkos::create_mirror_view(temp1_d)),
+      temp2_host(Kokkos::create_mirror_view(temp2_d)),
+      temp3_host(Kokkos::create_mirror_view(temp3_d)),
+      _some_index(some_index)
+       {
+
+//constructor s body
+//init randonly
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+
+
+  }
+  int _some_index;//league size
+
+//device views
+  ExecViewManaged<Real * [NP][NP]> scalar_input_d;
+  ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
+  ExecViewManaged<Real * [NP][NP]> metdet_d;
+  ExecViewManaged<Real * [NP][NP]> dvv_d;
+  ExecViewManaged<Real * [NP][NP]> scalar_output_d;
+  ExecViewManaged<Real * [2][NP][NP]> vector_output_d;
+  ExecViewManaged<Real * [2][NP][NP]> temp1_d, temp2_d, temp3_d;  
+
+//host views, one dim is some_index. sp ops do not take ie or nlev fields, but to make it 
+//more reasonable test and to have parallel_for
+  ExecViewManaged<Real * [NP][NP]>::HostMirror scalar_input_host;
+  const int scalar_input_len = NP*NP;
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror dinv_host;
+  const int dinv_len = 2*2*NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror metdet_host;
+  const int metdet_len = NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror dvv_host;
+  const int dvv_len = NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror scalar_output_host;
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror vector_output_host;
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror temp1_host, temp2_host, temp3_host;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TeamMember team) const {
+        //here is a flaw
+//grad is :
+//gradient_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+//                const ExecViewUnmanaged<const Real[NP][NP]> scalar,
+//                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+//                const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
+//                ExecViewUnmanaged<Real[2][NP][NP]> temp_v,
+//                ExecViewUnmanaged<Real[2][NP][NP]> grad_s)
+
+        int _index = team.league_rank();
+
+        ExecViewManaged<Real [NP][NP]> local_scalar_input_d = 
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL);
+        ExecViewManaged<Real [NP][NP]> local_dvv_d = 
+          Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+        ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d = 
+          Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        ExecViewManaged<Real [2][NP][NP]> local_temp1_d = 
+          Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        ExecViewManaged<Real [2][NP][NP]> local_vector_output_d = 
+          Kokkos::subview(vector_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+        
+        gradient_sphere(team, local_scalar_input_d, local_dvv_d, local_dinv_d, local_temp1_d, local_vector_output_d);
+
+      };
+
+  void run_functor() const {
+//league, team, vector_length_request=1
+    Kokkos::TeamPolicy<ExecSpace> policy(_some_index, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    //TO FROM 
+    //copy all results even if only 1 was used
+    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
+    Kokkos::deep_copy(vector_output_host, vector_output_d);
+  };
+
+};
+
+
 TEST_CASE("what to insert here", "laplace_simple") {
+
   constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
-  constexpr const int num_elems = 10;
+  constexpr const int some_index = 10;
 
 //these are managed views but sph ops take in unmanaged views
-
-//host views, leading dim is ie. sp ops do not take ie fields, but to make it 
-//more reasonable test and to have parallel_for
-  ExecViewManaged<Real *[NP][NP]>::HostMirror sfield_host;
-  constexpr const int sfield_len = NP*NP;
-  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror dinv_host;
-  constexpr const int dinv_len = 2*2*NP*NP;
-  ExecViewManaged<Real *[NP][NP]>::HostMirror metdet_host;
-  constexpr const int metdet_len = NP*NP;
-  ExecViewManaged<Real *[NP][NP]>::HostMirror dvv_host;
-  constexpr const int dvv_len = NP*NP;
-  ExecViewManaged<Real *[NP][NP]>::HostMirror laplace_host;
-  ExecViewManaged<Real *[2][NP][NP]>::HostMirror temp1_host,temp2_host,temp3_host;
 //device
-  ExecViewManaged<Real *[NP][NP]> sfield_d;
-  ExecViewManaged<Real *[2][2][NP][NP]> dinv_d;
-  ExecViewManaged<Real *[NP][NP]> metdet_d;
-  ExecViewManaged<Real *[NP][NP]> dvv_d;
-  ExecViewManaged<Real *[NP][NP]> laplace_d;
-  ExecViewManaged<Real *[2][NP][NP]> temp1_d,temp2_d,temp3_d;  
-
-//init views
-  sfield_d ("scalar field", num_elems);
-  dinv_d   ("dinv", num_elems);
-  metdet_d ("metdet", num_elems);
-  dvv_d    ("dvv", num_elems);
-  laplace_d("resulting laplace", num_elems);
-  temp1_d  ("temp scalar field 1", num_elems);
-  temp2_d  ("temp scalar field 2", num_elems);
-  temp3_d  ("temp scalar field 3", num_elems);
-
-//this should also be done as class
-//init host mirrors
-  sfield_host(Kokkos::create_mirror_view(sfield_d));
-  dinv_host(Kokkos::create_mirror_view(dinv_d));
-  metdet_host(Kokkos::create_mirror_view(metdet_d));
-  dvv_host(Kokkos::create_mirror_view(dvv_d));
-  laplace_host(Kokkos::create_mirror_view(laplace_d));
-  temp1_host(Kokkos::create_mirror_view(temp1_d));
-  temp2_host(Kokkos::create_mirror_view(temp2_d));
-  temp3_host(Kokkos::create_mirror_view(temp3_d));
+/*
+  ExecViewManaged<Real * [NP][NP]> sfield_d("scalar field", some_index);
+  ExecViewManaged<Real * [2][2][NP][NP]> dinv_d("dinv", some_index);
+  ExecViewManaged<Real * [NP][NP]> metdet_d("metdet", some_index);
+  ExecViewManaged<Real * [NP][NP]> dvv_d("dvv", some_index);
+  ExecViewManaged<Real * [NP][NP]> laplace_d("laplace", some_index);
+  ExecViewManaged<Real * [2][NP][NP]> temp1_d("temp1", some_index),
+                                      temp2_d("temp2", some_index),
+                                      temp3_d("temp3", some_index);  
+//host views, one dim is some_index. sp ops do not take ie fields, but to make it 
+//more reasonable test and to have parallel_for
+  ExecViewManaged<Real * [NP][NP]>::HostMirror sfield_host(Kokkos::create_mirror_view(sfield_d));
+  constexpr const int sfield_len = NP*NP;
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror dinv_host(Kokkos::create_mirror_view(dinv_d));
+  constexpr const int dinv_len = 2*2*NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror metdet_host(Kokkos::create_mirror_view(metdet_d));
+  constexpr const int metdet_len = NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror dvv_host(Kokkos::create_mirror_view(dvv_d));
+  constexpr const int dvv_len = NP*NP;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror laplace_host(Kokkos::create_mirror_view(laplace_d));
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror temp1_host(Kokkos::create_mirror_view(temp1_d));
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror temp2_host(Kokkos::create_mirror_view(temp2_d));
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror temp3_host(Kokkos::create_mirror_view(temp3_d));
+*/
 
 //do i need fortran views?
-
 //instert mechaninsm to prevent dinv to be singular 
 //has dvv
 //  get_derivative().random_init(engine);
@@ -299,34 +418,38 @@ TEST_CASE("what to insert here", "laplace_simple") {
   rngAlg engine(rd());
 
 //repetition
-  genRandArray(sfield_host, sfield_len*num_elems, engine, std::uniform_real_distribution<real>(0, 1.0));
-  genRandArray(dinv_host, dinv_len*num_elems, engine, std::uniform_real_distribution<real>(0, 1.0));
-  genRandArray(metdet_host, metdet_len*num_elems, engine, std::uniform_real_distribution<real>(0, 1.0));
-  genRandArray(dvv_host, dvv_len*num_elems, engine, std::uniform_real_distribution<real>(0, 1.0));
- 
+/*  genRandArray(sfield_host.data(), sfield_len*num_elems, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dinv_host.data(), dinv_len*num_elems, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(metdet_host.data(), metdet_len*num_elems, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dvv_host.data(), dvv_len*num_elems, engine, std::uniform_real_distribution<Real>(0, 1.0));
+*/ 
 
 //copy to device, format TO FROM
-  Kokkos::deep_copy(sfield_d, sfield_host);
+/*  Kokkos::deep_copy(sfield_d, sfield_host);
   Kokkos::deep_copy(dinv_d, dinv_host);
   Kokkos::deep_copy(metdet_d, metdet_host);
   Kokkos::deep_copy(dvv_d, dvv_host);
-
+*/
 //run functor
 
 //copy back
 //copy from device, format TO FROM
-  Kokkos::deep_copy(sfield_host, sfield_d);
+/*  Kokkos::deep_copy(sfield_host, sfield_d);
   Kokkos::deep_copy(dinv_host, dinv_d);
   Kokkos::deep_copy(metdet_host, metdet_d);
   Kokkos::deep_copy(dvv_host, dvv_d);
+*/
 
 //run fortran
 
 //compare results
 
+ compute_sphop_test testing_grad(some_index);
+
+ testing_grad.run_functor();
 
 };//end of TEST_CASE(..., "simple laplace")
 
-*/
+
 
 
