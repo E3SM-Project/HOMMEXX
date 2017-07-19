@@ -42,10 +42,10 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
   control.dt    = dt;
 }
 
-void init_derivative_c (CF90Ptr& dvv, CF90Ptr& integration_matrix, CF90Ptr& boundary_interp_matrix)
+void init_derivative_c (CF90Ptr& dvv)
 {
   Derivative& deriv = get_derivative ();
-  deriv.init(dvv,integration_matrix,boundary_interp_matrix);
+  deriv.init(dvv);
 }
 
 void init_region_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,

@@ -57,14 +57,14 @@ contains
 #ifdef USE_KOKKOS_KERNELS
   subroutine init_caar_derivative_c (deriv)
     use iso_c_binding       , only : c_ptr, c_loc
-    use derivative_mod_base , only : derivative_t, integration_matrix, boundary_interp_matrix
+    use derivative_mod_base , only : derivative_t
     interface
-      subroutine init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr) bind(c)
+      subroutine init_derivative_c (dvv_ptr) bind(c)
         use iso_c_binding, only : c_ptr
         !
         ! Inputs
         !
-        type (c_ptr), intent(in) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+        type (c_ptr), intent(in) :: dvv_ptr
       end subroutine init_derivative_c
     end interface
     !
@@ -74,13 +74,11 @@ contains
     !
     ! Locals
     !
-    type (c_ptr) :: dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr
+    type (c_ptr) :: dvv_ptr
 
     dvv_ptr = c_loc(deriv%dvv)
-    integr_mat_ptr = c_loc(integration_matrix)
-    bd_interp_mat_ptr = c_loc(boundary_interp_matrix)
 
-    call init_derivative_c (dvv_ptr, integr_mat_ptr, bd_interp_mat_ptr)
+    call init_derivative_c (dvv_ptr)
 
   end subroutine init_caar_derivative_c
 #endif
