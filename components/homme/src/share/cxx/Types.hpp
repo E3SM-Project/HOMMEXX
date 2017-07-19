@@ -12,6 +12,9 @@
 #include "config.h.c"
 #endif
 
+#define __MACRO_STRING(MacroVal) #MacroVal
+#define MACRO_STRING(MacroVal) __MACRO_STRING(MacroVal)
+
 namespace Homme {
 
 // Usual typedef for real scalar type
@@ -78,7 +81,7 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #endif // HOMMEXX_SPACE
 
 #ifdef AVX_VERSION
-using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real>;
+using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
     KokkosKernels::Batched::Experimental::SIMD<Real, VECTOR_SIZE>;
@@ -87,7 +90,7 @@ using VectorTagType =
 using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
 
-using Scalar = VectorType;
+using Scalar = KokkosKernels::Batched::Experimental::Vector<VectorType>;
 
 template <typename ExecSpace>
 int DefaultThreadsDistribution<ExecSpace>::Max_Threads_Per_Team;

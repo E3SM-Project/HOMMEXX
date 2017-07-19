@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_UTILITY_HPP
 #define HOMMEXX_UTILITY_HPP
 
-#include "Dimensions.hpp"
 #include "Types.hpp"
 
 namespace Homme {

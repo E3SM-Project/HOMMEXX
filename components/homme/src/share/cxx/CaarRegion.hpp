@@ -1,14 +1,10 @@
 #ifndef HOMME_REGION_HPP
 #define HOMME_REGION_HPP
 
-#include "Dimensions.hpp"
-
 #include "Types.hpp"
 
 #include "CaarControl.hpp"
 #include <Kokkos_Core.hpp>
-
-#include "vector/KokkosKernels_Vector.hpp"
 
 #include <random>
 
@@ -30,45 +26,45 @@ public:
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
   // Omega is the pressure vertical velocity
-  ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_omega_p;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
   // ???
-  ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_pecnd;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_pecnd;
   // Geopotential height field
-  ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_phi;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
   // ???
-  ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_derived_un0;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
   // ???
-  ExecViewManaged<Real * [NP][NP][NUM_LEV]> m_derived_vn0;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Lateral Velocity
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
   // Temperature
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
   // ???
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
   // q is the specific humidity
-  ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
+  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
   // eta is the vertical coordinate
   // eta dot is the flux through the vertical level interface
   //    (note there are NUM_LEV_P of them)
   // dpdn is the derivative of pressure with respect to eta
-  ExecViewManaged<Real * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
   struct BufferViews {
     BufferViews() = default;
     void init(const int num_elems);
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> temperature_grad;
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Real * [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Real * [NP][NP][NUM_LEV]> vorticity;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temperature_grad;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> ephi;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad;
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> vorticity;
   } buffers;
 
   CaarRegion() = default;

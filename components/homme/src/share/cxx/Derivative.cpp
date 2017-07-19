@@ -61,14 +61,8 @@ void Derivative::random_init(std::mt19937_64 &engine) {
 }
 
 void Derivative::dvv(Real *dvv_ptr) {
-  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_cxx = Kokkos::create_mirror_view(m_dvv_exec),
-    dvv_wrapper(dvv_ptr);
-  Kokkos::deep_copy(dvv_cxx, m_dvv_exec);
-  for(int igp = 0; igp < NP; ++igp) {
-    for(int jgp = 0; jgp < NP; ++jgp) {
-      dvv_wrapper(jgp, igp) = dvv_cxx(igp, jgp);
-    }
-  }
+  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_f90(dvv_ptr);
+  Kokkos::deep_copy(dvv_f90, m_dvv_exec);
 }
 
 void subcell_div_fluxes (const Kokkos::TeamPolicy<ExecSpace>::member_type& team_member,
