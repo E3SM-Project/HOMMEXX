@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_DERIVATIVE_HPP
 #define HOMMEXX_DERIVATIVE_HPP
 
-#include "Dimensions.hpp"
 #include "Types.hpp"
 
 #include <random>

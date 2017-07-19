@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_CAAR_CONTROL_HPP
 #define HOMMEXX_CAAR_CONTROL_HPP
 
-#include "Dimensions.hpp"
 #include "Types.hpp"
 
 #include <cstdlib>

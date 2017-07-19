@@ -1,11 +1,11 @@
 #ifndef HOMMEXX_SPHERE_OPERATORS_HPP
 #define HOMMEXX_SPHERE_OPERATORS_HPP
 
+#include "Types.hpp"
 #include "CaarRegion.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "PhysicalConstants.hpp"
-#include "Types.hpp"
 
 #include <Kokkos_Core.hpp>
 
@@ -46,34 +46,34 @@ vorticity_sphere_sl(const KernelVariables &kv,
 // Multi-level kernels
 KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const KernelVariables &kv,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> scalar,
-                ExecViewUnmanaged<Real[2][NP][NP][NUM_LEV]> grad_s);
+                const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
+                const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
+                const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s);
 
 KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
     const KernelVariables &kv,
-    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-    const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> scalar,
-    ExecViewUnmanaged<Real[2][NP][NP][NUM_LEV]> grad_s);
+    const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
+    const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
+    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s);
 
 KOKKOS_INLINE_FUNCTION void
 divergence_sphere(const KernelVariables &kv,
-                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                  const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
-                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                  const ExecViewUnmanaged<const Real[2][NP][NP][NUM_LEV]> v,
-                  ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> div_v);
+                  const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
+                  const ExecViewUnmanaged<const Scalar * [NP][NP]> metdet,
+                  const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
+                  const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v);
 
 KOKKOS_INLINE_FUNCTION void
 vorticity_sphere(const KernelVariables &kv,
-                 const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
-                 const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
-                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                 const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> u,
-                 const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> v,
-                 ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> vort);
+                 const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> d,
+                 const ExecViewUnmanaged<const Scalar * [NP][NP]> metdet,
+                 const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
+                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> u,
+                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> v,
+                 ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> vort);
 
 // ================ SINGLE-LEVEL IMPLEMENTATION =========================== //
 
@@ -218,16 +218,16 @@ KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const KernelVariables &kv,
                 const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> scalar,
-                ExecViewUnmanaged<Real[2][NP][NP][NUM_LEV]> grad_s) {
+                const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s) {
   constexpr int contra_iters = NP * NP;
   // TODO: Use scratch space for this
-  Real temp_v[2][NP][NP];
+  Scalar temp_v[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
     const int j = loop_idx / NP;
     const int l = loop_idx % NP;
-    Real dsdx(0), dsdy(0);
+    Scalar dsdx(0.0), dsdy(0.0);
     for (int i = 0; i < NP; ++i) {
       dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
       dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
@@ -251,15 +251,15 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
     const KernelVariables &kv,
     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
     const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-    const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> scalar,
-    ExecViewUnmanaged<Real[2][NP][NP][NUM_LEV]> grad_s) {
+    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s) {
   constexpr int contra_iters = NP * NP;
-  Real temp_v[2][NP][NP];
+  Scalar temp_v[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
     const int j = loop_idx / NP;
     const int l = loop_idx % NP;
-    Real dsdx(0), dsdy(0);
+    Scalar dsdx(0), dsdy(0);
     for (int i = 0; i < NP; ++i) {
       dsdx += dvv(l, i) * scalar(j, i, kv.ilev);
       dsdy += dvv(l, i) * scalar(i, j, kv.ilev);
@@ -274,8 +274,8 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
     const int h = (loop_idx / NP) / NP;
     const int i = (loop_idx / NP) % NP;
     const int j = loop_idx % NP;
-    grad_s(h, j, i, kv.ilev) += dinv(kv.ie, h, 0, j, i) * temp_v[0][j][i] +
-                                dinv(kv.ie, h, 1, j, i) * temp_v[1][j][i];
+    grad_s(h, i, j, kv.ilev) += dinv(kv.ie, h, 0, i, j) * temp_v[0][i][j] +
+                                dinv(kv.ie, h, 1, i, j) * temp_v[1][i][j];
   });
 }
 
@@ -284,10 +284,10 @@ divergence_sphere(const KernelVariables &kv,
                   const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
                   const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
                   const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                  const ExecViewUnmanaged<const Real[2][NP][NP][NUM_LEV]> v,
-                  ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> div_v) {
+                  const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
   constexpr int contra_iters = NP * NP * 2;
-  Real gv[2][NP][NP];
+  Scalar gv[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
     const int hgp = (loop_idx / NP) / NP;
@@ -304,7 +304,7 @@ divergence_sphere(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Real dudx = 0.0, dvdy = 0.0;
+    Scalar dudx = 0.0, dvdy = 0.0;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dudx += dvv(igp, kgp) * gv[0][jgp][kgp];
       dvdy += dvv(jgp, kgp) * gv[1][kgp][igp];
@@ -320,11 +320,11 @@ vorticity_sphere(const KernelVariables &kv,
                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
                  const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                 const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> u,
-                 const ExecViewUnmanaged<const Real[NP][NP][NUM_LEV]> v,
-                 ExecViewUnmanaged<Real[NP][NP][NUM_LEV]> vort) {
+                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> u,
+                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> v,
+                 ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> vort) {
   constexpr int covar_iters = 2 * NP * NP;
-  Real vcov[2][NP][NP];
+  Scalar vcov[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, covar_iters),
                        [&](const int loop_idx) {
     const int hgp = loop_idx / NP / NP;
@@ -339,8 +339,8 @@ vorticity_sphere(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Real dudy = 0.0;
-    Real dvdx = 0.0;
+    Scalar dudy = 0.0;
+    Scalar dvdx = 0.0;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dvdx += dvv(igp, kgp) * vcov[1][jgp][kgp];
       dudy += dvv(jgp, kgp) * vcov[0][kgp][igp];

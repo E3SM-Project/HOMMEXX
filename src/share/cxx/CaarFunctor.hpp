@@ -2,7 +2,6 @@
 #define CAAR_FUNCTOR_HPP
 
 #include "Types.hpp"
-
 #include "CaarControl.hpp"
 #include "CaarRegion.hpp"
 #include "Derivative.hpp"
@@ -43,14 +42,14 @@ struct CaarFunctor {
       const int jgp = idx % NP;
       // Kinetic energy + PHI (geopotential energy) +
       // PECND (potential energy?)
-      Real k_energy =
-          0.5 * (m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
-                     m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) +
-                 m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
-                     m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev));
-      m_region.buffers.ephi(kv.ie, jgp, igp, kv.ilev) =
-          k_energy + m_region.m_phi(kv.ie, jgp, igp, kv.ilev) +
-          m_region.m_pecnd(kv.ie, jgp, igp, kv.ilev);
+      Scalar k_energy =
+          0.5 * (m_region.m_u(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
+                     m_region.m_u(kv.ie, m_data.n0, igp, jgp, kv.ilev) +
+                 m_region.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
+                     m_region.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev));
+      m_region.buffers.ephi(kv.ie, igp, jgp, kv.ilev) =
+          k_energy + m_region.m_phi(kv.ie, igp, jgp, kv.ilev) +
+          m_region.m_pecnd(kv.ie, igp, jgp, kv.ilev);
     });
 
     gradient_sphere_update(
@@ -91,8 +90,8 @@ struct CaarFunctor {
 
       m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev) *=
           PhysicalConstants::Rgas *
-          (m_region.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev) /
-           m_region.buffers.pressure(kv.ie, jgp, igp, kv.ilev));
+          (m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) /
+           m_region.buffers.pressure(kv.ie, igp, jgp, kv.ilev));
     });
 
     compute_energy_grad(kv);
@@ -109,7 +108,7 @@ struct CaarFunctor {
       const int jgp = idx % NP;
 
       // Recycle vort to contain (fcor+vort)
-      m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev) +=
+      m_region.buffers.vorticity(kv.ie, igp, jgp, kv.ilev) +=
           m_region.m_fcor(kv.ie, igp, jgp);
 
       m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) *= -1;
@@ -164,7 +163,7 @@ struct CaarFunctor {
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      Real integration = 0.0;
+      Scalar integration = 0.0;
       for (kv.ilev = NUM_LEV - 1; kv.ilev >= 0; --kv.ilev) {
         // compute phi
         m_region.m_phi(kv.ie, jgp, igp, kv.ilev) =
@@ -193,7 +192,7 @@ struct CaarFunctor {
     // pressure, meaning that we cannot update the different
     // pressure points within a level before the gradient is
     // complete!
-    Real integration;
+    Scalar integration;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
@@ -211,7 +210,7 @@ struct CaarFunctor {
                            [&](const int loop_idx) {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
-        Real vgrad_p =
+        Scalar vgrad_p =
             m_region.m_u(kv.ie, m_data.n0, kv.ilev, jgp, igp) *
                 m_region.buffers.pressure_grad(kv.ie, 0, jgp, igp, kv.ilev) +
             m_region.m_v(kv.ie, m_data.n0, kv.ilev, jgp, igp) *
@@ -283,7 +282,7 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      Real Qt = m_region.m_qdp(kv.ie, m_data.qn0, 0, jgp, igp, kv.ilev) /
+      Scalar Qt = m_region.m_qdp(kv.ie, m_data.qn0, 0, jgp, igp, kv.ilev) /
                 m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
       Qt *= PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0;
       Qt += 1.0;
@@ -376,20 +375,20 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      Real vgrad_t =
+      Scalar vgrad_t =
           m_region.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
               m_region.buffers.temperature_grad(kv.ie, 0, jgp, igp, kv.ilev) +
           m_region.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
               m_region.buffers.temperature_grad(kv.ie, 1, jgp, igp, kv.ilev);
 
       // vgrad_t + kappa * T_v * omega_p
-      Real ttens;
+      Scalar ttens;
       ttens = -vgrad_t +
               PhysicalConstants::kappa *
                   m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) *
                   m_region.buffers.omega_p(kv.ie, igp, jgp, kv.ilev);
 
-      Real temp_np1 = ttens * m_data.dt2 +
+      Scalar temp_np1 = ttens * m_data.dt2 +
                       m_region.m_t(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
       temp_np1 *= m_region.m_spheremp(kv.ie, igp, jgp);
 
@@ -405,7 +404,7 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      Real tmp = m_region.m_dp3d(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
+      Scalar tmp = m_region.m_dp3d(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
       tmp -= m_data.dt2 * m_region.buffers.div_vdp(kv.ie, jgp, igp, kv.ilev);
       m_region.m_dp3d(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
           m_region.m_spheremp(kv.ie, jgp, igp) * tmp;
@@ -417,16 +416,16 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void preq_vertadv(
       const TeamMember &team,
-      const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T,
-      const ExecViewUnmanaged<const Real[NUM_LEV][2][NP][NP]> v,
-      const ExecViewUnmanaged<const Real[NUM_LEV_P][NP][NP]> eta_dp_deta,
-      const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> rpdel,
-      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> T_vadv,
-      ExecViewUnmanaged<Real[NUM_LEV][2][NP][NP]> v_vadv) {
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> T,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV_P][NP][NP]> eta_dp_deta,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> rpdel,
+      ExecViewUnmanaged<Scalar[NUM_LEV][NP][NP]> T_vadv,
+      ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> v_vadv) {
     constexpr const int k_0 = 0;
     for (int j = 0; j < NP; ++j) {
       for (int i = 0; i < NP; ++i) {
-        Real facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
+        Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
         T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
         for (int h = 0; h < 2; ++h) {
           v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
@@ -437,8 +436,8 @@ struct CaarFunctor {
     for (int k = k_0 + 1; k < k_f; ++k) {
       for (int j = 0; j < NP; ++j) {
         for (int i = 0; i < NP; ++i) {
-          Real facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
-          Real facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
+          Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
+          Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
           T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
                             facm * (T(k, j, i) - T(k - 1, j, i));
           for (int h = 0; h < 2; ++h) {
@@ -450,7 +449,7 @@ struct CaarFunctor {
     }
     for (int j = 0; j < NP; ++j) {
       for (int i = 0; i < NP; ++i) {
-        Real facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
+        Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
         T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
         for (int h = 0; h < 2; ++h) {
           v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
