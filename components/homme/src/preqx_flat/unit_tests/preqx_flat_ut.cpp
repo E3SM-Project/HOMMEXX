@@ -82,15 +82,18 @@ public:
   CaarFunctor functor;
 
   // Arrays used to pass data to and from Fortran
-  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][2][NP][NP]> velocity;
-  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> temperature;
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][2][NP][NP]>
+  velocity;
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>
+  temperature;
   HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> dp3d;
-  HostViewManaged<Real * [NUM_LEV][NP][NP]> phi;
-  HostViewManaged<Real * [NUM_LEV][NP][NP]> pecnd;
-  HostViewManaged<Real * [NUM_LEV][NP][NP]> omega_p;
-  HostViewManaged<Real * [NUM_LEV][2][NP][NP]> derived_v;
-  HostViewManaged<Real * [NUM_LEV_P][NP][NP]> eta_dpdn;
-  HostViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> phi;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dpdn;
+  HostViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
+  qdp;
   HostViewManaged<Real * [2][2][NP][NP]> dinv;
   HostViewManaged<Real[NP][NP]> dvv;
 
@@ -118,7 +121,15 @@ public:
   }
 };
 
-TEST_CASE("monolithic compute_and_apply_rhs", "compute_velocity") {
+TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
+  printf("Q_NUM_TIME_LEVELS: %d\n"
+         "QSIZE_D: %d\n"
+         "NUM_PHYSICAL_LEV: %d\n"
+         "VECTOR_SIZE: %d\n"
+         "LEVEL_PADDING: %d\n"
+         "NUM_LEV: %d\n",
+         Q_NUM_TIME_LEVELS, QSIZE_D, NUM_PHYSICAL_LEV, VECTOR_SIZE,
+         LEVEL_PADDING, NUM_LEV);
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 1;
 
@@ -131,47 +142,44 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_velocity") {
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  SECTION("compute_energy_grad") {
-    compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems);
-    test_functor.run_functor();
-    HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad("energy_grad",
-                                                               num_elems);
-    Kokkos::deep_copy(energy_grad, region.buffers.energy_grad);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems);
+  test_functor.run_functor();
+  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad("energy_grad",
+                                                             num_elems);
+  Kokkos::deep_copy(energy_grad, region.buffers.energy_grad);
 
-    for (int ie = 0; ie < num_elems; ++ie) {
-      for (int level = 0; level < NUM_LEV; ++level) {
-        for (int v = 0; v < VECTOR_SIZE; ++v) {
-          Real vtemp[2][NP][NP];
-          caar_compute_energy_grad_c_int(
-              reinterpret_cast<Real *>(test_functor.dvv.data()),
-              reinterpret_cast<Real *>(Kokkos::subview(
-                  test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-                  Kokkos::ALL).data()),
-              reinterpret_cast<Real *>(Kokkos::subview(test_functor.pecnd, ie,
-                                                       level, Kokkos::ALL,
-                                                       Kokkos::ALL).data()),
-              reinterpret_cast<Real *>(Kokkos::subview(test_functor.phi, ie,
-                                                       level, Kokkos::ALL,
-                                                       Kokkos::ALL).data()),
-              reinterpret_cast<Real *>(Kokkos::subview(
-                  test_functor.velocity, ie, test_functor.n0, level,
-                  Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data()),
-              vtemp);
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
-              REQUIRE(!std::isnan(vtemp[1][igp][jgp]));
-              REQUIRE(!std::isnan(energy_grad(ie, 0, igp, jgp, level)[v]));
-              REQUIRE(!std::isnan(energy_grad(ie, 1, igp, jgp, level)[v]));
-              REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                      compare_answers(vtemp[0][igp][jgp],
-                                      energy_grad(ie, 0, igp, jgp, level)[v],
-                                      128.0));
-              REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                      compare_answers(vtemp[1][igp][jgp],
-                                      energy_grad(ie, 1, igp, jgp, level)[v],
-                                      128.0));
-            }
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int level = 0; level < NUM_LEV; ++level) {
+      for (int v = 0; v < VECTOR_SIZE; ++v) {
+        Real vtemp[2][NP][NP];
+        caar_compute_energy_grad_c_int(
+            reinterpret_cast<Real *>(test_functor.dvv.data()),
+            reinterpret_cast<Real *>(
+                Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
+                                Kokkos::ALL, Kokkos::ALL).data()),
+            reinterpret_cast<Real *>(Kokkos::subview(test_functor.pecnd, ie,
+                                                     level, Kokkos::ALL,
+                                                     Kokkos::ALL).data()),
+            reinterpret_cast<Real *>(Kokkos::subview(
+                test_functor.phi, ie, level, Kokkos::ALL, Kokkos::ALL).data()),
+            reinterpret_cast<Real *>(Kokkos::subview(
+                test_functor.velocity, ie, test_functor.n0, level, Kokkos::ALL,
+                Kokkos::ALL, Kokkos::ALL).data()),
+            vtemp);
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
+            REQUIRE(!std::isnan(vtemp[1][igp][jgp]));
+            REQUIRE(!std::isnan(energy_grad(ie, 0, igp, jgp, level)[v]));
+            REQUIRE(!std::isnan(energy_grad(ie, 1, igp, jgp, level)[v]));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(vtemp[0][igp][jgp],
+                                    energy_grad(ie, 0, igp, jgp, level)[v],
+                                    128.0));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(vtemp[1][igp][jgp],
+                                    energy_grad(ie, 1, igp, jgp, level)[v],
+                                    128.0));
           }
         }
       }
