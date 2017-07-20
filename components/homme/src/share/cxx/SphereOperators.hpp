@@ -48,6 +48,10 @@ vorticity_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                  ExecViewUnmanaged<Real[2][NP][NP]> vcov,
                  ExecViewUnmanaged<Real[NP][NP]> vort);
 
+
+///add laplace_wk signature
+
+
 // ============================ IMPLEMENTATION =========================== //
 
 KOKKOS_INLINE_FUNCTION void
