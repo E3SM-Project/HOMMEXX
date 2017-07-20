@@ -71,6 +71,11 @@ struct EulerStepFunctor
         kv.iq   = lev_q / NUM_LEV;
         kv.ilev = lev_q % NUM_LEV;
 
+        ExecViewUnmanaged<const Real[NP][NP]> ustar = m_region.get_3d_buffer(kv.ie,USTAR,kv.ilev);
+        ExecViewUnmanaged<const Real[NP][NP]> vstar = m_region.get_3d_buffer(kv.ie,VSTAR,kv.ilev);
+        ExecViewUnmanaged<const Real[NP][NP]> qdp   = m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev);
+        ExecViewUnmanaged<Real[NP][NP]>       q_buf = m_region.get_q_buffer(kv.ie,kv.iq,kv.ilev);
+
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (kv.team, NP*NP),
           KOKKOS_LAMBDA (const int idx)
@@ -78,8 +83,8 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            kv.vector_buf_1(0,igp,jgp) = m_region.get_3d_buffer(kv.ie,USTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp);
-            kv.vector_buf_1(1,igp,jgp) = m_region.get_3d_buffer(kv.ie,VSTAR,kv.ilev,igp,jgp) * m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp);
+            kv.vector_buf_1(0,igp,jgp) = ustar(igp,jgp) * qdp(igp,jgp);
+            kv.vector_buf_1(1,igp,jgp) = vstar(igp,jgp) * qdp(igp,jgp);
           }
         );
 
@@ -94,7 +99,7 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            m_region.get_q_buffer(kv.ie,kv.iq,kv.ilev,igp,jgp) = m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev,igp,jgp) - m_data.dt*kv.scalar_buf(igp,jgp);
+            q_buf(igp,jgp) = qdp(igp,jgp) - m_data.dt*kv.scalar_buf(igp,jgp);
           }
         );
       }
