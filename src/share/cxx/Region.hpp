@@ -126,6 +126,12 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[NP][NP]> QDP(const int ie, const int qn0,
+                                      const int v, const int ilev) const {
+    return Kokkos::subview(m_Qdp, ie, qn0, v, ilev, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
   Real& QDP(const int ie, const int qn0, const int v,
             const int ilev, const int igp, const int jgp) const {
     return m_Qdp(ie, qn0, v, ilev, igp, jgp);
