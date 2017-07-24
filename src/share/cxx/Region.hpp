@@ -121,6 +121,11 @@ public:
   // v is the tracer we're working with, 0 <= v < QSIZE_D
   // qn0 is the timelevel, 0 <= qn0 < Q_NUM_TIME_LEVELS
   KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> QDP(const int ie, const int qn0) const {
+    return Kokkos::subview(m_Qdp, ie, qn0, ALL, ALL, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> QDP(const int ie, const int qn0, const int v) const {
     return Kokkos::subview(m_Qdp, ie, qn0, v, ALL, ALL, ALL);
   }
@@ -315,6 +320,11 @@ public:
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Real[NP][NP]> get_q_buffer (const int ie, const int iq, const int ilev) const {
     return Kokkos::subview(m_q_buffer, ie, iq, ilev, ALL, ALL);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> get_q_buffer (const int ie) const {
+    return Kokkos::subview(m_q_buffer, ie, ALL, ALL, ALL, ALL);
   }
 };
 
