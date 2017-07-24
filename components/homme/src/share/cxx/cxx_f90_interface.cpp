@@ -132,7 +132,7 @@ void advance_qdp_c()
   // Retrieve the team size
   DefaultThreadsDistribution<ExecSpace>::init();
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = DefaultThreadsDistribution<ExecSpace>::threads_per_team(data.nete-data.nets);
+  const int threads_per_team   = data.team_size;
 
   // Setup the policy
   Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
