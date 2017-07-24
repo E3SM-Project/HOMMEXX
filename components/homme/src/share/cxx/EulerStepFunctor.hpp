@@ -18,39 +18,6 @@ struct EulerStepFunctor
   static constexpr int USTAR = 0;
   static constexpr int VSTAR = 1;
 
-  struct KernelVariables
-  {
-    KernelVariables(const TeamMember &team_in)
-        : team(team_in),
-          scalar_buf(allocate_thread<Real, Real[NP][NP]>()),
-          vector_buf_1(allocate_thread<Real, Real[2][NP][NP]>()),
-          vector_buf_2(allocate_thread<Real, Real[2][NP][NP]>()),
-          ie(team.league_rank()), ilev(-1), iq(-1)
-    {
-      // Nothing else to be done here
-    }
-
-    template <typename Primitive, typename Data>
-    KOKKOS_INLINE_FUNCTION
-    Primitive* allocate_thread() const {
-      ScratchView<Data> view(team.thread_scratch(0));
-      return view.data();
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    static size_t shmem_size(int team_size) {
-      // One scalar buffer and two vector buffers
-      size_t mem_size = (sizeof(Real[NP][NP]) + 2*sizeof(Real[2][NP][NP])) * team_size;
-      return mem_size;
-    }
-
-    const TeamMember&                   team;
-    ExecViewUnmanaged<Real[NP][NP]>     scalar_buf;
-    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_1;
-    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_2;
-    int ie, ilev, iq;
-  };
-
   EulerStepFunctor (const Control& data)
    : m_data    (data)
    , m_region  (get_region())
@@ -60,46 +27,66 @@ struct EulerStepFunctor
   }
 
   KOKKOS_INLINE_FUNCTION
+  static size_t shmem_size(int team_size) {
+    // One scalar buffer and two vector buffers
+    size_t mem_size = (sizeof(Real[NP][NP]) + 2*sizeof(Real[2][NP][NP])) * team_size;
+    return mem_size;
+  }
+
+  template <typename Primitive, typename Data>
+  KOKKOS_INLINE_FUNCTION
+  Primitive* allocate_thread(const TeamMember& team) const {
+    ScratchView<Data> view(team.thread_scratch(0));
+    return view.data();
+  }
+
+  KOKKOS_INLINE_FUNCTION
   void operator() (TeamMember team) const
   {
-    KernelVariables kv(team);
+    const int ie = team.league_rank();
+    ExecViewUnmanaged<Real[NP][NP]>     scalar_buf   (allocate_thread<Real,Real[NP][NP]>(team));
+    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_1 (allocate_thread<Real,Real[2][NP][NP]>(team));
+    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_2 (allocate_thread<Real,Real[2][NP][NP]>(team));
+
+    ExecViewUnmanaged<const Real[NP][NP]>       metdet_ie = m_region.METDET(ie);
+    ExecViewUnmanaged<const Real[2][2][NP][NP]> dinv_ie   = m_region.DINV(ie);
+
+    ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> ustar = m_region.get_3d_buffer(ie,USTAR);
+    ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> vstar = m_region.get_3d_buffer(ie,VSTAR);
+    ExecViewUnmanaged<const Real[QSIZE_D][NUM_LEV][NP][NP]> qdp   = m_region.QDP(ie,m_data.qn0);
+    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>       q_buf = m_region.get_q_buffer(ie);
 
     Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team,NUM_LEV*m_data.qsize),
+      Kokkos::TeamThreadRange(team,NUM_LEV*m_data.qsize),
       [&] (const int lev_q)
       {
-        kv.iq   = lev_q / NUM_LEV;
-        kv.ilev = lev_q % NUM_LEV;
-
-        ExecViewUnmanaged<const Real[NP][NP]> ustar = m_region.get_3d_buffer(kv.ie,USTAR,kv.ilev);
-        ExecViewUnmanaged<const Real[NP][NP]> vstar = m_region.get_3d_buffer(kv.ie,VSTAR,kv.ilev);
-        ExecViewUnmanaged<const Real[NP][NP]> qdp   = m_region.QDP(kv.ie,m_data.qn0,kv.iq,kv.ilev);
-        ExecViewUnmanaged<Real[NP][NP]>       q_buf = m_region.get_q_buffer(kv.ie,kv.iq,kv.ilev);
+        const int iq   = lev_q / NUM_LEV;
+        const int ilev = lev_q % NUM_LEV;
 
         Kokkos::parallel_for (
-          Kokkos::ThreadVectorRange (kv.team, NP*NP),
+          Kokkos::ThreadVectorRange (team, NP*NP),
           KOKKOS_LAMBDA (const int idx)
           {
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            kv.vector_buf_1(0,igp,jgp) = ustar(igp,jgp) * qdp(igp,jgp);
-            kv.vector_buf_1(1,igp,jgp) = vstar(igp,jgp) * qdp(igp,jgp);
+            vector_buf_1(0,igp,jgp) = ustar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
+            vector_buf_1(1,igp,jgp) = vstar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
           }
         );
 
-        divergence_sphere(kv.team, kv.vector_buf_1,m_deriv.get_dvv(),
-                          m_region.METDET(kv.ie),m_region.DINV(kv.ie),
-                          kv.vector_buf_2, kv.scalar_buf);
+        divergence_sphere(team,vector_buf_1,m_deriv.get_dvv(),
+                          metdet_ie,dinv_ie,
+                          vector_buf_2, scalar_buf);
 
         Kokkos::parallel_for (
-          Kokkos::ThreadVectorRange (kv.team, NP*NP),
+          Kokkos::ThreadVectorRange (team, NP*NP),
           KOKKOS_LAMBDA (const int idx)
           {
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            q_buf(igp,jgp) = qdp(igp,jgp) - m_data.dt*kv.scalar_buf(igp,jgp);
+            q_buf(iq,ilev,igp,jgp) = qdp(iq,ilev,igp,jgp) - m_data.dt*scalar_buf(igp,jgp);
           }
         );
       }
