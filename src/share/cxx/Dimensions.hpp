@@ -5,6 +5,8 @@
 #include "config.h.c"
 #endif
 
+#include <Hommexx_config.h>
+
 #include <Kokkos_Core.hpp>
 
 namespace Homme {

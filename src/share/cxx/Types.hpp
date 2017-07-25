@@ -80,11 +80,11 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 
 #endif // HOMMEXX_SPACE
 
-#ifdef AVX_VERSION
+#if (AVX_VERSION!=0)
 using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
-    KokkosKernels::Batched::Experimental::SIMD<Real, VECTOR_SIZE>;
+    KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>;
 #endif // AVX_VERSION
 
 using VectorType =
