@@ -65,7 +65,7 @@ struct EulerStepFunctor
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
-          KOKKOS_LAMBDA (const int idx)
+          [&] (const int idx)
           {
             const int igp = idx / NP;
             const int jgp = idx % NP;
@@ -81,7 +81,7 @@ struct EulerStepFunctor
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
-          KOKKOS_LAMBDA (const int idx)
+          [&] (const int idx)
           {
             const int igp = idx / NP;
             const int jgp = idx % NP;
