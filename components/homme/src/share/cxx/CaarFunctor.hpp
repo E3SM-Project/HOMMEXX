@@ -48,8 +48,8 @@ struct CaarFunctor {
                  m_region.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
                      m_region.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev));
       m_region.buffers.ephi(kv.ie, igp, jgp, kv.ilev) =
-          k_energy + m_region.m_phi(kv.ie, igp, jgp, kv.ilev) +
-          m_region.m_pecnd(kv.ie, igp, jgp, kv.ilev);
+          k_energy + (m_region.m_phi(kv.ie, igp, jgp, kv.ilev) +
+          m_region.m_pecnd(kv.ie, igp, jgp, kv.ilev));
     });
 
     gradient_sphere_update(
