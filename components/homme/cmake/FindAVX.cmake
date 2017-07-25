@@ -3,11 +3,6 @@
 
 MACRO (FindAVX)
 
-  SET(AVX_FOUND    false CACHE BOOL "AVX available on host")
-  SET(AVX2_FOUND   false CACHE BOOL "AVX2 available on host")
-  SET(AVX512_FOUND false CACHE BOOL "AVX512 available on host")
-
-  MESSAGE (STATUS "Looking for AVX on host...")
   EXECUTE_PROCESS (COMMAND cat /proc/cpuinfo
                    COMMAND grep avx
                    OUTPUT_VARIABLE OUTPUT_VARIABLE_CPUINFO)
@@ -34,18 +29,18 @@ MACRO (FindAVX)
 
   ENDIF()
 
-  IF (${AVX512_FOUND})
-    MESSAGE (STATUS "Found AVX512.")
+  IF (AVX512_FOUND)
+    MESSAGE (STATUS "Looking for AVX on host... found AVX512.")
     SET (AVX_VERSION_AUTO "512")
-  ELSEIF(${AVX2_FOUND})
-    MESSAGE (STATUS "Found AVX2.")
+  ELSEIF(AVX2_FOUND)
+    MESSAGE (STATUS "Looking for AVX on host... found AVX2.")
     SET (AVX_VERSION_AUTO "2")
-  ELSEIF(${AVX_FOUND})
-    MESSAGE (STATUS "Found AVX.")
+  ELSEIF(AVX_FOUND)
+    MESSAGE (STATUS "Looking for AVX on host... found AVX2.")
     SET (AVX_VERSION_AUTO "1")
   ELSE()
     SET (AVX_VERSION_AUTO "0")
-    MESSAGE (STATUS "AVX not found")
+    MESSAGE (STATUS "Looking for AVX on host... not found.")
   ENDIF()
 
 ENDMACRO()
