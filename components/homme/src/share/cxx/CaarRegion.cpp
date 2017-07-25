@@ -220,15 +220,13 @@ void CaarRegion::pull_from_f90_pointers(
     CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
     CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
     CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
-  pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v,
-          derived_eta_dot_dpdn);
+  pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
   pull_4d(state_v, state_t, state_dp3d);
   pull_extra(derived_eta_dot_dpdn, state_qdp);
 }
 
 void CaarRegion::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
-                         CF90Ptr &derived_omega_p, CF90Ptr &derived_v,
-                         CF90Ptr &derived_eta_dot_dpdn) {
+                         CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
@@ -241,22 +239,24 @@ void CaarRegion::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
       Kokkos::create_mirror_view(m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
-          h_omega_p(ie, igp, jgp, ilev) = derived_omega_p[k_3d_scalars];
-          h_pecnd(ie, igp, jgp, ilev) = derived_pecnd[k_3d_scalars];
-          h_phi(ie, igp, jgp, ilev) = derived_phi[k_3d_scalars];
+      for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
+            h_omega_p(ie, igp, jgp, ilev)[ivector] = derived_omega_p[k_3d_scalars];
+            h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
+            h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
+          }
         }
-      }
 
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_un0(ie, igp, jgp, ilev) = derived_v[k_3d_vectors];
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          }
         }
-      }
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_vn0(ie, igp, jgp, ilev) = derived_v[k_3d_vectors];
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          }
         }
       }
     }
@@ -281,21 +281,23 @@ void CaarRegion::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
-            h_dp3d(ie, tl, igp, jgp, ilev) = state_dp3d[k_4d_scalars];
-            h_t(ie, tl, igp, jgp, ilev) = state_t[k_4d_scalars];
+        for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
+              h_dp3d(ie, tl, igp, jgp, ilev)[ivector] = state_dp3d[k_4d_scalars];
+              h_t(ie, tl, igp, jgp, ilev)[ivector] = state_t[k_4d_scalars];
+            }
           }
-        }
 
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            h_u(ie, tl, igp, jgp, ilev) = state_v[k_4d_vectors];
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              h_u(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
+            }
           }
-        }
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            h_v(ie, tl, igp, jgp, ilev) = state_v[k_4d_vectors];
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              h_v(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
+            }
           }
         }
       }
@@ -311,10 +313,15 @@ void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
   for (int ie = 0, k_eta_dot_dp_dn; ie < num_elems(); ++ie) {
-    for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
+    // Note: we must process only NUM_PHYSICAL_LEV, since the F90
+    //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
+    //       and on vector length, we would have to treat the last pack with care
+    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
-          h_eta_dot_dpdn(ie, igp, jgp, ilev) =
+          h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector] =
               derived_eta_dot_dpdn[k_eta_dot_dp_dn];
         }
       }
@@ -345,15 +352,13 @@ void CaarRegion::push_to_f90_pointers(
     F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d, F90Ptr &derived_phi,
     F90Ptr &derived_pecnd, F90Ptr &derived_omega_p, F90Ptr &derived_v,
     F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const {
-  push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v,
-          derived_eta_dot_dpdn);
+  push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_extra(derived_eta_dot_dpdn, state_qdp);
 }
 
 void CaarRegion::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
-                         F90Ptr &derived_omega_p, F90Ptr &derived_v,
-                         F90Ptr &derived_eta_dot_dpdn) const {
+                         F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
@@ -419,8 +424,7 @@ void CaarRegion::push_4d(F90Ptr &state_v, F90Ptr &state_t,
         for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
-              state_dp3d[k_4d_scalars] =
-                  h_dp3d(ie, tl, igp, jgp, ilev)[ivector];
+              state_dp3d[k_4d_scalars] = h_dp3d(ie, tl, igp, jgp, ilev)[ivector];
               state_t[k_4d_scalars] = h_t(ie, tl, igp, jgp, ilev)[ivector];
             }
           }
@@ -446,14 +450,18 @@ void CaarRegion::push_extra(F90Ptr &derived_eta_dot_dpdn,
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
   Kokkos::deep_copy(h_eta_dot_dpdn, m_eta_dot_dpdn);
-  for (int ie = 0, k_eta_dot_dp_dn = 0; ie < num_elems(); ++ie) {
-    for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
-      for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
-            derived_eta_dot_dpdn[k_eta_dot_dp_dn] =
-                h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector];
-          }
+  int k_eta_dot_dp_dn = 0;
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    // Note: we must process only NUM_PHYSICAL_LEV, since the F90
+    //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
+    //       and on vector length, we would have to treat the last pack with care
+    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
+          derived_eta_dot_dpdn[k_eta_dot_dp_dn] =
+              h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector];
         }
       }
     }
