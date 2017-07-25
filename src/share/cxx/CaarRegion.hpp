@@ -86,8 +86,7 @@ public:
                               CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn,
                               CF90Ptr &state_qdp);
   void pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
-               CF90Ptr &derived_omega_p, CF90Ptr &derived_v,
-               CF90Ptr &derived_eta_dot_dpdn);
+               CF90Ptr &derived_omega_p, CF90Ptr &derived_v);
   void pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d);
   void pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp);
 
@@ -98,8 +97,7 @@ public:
                             F90Ptr &derived_eta_dot_dpdn,
                             F90Ptr &state_qdp) const;
   void push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
-               F90Ptr &derived_omega_p, F90Ptr &derived_v,
-               F90Ptr &derived_eta_dot_dpdn) const;
+               F90Ptr &derived_omega_p, F90Ptr &derived_v) const;
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_extra(F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const;
 

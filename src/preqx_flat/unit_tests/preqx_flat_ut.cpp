@@ -17,11 +17,11 @@ using namespace Homme;
 using rngAlg = std::mt19937_64;
 
 extern "C" {
-void caar_compute_energy_grad_c_int(const Real *dvv, const Real *Dinv,
+void caar_compute_energy_grad_c_int(const Real *const &dvv, const Real *const &Dinv,
                                     const Real *const &pecnd,
                                     const Real *const &phi,
                                     const Real *const &velocity,
-                                    Real (&vtemp)[2][NP][NP]);
+                                    Real *const &vtemp);//(&vtemp)[2][NP][NP]);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -86,7 +86,7 @@ public:
   velocity;
   HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>
   temperature;
-  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> dp3d;
+  HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> phi;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
@@ -152,6 +152,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     for (int level = 0; level < NUM_LEV; ++level) {
       for (int v = 0; v < VECTOR_SIZE; ++v) {
         Real vtemp[2][NP][NP];
+
         caar_compute_energy_grad_c_int(
             reinterpret_cast<Real *>(test_functor.dvv.data()),
             reinterpret_cast<Real *>(
@@ -165,7 +166,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
             reinterpret_cast<Real *>(Kokkos::subview(
                 test_functor.velocity, ie, test_functor.n0, level, Kokkos::ALL,
                 Kokkos::ALL, Kokkos::ALL).data()),
-            vtemp);
+            &vtemp[0][0][0]);
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
@@ -182,7 +183,10 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
                                     128.0));
           }
         }
+std::cout << "done checking, now moving to next vector.\n" << std::flush;
       }
     }
   }
+
+std::cout << "test finished.\n";
 }
