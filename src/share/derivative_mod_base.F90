@@ -1260,6 +1260,15 @@ end do
     real(kind=real_kind) ::  dsdx00, dsdy00
     real(kind=real_kind) ::  v1(np,np),v2(np,np)
 
+
+print *, 'IN GRAD F'
+do i=1,np
+do j=1,np
+print *, 'i,j,dinv', i,j,dinv(i,j,:,:)
+print *, 'dvv', deriv%dvv(i,j)
+enddo
+enddo
+
     do j=1,np
        do l=1,np
           dsdx00=0.0d0
@@ -1271,8 +1280,11 @@ end do
           end do
           v1(l  ,j  ) = dsdx00*rrearth
           v2(j  ,l  ) = dsdy00*rrearth
+
+
        end do
     end do
+
     ! convert covarient to latlon
     do l=1,2
        do j=1,np
@@ -1281,6 +1293,13 @@ end do
           enddo
        enddo
     enddo
+
+do i=1,np
+do j=1,np
+print *, 'i,j,ds', i,j,ds(i,j,:)
+enddo
+enddo
+
 
   end function gradient_sphere
 
@@ -1294,9 +1313,19 @@ end do
 
     type(derivative_t) :: deriv
 
+    integer i,j
+
     deriv%dvv = dvv
 
     grad = gradient_sphere(s, deriv, dinv)
+
+print *, 'IN GRADCALLABLE F'
+do i=1,np
+do j=1,np
+print *, 'i,j,gr', i,j,grad(i,j,:)
+enddo
+enddo
+
   end subroutine gradient_sphere_c_callable
 
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)

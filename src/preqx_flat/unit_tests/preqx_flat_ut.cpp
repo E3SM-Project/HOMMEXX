@@ -39,10 +39,10 @@ void laplace_simple_c_int(const Real (&scalar_field)[NP][NP],
                           const Real (&metdet)[NP][NP],
                                 Real (&laplace)[NP][NP]);
 
-void gradient_sphere_c_callable(const Real (&scalar_field)[NP][NP],
+void gradient_sphere_c_callable(const Real (&s)[NP][NP],
                                 const Real (&dvv)[NP][NP],
                                 const Real (&dinv)[NP][NP][2][2],
-                                Real (&laplace)[NP][NP][2]);
+                                Real (&grad)[NP][NP][2]);
 
 }//extern C
 
@@ -183,6 +183,8 @@ public:
   int nete = -1;
 };//compute_subfunctor_test
 
+
+/*
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
@@ -246,7 +248,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     }
   }
 }//end of TEST_CASE(...,"compute_energy_grad")
-
+*/
 
 /*
   subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
@@ -292,11 +294,29 @@ public:
   std::random_device rd;
   rngAlg engine(rd());
 
+//for dimensions use product dim0*...
+
 //check singularities?
-  genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+//  genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
+//  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+//  genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+//  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+
+for(int i1=0; i1<_some_index; i1++)
+for(int i2=0; i2<NP; i2++)
+for(int i3=0; i3<NP; i3++){
+dinv_host(i1,0,0,i2,i3)=1.0;
+dinv_host(i1,1,1,i2,i3)=1.0;
+dinv_host(i1,1,0,i2,i3)=1.0;
+dinv_host(i1,0,1,i2,i3)=1.0;
+
+dvv_host(i1,i2,i3)=1.0;
+
+Real aa = i2+i3;
+
+scalar_input_host(i1,i2,i3) = aa;
+
+}
 
 
   }
@@ -412,7 +432,7 @@ public:
 
 }; //end of compute_sphop_test
 
-
+/*
 TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -496,7 +516,7 @@ std::cout << "F = " << loc_f_out[igp][jgp] << ", C = " << testing_laplace.scalar
 
  }
 };//end of TEST_CASE(..., "simple laplace")
-
+*/
 
 
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
@@ -530,12 +550,12 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
    for( int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
 
-        sf[_j][_i] = local_scalar_input(_i,_j);
+        sf[_i][_j] = local_scalar_input(_i,_j);
         dvvf[_j][_i] = local_dvv(_i,_j);
 
-std::cout << "i,j = " << _i << " " << _j << "\n";
-std::cout << "scalar field (j,i)" << sf[_j][_i] << "\n";
-std::cout << "dvv (j,i)" << dvvf[_j][_i] << "\n";
+//std::cout << "i,j = " << _i << " " << _j << "\n";
+//std::cout << "scalar field (j,i)" << sf[_j][_i] << "\n";
+//std::cout << "dvv (j,i)" << dvvf[_j][_i] << "\n";
 
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
@@ -549,12 +569,13 @@ std::cout << "dvv (j,i)" << dvvf[_j][_i] << "\n";
 
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-         for (int _d = 0; _d < 2; _d++){
+       //  for (int _d = 0; _d < 2; ++_d){
         
-std::cout << "i = " << igp << ", j= " << jgp << ", dim= " << _d << "\n";
-std::cout << "F = " << loc_f_out[igp][jgp][_d] << 
-             ", C = " << testing_grad.vector_output_host(_index, _d, igp, jgp) <<"\n";
-}   
+std::cout << "i = " << igp << ", j= " << jgp << "\n";
+std::cout << "F = " << loc_f_out[igp][jgp][0] <<  ", " << loc_f_out[igp][jgp][1] <<"\n";
+std::cout << "C = " << testing_grad.vector_output_host(_index, 0, igp, jgp) <<
+", " << testing_grad.vector_output_host(_index, 1, igp, jgp) << "\n";
+//}   
 }   
 }
    for (int igp = 0; igp < NP; ++igp) {
