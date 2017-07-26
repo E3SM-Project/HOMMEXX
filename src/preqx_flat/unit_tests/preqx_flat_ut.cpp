@@ -159,12 +159,12 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
                 Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
                                 Kokkos::ALL, Kokkos::ALL).data()),
             reinterpret_cast<Real *>(Kokkos::subview(test_functor.pecnd, ie,
-                                                     level, Kokkos::ALL,
+                                                     level*VECTOR_SIZE + v, Kokkos::ALL,
                                                      Kokkos::ALL).data()),
             reinterpret_cast<Real *>(Kokkos::subview(
-                test_functor.phi, ie, level, Kokkos::ALL, Kokkos::ALL).data()),
+                test_functor.phi, ie, level*VECTOR_SIZE + v, Kokkos::ALL, Kokkos::ALL).data()),
             reinterpret_cast<Real *>(Kokkos::subview(
-                test_functor.velocity, ie, test_functor.n0, level, Kokkos::ALL,
+                test_functor.velocity, ie, test_functor.n0, level*VECTOR_SIZE+v, Kokkos::ALL,
                 Kokkos::ALL, Kokkos::ALL).data()),
             &vtemp[0][0][0]);
         for (int igp = 0; igp < NP; ++igp) {
@@ -183,7 +183,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
                                     128.0));
           }
         }
-std::cout << "done checking, now moving to next vector.\n" << std::flush;
       }
     }
   }
