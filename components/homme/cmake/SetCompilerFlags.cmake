@@ -7,13 +7,11 @@ SET(AVX_FOUND    FALSE CACHE INTERNAL "AVX available on host")
 SET(AVX2_FOUND   FALSE CACHE INTERNAL "AVX2 available on host")
 SET(AVX512_FOUND FALSE CACHE INTERNAL "AVX512 available on host")
 
-SET (AVX_VERSION  "NONE" CACHE STRING "The version of AVX available on host")
-
-IF (AVX_VERSION STREQUAL "NONE")
+IF (NOT DEFINED AVX_VERSION)
   # The user did not specify any avx version, so we detect it.
   INCLUDE(FindAVX)
   FindAVX()
-  SET (AVX_VERSION  ${AVX_VERSION_AUTO})
+  SET (AVX_VERSION ${AVX_VERSION_AUTO} CACHE STRING "The version of AVX available on host")
 ELSE()
   IF (AVX_VERSION STREQUAL "0")
   ELSEIF(AVX_VERSION STREQUAL "1")
@@ -27,7 +25,6 @@ ELSE()
   ENDIF()
   MESSAGE (STATUS "Requested AVX version: ${AVX_VERSION}")
 ENDIF()
-MARK_AS_ADVANCED (AVX_VERSION)
 
 # Need this for a fix in repro_sum_mod
 IF (${CMAKE_Fortran_COMPILER_ID} STREQUAL XL)
@@ -276,28 +273,11 @@ ENDIF ()
 ##############################################################################
 
 ##############################################################################
-# Compiler FLAGS for AVX1 and AVX2 (CXX compiler only)
-##############################################################################
-IF (AVX_FOUND)
-  IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-    SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
-  ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
-    SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xAVX")
-  ENDIF()
-ELSEIF (AVX2_FOUND)
-  IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-    SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
-  ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
-    SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX2")
-  ENDIF()
-ENDIF()
-
-
-##############################################################################
 # Intel Phi (MIC) specific flags - only supporting the Intel compiler
 ##############################################################################
 OPTION(ENABLE_INTEL_PHI "Whether to build with Intel Xeon Phi (MIC) support" FALSE)
-IF (ENABLE_INTEL_PHI)
+
+IF (ENABLE_INTEL_PHI OR AVX512_FOUND)
   SET(AVX_VERSION "512")
   IF (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL Intel)
     MESSAGE(FATAL_ERROR "Intel Phi acceleration only supported through the Intel compiler")
@@ -319,6 +299,23 @@ IF (ENABLE_INTEL_PHI)
       SET(CMAKE_FIND_ROOT_PATH /usr/linux-k1om-4.7)
     ENDIF ()
   ENDIF ()
+ELSE()
+  ##############################################################################
+  # Compiler FLAGS for AVX1 and AVX2 (CXX compiler only)
+  ##############################################################################
+  IF (AVX2_FOUND)
+    IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
+    ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX2")
+    ENDIF()
+  ELSEIF (AVX_FOUND)
+    IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
+    ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xAVX")
+    ENDIF()
+  ENDIF()
 ENDIF ()
 
 ##############################################################################
