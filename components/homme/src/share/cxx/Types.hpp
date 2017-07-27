@@ -80,7 +80,7 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 
 #endif // HOMMEXX_SPACE
 
-#if (AVX_VERSION==4 || AVX_VERSION==8)
+#if (AVX_VERSION>0)
 using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
