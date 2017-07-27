@@ -335,6 +335,13 @@ for(int i3=0; i3<NP; i3++){
   struct TagSimpleLaplace{};
 //tag for gradient_sphere()
   struct TagGradientSphere{};
+//tag for default, a dummy
+  struct TagDefault{};
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagDefault &, TeamMember team ) const {
+    //do nothing or print a message
+  };
 
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagSimpleLaplace &, TeamMember team) const {
@@ -363,6 +370,25 @@ for(int i3=0; i3<NP; i3++){
 
       };
 
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagGradientSphere &, TeamMember team) const {
+    int _index = team.league_rank();
+
+    ExecViewManaged<Real [NP][NP]> local_scalar_input_d =
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [NP][NP]> local_dvv_d =
+          Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
+          Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
+          Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [2][NP][NP]> local_vector_output_d =
+          Kokkos::subview(vector_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    gradient_sphere(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
+                              local_temp1_d, local_vector_output_d);
+  };
+
 //this could be even nicer, 
 //put in a param in run_functor(param) to only branch policy type
   void run_functor_simple_laplace() const {
@@ -383,25 +409,6 @@ for(int i3=0; i3<NP; i3++){
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  KOKKOS_INLINE_FUNCTION
-  void operator()( const TagGradientSphere &, TeamMember team) const {
-    int _index = team.league_rank();
-        
-    ExecViewManaged<Real [NP][NP]> local_scalar_input_d =  
-          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_dvv_d =  
-          Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d = 
-          Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_temp1_d = 
-          Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_vector_output_d =  
-          Kokkos::subview(vector_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-        
-    gradient_sphere(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
-                              local_temp1_d, local_vector_output_d);  
-  };
-
 }; //end of definition of compute_sphere_operator_test()
 
 
@@ -414,7 +421,7 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  testing_laplace.run_functor_simple_laplace();
 
- Real loc_f_out[NP][NP];
+ Real local_fortran_output[NP][NP];
 
  for(int _index = 0; _index < parallel_index; _index++){
    HostViewManaged<Real [NP][NP]> local_scalar_input = 
@@ -429,11 +436,13 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
    HostViewManaged<Real [NP][NP]> local_metdet =
      Kokkos::subview(testing_laplace.metdet_host, _index, Kokkos::ALL, Kokkos::ALL);
 
+//F input declared
    Real sf[NP][NP];
    Real dvvf[NP][NP];
    Real dinvf[2][2][NP][NP];
    Real metf[NP][NP];
 
+//flip arrays for F
    for(int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
    
@@ -445,42 +454,32 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
               dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
    }
 
-//old call, arrays need to be flipped
-//   laplace_simple_c_int(local_scalar_input.data(), local_dvv.data(),
-//                        local_dinv.data(), local_metdet.data(), loc_f_out);
-
-   laplace_simple_c_int(&(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]), &(metf[0][0]), &(loc_f_out[0][0]));
-
-   for(int _i = 0; _i < NP; _i++)
-      for(int _j = 0; _j < NP; _j++){
-
-//std::cout << "i = " << _i << ", j= " << _j << "\n";
-//std::cout << "scalar input from C " << testing_grad.scalar_input_host(_index,_i,_j) << "\n";
-//std::cout << "scalar input from F " << sf[_i][_j] << "\n";
-
-
-}
-//         fortran_scalar_output(_index, _j, _i) = loc_f_out[_i][_j];
+//run F code
+   laplace_simple_c_int(&(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]), 
+                        &(metf[0][0]), &(local_fortran_output[0][0]));
 
 //now compare answers
+/*
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-
 std::cout << "i = " << igp << ", j= " << jgp << "\n";
 std::cout << "F lapl = " << loc_f_out[jgp][igp] << ", C lapl = " << testing_laplace.scalar_output_host(_index, igp, jgp) <<"\n";
 }
-}
+}*/
+
+//compare answers
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-          REQUIRE(!std::isnan(loc_f_out[jgp][igp]));
+          REQUIRE(!std::isnan(local_fortran_output[jgp][igp]));
           REQUIRE(!std::isnan(testing_laplace.scalar_output_host(_index, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(loc_f_out[jgp][igp],
+              compare_answers(local_fortran_output[jgp][igp],
                         testing_laplace.scalar_output_host(_index, igp, jgp)));
       }
     }
 
- }
+ }//end of for loop for parallel_index
+
 };//end of TEST_CASE(..., "simple laplace")
 
 
