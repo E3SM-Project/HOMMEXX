@@ -1260,15 +1260,6 @@ end do
     real(kind=real_kind) ::  dsdx00, dsdy00
     real(kind=real_kind) ::  v1(np,np),v2(np,np)
 
-
-print *, 'IN GRAD F'
-do i=1,np
-do j=1,np
-print *, 'i,j,dinv', i,j,dinv(i,j,:,:)
-print *, 'dvv', deriv%dvv(i,j)
-enddo
-enddo
-
     do j=1,np
        do l=1,np
           dsdx00=0.0d0
@@ -1294,13 +1285,6 @@ enddo
        enddo
     enddo
 
-do i=1,np
-do j=1,np
-print *, 'i,j,ds', i,j,ds(i,j,:)
-enddo
-enddo
-
-
   end function gradient_sphere
 
   subroutine gradient_sphere_c_callable(s, dvv, dinv, grad) bind(c)
@@ -1318,13 +1302,6 @@ enddo
     deriv%dvv = dvv
 
     grad = gradient_sphere(s, deriv, dinv)
-
-print *, 'IN GRADCALLABLE F'
-do i=1,np
-do j=1,np
-print *, 'i,j,gr', i,j,grad(i,j,:)
-enddo
-enddo
 
   end subroutine gradient_sphere_c_callable
 
@@ -1656,6 +1633,43 @@ enddo
 
 !--------------------------------------------------------------------------
 
+  subroutine divergence_sphere_wk_c_callable(v, dvv, spheremp, D, Dinv, div) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+
+    real(kind=real_kind), intent(in) :: v(np, np, 2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: Dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(out) :: div(np, np)
+
+    !local
+    type(derivative_t) :: deriv
+    type(element_t) :: elem
+
+    deriv%dvv = dvv
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+#endif
+
+    elem%D = D
+    elem%Dinv = Dinv
+    elem%spheremp = spheremp
+
+    div = divergence_sphere_wk(v, deriv, elem)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+#endif
+
+  end subroutine divergence_sphere_wk_c_callable
 
 
   function divergence_sphere_wk(v,deriv,elem) result(div)
