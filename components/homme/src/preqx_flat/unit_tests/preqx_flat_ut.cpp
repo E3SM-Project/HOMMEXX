@@ -38,11 +38,20 @@ void laplace_simple_c_int(const Real (&scalar_field)[NP][NP],
                           const Real (&dinv)[NP][NP][2][2],
                           const Real (&metdet)[NP][NP],
                                 Real (&laplace)[NP][NP]);
-
+/*
 void gradient_sphere_c_callable(const Real (&s)[NP][NP],
                                 const Real (&dvv)[NP][NP],
                                 const Real (&dinv)[NP][NP][2][2],
                                 Real (&grad)[NP][NP][2]);
+*/
+
+void gradient_sphere_c_callable(const Real* ,
+                                const Real* ,
+                                const Real* ,
+                                Real*);
+
+
+
 
 }//extern C
 
@@ -51,6 +60,8 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   if (relative_coeff > 0.0 && target != 0.0) {
     denom = relative_coeff * std::fabs(target);
   }
+
+std::cout<< "in compute answers " << target << " and " << computed <<"\n";
 
   return std::fabs(target - computed) / denom;
 }//compare_answers
@@ -297,24 +308,24 @@ public:
 //for dimensions use product dim0*...
 
 //check singularities?
-//  genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
-//  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 //  genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
-//  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
 for(int i1=0; i1<_some_index; i1++)
 for(int i2=0; i2<NP; i2++)
 for(int i3=0; i3<NP; i3++){
-dinv_host(i1,0,0,i2,i3)=1.0;
-dinv_host(i1,1,1,i2,i3)=1.0;
-dinv_host(i1,1,0,i2,i3)=1.0;
-dinv_host(i1,0,1,i2,i3)=1.0;
+//dinv_host(i1,0,0,i2,i3)=1.0;
+//dinv_host(i1,1,1,i2,i3)=1.0;
+//dinv_host(i1,1,0,i2,i3)=1.0;
+//dinv_host(i1,0,1,i2,i3)=1.0;
 
-dvv_host(i1,i2,i3)=1.0;
+//dvv_host(i1,i2,i3)=1.0;
 
-Real aa = i2+i3;
+//Real aa = i2+i3;
 
-scalar_input_host(i1,i2,i3) = aa;
+//scalar_input_host(i1,i2,i3) = aa;
 
 }
 
@@ -529,8 +540,7 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
  testing_grad.run_functor_gradient_sphere();
 
 //not used
-// HostViewManaged<Real * [NP][NP]> fortran_scalar_output("Fortran scalar output", some_index);
- Real loc_f_out[NP][NP][2];
+ Real loc_f_out[2][NP][NP];
 
  for(int _index = 0; _index < some_index; _index++){
    HostViewManaged<Real [NP][NP]> local_scalar_input =
@@ -544,35 +554,30 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
 
    Real sf[NP][NP];
    Real dvvf[NP][NP];
-   Real dinvf[NP][NP][2][2];
+   Real dinvf[2][2][NP][NP];
 
 //flipping arrays -- i dont know how to do it here
    for( int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
 
-        sf[_i][_j] = local_scalar_input(_i,_j);
+        sf[_j][_i] = local_scalar_input(_i,_j);
         dvvf[_j][_i] = local_dvv(_i,_j);
-
-//std::cout << "i,j = " << _i << " " << _j << "\n";
-//std::cout << "scalar field (j,i)" << sf[_j][_i] << "\n";
-//std::cout << "dvv (j,i)" << dvvf[_j][_i] << "\n";
 
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
-//md suggested
-//              dinvf[_j][_i][_d2][_d1] = local_dinv(_d1,_d2,_i,_j);
 
-              dinvf[_j][_i][_d1][_d2] = local_dinv(_d1,_d2,_i,_j);
+              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
    }
 
-   gradient_sphere_c_callable(sf, dvvf, dinvf, loc_f_out);
+   gradient_sphere_c_callable(&(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]), &(loc_f_out[0][0][0]));
+
 
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
        //  for (int _d = 0; _d < 2; ++_d){
         
-std::cout << "i = " << igp << ", j= " << jgp << "\n";
-std::cout << "F = " << loc_f_out[igp][jgp][0] <<  ", " << loc_f_out[igp][jgp][1] <<"\n";
+std::cout << "here i= " << igp << ", j= " << jgp << "\n";
+std::cout << "F real* = " << loc_f_out[0][jgp][igp] <<  ", " << loc_f_out[1][jgp][igp] <<"\n";
 std::cout << "C = " << testing_grad.vector_output_host(_index, 0, igp, jgp) <<
 ", " << testing_grad.vector_output_host(_index, 1, igp, jgp) << "\n";
 //}   
@@ -580,14 +585,13 @@ std::cout << "C = " << testing_grad.vector_output_host(_index, 0, igp, jgp) <<
 }
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-         for (int _d = 0; _d < 2; _d++){
-          REQUIRE(!std::isnan(loc_f_out[igp][jgp][_d]));
-          REQUIRE(!std::isnan(
-              testing_grad.vector_output_host(_index, _d, jgp, igp)));
+         for (int _d = 0; _d < 2; ++_d){
+          REQUIRE(!std::isnan(loc_f_out[_d][jgp][igp]));
+          REQUIRE(!std::isnan(testing_grad.vector_output_host(_index, _d, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
               compare_answers(
-                        loc_f_out[igp][jgp][_d],
-                        testing_grad.scalar_output_host(_index, _d, jgp, igp)));
+                        loc_f_out[_d][igp][jgp],
+                        testing_grad.vector_output_host(_index, _d, jgp, igp)));
       }
     }
   }
