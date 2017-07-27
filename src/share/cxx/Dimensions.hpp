@@ -26,9 +26,7 @@ namespace Homme {
 
 #if   (AVX_VERSION == 0)
 static constexpr const int VECTOR_SIZE = 1;
-#elif (AVX_VERSION == 1)
-static constexpr const int VECTOR_SIZE = 2;
-#elif (AVX_VERSION == 2)
+#elif (AVX_VERSION == 1 || AVX_VERSION == 2)
 static constexpr const int VECTOR_SIZE = 4;
 #elif (AVX_VERSION == 512)
 static constexpr const int VECTOR_SIZE = 8;
