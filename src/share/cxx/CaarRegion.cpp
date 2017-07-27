@@ -61,18 +61,24 @@ void CaarRegion::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
 
+  // 2d scalars
   for (int ie = 0; ie < m_num_elems; ++ie) {
-    // 2d scalars
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp, ++k_scalars) {
         h_fcor(ie, igp, jgp) = fcor[k_scalars];
         h_spheremp(ie, igp, jgp) = spheremp[k_scalars];
         h_metdet(ie, igp, jgp) = metdet[k_scalars];
         h_phis(ie, igp, jgp) = phis[k_scalars];
+      }
+    }
+  }
 
-        // 2d tensors
-        for (int idim = 0; idim < 2; ++idim) {
-          for (int jdim = 0; jdim < 2; ++jdim) {
+  // 2d tensors
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    for (int idim = 0; idim < 2; ++idim) {
+      for (int jdim = 0; jdim < 2; ++jdim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
             h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
             h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
           }
@@ -336,9 +342,11 @@ void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
         for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
-              h_qdp(ie, qni, iq, igp, jgp, ilev) = state_qdp[k_qdp];
+          for (int iv = 0; iv < VECTOR_SIZE; ++iv) {
+            for (int igp = 0; igp < NP; ++igp) {
+              for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
+                h_qdp(ie, qni, iq, igp, jgp, ilev)[iv] = state_qdp[k_qdp];
+              }
             }
           }
         }
