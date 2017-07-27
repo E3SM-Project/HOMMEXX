@@ -17,23 +17,32 @@ Derivative::Derivative ()
 
 void Derivative::init (CF90Ptr& dvv_ptr)
 {
-  HostViewUnmanaged<const Real[NP][NP]> dvv_host (dvv_ptr);
+  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host(m_dvv_exec);
+
+  int k_dvv = 0;
+  for (int igp=0; igp<NP; ++igp)
+  {
+    for (int jgp=0; jgp<NP; ++jgp, ++k_dvv)
+    {
+      dvv_host(igp,jgp) = dvv_ptr[k_dvv];
+    }
+  }
+
   Kokkos::deep_copy (m_dvv_exec, dvv_host);
 }
 
-void Derivative::init (CF90Ptr& dvv_ptr, CF90Ptr& integration_mat_ptr, CF90Ptr& bd_interpolation_mat_ptr)
+void Derivative::init (CF90Ptr& dvv_ptr, CF90Ptr& /*integration_mat_ptr*/, CF90Ptr& /*bd_interpolation_mat_ptr*/)
 {
   HostViewManaged<Real[NP][NP]>     dvv_host ("dvv");
-  HostViewManaged<Real[NC][NP]>     integ_mat_host ("dvv");
-  HostViewManaged<Real[2][NC][NP]>  bd_interp_mat_host ("dvv");
+  //HostViewManaged<Real[NC][NP]>     integ_mat_host ("dvv");
+  //HostViewManaged<Real[2][NC][NP]>  bd_interp_mat_host ("dvv");
 
-  flip_f90_array_2d_12<NP,NP> (dvv_ptr, dvv_host);
-  flip_f90_array_2d_12<NC,NP> (integration_mat_ptr, integ_mat_host);
-  flip_f90_array_3d_213<NC,2,NP> (bd_interpolation_mat_ptr, bd_interp_mat_host);
+  init(dvv_ptr);
+  //flip_f90_array_2d_12<NC,NP> (integration_mat_ptr, integ_mat_host);
+  //flip_f90_array_3d_213<NC,2,NP> (bd_interpolation_mat_ptr, bd_interp_mat_host);
 
-  Kokkos::deep_copy (m_dvv_exec,           dvv_host);
-  Kokkos::deep_copy (m_integ_mat_exec,     integ_mat_host);
-  Kokkos::deep_copy (m_bd_interp_mat_exec, bd_interp_mat_host);
+  //Kokkos::deep_copy (m_integ_mat_exec,     integ_mat_host);
+  //Kokkos::deep_copy (m_bd_interp_mat_exec, bd_interp_mat_host);
 }
 
 void Derivative::random_init(std::mt19937_64 &engine) {
