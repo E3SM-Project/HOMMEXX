@@ -25,16 +25,16 @@ void caar_compute_energy_grad_c_int(const Real (&dvv)[NP][NP], Real *Dinv,
                                     Real *const &velocity,
                                     Real (&vtemp)[2][NP][NP]);
 
-void laplace_simple_c_int(const Real (&scalar_field)[NP][NP],
-                          const Real (&dvv)[NP][NP],
-                          const Real (&dinv)[NP][NP][2][2],
-                          const Real (&metdet)[NP][NP],
-                                Real (&laplace)[NP][NP]);
+void laplace_simple_c_int(const Real* ,
+                          const Real* ,
+                          const Real* ,
+                          const Real* ,
+                                Real* );
 
 void gradient_sphere_c_callable(const Real* ,
                                 const Real* ,
                                 const Real* ,
-                                Real*);
+                                      Real*);
 
 }//extern C
 
@@ -404,22 +404,19 @@ for(int i3=0; i3<NP; i3++){
 
 }; //end of definition of compute_sphere_operator_test()
 
-/*
+
 TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
- constexpr const int some_index = 1;
+ constexpr const int parallel_index = 1;
 
- compute_sphop_test testing_laplace(some_index);
+ compute_sphere_operator_test testing_laplace(parallel_index);
 
-//result will be in testing_grad.vector_output_host
  testing_laplace.run_functor_simple_laplace();
 
- HostViewManaged<Real * [NP][NP]> fortran_scalar_output("Fortran scalar output", some_index);
  Real loc_f_out[NP][NP];
-//cannot put fortran testing in the class... enough problems with cpp functors 
-//run fortran
- for(int _index = 0; _index < some_index; _index++){
+
+ for(int _index = 0; _index < parallel_index; _index++){
    HostViewManaged<Real [NP][NP]> local_scalar_input = 
      Kokkos::subview(testing_laplace.scalar_input_host, _index, Kokkos::ALL, Kokkos::ALL);
    
@@ -434,25 +431,25 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
    Real sf[NP][NP];
    Real dvvf[NP][NP];
-   Real dinvf[NP][NP][2][2];
+   Real dinvf[2][2][NP][NP];
    Real metf[NP][NP];
 
    for(int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
    
-        sf[_i][_j] = local_scalar_input(_i,_j);
-        dvvf[_i][_j] = local_dvv(_i,_j);
-        metf[_i][_j] = local_metdet(_i,_j);
+        sf[_j][_i] = local_scalar_input(_i,_j);
+        dvvf[_j][_i] = local_dvv(_i,_j);
+        metf[_j][_i] = local_metdet(_i,_j);
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
-              dinvf[_i][_j][_d1][_d2] = local_dinv(_d1,_d2,_i,_j);
+              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
    }
 
 //old call, arrays need to be flipped
 //   laplace_simple_c_int(local_scalar_input.data(), local_dvv.data(),
 //                        local_dinv.data(), local_metdet.data(), loc_f_out);
 
-   laplace_simple_c_int(sf, dvvf, dinvf, metf, loc_f_out);
+   laplace_simple_c_int(&(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]), &(metf[0][0]), &(loc_f_out[0][0]));
 
    for(int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
@@ -470,25 +467,22 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
       for (int jgp = 0; jgp < NP; ++jgp) {
 
 std::cout << "i = " << igp << ", j= " << jgp << "\n";
-std::cout << "F = " << loc_f_out[igp][jgp] << ", C = " << testing_laplace.scalar_output_host(_index, igp, jgp) <<"\n";
+std::cout << "F lapl = " << loc_f_out[jgp][igp] << ", C lapl = " << testing_laplace.scalar_output_host(_index, igp, jgp) <<"\n";
 }
 }
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-
-          REQUIRE(!std::isnan(loc_f_out[igp][jgp]));
-          REQUIRE(!std::isnan(
-              testing_laplace.scalar_output_host(_index, jgp, igp)));
+          REQUIRE(!std::isnan(loc_f_out[jgp][igp]));
+          REQUIRE(!std::isnan(testing_laplace.scalar_output_host(_index, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(
-                        loc_f_out[jgp][igp],
-                        testing_laplace.scalar_output_host(_index, jgp, igp)));
+              compare_answers(loc_f_out[jgp][igp],
+                        testing_laplace.scalar_output_host(_index, igp, jgp)));
       }
     }
 
  }
 };//end of TEST_CASE(..., "simple laplace")
-*/
+
 
 
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
