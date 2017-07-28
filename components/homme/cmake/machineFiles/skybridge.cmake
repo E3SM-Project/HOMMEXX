@@ -10,7 +10,8 @@ SET (CMAKE_CXX_COMPILER mpicc CACHE FILEPATH "")
 #SET (USE_MPI_OPTIONS "--map-by node:SPAN" CACHE FILEPATH "")
 
 # Openmpi 1.6
-SET (USE_MPI_OPTIONS "-loadbalance" CACHE FILEPATH "")
+# IKT, 7/28/17: commented out the following option, which only works with omp1.6 (not opm1.8)
+#SET (USE_MPI_OPTIONS "-loadbalance" CACHE FILEPATH "")
 
 # this is ignored if we use FORCE_Fortran_FLAGS
 SET (ADD_Fortran_FLAGS "-traceback" CACHE STRING "")
