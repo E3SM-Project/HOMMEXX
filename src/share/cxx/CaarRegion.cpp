@@ -322,7 +322,7 @@ void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
     //       and on vector length, we would have to treat the last pack with care
-    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+    for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
       int ilev    = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
@@ -463,7 +463,7 @@ void CaarRegion::push_extra(F90Ptr &derived_eta_dot_dpdn,
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
     //       and on vector length, we would have to treat the last pack with care
-    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+    for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
       int ilev    = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
