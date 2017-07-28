@@ -89,10 +89,10 @@ struct CaarFunctor {
       const int jgp = idx % NP;
 
       m_region.buffers.energy_grad(kv.ie,hgp,igp,jgp,kv.ilev) =
-          m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev) *
           PhysicalConstants::Rgas *
           (m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) /
-           m_region.buffers.pressure(kv.ie, igp, jgp, kv.ilev));
+           m_region.buffers.pressure(kv.ie, igp, jgp, kv.ilev)) *
+          m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev);
     });
 
     compute_energy_grad(kv);
@@ -242,7 +242,7 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      m_region.buffers.pressure(kv.ie, jgp, igp, 0)[0] =
+      m_region.buffers.pressure(kv.ie, igp, jgp, 0)[0] =
           m_data.hybrid_a(0) * m_data.ps0 +
           0.5 * m_region.m_dp3d(kv.ie, m_data.n0, igp, jgp, 0)[0];
 
@@ -255,10 +255,10 @@ struct CaarFunctor {
 
         const int lev_prev = (kv.ilev-1) / VECTOR_SIZE;
         const int vec_prev = (kv.ilev-1) % VECTOR_SIZE;
-        m_region.buffers.pressure(kv.ie, jgp, igp, lev)[vec] =
-            m_region.buffers.pressure(kv.ie, jgp, igp, lev_prev)[vec_prev] +
-            0.5 * m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, lev_prev)[vec_prev] +
-            0.5 * m_region.m_dp3d(kv.ie, m_data.n0, jgp, igp, lev)[vec];
+        m_region.buffers.pressure(kv.ie, igp, jgp, lev)[vec] =
+            m_region.buffers.pressure(kv.ie, igp, jgp, lev_prev)[vec_prev] +
+            0.5 * m_region.m_dp3d(kv.ie, m_data.n0, igp, jgp, lev_prev)[vec_prev] +
+            0.5 * m_region.m_dp3d(kv.ie, m_data.n0, igp, jgp, lev)[vec];
       }
     });
   }
