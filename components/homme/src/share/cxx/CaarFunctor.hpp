@@ -88,7 +88,8 @@ struct CaarFunctor {
       const int igp = (idx / NP) % NP;
       const int jgp = idx % NP;
 
-      m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev) *=
+      m_region.buffers.energy_grad(kv.ie,hgp,igp,jgp,kv.ilev) =
+          m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev) *
           PhysicalConstants::Rgas *
           (m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) /
            m_region.buffers.pressure(kv.ie, igp, jgp, kv.ilev));
@@ -111,31 +112,31 @@ struct CaarFunctor {
       m_region.buffers.vorticity(kv.ie, igp, jgp, kv.ilev) +=
           m_region.m_fcor(kv.ie, igp, jgp);
 
-      m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) *= -1;
-      m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) +=
-          /* v_vadv(igp, jgp) + */ m_region.m_v(kv.ie, m_data.n0, jgp, igp,
+      m_region.buffers.energy_grad(kv.ie, 0, igp, jgp, kv.ilev) *= -1;
+      m_region.buffers.energy_grad(kv.ie, 0, igp, jgp, kv.ilev) +=
+          /* v_vadv(igp, jgp) + */ m_region.m_v(kv.ie, m_data.n0, igp, jgp,
                                                 kv.ilev) *
-          m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev);
-      m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) *= -1;
-      m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) +=
-          /* v_vadv(igp, jgp) + */ -m_region.m_u(kv.ie, m_data.n0, jgp, igp,
+          m_region.buffers.vorticity(kv.ie, igp, jgp, kv.ilev);
+      m_region.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev) *= -1;
+      m_region.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev) +=
+          /* v_vadv(igp, jgp) + */ -m_region.m_u(kv.ie, m_data.n0, igp, jgp,
                                                  kv.ilev) *
-          m_region.buffers.vorticity(kv.ie, jgp, igp, kv.ilev);
+          m_region.buffers.vorticity(kv.ie, igp, jgp, kv.ilev);
 
-      m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) *= m_data.dt2;
-      m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev) +=
-          m_region.m_u(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
-      m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) *= m_data.dt2;
-      m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev) +=
-          m_region.m_v(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
+      m_region.buffers.energy_grad(kv.ie, 0, igp, jgp, kv.ilev) *= m_data.dt2;
+      m_region.buffers.energy_grad(kv.ie, 0, igp, jgp, kv.ilev) +=
+          m_region.m_u(kv.ie, m_data.nm1, igp, jgp, kv.ilev);
+      m_region.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev) *= m_data.dt2;
+      m_region.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev) +=
+          m_region.m_v(kv.ie, m_data.nm1, igp, jgp, kv.ilev);
 
       // Velocity at np1 = spheremp * buffer
-      m_region.m_u(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
-          m_region.m_spheremp(kv.ie, jgp, igp) *
-          m_region.buffers.energy_grad(kv.ie, 0, jgp, igp, kv.ilev);
-      m_region.m_v(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
-          m_region.m_spheremp(kv.ie, jgp, igp) *
-          m_region.buffers.energy_grad(kv.ie, 1, jgp, igp, kv.ilev);
+      m_region.m_u(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
+          m_region.m_spheremp(kv.ie, igp, jgp) *
+          m_region.buffers.energy_grad(kv.ie, 0, igp, jgp, kv.ilev);
+      m_region.m_v(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
+          m_region.m_spheremp(kv.ie, igp, jgp) *
+          m_region.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev);
     });
   }
 
