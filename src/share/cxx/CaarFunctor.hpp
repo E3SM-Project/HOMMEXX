@@ -196,7 +196,7 @@ struct CaarFunctor {
     // pressure, meaning that we cannot update the different
     // pressure points within a level before the gradient is
     // complete!
-    ExecViewManaged<Real[NP][NP]> integration("");
+    ExecViewUnmanaged<Real[NP][NP]> integration = kv.scratch_mem;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
