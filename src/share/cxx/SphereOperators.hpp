@@ -152,6 +152,53 @@ divergence_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
   });
 }
 
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+                  const ExecViewUnmanaged<const Real[2][NP][NP]> v,
+                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                  const ExecViewUnmanaged<const Real[NP][NP]> spheremp,
+                  const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
+                  ExecViewUnmanaged<Real[2][NP][NP]> gv,    //TEMP
+                  ExecViewUnmanaged<Real[NP][NP]> div_v) {
+
+//copied from strong divergence as is
+//conversion to contravariant
+  constexpr int contra_iters = NP * NP * 2;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, contra_iters),
+                       KOKKOS_LAMBDA(const int loop_idx) {
+    const int hgp = (loop_idx / NP) / NP;
+    const int igp = (loop_idx / NP) % NP;
+    const int jgp = loop_idx % NP;
+
+    gv(hgp,igp,jgp) =  DInv(hgp,0,igp,jgp) * v(0,igp,jgp) +
+                       DInv(hgp,1,igp,jgp) * v(1,igp,jgp);
+  
+
+  });
+
+//in strong div
+//kgp = i in strong code, jgp=j, igp=l
+//in weak div, n is like j in strong div, 
+//n(weak)=j(strong)=jgp
+//m(weak)=l(strong)=igp
+//j(weak)=i(strong)=kgp
+  constexpr int div_iters = NP * NP;
+//keeping indices' names as in F
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, div_iters),
+                       KOKKOS_LAMBDA(const int loop_idx) {
+    const int mgp = loop_idx / NP;
+    const int ngp = loop_idx % NP;
+    div_v(mgp,ngp) = 0.0;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      div_v(mgp,ngp) -= (  spheremp(jgp,ngp)*gv(0,jgp,ngp)*dvv(mgp,jgp) 
+                         + spheremp(mgp,jgp)*gv(1,mgp,jgp)*dvv(ngp,jgp) )
+                         *PhysicalConstants::rrearth; 
+    }
+  });
+}
+
+
+
 // Note that divergence_sphere requires scratch space of 3 x NP x NP Reals
 // This must be called from the device space
 KOKKOS_INLINE_FUNCTION void
