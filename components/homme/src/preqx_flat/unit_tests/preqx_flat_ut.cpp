@@ -40,7 +40,6 @@ void divergence_sphere_wk_c_callable(const Real*,
                                      const Real*,
                                      const Real*,
                                      const Real*,
-                                     const Real*,
                                            Real*);
 
 }//extern C
@@ -181,7 +180,7 @@ public:
   int nete = -1;
 };//end of definition of compute_subfunctor_test()
 
-
+/*
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
@@ -245,7 +244,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     }
   }
 }//end of TEST_CASE(...,"compute_energy_grad")
-
+*/
 
 /*
   subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
@@ -265,6 +264,7 @@ class compute_sphere_operator_test {
 public:
   compute_sphere_operator_test(int some_index)
     : scalar_input_d("scalar input", some_index),
+      vector_input_d("vector input", some_index),
       d_d("d", some_index),
       dinv_d("dinv", some_index),
       metdet_d("metdet", some_index),
@@ -276,6 +276,7 @@ public:
       temp2_d("temp2", some_index),
       temp3_d("temp3", some_index),
       scalar_input_host(Kokkos::create_mirror_view(scalar_input_d)),
+      vector_input_host(Kokkos::create_mirror_view(vector_input_d)),
       d_host(Kokkos::create_mirror_view(d_d)),
       dinv_host(Kokkos::create_mirror_view(dinv_d)),
       metdet_host(Kokkos::create_mirror_view(metdet_d)),
@@ -298,31 +299,39 @@ public:
 //check singularities? divergence_wk uses both D and Dinv, does it matter if ther are
 //not inverses of each other?
   genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(vector_input_host.data(), vector_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
   genRandArray(d_host.data(), d_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(spheremp_host.data(), spheremp_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
-/*
+
 for(int i1=0; i1<_some_index; i1++)
 for(int i2=0; i2<NP; i2++)
 for(int i3=0; i3<NP; i3++){
-//dinv_host(i1,0,0,i2,i3)=1.0;
-//dinv_host(i1,1,1,i2,i3)=1.0;
-//dinv_host(i1,1,0,i2,i3)=1.0;
-//dinv_host(i1,0,1,i2,i3)=1.0;
-//dvv_host(i1,i2,i3)=1.0;
-//Real aa = i2+i3;
-//scalar_input_host(i1,i2,i3) = aa;
-}*/
+dinv_host(i1,0,0,i2,i3)=1.0;
+dinv_host(i1,1,1,i2,i3)=1.0;
+dinv_host(i1,1,0,i2,i3)=1.0;
+dinv_host(i1,0,1,i2,i3)=1.0;
 
+
+
+//metdet_host(i1,i2,i3)=1.0;
+//spheremp_host(i1,i2,i3)=1.0;
+//dvv_host(i1,i2,i3)=1.0;
+Real aa = i2+i3;
+scalar_input_host(i1,i2,i3) = aa;
+vector_input_host(i1,0,i2,i3) = aa;
+vector_input_host(i1,1,i2,i3) = aa;
+}
 
   }
   int _some_index;//league size, serves as ie index
 
 //device views
   ExecViewManaged<Real * [NP][NP]> scalar_input_d;
+  ExecViewManaged<Real * [2][NP][NP]> vector_input_d;
   ExecViewManaged<Real * [2][2][NP][NP]> d_d;
   ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
   ExecViewManaged<Real * [NP][NP]> spheremp_d;
@@ -337,6 +346,9 @@ for(int i3=0; i3<NP; i3++){
   ExecViewManaged<Real * [NP][NP]>::HostMirror scalar_input_host;
 //how to get total length of view? use dim0*dim1*...till dim7
   const int scalar_input_len = NP*NP; //temp code
+  ExecViewManaged<Real * [2][NP][NP]>::HostMirror vector_input_host;
+//how to get total length of view? use dim0*dim1*...till dim7
+  const int vector_input_len = 2*NP*NP; //temp code
   ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror d_host;
   const int d_len = 2*2*NP*NP; //temp code
   ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror dinv_host;
@@ -390,7 +402,31 @@ for(int i3=0; i3<NP; i3++){
     laplace_wk(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
                local_metdet_d, local_temp1_d, local_temp2_d, local_temp3_d, local_scalar_output_d);
 
-      };
+  };//end of op() for laplace_simple
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagDivergenceSphereWk &, TeamMember team) const {
+
+    int _index = team.league_rank();
+
+    ExecViewManaged<Real [2][NP][NP]> local_vector_input_d =
+      Kokkos::subview(vector_input_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [NP][NP]> local_dvv_d =
+      Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
+      Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
+      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
+//not clear which temp vars it needs... maybe, even scalar ones?
+    ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
+      Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [NP][NP]> local_scalar_output_d =
+      Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL);
+
+    divergence_sphere_wk(team, local_vector_input_d, local_dvv_d, local_spheremp_d,
+               local_dinv_d, local_temp1_d, local_scalar_output_d);
+  };//end of op() for divergence_sphere_wk
+
 
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagGradientSphere &, TeamMember team) const {
@@ -431,9 +467,19 @@ for(int i3=0; i3<NP; i3++){
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
+  void run_functor_div_wk() const {
+//league, team, vector_length_request=1
+    Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWk> policy(_some_index, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    //TO FROM 
+    //remember to copy correct output
+    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
+  };
+
 }; //end of definition of compute_sphere_operator_test()
 
-
+/*
 TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -495,8 +541,80 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
 };//end of TEST_CASE(..., "simple laplace")
 
+*/
 
 
+TEST_CASE("Testing div_wk()", "div_wk") {
+
+ constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
+ constexpr const int parallel_index = 1;
+
+ compute_sphere_operator_test testing_divwk(parallel_index);
+
+ testing_divwk.run_functor_div_wk();
+
+ Real local_fortran_output[NP][NP];
+
+ for(int _index = 0; _index < parallel_index; _index++){
+   HostViewManaged<Real [2][NP][NP]> local_vector_input =
+     Kokkos::subview(testing_divwk.vector_input_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+   HostViewManaged<Real [NP][NP]> local_dvv =
+     Kokkos::subview(testing_divwk.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
+
+   HostViewManaged<Real [2][2][NP][NP]> local_dinv =
+     Kokkos::subview(testing_divwk.dinv_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+   HostViewManaged<Real [NP][NP]> local_spheremp =
+     Kokkos::subview(testing_divwk.spheremp_host, _index, Kokkos::ALL, Kokkos::ALL);
+
+   Real vf[2][NP][NP];
+   Real dvvf[NP][NP];
+   Real dinvf[2][2][NP][NP];
+   Real metf[NP][NP];
+   Real sphf[NP][NP];
+
+   for(int _i = 0; _i < NP; _i++)
+      for(int _j = 0; _j < NP; _j++){
+
+        dvvf[_j][_i] = local_dvv(_i,_j);
+        sphf[_j][_i] = local_spheremp(_i,_j);
+        for(int _d1 = 0; _d1 < 2; _d1++){
+           vf[_d1][_j][_i] = local_vector_input(_d1,_i,_j);
+           for(int _d2 = 0; _d2 < 2; _d2++)
+              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
+        }
+   }
+
+   divergence_sphere_wk_c_callable(&(vf[0][0][0]), &(dvvf[0][0]), 
+                                   &(sphf[0][0]),
+                                   &(dinvf[0][0][0][0]), &(local_fortran_output[0][0]));
+
+   for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+std::cout << "i = " << igp << " j = " << jgp << "\n";
+std::cout << "F = " << local_fortran_output[jgp][igp] << " C = " << testing_divwk.scalar_output_host(_index, igp, jgp) << "\n";
+std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_output_host(_index, igp, jgp) << "\n";
+      }
+    }
+
+
+   for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+          REQUIRE(!std::isnan(local_fortran_output[jgp][igp]));
+          REQUIRE(!std::isnan(testing_divwk.scalar_output_host(_index, igp, jgp)));
+          REQUIRE(std::numeric_limits<Real>::epsilon() >=
+              compare_answers(local_fortran_output[jgp][igp],
+                        testing_divwk.scalar_output_host(_index, igp, jgp)));
+      }
+    }
+ }; //end of parallel_index loop
+
+}
+
+
+
+/*
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -554,7 +672,7 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
  
 };//end of TEST_CASE(..., "gradient_sphere")
 
-
+*/
 
 
 
