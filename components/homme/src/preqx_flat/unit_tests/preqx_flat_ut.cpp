@@ -307,20 +307,21 @@ public:
   genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
 /*
+//setting everything to 1 is good for debugging
 for(int i1=0; i1<_some_index; i1++)
 for(int i2=0; i2<NP; i2++)
 for(int i3=0; i3<NP; i3++){
-//dinv_host(i1,0,0,i2,i3)=1.0;
-//dinv_host(i1,1,1,i2,i3)=1.0;
-//dinv_host(i1,1,0,i2,i3)=1.0;
-//dinv_host(i1,0,1,i2,i3)=1.0;
-//metdet_host(i1,i2,i3)=1.0;
-//spheremp_host(i1,i2,i3)=1.0;
-//dvv_host(i1,i2,i3)=1.0;
+dinv_host(i1,0,0,i2,i3)=1.0;
+dinv_host(i1,1,1,i2,i3)=1.0;
+dinv_host(i1,1,0,i2,i3)=1.0;
+dinv_host(i1,0,1,i2,i3)=1.0;
+metdet_host(i1,i2,i3)=1.0;
+spheremp_host(i1,i2,i3)=1.0;
+dvv_host(i1,i2,i3)=1.0;
 Real aa = i2+i3;
 scalar_input_host(i1,i2,i3) = aa;
-//vector_input_host(i1,0,i2,i3) = aa;
-//vector_input_host(i1,1,i2,i3) = aa;
+vector_input_host(i1,0,i2,i3) = aa;
+vector_input_host(i1,1,i2,i3) = aa;
 }
 */
 
@@ -415,7 +416,6 @@ scalar_input_host(i1,i2,i3) = aa;
       Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [NP][NP]> local_spheremp_d =
       Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
-//not clear which temp vars it needs... maybe, even scalar ones?
     ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
       Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [NP][NP]> local_scalar_output_d =
@@ -477,7 +477,7 @@ scalar_input_host(i1,i2,i3) = aa;
 
 }; //end of definition of compute_sphere_operator_test()
 
-/*
+
 TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -539,8 +539,6 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
 };//end of TEST_CASE(..., "simple laplace")
 
-*/
-
 
 TEST_CASE("Testing div_wk()", "div_wk") {
 
@@ -587,6 +585,7 @@ TEST_CASE("Testing div_wk()", "div_wk") {
    divergence_sphere_wk_c_callable(&(vf[0][0][0]), &(dvvf[0][0]), 
                                    &(sphf[0][0]),
                                    &(dinvf[0][0][0][0]), &(local_fortran_output[0][0]));
+//temporary output
 
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
@@ -608,11 +607,10 @@ std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_
     }
  }; //end of parallel_index loop
 
-}
+}//end of TEST_CASE(...,"divergence_sphere_wk")
 
 
 
-/*
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -670,7 +668,6 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
  
 };//end of TEST_CASE(..., "gradient_sphere")
 
-*/
 
 
 
