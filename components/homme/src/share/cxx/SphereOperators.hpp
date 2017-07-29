@@ -176,6 +176,12 @@ divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
 
   });
 
+/*for (int i=0; i<NP;i++)
+for (int j=0; j<NP; j++)
+std::cout << "i,j =" << i << " " << j <<" and res=" << gv(0,i,j) << " " 
+<< gv(1,i,j) << "\n";
+*/
+
 //in strong div
 //kgp = i in strong code, jgp=j, igp=l
 //in weak div, n is like j in strong div, 
@@ -184,6 +190,7 @@ divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
 //j(weak)=i(strong)=kgp
   constexpr int div_iters = NP * NP;
 //keeping indices' names as in F
+
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, div_iters),
                        KOKKOS_LAMBDA(const int loop_idx) {
     const int mgp = loop_idx / NP;
@@ -195,7 +202,8 @@ divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                          *PhysicalConstants::rrearth; 
     }
   });
-}
+
+}//end of div_wk
 
 
 
