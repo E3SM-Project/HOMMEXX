@@ -299,32 +299,30 @@ public:
 //check singularities? divergence_wk uses both D and Dinv, does it matter if ther are
 //not inverses of each other?
   genRandArray(scalar_input_host.data(), scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  genRandArray(vector_input_host.data(), vector_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(vector_input_host.data(), vector_input_len*_some_index, engine, std::uniform_real_distribution<Real>(-100.0, 100.0));
   genRandArray(d_host.data(), d_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(spheremp_host.data(), spheremp_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
-
+/*
 for(int i1=0; i1<_some_index; i1++)
 for(int i2=0; i2<NP; i2++)
 for(int i3=0; i3<NP; i3++){
-dinv_host(i1,0,0,i2,i3)=1.0;
-dinv_host(i1,1,1,i2,i3)=1.0;
-dinv_host(i1,1,0,i2,i3)=1.0;
-dinv_host(i1,0,1,i2,i3)=1.0;
-
-
-
+//dinv_host(i1,0,0,i2,i3)=1.0;
+//dinv_host(i1,1,1,i2,i3)=1.0;
+//dinv_host(i1,1,0,i2,i3)=1.0;
+//dinv_host(i1,0,1,i2,i3)=1.0;
 //metdet_host(i1,i2,i3)=1.0;
 //spheremp_host(i1,i2,i3)=1.0;
 //dvv_host(i1,i2,i3)=1.0;
 Real aa = i2+i3;
 scalar_input_host(i1,i2,i3) = aa;
-vector_input_host(i1,0,i2,i3) = aa;
-vector_input_host(i1,1,i2,i3) = aa;
+//vector_input_host(i1,0,i2,i3) = aa;
+//vector_input_host(i1,1,i2,i3) = aa;
 }
+*/
 
   }
   int _some_index;//league size, serves as ie index
