@@ -195,12 +195,14 @@ std::cout << "i,j =" << i << " " << j <<" and res=" << gv(0,i,j) << " "
                        KOKKOS_LAMBDA(const int loop_idx) {
     const int mgp = loop_idx / NP;
     const int ngp = loop_idx % NP;
-    div_v(mgp,ngp) = 0.0;
+    //div_v(mgp,ngp) = 0.0;
+    Real dd = 0.0;
     for (int jgp = 0; jgp < NP; ++jgp) {
-      div_v(mgp,ngp) -= (  spheremp(jgp,ngp)*gv(0,jgp,ngp)*dvv(mgp,jgp) 
+      dd -= (  spheremp(jgp,ngp)*gv(0,jgp,ngp)*dvv(mgp,jgp)
                          + spheremp(mgp,jgp)*gv(1,mgp,jgp)*dvv(ngp,jgp) )
-                         *PhysicalConstants::rrearth; 
+                         *PhysicalConstants::rrearth;
     }
+    div_v(mgp,ngp) = dd;
   });
 
 }//end of div_wk
