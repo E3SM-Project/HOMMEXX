@@ -73,7 +73,6 @@ void caar_pre_exchange_monolithic_c()
   CaarControl& data  = get_control();
 
   // Retrieve the team size
-  DefaultThreadsDistribution<ExecSpace>::init();
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team   = data.team_size;
 

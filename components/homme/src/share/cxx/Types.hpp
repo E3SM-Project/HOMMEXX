@@ -32,8 +32,6 @@ using CF90Ptr = const Real *const; // Using this in a function signature
 using ExecSpace = Kokkos::Cuda;
 
 template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
-  static void init() {}
-
   static constexpr int vectors_per_thread() { return 16; }
 
   static int threads_per_team(const int /*num_elems*/) {
@@ -47,23 +45,26 @@ private:
 #else
 
 template <typename ExecSpace> struct DefaultThreadsDistribution {
-  static void init() { Max_Threads_Per_Team = ExecSpace::thread_pool_size(); }
-
   static constexpr int vectors_per_thread() { return 1; }
 
+#ifdef KOKKOS_COLUMN_THREAD_ONLY
   static int threads_per_team(const int num_elems) {
-#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-    if (Max_Threads_Per_Team >= num_elems)
-      return Max_Threads_Per_Team / num_elems;
-    else
-      return 1;
-#else
-    return 1;
-#endif
+    return ExecSpace::thread_pool_size();
   }
-
-private:
-  static int Max_Threads_Per_Team;
+#else
+#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
+  static int threads_per_team(const int num_elems) {
+    int Max_Threads_Per_Team = ExecSpace::thread_pool_size();
+    if (Max_Threads_Per_Team >= num_elems) {
+      return Max_Threads_Per_Team / num_elems;
+    } else {
+      return 1;
+    }
+  }
+#else
+  static int threads_per_team(const int num_elems) { return 1; }
+#endif
+#endif
 };
 
 #if defined(HOMMEXX_OPENMP_SPACE)
@@ -80,8 +81,9 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 
 #endif // HOMMEXX_SPACE
 
-#if (AVX_VERSION>0)
-using VectorTagType = KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
+#if (AVX_VERSION > 0)
+using VectorTagType =
+    KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
     KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>;
@@ -91,9 +93,6 @@ using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
 
 using Scalar = KokkosKernels::Batched::Experimental::Vector<VectorType>;
-
-template <typename ExecSpace>
-int DefaultThreadsDistribution<ExecSpace>::Max_Threads_Per_Team;
 
 // The memory spaces
 using ExecMemSpace = ExecSpace::memory_space;
