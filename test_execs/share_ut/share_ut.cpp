@@ -196,7 +196,6 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   deriv.init(dvv_h.data());
 
   // Execution policy
-  DefaultThreadsDistribution<ExecSpace>::init();
   const int vectors_per_thread =
       DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team = 1;
@@ -245,8 +244,6 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   }
 
   SECTION("divergence sphere") {
-
-    DefaultThreadsDistribution<ExecSpace>::init();
 
     for (int itest = 0; itest < num_rand_test; ++itest) {
       // Initialize input(s)
