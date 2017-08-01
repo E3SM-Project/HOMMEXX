@@ -19,4 +19,7 @@
 // Whether the debug parts of cxx code should be compiled or not
 #cmakedefine HOMMEXX_DEBUG
 
+// The version of AVX available on the host
+#define AVX_VERSION ${AVX_VERSION}
+
 #endif
