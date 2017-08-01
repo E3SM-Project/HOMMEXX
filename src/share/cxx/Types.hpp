@@ -107,32 +107,38 @@ using CXXLayout = Kokkos::LayoutRight;
 template <typename DataType, typename... Types>
 using ViewType = Kokkos::View<DataType, Types...>;
 
+// Managed/Unmanaged view
+template <typename DataType, typename MemorySpace>
+using ViewManaged = ViewType<DataType, Kokkos::LayoutRight, MemorySpace, Kokkos::MemoryManaged>;
+template <typename DataType, typename MemorySpace>
+using ViewUnmanaged = ViewType<DataType, Kokkos::LayoutRight, MemorySpace, Kokkos::MemoryManaged>;
+
+// Host/Device views
+template <typename DataType, typename MemoryManagement>
+using HostView = ViewType<DataType, Kokkos::LayoutRight, HostMemSpace, MemoryManagement>;
+template <typename DataType, typename MemoryManagement>
+using ExecView = ViewType<DataType, Kokkos::LayoutRight, ExecMemSpace, MemoryManagement>;
+
 // Further specializations for execution space and managed/unmanaged memory
 template <typename DataType>
-using ExecViewManaged = ViewType<DataType, Kokkos::LayoutRight, ExecMemSpace,
-                                 Kokkos::MemoryManaged>;
+using ExecViewManaged = ExecView<DataType, Kokkos::MemoryManaged>;
 template <typename DataType>
-using ExecViewUnmanaged = ViewType<DataType, Kokkos::LayoutRight, ExecMemSpace,
-                                   Kokkos::MemoryUnmanaged>;
+using ExecViewUnmanaged = ExecView<DataType, Kokkos::MemoryUnmanaged>;
 
 // Further specializations for host space.
 template <typename DataType>
-using HostViewManaged = ViewType<DataType, HostMemSpace, Kokkos::MemoryManaged>;
+using HostViewManaged = HostView<DataType, Kokkos::MemoryManaged>;
 template <typename DataType>
-using HostViewUnmanaged =
-    ViewType<DataType, HostMemSpace, Kokkos::MemoryUnmanaged>;
+using HostViewUnmanaged = HostView<DataType, Kokkos::MemoryUnmanaged>;
 
 template <typename DataType>
-using FortranViewManaged =
-    ViewType<DataType, HostMemSpace, Kokkos::MemoryManaged, FortranLayout>;
+using FortranViewManaged = ViewType<DataType, HostMemSpace, Kokkos::MemoryManaged, FortranLayout>;
 template <typename DataType>
-using FortranViewUnmanaged =
-    ViewType<DataType, HostMemSpace, Kokkos::MemoryUnmanaged, FortranLayout>;
+using FortranViewUnmanaged = ViewType<DataType, HostMemSpace, Kokkos::MemoryUnmanaged, FortranLayout>;
 
 // The scratch view type: always unmanaged, and always with c pointers
 template <typename DataType>
-using ScratchView =
-    ViewType<DataType, ScratchMemSpace, Kokkos::MemoryUnmanaged>;
+using ScratchView = ViewType<DataType, ScratchMemSpace, Kokkos::MemoryUnmanaged>;
 
 // To view the fully expanded name of a complicated template type T,
 // just try to access some non-existent field of MyDebug<T>. E.g.:
