@@ -264,7 +264,7 @@ laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
   gradient_sphere(team, field, dvv, DInv, temp_temp, temp_grad);
 
 //has to be divergence_wk!
-  divergence_sphere(team, temp_grad, dvv, metDet, DInv, temp_gv, laplace);
+  divergence_sphere_wk(team, temp_grad, dvv, metDet, DInv, temp_gv, laplace);
 }
 
 /*

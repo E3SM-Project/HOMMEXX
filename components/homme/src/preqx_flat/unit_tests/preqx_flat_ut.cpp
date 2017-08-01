@@ -403,6 +403,27 @@ vector_input_host(i1,1,i2,i3) = aa;
 
   };//end of op() for laplace_simple
 
+/*
+ * A comment on how these tests work:
+ * Consider 160 threads available, with _some_index=10;
+ *
+ * Below are lines
+ *     Kokkos::TeamPolicy<ExecSpace, TagSimpleLaplace> policy(_some_index, 16);     
+ *     Kokkos::parallel_for(policy, *this);
+ *        this one will call operator() with, say, weak divergence tag.
+ * Then first 160 threads will be clustered into 10 leagues (as many as _some_index).
+ * Each league will contain 16 threads (16 as the second argument in policy().)
+ * Each league will have its separate subview input and subview output (subview of global arrays
+ * based on team.league_rank), so, league 2 will have input from local_vector_input_d(2,:,:), etc.
+ * When divergence_sphere_wk is called, it will be executed by 16 threads in league, 
+ * each sharing input and output. So, it is not a perfect situation and not a perfect test,
+ * because 16 team threads run the same code and OVERWRITE the same output.
+ * A better test should have another level of parallelism, a loop with
+ * TeamThreadRange. Also, one should note that divergence_sphere_wk as well as
+ * other SphereOperators should be called from loop with TeamThreadRange.
+*/
+
+
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagDivergenceSphereWk &, TeamMember team) const {
 
@@ -586,7 +607,7 @@ TEST_CASE("Testing div_wk()", "div_wk") {
                                    &(sphf[0][0]),
                                    &(dinvf[0][0][0][0]), &(local_fortran_output[0][0]));
 //temporary output
-
+/*
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
 std::cout << "i = " << igp << " j = " << jgp << "\n";
@@ -594,7 +615,7 @@ std::cout << "F = " << local_fortran_output[jgp][igp] << " C = " << testing_divw
 std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_output_host(_index, igp, jgp) << "\n";
       }
     }
-
+*/
 
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
