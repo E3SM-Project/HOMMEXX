@@ -2167,12 +2167,12 @@ end do
 
 ! not a homme function, for debugging cxx
 ! make it not take elem in
-  function laplace_simple(s,dvv,dinv,metdet) result(laplace)
+  function laplace_simple(s,dvv,dinv,spheremp) result(laplace)
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: s(np,np)
     real(kind=real_kind), intent(in) :: dvv(np,np)
     real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
-    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind)             :: laplace(np,np)
 
     ! Local
@@ -2185,18 +2185,18 @@ end do
     
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
-    allocate(elem%metdet(np, np))
+    allocate(elem%spheremp(np, np))
 #endif
 
     elem%Dinv = dinv
-    elem%metdet = metdet
+    elem%spheremp = spheremp
 
 !    laplace=divergence_sphere_wk(grads,deriv,elem)
-    laplace=divergence_sphere(grads,deriv,elem)
+    laplace=divergence_sphere_wk(grads,deriv,elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
-    deallocate(elem%metdet)
+    deallocate(elem%spheremp)
 #endif
 
   end function laplace_simple
