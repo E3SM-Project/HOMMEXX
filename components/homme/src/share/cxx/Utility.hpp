@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_UTILITY_HPP
 #define HOMMEXX_UTILITY_HPP
 
-#include "Dimensions.hpp"
 #include "Types.hpp"
 
 namespace Homme {
@@ -70,7 +69,7 @@ void deep_copy_mirror_view(ViewOut view_out, ViewIn view_in)
 }
 
 template<typename ViewType>
-Real compute_view_norm (const ViewType view)
+typename std::enable_if<!std::is_same<typename ViewType::value_type,Scalar>::value,Real>::type frobenius_norm (const ViewType view)
 {
   typename ViewType::pointer_type data = view.data();
 
@@ -86,6 +85,31 @@ Real compute_view_norm (const ViewType view)
     temp = norm + y;
     c = (temp - norm) - y;
     norm = temp;
+  }
+
+  return std::sqrt(norm);
+}
+
+template<typename ViewType>
+typename std::enable_if<std::is_same<typename ViewType::value_type,Scalar>::value,Real>::type frobenius_norm (const ViewType view)
+{
+  typename ViewType::pointer_type data = view.data();
+
+  size_t length = view.size();
+
+  // Note: use Kahan algorithm to increase accuracy
+  Real norm = 0;
+  Real c = 0;
+  Real temp, y;
+  for (size_t i=0; i<length; ++i)
+  {
+    for (int v=0; v<VECTOR_SIZE; ++v)
+    {
+      y = data[i][v]*data[i][v] - c;
+      temp = norm + y;
+      c = (temp - norm) - y;
+      norm = temp;
+    }
   }
 
   return std::sqrt(norm);

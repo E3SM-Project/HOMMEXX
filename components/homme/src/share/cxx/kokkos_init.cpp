@@ -12,7 +12,7 @@ void init_kokkos(const bool print_configuration = true) {
 
   Kokkos::initialize();
 
-  Kokkos::print_configuration(std::cout, print_configuration);
+  ExecSpace::print_configuration(std::cout, print_configuration);
 }
 
 void finalize_kokkos() { Kokkos::finalize(); }
