@@ -69,7 +69,7 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   size_t shmem_size(const int team_size) const {
-    return CaarFunctor::KernelVariables::shmem_size(team_size);
+    return KernelVariables::shmem_size(team_size);
   }
 
   KOKKOS_INLINE_FUNCTION
