@@ -180,7 +180,7 @@ public:
   int nete = -1;
 };//end of definition of compute_subfunctor_test()
 
-/*
+
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
@@ -244,19 +244,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     }
   }
 }//end of TEST_CASE(...,"compute_energy_grad")
-*/
-
-/*
-  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
-    use kinds, only: real_kind
-    use dimensions_mod, only: np
-
-    real(kind=real_kind), intent(in) :: s(np,np)
-    real(kind=real_kind), intent(in) :: dvv(np,np)
-    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
-    real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(out):: laplace(np,np)
-*/
 
 
 //template <typename TestFunctor_T> class compute_sphop_test {
@@ -387,8 +374,8 @@ vector_input_host(i1,1,i2,i3) = aa;
       Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d = 
       Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_metdet_d =
-      Kokkos::subview(metdet_d, _index, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
+      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [2][NP][NP]> local_temp1_d = 
       Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [2][NP][NP]> local_temp2_d =
@@ -399,7 +386,7 @@ vector_input_host(i1,1,i2,i3) = aa;
       Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL);
        
     laplace_wk(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
-               local_metdet_d, local_temp1_d, local_temp2_d, local_temp3_d, local_scalar_output_d);
+               local_spheremp_d, local_temp1_d, local_temp2_d, local_temp3_d, local_scalar_output_d);
 
   };//end of op() for laplace_simple
 
@@ -520,14 +507,14 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
    HostViewManaged<Real [2][2][NP][NP]> local_dinv =
      Kokkos::subview(testing_laplace.dinv_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-   HostViewManaged<Real [NP][NP]> local_metdet =
-     Kokkos::subview(testing_laplace.metdet_host, _index, Kokkos::ALL, Kokkos::ALL);
+   HostViewManaged<Real [NP][NP]> local_spheremp =
+     Kokkos::subview(testing_laplace.spheremp_host, _index, Kokkos::ALL, Kokkos::ALL);
 
 //F input declared
    Real sf[NP][NP];
    Real dvvf[NP][NP];
    Real dinvf[2][2][NP][NP];
-   Real metf[NP][NP];
+   Real sphf[NP][NP];
 
 //flip arrays for F
    for(int _i = 0; _i < NP; _i++)
@@ -535,7 +522,7 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
    
         sf[_j][_i] = local_scalar_input(_i,_j);
         dvvf[_j][_i] = local_dvv(_i,_j);
-        metf[_j][_i] = local_metdet(_i,_j);
+        sphf[_j][_i] = local_spheremp(_i,_j);
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
               dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
@@ -543,7 +530,7 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
 //run F code
    laplace_simple_c_int(&(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]), 
-                        &(metf[0][0]), &(local_fortran_output[0][0]));
+                        &(sphf[0][0]), &(local_fortran_output[0][0]));
 
 //compare answers
    for (int igp = 0; igp < NP; ++igp) {

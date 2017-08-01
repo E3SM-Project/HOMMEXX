@@ -161,7 +161,7 @@ divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                   ExecViewUnmanaged<Real[2][NP][NP]> gv,    //TEMP
                   ExecViewUnmanaged<Real[NP][NP]> div_v) {
 
-//copied from strong divergence as is
+//copied from strong divergence as is but without metdet
 //conversion to contravariant
   constexpr int contra_iters = NP * NP * 2;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, contra_iters),
@@ -172,15 +172,7 @@ divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
 
     gv(hgp,igp,jgp) =  DInv(hgp,0,igp,jgp) * v(0,igp,jgp) +
                        DInv(hgp,1,igp,jgp) * v(1,igp,jgp);
-  
-
   });
-
-/*for (int i=0; i<NP;i++)
-for (int j=0; j<NP; j++)
-std::cout << "i,j =" << i << " " << j <<" and res=" << gv(0,i,j) << " " 
-<< gv(1,i,j) << "\n";
-*/
 
 //in strong div
 //kgp = i in strong code, jgp=j, igp=l
@@ -195,7 +187,6 @@ std::cout << "i,j =" << i << " " << j <<" and res=" << gv(0,i,j) << " "
                        KOKKOS_LAMBDA(const int loop_idx) {
     const int mgp = loop_idx / NP;
     const int ngp = loop_idx % NP;
-    //div_v(mgp,ngp) = 0.0;
     Real dd = 0.0;
     for (int jgp = 0; jgp < NP; ++jgp) {
       dd -= (  spheremp(jgp,ngp)*gv(0,jgp,ngp)*dvv(mgp,jgp)
@@ -253,10 +244,10 @@ laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                  const ExecViewUnmanaged<const Real[NP][NP]> field, //input
                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,   //for grad, div
                  const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv, //for grad, div
-                 const ExecViewUnmanaged<const Real[NP][NP]> metDet,//for div
-                 ExecViewUnmanaged<Real[2][NP][NP]> temp_gv,//temp for div
+                 const ExecViewUnmanaged<const Real[NP][NP]> spheremp,//for div
                  ExecViewUnmanaged<Real[2][NP][NP]> temp_temp, //temp for grad
                  ExecViewUnmanaged<Real[2][NP][NP]> temp_grad, //temp to store grad
+                 ExecViewUnmanaged<Real[2][NP][NP]> temp_div, //temp to store grad
 //let's reduce num of temps later
 //output
                  ExecViewUnmanaged<Real[NP][NP]> laplace) {
@@ -264,7 +255,7 @@ laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
   gradient_sphere(team, field, dvv, DInv, temp_temp, temp_grad);
 
 //has to be divergence_wk!
-  divergence_sphere_wk(team, temp_grad, dvv, metDet, DInv, temp_gv, laplace);
+  divergence_sphere_wk(team, temp_grad, dvv, spheremp, DInv, temp_div, laplace);
 }
 
 /*
