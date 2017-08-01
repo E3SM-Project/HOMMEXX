@@ -14,8 +14,11 @@ namespace Homme {
 // Until whenever CUDA supports constexpr properly
 #ifdef CUDA_BUILD
 
+#define VECTOR_SIZE         1
+
 #define NUM_PHYSICAL_LEV    PLEV
 #define NUM_LEV_P           (NUM_LEV + 1)
+#define NUM_INTERFACE_LEV   NUM_LEV_P
 #define NUM_TIME_LEVELS     3
 #define Q_NUM_TIME_LEVELS   2
 

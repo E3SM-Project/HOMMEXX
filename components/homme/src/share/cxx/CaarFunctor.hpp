@@ -21,7 +21,6 @@ struct CaarFunctor {
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
 
-  KOKKOS_INLINE_FUNCTION
   CaarFunctor() : m_data(), m_region(get_region()), m_deriv(get_derivative()) {
     // Nothing to be done here
   }

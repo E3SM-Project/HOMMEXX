@@ -112,9 +112,6 @@ struct SIMD {
   static_assert(std::is_same<T, double>::value || std::is_same<T, float>::value,
                 "KokkosKernels:: Invalid SIMD<> type.");
 
-  static_assert(std::is_same<SpT, Kokkos::OpenMP>::value,
-                "KokkosKernels:: Invalid SIMD<> exec space.");
-
   using value_type = T;
   using exec_space = SpT;
 };
@@ -124,9 +121,6 @@ template <typename T, typename SpT = Kokkos::DefaultHostExecutionSpace>
 struct AVX {
   static_assert(std::is_same<T, double>::value || std::is_same<T, float>::value,
                 "KokkosKernels:: Invalid AVX<> type.");
-
-  static_assert(std::is_same<SpT, Kokkos::OpenMP>::value,
-                "KokkosKernels:: Invalid AVX<> exec space.");
 
   using value_type = T;
   using exec_space = SpT;

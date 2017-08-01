@@ -318,7 +318,7 @@ void CaarRegion::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
 void CaarRegion::pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  for (int ie = 0, k_eta_dot_dp_dn; ie < num_elems(); ++ie) {
+  for (int ie = 0, k_eta_dot_dp_dn = 0; ie < num_elems(); ++ie) {
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
     //       and on vector length, we would have to treat the last pack with care

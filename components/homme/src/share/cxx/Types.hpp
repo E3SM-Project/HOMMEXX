@@ -26,24 +26,6 @@ using F90Ptr = Real *const; // Using this in a function signature emphasizes
 using CF90Ptr = const Real *const; // Using this in a function signature
                                    // emphasizes that the ordering is Fortran
 
-// Selecting the execution space. If no specific request, use Kokkos default
-// exec space
-#ifdef HOMMEXX_CUDA_SPACE
-using ExecSpace = Kokkos::Cuda;
-
-template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
-  static constexpr int vectors_per_thread() { return 16; }
-
-  static int threads_per_team(const int /*num_elems*/) {
-    return Max_Threads_Per_Team;
-  }
-
-private:
-  static constexpr int Max_Threads_Per_Team = 8;
-};
-
-#else
-
 template <typename ExecSpace> struct DefaultThreadsDistribution {
   static constexpr int vectors_per_thread() { return 1; }
 
@@ -63,11 +45,28 @@ template <typename ExecSpace> struct DefaultThreadsDistribution {
   }
 #else
   static int threads_per_team(const int num_elems) { return 1; }
-#endif
-#endif
+#endif // KOKKOS_PARALLELIZE_ON_ELEMENTS
+#endif // KOKKOS_COLUMN_THREAD_ONLY
 };
 
-#if defined(HOMMEXX_OPENMP_SPACE)
+#ifdef KOKKOS_HAVE_CUDA
+template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
+  static constexpr int vectors_per_thread() { return 16; }
+
+  static int threads_per_team(const int /*num_elems*/) {
+    return Max_Threads_Per_Team;
+  }
+
+private:
+  static constexpr int Max_Threads_Per_Team = 8;
+};
+#endif // KOKKOS_HAVE_CUDA
+
+// Selecting the execution space. If no specific request, use Kokkos default
+// exec space
+#if defined(HOMMEXX_CUDA_SPACE)
+using ExecSpace = Kokkos::Cuda;
+#elif defined(HOMMEXX_OPENMP_SPACE)
 using ExecSpace = Kokkos::OpenMP;
 #elif defined(HOMMEXX_THREADS_SPACE)
 using ExecSpace = Kokkos::Threads;
@@ -78,8 +77,6 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #else
 #error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
-
-#endif // HOMMEXX_SPACE
 
 #if (AVX_VERSION > 0)
 using VectorTagType =
@@ -112,10 +109,11 @@ using ViewType = Kokkos::View<DataType, Types...>;
 
 // Further specializations for execution space and managed/unmanaged memory
 template <typename DataType>
-using ExecViewManaged = ViewType<DataType, ExecMemSpace, Kokkos::MemoryManaged>;
+using ExecViewManaged = ViewType<DataType, Kokkos::LayoutRight, ExecMemSpace,
+                                 Kokkos::MemoryManaged>;
 template <typename DataType>
-using ExecViewUnmanaged =
-    ViewType<DataType, ExecMemSpace, Kokkos::MemoryUnmanaged>;
+using ExecViewUnmanaged = ViewType<DataType, Kokkos::LayoutRight, ExecMemSpace,
+                                   Kokkos::MemoryUnmanaged>;
 
 // Further specializations for host space.
 template <typename DataType>
