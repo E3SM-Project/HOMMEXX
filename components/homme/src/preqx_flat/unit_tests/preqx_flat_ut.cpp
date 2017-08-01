@@ -95,14 +95,14 @@ public:
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
               for (int dim = 0; dim < 2; ++dim) {
-                vector_output_1(kv.ie, kv.ilev, dim, igp, jgp) =
+                vector_results_1(kv.ie, kv.ilev, dim, igp, jgp) =
                     kv.vector_buf_1(dim, igp, jgp);
-                vector_output_2(kv.ie, kv.ilev, dim, igp, jgp) =
+                vector_results_2(kv.ie, kv.ilev, dim, igp, jgp) =
                     kv.vector_buf_2(dim, igp, jgp);
               }
-              scalar_output_1(kv.ie, kv.ilev, igp, jgp) =
+              scalar_results_1(kv.ie, kv.ilev, igp, jgp) =
                   kv.scalar_buf_1(igp, jgp);
-              scalar_output_2(kv.ie, kv.ilev, igp, jgp) =
+              scalar_results_2(kv.ie, kv.ilev, igp, jgp) =
                   kv.scalar_buf_2(igp, jgp);
             }
           }
@@ -110,7 +110,7 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 16, 4);
+    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 1, 1);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_1, vector_results_1);
@@ -157,6 +157,15 @@ public:
   int nete = -1;
 };
 
+class compute_energy_grad_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor,
+                           CaarFunctor::KernelVariables &kv) {
+    functor.compute_energy_grad(kv);
+  }
+};
+
 TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   constexpr const Real rel_threshold = 1E-15;
   constexpr const int num_elems = 10;
@@ -170,14 +179,6 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  class compute_energy_grad_test {
-  public:
-    KOKKOS_INLINE_FUNCTION
-    static void test_functor(const CaarFunctor &functor,
-                             CaarFunctor::KernelVariables &kv) {
-      functor.compute_energy_grad(kv);
-    }
-  };
   compute_subfunctor_test<compute_energy_grad_test> test_functor(num_elems);
 
   test_functor.run_functor();

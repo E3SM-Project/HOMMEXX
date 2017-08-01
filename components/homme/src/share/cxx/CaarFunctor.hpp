@@ -63,12 +63,10 @@ struct CaarFunctor {
     int ie, ilev;
   }; // KernelVariables
 
-  KOKKOS_INLINE_FUNCTION
   CaarFunctor() : m_data(), m_region(get_region()), m_deriv(get_derivative()) {
     // Nothing to be done here
   }
 
-  KOKKOS_INLINE_FUNCTION
   CaarFunctor(const CaarControl &data)
       : m_data(data), m_region(get_region()), m_deriv(get_derivative()) {
     // Nothing to be done here

@@ -175,7 +175,7 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
   using Kokkos::ALL;
 
   constexpr int nelems        = 10;
-  constexpr int num_rand_test = 10;
+  constexpr int num_rand_test = 100;
 
   // Raw pointers
   Real* scalar_f90 = new Real[nelems*NP*NP];
@@ -199,7 +199,6 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
   ExecViewManaged<Real*[2][2][NP][NP]> D_cxx_exec("D_cxx_exec",nelems);
   ExecViewManaged<Real*[NP][NP]>       metdet_cxx_exec("metdet_cxx_exec",nelems);
   ExecViewManaged<Real*[2][NP][NP]>    tmp_cxx("tmp_cxx",nelems);
-
 
   // Random numbers generators
   std::random_device rd;
@@ -264,7 +263,9 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
           {
             for (int i=0; i<NP; ++i, ++iter)
             {
-              REQUIRE(compare_answers(vector_f90[iter],vector_cxx(ie,dim,i,j)) == 0.0);
+              // CUDA can lose as many as 4 digits
+              Real cmp = compare_answers(vector_f90[iter],vector_cxx(ie,dim,i,j), 32768.0);
+              REQUIRE(cmp <= std::numeric_limits<Real>::epsilon());
             }
           }
         }
@@ -320,7 +321,8 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
         {
           for (int i=0; i<NP; ++i, ++iter)
           {
-            REQUIRE(compare_answers(scalar_f90[iter],scalar_cxx(ie,i,j)) == 0.0);
+            Real cmp = compare_answers(scalar_f90[iter],scalar_cxx(ie,i,j), 32768.0);
+            REQUIRE(cmp <= std::numeric_limits<Real>::epsilon());
           }
         }
       }
@@ -373,7 +375,8 @@ TEST_CASE ("SphereOperators", "Testing spherical differential operators")
         {
           for (int i=0; i<NP; ++i, ++iter)
           {
-            REQUIRE(compare_answers(scalar_f90[iter],scalar_cxx(ie,i,j)) == 0.0);
+            Real cmp = compare_answers(scalar_f90[iter],scalar_cxx(ie,i,j), 32768.0);
+            REQUIRE(cmp <= std::numeric_limits<Real>::epsilon());
           }
         }
       }

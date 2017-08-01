@@ -7,7 +7,7 @@
 
 int main(int argc, char **argv) {
   Kokkos::initialize();
-  Kokkos::print_configuration(std::cout,true);
+  Kokkos::DefaultExecutionSpace::print_configuration(std::cout,true);
   int result = Catch::Session().run(argc, argv);
   Kokkos::finalize();
   return result;
