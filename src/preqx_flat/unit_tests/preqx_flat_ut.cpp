@@ -27,11 +27,6 @@ void caar_compute_energy_grad_c_int(const Real *const &dvv, const Real *const &D
                                     const Real *const &velocity,
                                     Real *const &vtemp);//(&vtemp)[2][NP][NP]);
 
-void caar_compute_energy_grad_c_int(const Real (&dvv)[NP][NP], Real *Dinv,
-                                    Real *const &pecnd, Real *const &phi,
-                                    Real *const &velocity,
-                                    Real (&vtemp)[2][NP][NP]);
-
 void laplace_simple_c_int(const Real* ,
                           const Real* ,
                           const Real* ,
@@ -228,7 +223,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   std::cout << "test finished.\n";
 }//end of TEST_CASE(...,"compute_energy_grad")
 
-
+#if 0
 //template <typename TestFunctor_T> class compute_sphop_test {
 class compute_sphere_operator_test {
 public:
@@ -276,24 +271,24 @@ public:
   genRandArray(spheremp_host.data(), spheremp_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
-/*
+
 //setting everything to 1 is good for debugging
-for(int i1=0; i1<_some_index; i1++)
-for(int i2=0; i2<NP; i2++)
-for(int i3=0; i3<NP; i3++){
-dinv_host(i1,0,0,i2,i3)=1.0;
-dinv_host(i1,1,1,i2,i3)=1.0;
-dinv_host(i1,1,0,i2,i3)=1.0;
-dinv_host(i1,0,1,i2,i3)=1.0;
-metdet_host(i1,i2,i3)=1.0;
-spheremp_host(i1,i2,i3)=1.0;
-dvv_host(i1,i2,i3)=1.0;
-Real aa = i2+i3;
-scalar_input_host(i1,i2,i3) = aa;
-vector_input_host(i1,0,i2,i3) = aa;
-vector_input_host(i1,1,i2,i3) = aa;
-}
-*/
+//for(int i1=0; i1<_some_index; i1++)
+//for(int i2=0; i2<NP; i2++)
+//for(int i3=0; i3<NP; i3++){
+//dinv_host(i1,0,0,i2,i3)=1.0;
+//dinv_host(i1,1,1,i2,i3)=1.0;
+//dinv_host(i1,1,0,i2,i3)=1.0;
+//dinv_host(i1,0,1,i2,i3)=1.0;
+//metdet_host(i1,i2,i3)=1.0;
+//spheremp_host(i1,i2,i3)=1.0;
+//dvv_host(i1,i2,i3)=1.0;
+//Real aa = i2+i3;
+//scalar_input_host(i1,i2,i3) = aa;
+//vector_input_host(i1,0,i2,i3) = aa;
+//vector_input_host(i1,1,i2,i3) = aa;
+//}
+
 
   }
   int _some_index;//league size, serves as ie index
@@ -659,6 +654,6 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
  
 };//end of TEST_CASE(..., "gradient_sphere")
 
-
+#endif
 
 

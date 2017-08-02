@@ -177,7 +177,7 @@ divergence_sphere_sl(const KernelVariables &kv,
 }
 
 KOKKOS_INLINE_FUNCTION void
-divergence_sphere_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+divergence_sphere_wk_sl(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                   const ExecViewUnmanaged<const Real[2][NP][NP]> v,
                   const ExecViewUnmanaged<const Real[NP][NP]> dvv,
                   const ExecViewUnmanaged<const Real[NP][NP]> spheremp,
@@ -261,6 +261,30 @@ vorticity_sphere_sl(const KernelVariables &kv,
                                       PhysicalConstants::rrearth);
   });
 }
+
+#if 0
+// analog of fortran's laplace_wk_sphere
+// Single level implementation
+KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
+    const KernelVariables &kv,
+    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    ExecViewUnmanaged<Real[2][NP][NP]> gv,                     // temp for div
+    ExecViewUnmanaged<Real[NP][NP]> /*div_v*/,     // temp to store div
+    ExecViewUnmanaged<Real[2][NP][NP]> /*temp_v*/, // temp for grad
+    ExecViewUnmanaged<Real[2][NP][NP]> grad_s, // temp to store grad
+    // let's reduce num of temps later
+    // output
+    ExecViewUnmanaged<Real[NP][NP]> laplace) {
+    // let's ignore var coef and tensor hv
+       gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
+//this is not gonna work till div_wk is rewritten
+       divergence_sphere_wk_sl(kv, grad_s, dvv, spheremp, DInv, gv, laplace);
+}//end of laplace_wk_sl
+#endif
+
 
 // ================ MULTI-LEVEL IMPLEMENTATION =========================== //
 
@@ -358,26 +382,6 @@ divergence_sphere(const KernelVariables &kv,
   });
 }
 
-//version of fortran's laplace_wk_sphere
-KOKKOS_INLINE_FUNCTION void
-laplace_wk(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
-                 const ExecViewUnmanaged<const Real[NP][NP]> field, //input
-                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,   //for grad, div
-                 const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv, //for grad, div
-                 const ExecViewUnmanaged<const Real[NP][NP]> spheremp,//for div
-                 ExecViewUnmanaged<Real[2][NP][NP]> temp_temp, //temp for grad
-                 ExecViewUnmanaged<Real[2][NP][NP]> temp_grad, //temp to store grad
-                 ExecViewUnmanaged<Real[2][NP][NP]> temp_div, //temp to store grad
-//let's reduce num of temps later
-//output
-                 ExecViewUnmanaged<Real[NP][NP]> laplace) {
-//let's ignore var coef and tensor hv
-  gradient_sphere(team, field, dvv, DInv, temp_temp, temp_grad);
-
-//has to be divergence_wk!
-  divergence_sphere_wk(team, temp_grad, dvv, spheremp, DInv, temp_div, laplace);
-}
-
 KOKKOS_INLINE_FUNCTION void
 vorticity_sphere(const KernelVariables &kv,
                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
@@ -412,25 +416,6 @@ vorticity_sphere(const KernelVariables &kv,
   });
 }
 
-// analog of fortran's laplace_wk_sphere
-// Single level implementation
-KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
-    const KernelVariables &kv,
-    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
-    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
-    const ExecViewUnmanaged<const Real * [NP][NP]> metDet,     // for div
-    ExecViewUnmanaged<Real[2][NP][NP]> /*gv*/,                     // temp for div
-    ExecViewUnmanaged<Real[NP][NP]> /*div_v*/,     // temp to store div
-    ExecViewUnmanaged<Real[2][NP][NP]> /*temp_v*/, // temp for grad
-    ExecViewUnmanaged<Real[2][NP][NP]> grad_s, // temp to store grad
-    // let's reduce num of temps later
-    // output
-    ExecViewUnmanaged<Real[NP][NP]> laplace) {
-  // let's ignore var coef and tensor hv
-  gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
-  divergence_sphere_sl(kv, DInv, metDet, dvv, grad_s, laplace);
-}
 
 /*
   function laplace_sphere_wk(s,deriv,elem,var_coef) result(laplace)
