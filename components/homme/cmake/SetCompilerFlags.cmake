@@ -2,9 +2,30 @@
 # Compiler specific options
 ##############################################################################
 
-# Fortran Flags
+# Detectinc AVX capability
+SET(AVX_FOUND    FALSE CACHE INTERNAL "AVX available on host")
+SET(AVX2_FOUND   FALSE CACHE INTERNAL "AVX2 available on host")
+SET(AVX512_FOUND FALSE CACHE INTERNAL "AVX512 available on host")
 
-MESSAGE(STATUS "CMAKE_Fortran_COMPILER_ID = ${CMAKE_Fortran_COMPILER_ID}")
+IF (NOT DEFINED AVX_VERSION)
+  # The user did not specify any avx version, so we detect it.
+  INCLUDE(FindAVX)
+  FindAVX()
+  SET (AVX_VERSION ${AVX_VERSION_AUTO} CACHE STRING "The version of AVX available on host")
+ELSE()
+  IF (AVX_VERSION STREQUAL "0")
+  ELSEIF(AVX_VERSION STREQUAL "1")
+    SET (AVX_FOUND TRUE)
+  ELSEIF (AVX_VERSION STREQUAL "2")
+    SET (AVX2_FOUND TRUE)
+  ELSEIF (AVX_VERSION STREQUAL "512")
+    SET (AVX512_FOUND TRUE)
+  ELSE ()
+    MESSAGE (FATAL_ERROR "Invalid AVX_VERSION requested (${AVX_VERSION}). Valid options are 'NONE', '1', '2', '512'.")
+  ENDIF()
+  MESSAGE (STATUS "Requested AVX version: ${AVX_VERSION}")
+ENDIF()
+
 # Need this for a fix in repro_sum_mod
 IF (${CMAKE_Fortran_COMPILER_ID} STREQUAL XL)
   ADD_DEFINITIONS(-DnoI8)
@@ -244,19 +265,25 @@ IF (ENABLE_HORIZ_OPENMP OR ENABLE_COLUMN_OPENMP)
 
  IF (${ENABLE_COLUMN_OPENMP})
    # Set this as global so it can be picked up by all executables
-#   SET(COLUMN_OPENMP TRUE CACHE BOOL "Threading in the horizontal direction")
-   SET(COLUMN_OPENMP TRUE BOOL "Threading in the horizontal direction")
+#   SET(COLUMN_OPENMP TRUE CACHE BOOL "Threading in the vertical direction")
+   SET(COLUMN_OPENMP TRUE BOOL "Threading in the vertical direction")
+   IF (${NO_HORIZ_THREADS})
+     SET(KOKKOS_COLUMN_THREAD_ONLY "Threading in the vertical direction without horizontal threading in C++")
+   ELSE ()
+     SET(KOKKOS_PARALLELIZE_ON_ELEMENTS "Threading first in the horizontal direction, and then in the vertical with leftover threads in C++")
+   ENDIF ()
    MESSAGE(STATUS "  Using COLUMN_OPENMP")
  ENDIF ()
 ENDIF ()
 ##############################################################################
 
-
 ##############################################################################
 # Intel Phi (MIC) specific flags - only supporting the Intel compiler
 ##############################################################################
 OPTION(ENABLE_INTEL_PHI "Whether to build with Intel Xeon Phi (MIC) support" FALSE)
-IF (ENABLE_INTEL_PHI)
+
+IF (ENABLE_INTEL_PHI OR AVX512_FOUND)
+  SET(AVX_VERSION "512")
   IF (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL Intel)
     MESSAGE(FATAL_ERROR "Intel Phi acceleration only supported through the Intel compiler")
   ELSE ()
@@ -277,6 +304,23 @@ IF (ENABLE_INTEL_PHI)
       SET(CMAKE_FIND_ROOT_PATH /usr/linux-k1om-4.7)
     ENDIF ()
   ENDIF ()
+ELSE()
+  ##############################################################################
+  # Compiler FLAGS for AVX1 and AVX2 (CXX compiler only)
+  ##############################################################################
+  IF (AVX2_FOUND)
+    IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
+    ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xCORE-AVX2 -no-fma")
+    ENDIF()
+  ELSEIF (AVX_FOUND)
+    IF (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
+    ELSEIF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
+      SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xAVX")
+    ENDIF()
+  ENDIF()
 ENDIF ()
 
 ##############################################################################
