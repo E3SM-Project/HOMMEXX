@@ -390,29 +390,27 @@ public:
  * other SphereOperators should be called from loop with TeamThreadRange.
 */
 
-#if 0
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagDivergenceSphereWk &, TeamMember team) const {
-
+    KernelVariables kv(team);
     int _index = team.league_rank();
 
     ExecViewManaged<Real [2][NP][NP]> local_vector_input_d =
       Kokkos::subview(vector_input_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_dvv_d =
-      Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
-      Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
-      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
-      Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [NP][NP]> local_dvv_d =
+//      Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
+//      Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
+//      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
+//      Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [NP][NP]> local_scalar_output_d =
       Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL);
 
-    divergence_sphere_wk(team, local_vector_input_d, local_dvv_d, local_spheremp_d,
-               local_dinv_d, local_temp1_d, local_scalar_output_d);
+    divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+               local_vector_input_d, local_scalar_output_d);
   };//end of op() for divergence_sphere_wk
-#endif
 
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagGradientSphere &, TeamMember team) const {
@@ -455,7 +453,6 @@ public:
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-#if 0
   void run_functor_div_wk() const {
 //league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWk> policy(_some_index, 16);
@@ -465,7 +462,6 @@ public:
     //remember to copy correct output
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
-#endif
 
 }; //end of definition of compute_sphere_operator_test()
 
@@ -530,7 +526,7 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
  }//end of for loop for parallel_index
 
 };//end of TEST_CASE(..., "simple laplace")
-
+#endif
 
 TEST_CASE("Testing div_wk()", "div_wk") {
 
@@ -547,8 +543,8 @@ TEST_CASE("Testing div_wk()", "div_wk") {
    HostViewManaged<Real [2][NP][NP]> local_vector_input =
      Kokkos::subview(testing_divwk.vector_input_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-   HostViewManaged<Real [NP][NP]> local_dvv =
-     Kokkos::subview(testing_divwk.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
+//   HostViewManaged<Real [NP][NP]> local_dvv =
+//     Kokkos::subview(testing_divwk.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
 
    HostViewManaged<Real [2][2][NP][NP]> local_dinv =
      Kokkos::subview(testing_divwk.dinv_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -565,12 +561,12 @@ TEST_CASE("Testing div_wk()", "div_wk") {
    for(int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
 
-        dvvf[_j][_i] = local_dvv(_i,_j);
-        sphf[_j][_i] = local_spheremp(_i,_j);
+        dvvf[_i][_j] = testing_divwk.dvv_host(_i,_j);
+        sphf[_i][_j] = local_spheremp(_i,_j);
         for(int _d1 = 0; _d1 < 2; _d1++){
-           vf[_d1][_j][_i] = local_vector_input(_d1,_i,_j);
+           vf[_d1][_i][_j] = local_vector_input(_d1,_i,_j);
            for(int _d2 = 0; _d2 < 2; _d2++)
-              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
+              dinvf[_d1][_d2][_i][_j] = local_dinv(_d1,_d2,_i,_j);
         }
    }
 
@@ -590,17 +586,16 @@ std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_
 
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-          REQUIRE(!std::isnan(local_fortran_output[jgp][igp]));
+          REQUIRE(!std::isnan(local_fortran_output[igp][jgp]));
           REQUIRE(!std::isnan(testing_divwk.scalar_output_host(_index, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(local_fortran_output[jgp][igp],
+              compare_answers(local_fortran_output[igp][jgp],
                         testing_divwk.scalar_output_host(_index, igp, jgp)));
       }
     }
  }; //end of parallel_index loop
 
 }//end of TEST_CASE(...,"divergence_sphere_wk")
-#endif
 
 
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
