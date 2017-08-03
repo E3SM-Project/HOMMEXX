@@ -223,7 +223,7 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
   std::cout << "test finished.\n";
 }//end of TEST_CASE(...,"compute_energy_grad")
 
-#if 0
+#if 1
 //template <typename TestFunctor_T> class compute_sphop_test {
 class compute_sphere_operator_test {
 public:
@@ -234,7 +234,7 @@ public:
       dinv_d("dinv", some_index),
       metdet_d("metdet", some_index),
       spheremp_d("spheremp", some_index),
-      dvv_d("dvv", some_index),
+      dvv_d("dvv"),
       scalar_output_d("scalar output", some_index),
       vector_output_d("vector output", some_index),
       temp1_d("temp1", some_index),
@@ -269,7 +269,7 @@ public:
   genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
   genRandArray(spheremp_host.data(), spheremp_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  genRandArray(dvv_host.data(), dvv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dvv_host.data(), dvv_len, engine, std::uniform_real_distribution<Real>(0, 1.0));
 
 
 //setting everything to 1 is good for debugging
@@ -300,7 +300,7 @@ public:
   ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
   ExecViewManaged<Real * [NP][NP]> spheremp_d;
   ExecViewManaged<Real * [NP][NP]> metdet_d;
-  ExecViewManaged<Real * [NP][NP]> dvv_d;
+  ExecViewManaged<Real   [NP][NP]> dvv_d;
   ExecViewManaged<Real * [NP][NP]> scalar_output_d;
   ExecViewManaged<Real * [2][NP][NP]> vector_output_d;
   ExecViewManaged<Real * [2][NP][NP]> temp1_d, temp2_d, temp3_d;  
@@ -321,7 +321,7 @@ public:
   const int metdet_len = NP*NP;
   ExecViewManaged<Real * [NP][NP]>::HostMirror spheremp_host;
   const int spheremp_len = NP*NP;
-  ExecViewManaged<Real * [NP][NP]>::HostMirror dvv_host;
+  ExecViewManaged<Real   [NP][NP]>::HostMirror dvv_host;
   const int dvv_len = NP*NP;
   ExecViewManaged<Real * [NP][NP]>::HostMirror scalar_output_host;
   ExecViewManaged<Real * [2][NP][NP]>::HostMirror vector_output_host;
@@ -341,6 +341,7 @@ public:
     //do nothing or print a message
   };
 
+#if 0
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagSimpleLaplace &, TeamMember team) const {
 
@@ -367,6 +368,7 @@ public:
                local_spheremp_d, local_temp1_d, local_temp2_d, local_temp3_d, local_scalar_output_d);
 
   };//end of op() for laplace_simple
+#endif
 
 /*
  * A comment on how these tests work:
@@ -388,7 +390,7 @@ public:
  * other SphereOperators should be called from loop with TeamThreadRange.
 */
 
-
+#if 0
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagDivergenceSphereWk &, TeamMember team) const {
 
@@ -410,27 +412,28 @@ public:
     divergence_sphere_wk(team, local_vector_input_d, local_dvv_d, local_spheremp_d,
                local_dinv_d, local_temp1_d, local_scalar_output_d);
   };//end of op() for divergence_sphere_wk
-
+#endif
 
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagGradientSphere &, TeamMember team) const {
+    KernelVariables kv(team);
     int _index = team.league_rank();
 
     ExecViewManaged<Real [NP][NP]> local_scalar_input_d =
           Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_dvv_d =
-          Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
-          Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_temp1_d =
-          Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [NP][NP]> local_dvv_d =
+//          Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d =
+//          Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [2][NP][NP]> local_vector_output_d =
           Kokkos::subview(vector_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    gradient_sphere(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
-                              local_temp1_d, local_vector_output_d);
+    gradient_sphere_sl(kv, dinv_d, dvv_d, local_scalar_input_d,
+                           local_vector_output_d);
   };
 
+
+#if 0
 //this could be even nicer, 
 //put in a param in run_functor(param) to only branch policy type
   void run_functor_simple_laplace() const {
@@ -441,6 +444,7 @@ public:
     //TO FROM , why not from ...  to ... ?
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
+#endif
 
   void run_functor_gradient_sphere() const {
 //league, team, vector_length_request=1
@@ -451,6 +455,7 @@ public:
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
+#if 0
   void run_functor_div_wk() const {
 //league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWk> policy(_some_index, 16);
@@ -460,10 +465,11 @@ public:
     //remember to copy correct output
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
+#endif
 
 }; //end of definition of compute_sphere_operator_test()
 
-
+#if 0
 TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
@@ -594,7 +600,7 @@ std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_
  }; //end of parallel_index loop
 
 }//end of TEST_CASE(...,"divergence_sphere_wk")
-
+#endif
 
 
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
@@ -614,11 +620,12 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
    HostViewManaged<Real [NP][NP]> local_scalar_input =
      Kokkos::subview(testing_grad.scalar_input_host, _index, Kokkos::ALL, Kokkos::ALL);
 
-   HostViewManaged<Real [NP][NP]> local_dvv =
-     Kokkos::subview(testing_grad.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
+//   HostViewManaged<Real [NP][NP]> local_dvv =
+//     Kokkos::subview(testing_grad.dvv_host, Kokkos::ALL, Kokkos::ALL);
 
    HostViewManaged<Real [2][2][NP][NP]> local_dinv =
      Kokkos::subview(testing_grad.dinv_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
 
    Real sf[NP][NP];
    Real dvvf[NP][NP];
@@ -627,11 +634,11 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
 //flipping arrays -- WRITE DOWN HOW THIS SHOULD BE DONE
    for( int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
-        sf[_j][_i] = local_scalar_input(_i,_j);
-        dvvf[_j][_i] = local_dvv(_i,_j);
+        sf[_i][_j] = local_scalar_input(_i,_j);
+        dvvf[_i][_j] = testing_grad.dvv_host(_i,_j);
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
-              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
+              dinvf[_d1][_d2][_i][_j] = local_dinv(_d1,_d2,_i,_j);
    }
 
 //running F version of operator
@@ -642,12 +649,12 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
    for (int igp = 0; igp < NP; ++igp)
       for (int jgp = 0; jgp < NP; ++jgp)
          for (int _d = 0; _d < 2; ++_d){
-          REQUIRE(!std::isnan(local_fortran_output[_d][jgp][igp]));
+          REQUIRE(!std::isnan(local_fortran_output[_d][igp][jgp]));
           REQUIRE(!std::isnan(testing_grad.vector_output_host(_index, _d, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
               compare_answers(
                         local_fortran_output[_d][igp][jgp],
-                        testing_grad.vector_output_host(_index, _d, jgp, igp)));
+                        testing_grad.vector_output_host(_index, _d, igp, jgp)));
     }//end of comparing answers
     
   }//end of loop for parallel_index
