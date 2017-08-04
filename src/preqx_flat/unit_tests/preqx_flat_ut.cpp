@@ -54,11 +54,24 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   return std::fabs(target - computed) / denom;
 }//end of definition of compare_answers()
 
+/*
+template<typename RealType1, typename RealType2>
+void genRandArray(RealType1 *arr, int arr_len, rngAlg &engine, std::uniform_real_distribution<RealType2> pdf){
+  
+  RealType2* brr = reinterpret_cast<RealType2 *> arr;
+
+  for(int i = 0; i < arr_len; ++i) {
+    brr[i] = pdf(engine);
+  }
+}//end of definition of genRandArray()
+*/
+
 void genRandArray(Real *arr, int arr_len, rngAlg &engine, std::uniform_real_distribution<Real> pdf){
   for(int i = 0; i < arr_len; ++i) {
     arr[i] = pdf(engine);
   }
 }//end of definition of genRandArray()
+
 
 
 /* compute_subfunctor_test
@@ -221,10 +234,133 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
     }
   }
   std::cout << "test finished.\n";
-}//end of TEST_CASE(...,"compute_energy_grad")
+};//end of TEST_CASE(...,"compute_energy_grad")
 
-#if 1
-//template <typename TestFunctor_T> class compute_sphop_test {
+
+
+
+class compute_sphere_operator_test_ml {
+public:
+  compute_sphere_operator_test_ml(int some_index)
+    : scalar_input_d("scalar input", some_index),
+      vector_input_d("vector input", some_index),
+      d_d("d", some_index),
+      dinv_d("dinv", some_index),
+      metdet_d("metdet", some_index),
+      spheremp_d("spheremp", some_index),
+      dvv_d("dvv"),
+      scalar_output_d("scalar output", some_index),
+      vector_output_d("vector output", some_index),
+      temp1_d("temp1", some_index),
+      temp2_d("temp2", some_index),
+      temp3_d("temp3", some_index),
+      scalar_input_host(Kokkos::create_mirror_view(scalar_input_d)),
+      vector_input_host(Kokkos::create_mirror_view(vector_input_d)),
+      d_host(Kokkos::create_mirror_view(d_d)),
+      dinv_host(Kokkos::create_mirror_view(dinv_d)),
+      metdet_host(Kokkos::create_mirror_view(metdet_d)),
+      spheremp_host(Kokkos::create_mirror_view(spheremp_d)),
+      dvv_host(Kokkos::create_mirror_view(dvv_d)),
+      scalar_output_host(Kokkos::create_mirror_view(scalar_output_d)),
+      vector_output_host(Kokkos::create_mirror_view(vector_output_d)),
+      temp1_host(Kokkos::create_mirror_view(temp1_d)),
+      temp2_host(Kokkos::create_mirror_view(temp2_d)),
+      temp3_host(Kokkos::create_mirror_view(temp3_d)),
+      _some_index(some_index)
+       {
+
+  std::random_device rd;
+  rngAlg engine(rd());
+  genRandArray(reinterpret_cast<Real *>(scalar_input_host.data()), 
+      scalar_input_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(reinterpret_cast<Real *>(vector_input_host.data()), 
+      vector_input_len*_some_index, engine, std::uniform_real_distribution<Real>(-100.0, 100.0));
+  genRandArray(d_host.data(), d_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dinv_host.data(), dinv_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(metdet_host.data(), metdet_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(spheremp_host.data(), spheremp_len*_some_index, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  genRandArray(dvv_host.data(), dvv_len, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  }//end of constructor
+
+  int _some_index;//league size, serves as ie index
+
+//device
+
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> scalar_input_d;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vector_input_d;
+  ExecViewManaged<Real * [2][2][NP][NP]> d_d;
+  ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
+  ExecViewManaged<Real * [NP][NP]> spheremp_d;
+  ExecViewManaged<Real * [NP][NP]> metdet_d;
+  ExecViewManaged<Real   [NP][NP]> dvv_d;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> scalar_output_d;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vector_output_d;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temp1_d, temp2_d, temp3_d;
+
+//host
+//rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror scalar_input_host;
+  const int scalar_input_len = NUM_PHYSICAL_LEV*NP*NP; //temp code
+
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror vector_input_host;
+  const int vector_input_len = NUM_PHYSICAL_LEV*2*NP*NP;
+
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror d_host;
+  const int d_len = 2*2*NP*NP; //temp code
+
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror dinv_host;
+  const int dinv_len = 2*2*NP*NP; //temp code
+
+  ExecViewManaged<Real * [NP][NP]>::HostMirror metdet_host;
+  const int metdet_len = NP*NP;
+
+  ExecViewManaged<Real * [NP][NP]>::HostMirror spheremp_host;
+  const int spheremp_len = NP*NP;
+
+  ExecViewManaged<Real   [NP][NP]>::HostMirror dvv_host;
+  const int dvv_len = NP*NP;
+
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror scalar_output_host;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror vector_output_host;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror temp1_host, temp2_host, temp3_host;
+
+//tag for laplace_simple()
+  struct TagSimpleLaplaceML{};
+//tag for gradient_sphere()
+  struct TagGradientSphereML{};
+//tag for divergence_sphere_wk
+  struct TagDivergenceSphereML{};
+//tag for default, a dummy
+  struct TagDefault{};
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagDefault &, TeamMember team ) const {
+    //do nothing or print a message
+  };
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagGradientSphereML &, TeamMember team) const {
+
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar [NP][NP][NUM_LEV]> local_scalar_input_d =
+        Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Scalar [2][NP][NP][NUM_LEV]> local_vector_output_d =
+        Kokkos::subview(vector_output_d, _index, Kokkos::ALL, Kokkos::ALL, 
+                                                 Kokkos::ALL, Kokkos::ALL);
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int &level) {
+      kv.ilev = level;
+      gradient_sphere(kv, dinv_d, dvv_d, local_scalar_input_d, local_vector_output_d);
+    });//end parallel_for for level
+
+  }//end of op() for grad_sphere_ml
+
+};//end of class def compute_sphere_op_test_ml
+
+
 class compute_sphere_operator_test {
 public:
   compute_sphere_operator_test(int some_index)
@@ -651,6 +787,6 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
  
 };//end of TEST_CASE(..., "gradient_sphere")
 
-#endif
+
 
 
