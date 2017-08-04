@@ -218,7 +218,7 @@ divergence_sphere_wk_sl(const KernelVariables &kv,
     div_v(ngp,mgp) = dd;
   });
 
-}//end of div_wk
+}//end of divergence_sphere_wk_sl
 
 
 
@@ -409,6 +409,44 @@ vorticity_sphere(const KernelVariables &kv,
                                                PhysicalConstants::rrearth);
   });
 }
+
+
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_wk(const KernelVariables &kv,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
+                  const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                  const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
+
+  constexpr int contra_iters = NP * NP * 2;
+  Scalar gv[2][NP][NP];
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    gv[0][igp][jgp] = dinv(kv.ie,0,0,igp,jgp) * v(0,igp,jgp, kv.ilev) +
+                      dinv(kv.ie,1,0,igp,jgp) * v(1,igp,jgp, kv.ilev);
+    gv[1][igp][jgp] = dinv(kv.ie,0,1,igp,jgp) * v(0,igp,jgp, kv.ilev) +
+                      dinv(kv.ie,1,1,igp,jgp) * v(1,igp,jgp, kv.ilev);
+  });
+
+  constexpr int div_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, div_iters),
+                       [&](const int loop_idx) {
+    const int mgp = loop_idx / NP;
+    const int ngp = loop_idx % NP;
+    Scalar dd = 0.0;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      dd -= (  spheremp(kv.ie,ngp,jgp)*gv[0][ngp][jgp]*dvv(jgp,mgp)
+             + spheremp(kv.ie,jgp,mgp)*gv[1][jgp][mgp]*dvv(jgp,ngp) )
+                         *PhysicalConstants::rrearth;
+    }
+    div_v(ngp,mgp,kv.ilev) = dd;
+  });
+
+}//end of divergence_sphere_wk
+
 
 
 /*
