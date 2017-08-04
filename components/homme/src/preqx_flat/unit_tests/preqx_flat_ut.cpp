@@ -341,34 +341,32 @@ public:
     //do nothing or print a message
   };
 
-#if 0
   KOKKOS_INLINE_FUNCTION
   void operator()( const TagSimpleLaplace &, TeamMember team) const {
-
+    KernelVariables kv(team);
     int _index = team.league_rank();
 
     ExecViewManaged<Real [NP][NP]> local_scalar_input_d = 
       Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_dvv_d = 
-      Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d = 
-      Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
-      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [NP][NP]> local_dvv_d = 
+//      Kokkos::subview(dvv_d, _index, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][2][NP][NP]> local_dinv_d = 
+//      Kokkos::subview(dinv_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [NP][NP]> local_spheremp_d =
+//      Kokkos::subview(spheremp_d, _index, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [2][NP][NP]> local_temp1_d = 
       Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_temp2_d =
-      Kokkos::subview(temp2_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real [2][NP][NP]> local_temp3_d =
-      Kokkos::subview(temp3_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][NP][NP]> local_temp2_d =
+//      Kokkos::subview(temp2_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+//    ExecViewManaged<Real [2][NP][NP]> local_temp3_d =
+//      Kokkos::subview(temp3_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     ExecViewManaged<Real [NP][NP]> local_scalar_output_d = 
       Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL);
        
-    laplace_wk(team, local_scalar_input_d, local_dvv_d, local_dinv_d,
-               local_spheremp_d, local_temp1_d, local_temp2_d, local_temp3_d, local_scalar_output_d);
+    laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                      local_temp1_d, local_scalar_input_d, local_scalar_output_d);
 
   };//end of op() for laplace_simple
-#endif
 
 /*
  * A comment on how these tests work:
@@ -431,7 +429,6 @@ public:
   };
 
 
-#if 0
 //this could be even nicer, 
 //put in a param in run_functor(param) to only branch policy type
   void run_functor_simple_laplace() const {
@@ -442,7 +439,6 @@ public:
     //TO FROM , why not from ...  to ... ?
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
-#endif
 
   void run_functor_gradient_sphere() const {
 //league, team, vector_length_request=1
@@ -465,8 +461,8 @@ public:
 
 }; //end of definition of compute_sphere_operator_test()
 
-#if 0
-TEST_CASE("Testing laplace_simple()", "laplace_simple") {
+
+TEST_CASE("Testing laplace_simple_sl()", "laplace_simple_sl") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
  constexpr const int parallel_index = 10;
@@ -481,8 +477,8 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
    HostViewManaged<Real [NP][NP]> local_scalar_input = 
      Kokkos::subview(testing_laplace.scalar_input_host, _index, Kokkos::ALL, Kokkos::ALL);
    
-   HostViewManaged<Real [NP][NP]> local_dvv =
-     Kokkos::subview(testing_laplace.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
+//   HostViewManaged<Real [NP][NP]> local_dvv =
+//     Kokkos::subview(testing_laplace.dvv_host, _index, Kokkos::ALL, Kokkos::ALL);
   
    HostViewManaged<Real [2][2][NP][NP]> local_dinv =
      Kokkos::subview(testing_laplace.dinv_host, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -500,12 +496,12 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
    for(int _i = 0; _i < NP; _i++)
       for(int _j = 0; _j < NP; _j++){
    
-        sf[_j][_i] = local_scalar_input(_i,_j);
-        dvvf[_j][_i] = local_dvv(_i,_j);
-        sphf[_j][_i] = local_spheremp(_i,_j);
+        sf[_i][_j] = local_scalar_input(_i,_j);
+        dvvf[_i][_j] = testing_laplace.dvv_host(_i,_j);
+        sphf[_i][_j] = local_spheremp(_i,_j);
         for(int _d1 = 0; _d1 < 2; _d1++)
            for(int _d2 = 0; _d2 < 2; _d2++)
-              dinvf[_d2][_d1][_j][_i] = local_dinv(_d1,_d2,_i,_j);
+              dinvf[_d1][_d2][_i][_j] = local_dinv(_d1,_d2,_i,_j);
    }
 
 //run F code
@@ -515,10 +511,10 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
 //compare answers
    for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-          REQUIRE(!std::isnan(local_fortran_output[jgp][igp]));
+          REQUIRE(!std::isnan(local_fortran_output[igp][jgp]));
           REQUIRE(!std::isnan(testing_laplace.scalar_output_host(_index, igp, jgp)));
           REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(local_fortran_output[jgp][igp],
+              compare_answers(local_fortran_output[igp][jgp],
                         testing_laplace.scalar_output_host(_index, igp, jgp)));
       }
     }
@@ -526,7 +522,6 @@ TEST_CASE("Testing laplace_simple()", "laplace_simple") {
  }//end of for loop for parallel_index
 
 };//end of TEST_CASE(..., "simple laplace")
-#endif
 
 TEST_CASE("Testing div_wk()", "div_wk") {
 

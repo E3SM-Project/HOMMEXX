@@ -182,7 +182,6 @@ divergence_sphere_wk_sl(const KernelVariables &kv,
                   const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
                   const ExecViewUnmanaged<const Real[NP][NP]> dvv,
                   const ExecViewUnmanaged<const Real[2][NP][NP]> v,
-                  //ExecViewUnmanaged<Real[2][NP][NP]> gv,    //TEMP
                   ExecViewUnmanaged<Real[NP][NP]> div_v) {
 
 //copied from strong divergence as is but without metdet
@@ -261,28 +260,24 @@ vorticity_sphere_sl(const KernelVariables &kv,
   });
 }
 
-#if 0
 // analog of fortran's laplace_wk_sphere
 // Single level implementation
 KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
     const KernelVariables &kv,
-    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
     const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
-    ExecViewUnmanaged<Real[2][NP][NP]> gv,                     // temp for div
-    ExecViewUnmanaged<Real[NP][NP]> /*div_v*/,     // temp to store div
-    ExecViewUnmanaged<Real[2][NP][NP]> /*temp_v*/, // temp for grad
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
+//how to get rid of this temp var? passing real* instead of kokkos view
+////does not work. is creating kokkos temorary in a kernel the correct way?
     ExecViewUnmanaged<Real[2][NP][NP]> grad_s, // temp to store grad
-    // let's reduce num of temps later
+    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
     // output
     ExecViewUnmanaged<Real[NP][NP]> laplace) {
+    // Real grad_s[2][NP][NP];
     // let's ignore var coef and tensor hv
        gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
-//this is not gonna work till div_wk is rewritten
-       divergence_sphere_wk_sl(kv, grad_s, dvv, spheremp, DInv, gv, laplace);
+       divergence_sphere_wk_sl(kv, DInv, spheremp, dvv, grad_s, laplace);
 }//end of laplace_wk_sl
-#endif
 
 
 // ================ MULTI-LEVEL IMPLEMENTATION =========================== //
