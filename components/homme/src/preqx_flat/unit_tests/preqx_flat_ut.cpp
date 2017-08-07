@@ -358,6 +358,16 @@ public:
 
   }//end of op() for grad_sphere_ml
 
+
+  void run_functor_gradient_sphere() const {
+//league, team, vector_length_request=1
+    Kokkos::TeamPolicy<ExecSpace, TagGradientSphereML> policy(_some_index, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    //TO FROM 
+    Kokkos::deep_copy(vector_output_host, vector_output_d);
+  };
+
 };//end of class def compute_sphere_op_test_ml
 
 
@@ -657,9 +667,11 @@ TEST_CASE("Testing laplace_simple_sl()", "laplace_simple_sl") {
 
  }//end of for loop for parallel_index
 
+  std::cout << "simple_laplace_sl test finished.\n";
+
 };//end of TEST_CASE(..., "simple laplace")
 
-TEST_CASE("Testing div_wk()", "div_wk") {
+TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
  constexpr const int parallel_index = 1;
@@ -726,10 +738,12 @@ std::cout << "frac = " << local_fortran_output[jgp][igp] / testing_divwk.scalar_
     }
  }; //end of parallel_index loop
 
+  std::cout << "div_wk_sl test finished.\n";
+
 }//end of TEST_CASE(...,"divergence_sphere_wk")
 
 
-TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
+TEST_CASE("Testing gradient_sphere_sl()", "gradient_sphere") {
 
  constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
  constexpr const int parallel_index = 10;
@@ -785,8 +799,86 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
     
   }//end of loop for parallel_index
  
+  std::cout << "grad_sl test finished.\n";
+
 };//end of TEST_CASE(..., "gradient_sphere")
 
 
 
 
+//SHMEM ????
+
+
+TEST_CASE("Testing gradient_sphere_ml()", "gradient_sphere") {
+
+ constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
+ constexpr const int parallel_index = 10;
+
+ compute_sphere_operator_test_ml testing_grad_ml(parallel_index);
+//running kokkos version of operator
+ testing_grad_ml.run_functor_gradient_sphere();
+
+
+ for(int _index = 0; _index < parallel_index; _index++){
+    for (int level = 0; level < NUM_LEV; ++level) {
+      for (int v = 0; v < VECTOR_SIZE; ++v) {
+
+//        HostViewManaged<Real [NP][NP]> local_scalar_input =
+//        Kokkos::subview(testing_grad_ml.scalar_input_host, 
+//                     _index, Kokkos::ALL, Kokkos::ALL, level*VECTOR_SIZE + v);
+
+//        HostViewManaged<Real [2][2][NP][NP]> local_dinv =
+//        Kokkos::subview(testing_grad_ml.dinv_host, 
+//                     _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+
+//fortran output
+        Real local_fortran_output[2][NP][NP];
+//F input
+        Real sf[NP][NP];
+        Real dvvf[NP][NP];
+        Real dinvf[2][2][NP][NP];
+
+//since i don't need flipping arrays, maybe, it is enough to pass data() pointer?
+        for( int _i = 0; _i < NP; _i++)
+          for(int _j = 0; _j < NP; _j++){
+            sf[_i][_j] = testing_grad_ml.scalar_input_host(_index,_i,_j,level)[v];
+            dvvf[_i][_j] = testing_grad_ml.dvv_host(_i,_j);
+              for(int _d1 = 0; _d1 < 2; _d1++)
+              for(int _d2 = 0; _d2 < 2; _d2++)
+                 dinvf[_d1][_d2][_i][_j] = 
+                         testing_grad_ml.dinv_host(_index,_d1,_d2,_i,_j);
+           }
+
+//running F version of operator
+        gradient_sphere_c_callable(&(sf[0][0]), &(dvvf[0][0]),
+               &(dinvf[0][0][0][0]), &(local_fortran_output[0][0][0]));
+
+//compare with the part from C run
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Real coutput0 = testing_grad_ml.vector_output_host(_index,0,igp,jgp,level)[v];
+            Real coutput1 = testing_grad_ml.vector_output_host(_index,1,igp,jgp,level)[v];
+            REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
+            REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
+//            REQUIRE(!std::isnan(testing_grad_ml.vector_output_host(_index,0,igp,jgp,level)[v]));
+//            REQUIRE(!std::isnan(testing_grad_ml.vector_output_host(_index,1,igp,jgp,level)[v]));
+            REQUIRE(!std::isnan(coutput0));
+            REQUIRE(!std::isnan(coutput1));
+//what is 128 here?
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(local_fortran_output[0][igp][jgp],
+                                    coutput0, 128.0));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(local_fortran_output[1][igp][jgp],
+                                    coutput1, 128.0));
+          }//jgp
+        }//igp
+
+     }//v
+   }//level
+ }//_index
+
+ std::cout << "test grad_ml finished. \n";
+
+}//end fo test grad_sphere_ml 
