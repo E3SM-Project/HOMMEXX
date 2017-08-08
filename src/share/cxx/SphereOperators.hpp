@@ -355,7 +355,7 @@ divergence_sphere_wk(const KernelVariables &kv,
                   const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
                   ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
 
-  constexpr int contra_iters = NP * NP * 2;
+  constexpr int contra_iters = NP * NP;
   Scalar gv[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
                        [&](const int loop_idx) {
