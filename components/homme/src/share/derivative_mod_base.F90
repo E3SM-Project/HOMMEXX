@@ -101,6 +101,8 @@ private
 ! public  :: curl_sphere_wk_testcontra  ! not coded
   public  :: divergence_sphere_wk
   public  :: laplace_sphere_wk
+  public  :: laplace_simple
+  public  :: laplace_simple_c_int
   public  :: vlaplace_sphere_wk
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
@@ -1269,8 +1271,11 @@ end do
           end do
           v1(l  ,j  ) = dsdx00*rrearth
           v2(j  ,l  ) = dsdy00*rrearth
+
+
        end do
     end do
+
     ! convert covarient to latlon
     do l=1,2
        do j=1,np
@@ -1292,9 +1297,12 @@ end do
 
     type(derivative_t) :: deriv
 
+    integer i,j
+
     deriv%dvv = dvv
 
     grad = gradient_sphere(s, deriv, dinv)
+
   end subroutine gradient_sphere_c_callable
 
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)
@@ -1625,6 +1633,39 @@ end do
 
 !--------------------------------------------------------------------------
 
+  subroutine divergence_sphere_wk_c_callable(v, dvv, spheremp, Dinv, div) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+
+    real(kind=real_kind), intent(in) :: v(np, np, 2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: Dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(out) :: div(np, np)
+
+    !local
+    type(derivative_t) :: deriv
+    type(element_t) :: elem
+
+    deriv%dvv = dvv
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+#endif
+
+    elem%Dinv = Dinv
+    elem%spheremp = spheremp
+
+    div = divergence_sphere_wk(v, deriv, elem)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+#endif
+
+  end subroutine divergence_sphere_wk_c_callable
 
 
   function divergence_sphere_wk(v,deriv,elem) result(div)
@@ -2123,6 +2164,57 @@ end do
     laplace=divergence_sphere_wk(grads,deriv,elem)
 
   end function laplace_sphere_wk
+
+! not a homme function, for debugging cxx
+! make it not take elem in
+  function laplace_simple(s,dvv,dinv,spheremp) result(laplace)
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(in) :: dvv(np,np)
+    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind)             :: laplace(np,np)
+
+    ! Local
+    type (element_t) :: elem
+    type (derivative_t) :: deriv
+    real(kind=real_kind) :: grads(np,np,2)
+
+    deriv%dvv = dvv
+    grads=gradient_sphere(s,deriv,dinv)
+    
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+#endif
+
+    elem%Dinv = dinv
+    elem%spheremp = spheremp
+
+!    laplace=divergence_sphere_wk(grads,deriv,elem)
+    laplace=divergence_sphere_wk(grads,deriv,elem)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+#endif
+
+  end function laplace_simple
+
+!not a homme subroutine, to call from C++ unit testing
+  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
+    use kinds, only: real_kind
+    use dimensions_mod, only: np
+
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(in) :: dvv(np,np)
+    real(kind=real_kind), intent(in) :: dinv(np,np,2,2)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(out):: laplace(np,np)
+
+    laplace=laplace_simple(s,dvv,dinv,metdet)
+
+  end subroutine laplace_simple_c_int
 
 !DIR$ ATTRIBUTES FORCEINLINE :: vlaplace_sphere_wk
   function vlaplace_sphere_wk(v,deriv,elem,var_coef,nu_ratio) result(laplace)
