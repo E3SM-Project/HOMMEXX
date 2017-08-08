@@ -329,7 +329,7 @@ public:
 //tag for gradient_sphere()
   struct TagGradientSphereML{};
 //tag for divergence_sphere_wk
-  struct TagDivergenceSphereML{};
+  struct TagDivergenceSphereWkML{};
 //tag for default, a dummy
   struct TagDefault{};
 
@@ -359,6 +359,28 @@ public:
   }//end of op() for grad_sphere_ml
 
 
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagDivergenceSphereWkML &, TeamMember team) const {
+
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar [2][NP][NP][NUM_LEV]> local_vector_input_d =
+    Kokkos::subview(vector_input_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar [NP][NP][NUM_LEV]> local_scalar_output_d =
+    Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int &level) {
+      kv.ilev = level;
+      divergence_sphere_wk(kv, dinv_d, spheremp_d, dvv_d,
+                               local_vector_input_d, local_scalar_output_d);
+    });//end parallel_for for level
+
+  }//end of op() for divergence_sphere_wk_ml
+
+
   void run_functor_gradient_sphere() const {
 //league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagGradientSphereML> policy(_some_index, 16);
@@ -367,6 +389,14 @@ public:
     //TO FROM 
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
+
+  void run_functor_divergence_sphere_wk() const {
+    Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWkML> policy(_some_index, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
+  };
+
 
 };//end of class def compute_sphere_op_test_ml
 
@@ -531,7 +561,7 @@ public:
  * because 16 team threads run the same code and OVERWRITE the same output.
  * A better test should have another level of parallelism, a loop with
  * TeamThreadRange. Also, one should note that divergence_sphere_wk as well as
- * other SphereOperators should be called from loop with TeamThreadRange.
+ * other SphereOperators should be called from loop with aeamThreadRange.
 */
 
   KOKKOS_INLINE_FUNCTION
@@ -815,23 +845,11 @@ TEST_CASE("Testing gradient_sphere_ml()", "gradient_sphere") {
  constexpr const int parallel_index = 10;
 
  compute_sphere_operator_test_ml testing_grad_ml(parallel_index);
-//running kokkos version of operator
  testing_grad_ml.run_functor_gradient_sphere();
-
 
  for(int _index = 0; _index < parallel_index; _index++){
     for (int level = 0; level < NUM_LEV; ++level) {
       for (int v = 0; v < VECTOR_SIZE; ++v) {
-
-//        HostViewManaged<Real [NP][NP]> local_scalar_input =
-//        Kokkos::subview(testing_grad_ml.scalar_input_host, 
-//                     _index, Kokkos::ALL, Kokkos::ALL, level*VECTOR_SIZE + v);
-
-//        HostViewManaged<Real [2][2][NP][NP]> local_dinv =
-//        Kokkos::subview(testing_grad_ml.dinv_host, 
-//                     _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-
 //fortran output
         Real local_fortran_output[2][NP][NP];
 //F input
@@ -861,8 +879,6 @@ TEST_CASE("Testing gradient_sphere_ml()", "gradient_sphere") {
             Real coutput1 = testing_grad_ml.vector_output_host(_index,1,igp,jgp,level)[v];
             REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
-//            REQUIRE(!std::isnan(testing_grad_ml.vector_output_host(_index,0,igp,jgp,level)[v]));
-//            REQUIRE(!std::isnan(testing_grad_ml.vector_output_host(_index,1,igp,jgp,level)[v]));
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
 //what is 128 here?
@@ -874,7 +890,6 @@ TEST_CASE("Testing gradient_sphere_ml()", "gradient_sphere") {
                                     coutput1, 128.0));
           }//jgp
         }//igp
-
      }//v
    }//level
  }//_index
@@ -882,3 +897,68 @@ TEST_CASE("Testing gradient_sphere_ml()", "gradient_sphere") {
  std::cout << "test grad_ml finished. \n";
 
 }//end fo test grad_sphere_ml 
+
+
+
+TEST_CASE("Testing divergence_sphere_wk_ml()", "divergence_sphere_wk_ml") {
+
+ constexpr const Real rel_threshold = 1E-15;//let's move this somewhere in *hpp?
+ constexpr const int parallel_index = 10;
+
+ compute_sphere_operator_test_ml testing_div_ml(parallel_index);
+ testing_div_ml.run_functor_divergence_sphere_wk();
+
+ for(int _index = 0; _index < parallel_index; _index++){
+    for (int level = 0; level < NUM_LEV; ++level) {
+      for (int v = 0; v < VECTOR_SIZE; ++v) {
+//fortran output
+        Real local_fortran_output[NP][NP];
+//F input
+        Real vf[2][NP][NP];
+        Real dvvf[NP][NP];
+        Real dinvf[2][2][NP][NP];
+        Real sphf[NP][NP];
+
+        for( int _i = 0; _i < NP; _i++)
+          for(int _j = 0; _j < NP; _j++){
+            sphf[_i][_j] = testing_div_ml.spheremp_host(_index,_i,_j);
+            dvvf[_i][_j] = testing_div_ml.dvv_host(_i,_j);
+              for(int _d1 = 0; _d1 < 2; _d1++){
+                 vf[_d1][_i][_j] = testing_div_ml.vector_input_host(_index,_d1,_i,_j,level)[v];
+                 for(int _d2 = 0; _d2 < 2; _d2++)
+                    dinvf[_d1][_d2][_i][_j] =
+                         testing_div_ml.dinv_host(_index,_d1,_d2,_i,_j);
+              }
+           }
+         divergence_sphere_wk_c_callable(&(vf[0][0][0]), &(dvvf[0][0]),
+                                   &(sphf[0][0]),
+                                   &(dinvf[0][0][0][0]), &(local_fortran_output[0][0]));
+//compare with the part from C run
+         for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Real coutput0 = testing_div_ml.scalar_output_host(_index,igp,jgp,level)[v];
+            REQUIRE(!std::isnan(local_fortran_output[igp][jgp]));
+            REQUIRE(!std::isnan(coutput0));
+//what is 128 here?
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(local_fortran_output[igp][jgp],
+                                    coutput0, 128.0)); 
+          }//jgp
+        }//igp
+     }//v
+   }//level
+ }//_index
+
+ std::cout << "test div_wk_ml finished. \n";
+
+}//end of test div_sphere_wk_ml
+
+
+
+
+
+
+
+
+
+
