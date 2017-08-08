@@ -120,11 +120,6 @@ void vorticity_sphere_c_callable(real *v, real *dvv,
                                  real *rmetdet, real *dinv,
                                  real *vort);
 
-void laplace_simple_sphere_c_callable(real *s, real *dvv,
-                                      real *dinv,
-                                      real *metdet, real *rmetdet,
-                                      real *laplace);
-
 }  // extern "C"
 
 namespace Homme {
@@ -149,14 +144,6 @@ void divergence_sphere_c(int ie, const Vector_QP &v,
                          const HommeExecView5D &dinv,
                          Scalar_QP &divergence);
 
-//s is input, laplace is output
-template <typename Scalar_QP, typename Vector_QP>
-void laplace_simple_sphere_c(int ie, const Scalar_QP &s,
-                             const HommeExecView2D &dvv,
-                             const HommeExecView5D &dinv,
-                             const HommeExecView3D &metdet,
-                             const HommeExecView3D &rmetdet,
-                             Scalar_QP &laplace);
 }
 
 template <typename rngAlg, typename dist, typename number>
