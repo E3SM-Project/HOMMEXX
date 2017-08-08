@@ -218,6 +218,7 @@ KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
 
 // ================ MULTI-LEVEL IMPLEMENTATION =========================== //
 
+
 KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const KernelVariables &kv,
                 const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
@@ -382,6 +383,20 @@ divergence_sphere_wk(const KernelVariables &kv,
   });
 
 }//end of divergence_sphere_wk
+
+
+KOKKOS_INLINE_FUNCTION void laplace_wk(
+    const KernelVariables &kv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
+    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> field,         // input
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace) {
+    // let's ignore var coef and tensor hv
+       gradient_sphere(kv, DInv, dvv, field, grad_s);
+       divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
+}//end of laplace_wk
 
 
 

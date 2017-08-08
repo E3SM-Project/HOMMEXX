@@ -295,6 +295,8 @@ public:
   ExecViewManaged<Real   [NP][NP]> dvv_d;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> scalar_output_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vector_output_d;
+//making temp vars with leading dimension 'ie' to avoid thread sharing issues
+//in the ie loop
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temp1_d, temp2_d, temp3_d;
 
 //host
@@ -379,6 +381,32 @@ public:
     });//end parallel_for for level
 
   }//end of op() for divergence_sphere_wk_ml
+
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()( const TagSimpleLaplaceML &, TeamMember team) const {
+
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar [NP][NP][NUM_LEV]> local_scalar_input_d =
+    Kokkos::subview(scalar_input_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar [NP][NP][NUM_LEV]> local_scalar_output_d =
+    Kokkos::subview(scalar_output_d, _index, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar [2][NP][NP][NUM_LEV]> local_temp1_d =
+        Kokkos::subview(temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
+                                                 Kokkos::ALL, Kokkos::ALL);
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int &level) {
+      kv.ilev = level;
+      laplace_wk(kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
+                     local_scalar_input_d, local_scalar_output_d);
+    });//end parallel_for for level
+
+  }//end of op() for laplace_wk_ml
 
 
   void run_functor_gradient_sphere() const {
