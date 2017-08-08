@@ -15,10 +15,11 @@ public:
   using type = Vector<tag_type>;
   using value_type = typename tag_type::value_type;
   using member_type = typename tag_type::member_type;
+  using data_type = value_type[l];
 
-  enum : int { vector_length = tag_type::length };
-
-  typedef value_type data_type[vector_length];
+  enum : int {
+    vector_length = tag_type::length
+  };
 
   KOKKOS_INLINE_FUNCTION
   static const char *label() { return "SIMD"; }
@@ -28,40 +29,40 @@ private:
 
 public:
   KOKKOS_INLINE_FUNCTION Vector() {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = 0; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = 0;
+    }
   }
   template <typename ArgValueType>
   KOKKOS_INLINE_FUNCTION Vector(const ArgValueType val) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = val; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = val;
+    }
   }
   KOKKOS_INLINE_FUNCTION Vector(const type &b) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = b._data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = b._data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
   type &loadAligned(value_type const *p) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = p[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = p[i];
+    }
     return *this;
   }
 
   KOKKOS_INLINE_FUNCTION
   type &loadUnaligned(value_type const *p) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = p[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = p[i];
+    }
     return *this;
   }
 
@@ -71,18 +72,18 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void storeAligned(value_type *p) const {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { p[i] = _data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      p[i] = _data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
   void storeUnaligned(value_type *p) const {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { p[i] = _data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      p[i] = _data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -94,11 +95,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator+(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] + b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] + b[i];
+  }
   return r_val;
 }
 
@@ -152,11 +152,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator-(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] - b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] - b[i];
+  }
   return r_val;
 }
 
@@ -177,11 +176,10 @@ operator-(const typename VectorTag<SIMD<T, SpT>, l>::value_type a,
 template <typename T, typename SpT, int l>
 KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator-(Vector<VectorTag<SIMD<T, SpT>, l> > const &a) {
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { a[i] = -a[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    a[i] = -a[i];
+  }
   return a;
 }
 
@@ -221,12 +219,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator*(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] * b[i]; });
-
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] * b[i];
+  }
   return r_val;
 }
 
@@ -265,11 +261,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator/(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] / b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] / b[i];
+  }
   return r_val;
 }
 
