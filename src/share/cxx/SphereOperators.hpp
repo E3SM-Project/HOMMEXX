@@ -36,6 +36,16 @@ divergence_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                   ExecViewUnmanaged<Real[2][NP][NP]> gv,
                   ExecViewUnmanaged<Real[NP][NP]> div_v);
 
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_update(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+                         const Real alph, const Real beta,
+                         const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                         const ExecViewUnmanaged<const Real[NP][NP]> metDet,
+                         const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
+                         const ExecViewUnmanaged<const Real[2][NP][NP]> v,
+                         ExecViewUnmanaged<Real[2][NP][NP]> gv,
+                         ExecViewUnmanaged<Real[NP][NP]> div_v);
+
 KOKKOS_FUNCTION void
 vorticity_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                  const ExecViewUnmanaged<const Real[NP][NP]> u,
@@ -121,19 +131,20 @@ divergence_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
                   const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
                   ExecViewUnmanaged<Real[2][NP][NP]> gv,
                   ExecViewUnmanaged<Real[NP][NP]> div_v) {
-  constexpr int contra_iters = NP * NP * 2;
+  constexpr int contra_iters = NP * NP;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, contra_iters),
-                       KOKKOS_LAMBDA(const int loop_idx) {
-    const int hgp = (loop_idx / NP) / NP;
-    const int igp = (loop_idx / NP) % NP;
+                     [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    gv(hgp,igp,jgp) = metDet(igp,jgp) * (DInv(hgp,0,igp,jgp) * v(0,igp,jgp) +
-                                         DInv(hgp,1,igp,jgp) * v(1,igp,jgp));
+    gv(0,igp,jgp) = metDet(igp,jgp) * (DInv(0,0,igp,jgp) * v(0,igp,jgp) +
+                                       DInv(0,1,igp,jgp) * v(1,igp,jgp));
+    gv(1,igp,jgp) = metDet(igp,jgp) * (DInv(1,0,igp,jgp) * v(0,igp,jgp) +
+                                       DInv(1,1,igp,jgp) * v(1,igp,jgp));
   });
 
   constexpr int div_iters = NP * NP;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, div_iters),
-                       KOKKOS_LAMBDA(const int loop_idx) {
+                     [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Real dudx = 0.0, dvdy = 0.0;
@@ -143,6 +154,44 @@ divergence_sphere(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
     }
 
     div_v(igp,jgp) = (dudx + dvdy) * ((1.0 / metDet(igp, jgp)) * PhysicalConstants::rrearth);
+  });
+}
+
+// Note: div_v = alpha*div(v) + beta(div_v)
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_update(const Kokkos::TeamPolicy<ExecSpace>::member_type &team,
+                         const Real alpha, const Real beta,
+                         const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                         const ExecViewUnmanaged<const Real[NP][NP]> metDet,
+                         const ExecViewUnmanaged<const Real[2][2][NP][NP]> DInv,
+                         const ExecViewUnmanaged<const Real[2][NP][NP]> v,
+                         const ExecViewUnmanaged<Real[2][NP][NP]> gv,
+                         const ExecViewUnmanaged<Real[NP][NP]> div_v) {
+  constexpr int contra_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, contra_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+
+    gv(0,igp,jgp) = metDet(igp,jgp) * (DInv(0,0,igp,jgp) * v(0,igp,jgp) +
+                                       DInv(0,1,igp,jgp) * v(1,igp,jgp));
+    gv(1,igp,jgp) = metDet(igp,jgp) * (DInv(1,0,igp,jgp) * v(0,igp,jgp) +
+                                       DInv(1,1,igp,jgp) * v(1,igp,jgp));
+  });
+
+  constexpr int div_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, div_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    Real dudx = 0.0, dvdy = 0.0;
+    for (int kgp = 0; kgp < NP; ++kgp) {
+      dudx += dvv(kgp, igp) * gv(0, kgp, jgp);
+      dvdy += dvv(kgp, jgp) * gv(1, igp, kgp);
+    }
+
+    div_v(igp,jgp) *= beta;
+    div_v(igp,jgp) = alpha*((dudx + dvdy) * ((1.0 / metDet(igp, jgp)) * PhysicalConstants::rrearth));
   });
 }
 
