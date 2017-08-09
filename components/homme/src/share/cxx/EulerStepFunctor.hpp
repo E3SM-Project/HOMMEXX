@@ -53,8 +53,6 @@ struct EulerStepFunctor
 
     ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> ustar = m_region.get_3d_buffer(ie,USTAR);
     ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> vstar = m_region.get_3d_buffer(ie,VSTAR);
-    ExecViewUnmanaged<const Real[QSIZE_D][NUM_LEV][NP][NP]> qdp   = m_region.QDP(ie,m_data.qn0);
-    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>       q_buf = m_region.get_q_buffer(ie);
 
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(team,NUM_LEV*m_data.qsize),
@@ -62,6 +60,9 @@ struct EulerStepFunctor
       {
         const int iq   = lev_q / NUM_LEV;
         const int ilev = lev_q % NUM_LEV;
+
+        ExecViewUnmanaged<const Real[NP][NP]> qdp   = m_region.QDP(ie,m_data.qn0,iq,ilev);
+        ExecViewUnmanaged<Real[NP][NP]>       q_buf = m_region.get_q_buffer(ie,iq,ilev);
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
@@ -72,23 +73,13 @@ struct EulerStepFunctor
 
             vector_buf_1(0,igp,jgp) = ustar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
             vector_buf_1(1,igp,jgp) = vstar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
+            q_buf(igp,jgp)          = qdp(igp,jgp);
           }
         );
 
-        divergence_sphere(team,vector_buf_1,m_deriv.get_dvv(),
-                          metdet_ie,dinv_ie,
-                          vector_buf_2, scalar_buf);
-
-        Kokkos::parallel_for (
-          Kokkos::ThreadVectorRange (team, NP*NP),
-          [&] (const int idx)
-          {
-            const int igp = idx / NP;
-            const int jgp = idx % NP;
-
-            q_buf(iq,ilev,igp,jgp) = qdp(iq,ilev,igp,jgp) - m_data.dt*scalar_buf(igp,jgp);
-          }
-        );
+        divergence_sphere_update(team, -m_data.dt, 1.0,
+                                 m_deriv.get_dvv(), metdet_ie,dinv_ie,
+                                 vector_buf_1, vector_buf_2, scalar_buf);
       }
     );
   }
