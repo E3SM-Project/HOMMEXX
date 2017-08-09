@@ -164,6 +164,22 @@ contains
   end subroutine preq_omegap
 
 
+  subroutine preq_omega_ps_c_int(omega_p, p, vgrad_p, divdp) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    use hybvcoord_mod, only : hvcoord_t
+    implicit none
+
+    real (kind=real_kind), intent(out) :: omega_p(np,np,nlev)
+    real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: vgrad_p(np,np,nlev)
+    real (kind=real_kind), intent(in) :: p(np,np,nlev)
+
+    ! hvcoord is unused, so pass it as a dummy value
+    type (hvcoord_t) :: hvcoord
+    call preq_omega_ps(omega_p, hvcoord, p, vgrad_p, divdp)
+  end subroutine preq_omega_ps_c_int
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 !
