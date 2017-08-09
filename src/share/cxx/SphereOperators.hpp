@@ -343,7 +343,7 @@ divergence_sphere_update(const KernelVariables &kv,
     }
 
     div_v(igp,jgp,kv.ilev) *= beta;
-    div_v(igp,jgp,kv.ilev) = alpha*((dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) * PhysicalConstants::rrearth));
+    div_v(igp,jgp,kv.ilev) += alpha*((dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) * PhysicalConstants::rrearth));
   });
 }
 

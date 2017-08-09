@@ -51,7 +51,7 @@ struct EulerStepFunctor
       [&] (const int lev_q)
       {
         const int iq   = lev_q / NUM_LEV;
-        const int ilev = lev_q % NUM_LEV;
+        kv.ilev = lev_q % NUM_LEV;
 
         ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> qdp   = ::Homme::subview(m_region.m_qdp,kv.ie,m_data.qn0,iq);
         ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       q_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_TBUFF,iq);
@@ -63,9 +63,9 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            vector_buf(0,igp,jgp,ilev) = ustar(igp,jgp,ilev) * qdp(igp,jgp,ilev);
-            vector_buf(1,igp,jgp,ilev) = vstar(igp,jgp,ilev) * qdp(igp,jgp,ilev);
-            q_buf(igp,jgp,ilev)        = qdp(igp,jgp,ilev);
+            vector_buf(0,igp,jgp,kv.ilev) = ustar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
+            vector_buf(1,igp,jgp,kv.ilev) = vstar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
+            q_buf(igp,jgp,kv.ilev)        = qdp(igp,jgp,kv.ilev);
           }
         );
 

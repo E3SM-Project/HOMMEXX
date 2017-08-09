@@ -538,8 +538,8 @@ void Region::push_scalar_buffer (F90Ptr&  field_ptr, int IDX)
     Kokkos::deep_copy(view_ie_host, view_ie_exec);
     for (int k=0; k<NUM_LEV; ++k) {
       for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int j=0; j<NP; ++j) {
-          for (int i=0; i<NP; ++i, ++iter) {
+        for (int i=0; i<NP; ++i) {
+          for (int j=0; j<NP; ++j, ++iter) {
             field_ptr[iter] = view_ie_host(i,j,k)[iv];
           }
         }
@@ -561,8 +561,8 @@ void Region::pull_vector_buffer (CF90Ptr& field_ptr, int IDX)
     for (int k=0; k<NUM_LEV; ++k) {
       for (int iv=0; iv<VECTOR_SIZE; ++iv) {
         for (int icomp=0; icomp<2; ++icomp) {
-          for (int j=0; j<NP; ++j) {
-            for (int i=0; i<NP; ++i, ++iter) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
               view_ie_host(icomp,i,j,k)[iv] = field_ptr[iter];
             }
           }
@@ -587,8 +587,8 @@ void Region::push_vector_buffer (F90Ptr&  field_ptr, int IDX)
     for (int k=0; k<NUM_LEV; ++k) {
       for (int iv=0; iv<VECTOR_SIZE; ++iv) {
         for (int icomp=0; icomp<2; ++icomp) {
-          for (int j=0; j<NP; ++j) {
-            for (int i=0; i<NP; ++i, ++iter) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
               field_ptr[iter] = view_ie_host(icomp,i,j,k)[iv];
             }
           }
@@ -611,8 +611,8 @@ void Region::pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize)
     for (int iq=0; iq<qsize; ++iq) {
       for (int k=0; k<NUM_LEV; ++k) {
         for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-          for (int j=0; j<NP; ++j) {
-            for (int i=0; i<NP; ++i, ++iter) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
               view_ie_host(iq,i,j,k)[iv] = field_ptr[iter];
             }
           }
@@ -637,8 +637,8 @@ void Region::push_tracer_buffer (F90Ptr&  field_ptr, int IDX, int qsize)
     for (int iq=0; iq<qsize; ++iq) {
       for (int k=0; k<NUM_LEV; ++k) {
         for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-          for (int j=0; j<NP; ++j) {
-            for (int i=0; i<NP; ++i, ++iter) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
               field_ptr[iter] = view_ie_host(iq,i,j,k)[iv];
             }
           }
