@@ -21,7 +21,6 @@ using namespace Homme;
 using rngAlg = std::mt19937_64;
 
 extern "C" {
-
 void caar_compute_energy_grad_c_int(
     const Real *const &dvv, const Real *const &Dinv,
     const Real *const &pecnd, const Real *const &phi,
@@ -149,19 +148,10 @@ class compute_energy_grad_test {
   }
 };
 
-TEST_CASE("monolithic compute_and_apply_rhs",
-          "compute_energy_grad") {
-  printf(
-      "Q_NUM_TIME_LEVELS: %d\n"
-      "QSIZE_D: %d\n"
-      "NUM_PHYSICAL_LEV: %d\n"
-      "VECTOR_SIZE: %d\n"
-      "LEVEL_PADDING: %d\n"
-      "NUM_LEV: %d\n",
-      Q_NUM_TIME_LEVELS, QSIZE_D, NUM_PHYSICAL_LEV,
-      VECTOR_SIZE, LEVEL_PADDING, NUM_LEV);
-  constexpr const Real rel_threshold = 1E-15;
-  constexpr const int num_elems = 1;
+TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 128.0;
+  constexpr const int num_elems = 10;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -184,58 +174,51 @@ TEST_CASE("monolithic compute_and_apply_rhs",
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real vtemp[2][NP][NP];
+        for (int h = 0; h < 2; h++) {
+          for (int i = 0; i < NP; i++) {
+            for (int j = 0; j < NP; j++) {
+              vtemp[h][i][j] = std::numeric_limits<Real>::quiet_NaN();
+            }
+          }
+        }
 
+// void caar_compute_energy_grad_c_int(
+//     const Real *const &dvv, const Real *const &Dinv,
+//     const Real *const &pecnd, const Real *const &phi,
+//     const Real *const &velocity,
+//     Real *const &vtemp);  //(&vtemp)[2][NP][NP]);
         caar_compute_energy_grad_c_int(
+            test_functor.dvv.data(),
             reinterpret_cast<Real *>(
-                test_functor.dvv.data()),
+                Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
+                                Kokkos::ALL, Kokkos::ALL).data()),
             reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.dinv, ie,
-                                Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
+                Kokkos::subview(test_functor.pecnd, ie, level * VECTOR_SIZE + v,
+                                Kokkos::ALL, Kokkos::ALL).data()),
             reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.pecnd, ie,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
+                Kokkos::subview(test_functor.phi, ie, level * VECTOR_SIZE + v,
+                                Kokkos::ALL, Kokkos::ALL).data()),
             reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.phi, ie,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
-            reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.velocity, ie,
-                                test_functor.n0,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL)
-                    .data()),
+                Kokkos::subview(test_functor.velocity, ie, test_functor.n0,
+                                level * VECTOR_SIZE + v, Kokkos::ALL,
+                                Kokkos::ALL, Kokkos::ALL).data()),
             &vtemp[0][0][0]);
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
             REQUIRE(!std::isnan(vtemp[1][igp][jgp]));
-            REQUIRE(!std::isnan(
-                energy_grad(ie, 0, igp, jgp, level)[v]));
-            REQUIRE(!std::isnan(
-                energy_grad(ie, 1, igp, jgp, level)[v]));
-            REQUIRE(
-                std::numeric_limits<Real>::epsilon() >=
-                compare_answers(
-                    vtemp[0][igp][jgp],
-                    energy_grad(ie, 0, igp, jgp, level)[v],
-                    128.0));
-            REQUIRE(
-                std::numeric_limits<Real>::epsilon() >=
-                compare_answers(
-                    vtemp[1][igp][jgp],
-                    energy_grad(ie, 1, igp, jgp, level)[v],
-                    128.0));
+            REQUIRE(!std::isnan(energy_grad(ie, 0, igp, jgp, level)[v]));
+            REQUIRE(!std::isnan(energy_grad(ie, 1, igp, jgp, level)[v]));
+            Real rel_error = compare_answers(
+                vtemp[0][igp][jgp], energy_grad(ie, 0, igp, jgp, level)[v]);
+            REQUIRE(rel_threshold >= rel_error);
+
+            rel_error = compare_answers(vtemp[1][igp][jgp],
+                                        energy_grad(ie, 1, igp, jgp, level)[v]);
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
     }
   }
-  std::cout << "CaarFunctor: compute_energy_grad() test "
-               "finished.\n";
 };  // end of TEST_CASE(...,"compute_energy_grad")
