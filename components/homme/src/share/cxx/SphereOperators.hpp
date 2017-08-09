@@ -11,70 +11,6 @@
 
 namespace Homme {
 
-// Single-level kernels
-KOKKOS_INLINE_FUNCTION void
-gradient_sphere_sl(const KernelVariables &kv,
-                   const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                   const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                   const ExecViewUnmanaged<const Real[NP][NP]> scalar,
-                   ExecViewUnmanaged<Real[2][NP][NP]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void gradient_sphere_update_sl(
-    const KernelVariables &kv,
-    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-    const ExecViewUnmanaged<const Real[NP][NP]> scalar,
-    ExecViewUnmanaged<Real[2][NP][NP]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void
-divergence_sphere_sl(const KernelVariables &kv,
-                     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                     const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
-                     const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                     const ExecViewUnmanaged<const Real[2][NP][NP]> v,
-                     ExecViewUnmanaged<Real[NP][NP]> div_v);
-
-KOKKOS_INLINE_FUNCTION void
-vorticity_sphere_sl(const KernelVariables &kv,
-                    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
-                    const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
-                    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                    const ExecViewUnmanaged<const Real[NP][NP]> u,
-                    const ExecViewUnmanaged<const Real[NP][NP]> v,
-                    ExecViewUnmanaged<Real[NP][NP]> vort);
-
-// Multi-level kernels
-KOKKOS_INLINE_FUNCTION void
-gradient_sphere(const KernelVariables &kv,
-                const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
-                const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
-                const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
-                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
-    const KernelVariables &kv,
-    const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
-    const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
-    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s);
-
-KOKKOS_INLINE_FUNCTION void
-divergence_sphere(const KernelVariables &kv,
-                  const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> dinv,
-                  const ExecViewUnmanaged<const Scalar * [NP][NP]> metdet,
-                  const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
-                  const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
-                  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v);
-
-KOKKOS_INLINE_FUNCTION void
-vorticity_sphere(const KernelVariables &kv,
-                 const ExecViewUnmanaged<const Scalar * [2][2][NP][NP]> d,
-                 const ExecViewUnmanaged<const Scalar * [NP][NP]> metdet,
-                 const ExecViewUnmanaged<const Scalar[NP][NP]> dvv,
-                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> u,
-                 const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> v,
-                 ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> vort);
-
 // ================ SINGLE-LEVEL IMPLEMENTATION =========================== //
 
 KOKKOS_INLINE_FUNCTION void
@@ -177,6 +113,54 @@ divergence_sphere_sl(const KernelVariables &kv,
 }
 
 KOKKOS_INLINE_FUNCTION void
+divergence_sphere_wk_sl(const KernelVariables &kv,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
+                  const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                  const ExecViewUnmanaged<const Real[2][NP][NP]> v,
+                  ExecViewUnmanaged<Real[NP][NP]> div_v) {
+
+//copied from strong divergence as is but without metdet
+//conversion to contravariant
+  constexpr int contra_iters = NP * NP * 2;
+  Real gv[2][NP][NP];
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
+                       [&](const int loop_idx) {
+    const int hgp = (loop_idx / NP) / NP;
+    const int igp = (loop_idx / NP) % NP;
+    const int jgp = loop_idx % NP;
+    gv[hgp][igp][jgp] = dinv(kv.ie,0,hgp,igp,jgp) * v(0,igp,jgp) +
+                        dinv(kv.ie,1,hgp,igp,jgp) * v(1,igp,jgp);
+  });
+
+//in strong div
+//kgp = i in strong code, jgp=j, igp=l
+//in weak div, n is like j in strong div, 
+//n(weak)=j(strong)=jgp
+//m(weak)=l(strong)=igp
+//j(weak)=i(strong)=kgp
+  constexpr int div_iters = NP * NP;
+//keeping indices' names as in F
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, div_iters),
+                       [&](const int loop_idx) {
+    const int mgp = loop_idx / NP;
+    const int ngp = loop_idx % NP;
+    Real dd = 0.0;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      dd -= (  spheremp(kv.ie,ngp,jgp)*gv[0][ngp][jgp]*dvv(jgp,mgp)
+             + spheremp(kv.ie,jgp,mgp)*gv[1][jgp][mgp]*dvv(jgp,ngp) )
+                         *PhysicalConstants::rrearth;
+    }
+    div_v(ngp,mgp) = dd;
+  });
+
+}//end of divergence_sphere_wk_sl
+
+
+
+// Note that divergence_sphere requires scratch space of 3 x NP x NP Reals
+// This must be called from the device space
+KOKKOS_INLINE_FUNCTION void
 vorticity_sphere_sl(const KernelVariables &kv,
                     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
                     const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
@@ -212,7 +196,28 @@ vorticity_sphere_sl(const KernelVariables &kv,
   });
 }
 
+// analog of fortran's laplace_wk_sphere
+// Single level implementation
+KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
+    const KernelVariables &kv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
+//how to get rid of this temp var? passing real* instead of kokkos view
+////does not work. is creating kokkos temorary in a kernel the correct way?
+    ExecViewUnmanaged<Real[2][NP][NP]> grad_s, // temp to store grad
+    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
+    // output
+    ExecViewUnmanaged<Real[NP][NP]> laplace) {
+    // Real grad_s[2][NP][NP];
+    // let's ignore var coef and tensor hv
+       gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
+       divergence_sphere_wk_sl(kv, DInv, spheremp, dvv, grad_s, laplace);
+}//end of laplace_wk_sl
+
+
 // ================ MULTI-LEVEL IMPLEMENTATION =========================== //
+
 
 KOKKOS_INLINE_FUNCTION void
 gradient_sphere(const KernelVariables &kv,
@@ -342,25 +347,58 @@ vorticity_sphere(const KernelVariables &kv,
   });
 }
 
-// analog of fortran's laplace_wk_sphere
-// Single level implementation
-KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
+
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_wk(const KernelVariables &kv,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
+                  const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                  const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                  const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
+
+  constexpr int contra_iters = NP * NP;
+  Scalar gv[2][NP][NP];
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    gv[0][igp][jgp] = dinv(kv.ie,0,0,igp,jgp) * v(0,igp,jgp, kv.ilev) +
+                      dinv(kv.ie,1,0,igp,jgp) * v(1,igp,jgp, kv.ilev);
+    gv[1][igp][jgp] = dinv(kv.ie,0,1,igp,jgp) * v(0,igp,jgp, kv.ilev) +
+                      dinv(kv.ie,1,1,igp,jgp) * v(1,igp,jgp, kv.ilev);
+  });
+
+  constexpr int div_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, div_iters),
+                       [&](const int loop_idx) {
+    const int mgp = loop_idx / NP;
+    const int ngp = loop_idx % NP;
+    Scalar dd = 0.0;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      dd -= (  spheremp(kv.ie,ngp,jgp)*gv[0][ngp][jgp]*dvv(jgp,mgp)
+             + spheremp(kv.ie,jgp,mgp)*gv[1][jgp][mgp]*dvv(jgp,ngp) )
+                         *PhysicalConstants::rrearth;
+    }
+    div_v(ngp,mgp,kv.ilev) = dd;
+  });
+
+}//end of divergence_sphere_wk
+
+
+KOKKOS_INLINE_FUNCTION void laplace_wk(
     const KernelVariables &kv,
-    const ExecViewUnmanaged<const Real[NP][NP]> field,         // input
-    const ExecViewUnmanaged<const Real[NP][NP]> dvv,           // for grad, div
     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
-    const ExecViewUnmanaged<const Real * [NP][NP]> metDet,     // for div
-    ExecViewUnmanaged<Real[2][NP][NP]> /*gv*/,                     // temp for div
-    ExecViewUnmanaged<Real[NP][NP]> /*div_v*/,     // temp to store div
-    ExecViewUnmanaged<Real[2][NP][NP]> /*temp_v*/, // temp for grad
-    ExecViewUnmanaged<Real[2][NP][NP]> grad_s, // temp to store grad
-    // let's reduce num of temps later
-    // output
-    ExecViewUnmanaged<Real[NP][NP]> laplace) {
-  // let's ignore var coef and tensor hv
-  gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
-  divergence_sphere_sl(kv, DInv, metDet, dvv, grad_s, laplace);
-}
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
+    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> field,         // input
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace) {
+    // let's ignore var coef and tensor hv
+       gradient_sphere(kv, DInv, dvv, field, grad_s);
+       divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
+}//end of laplace_wk
+
+
 
 /*
   function laplace_sphere_wk(s,deriv,elem,var_coef) result(laplace)
