@@ -1,491 +1,499 @@
 #include "Region.hpp"
 #include "Utility.hpp"
 
+#include <assert.h>
+
 namespace Homme {
 
-void Region::init(const int num_elems)
-{
+void Region::init(const int num_elems) {
   m_num_elems = num_elems;
 
-  m_2d_scalars = ExecViewManaged<Real * [NUM_2D_SCALARS][NP][NP]>("2d scalars", m_num_elems);
-  m_2d_tensors = ExecViewManaged<Real * [NUM_2D_TENSORS][2][2][NP][NP]> ("2d tensors", m_num_elems);
+  buffers.init(num_elems);
 
-  m_3d_scalars = ExecViewManaged<Real * [NUM_3D_SCALARS][NUM_LEV][NP][NP]> ("3d scalars", m_num_elems);
-  m_4d_scalars = ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]> ("4d scalars",m_num_elems);
+  m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
+  m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
+  m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
+  m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
-  m_Qdp          = ExecViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> ("qdp", m_num_elems);
-  m_eta_dot_dpdn = ExecViewManaged<Real * [NUM_LEV_P][NP][NP]> ("eta_dot_dpdn", m_num_elems);
+  m_d =
+      ExecViewManaged<Real * [2][2][NP][NP]>("D - metric tensor", m_num_elems);
+  m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
+      "DInv - inverse metric tensor", m_num_elems);
 
-  m_3d_buffers = ExecViewManaged<Real * [NUM_3D_BUFFERS][NUM_LEV][NP][NP]> ("buffers", m_num_elems);
-  m_q_buffer = ExecViewManaged<Real * [QSIZE_D][NUM_LEV][NP][NP]> ("q_buffer", m_num_elems);
+  m_omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
+  m_pecnd = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PECND", m_num_elems);
+  m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
+  m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Derived Lateral Velocity 1", m_num_elems);
+  m_derived_vn0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Derived Lateral Velocity 2", m_num_elems);
+
+  m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
+      "Lateral Velocity 1", m_num_elems);
+  m_v = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
+      "Lateral Velocity 2", m_num_elems);
+  m_t = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
+      "Temperature", m_num_elems);
+  m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
+      "DP3D", m_num_elems);
+
+  m_qdp = ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
+      "qdp", m_num_elems);
+  m_eta_dot_dpdn =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn", m_num_elems);
 }
 
-void Region::init_2d (CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor, CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
-{
+void Region::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+                         CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
-  ExecViewManaged<Real * [NUM_2D_SCALARS][NP][NP]>::HostMirror h_2d_scalars = Kokkos::create_mirror_view(m_2d_scalars);
-  ExecViewManaged<Real *[NUM_2D_TENSORS][2][2][NP][NP]>::HostMirror h_2d_tensors = Kokkos::create_mirror_view(m_2d_tensors);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    // 2d scalars
-    for (int jgp=0; jgp<NP; ++jgp)
-    {
-      for (int igp=0; igp<NP; ++igp, ++k_scalars)
-      {
-        h_2d_scalars(ie, static_cast<int>(IDX_FCOR),     igp, jgp) = fcor[k_scalars];
-        h_2d_scalars(ie, static_cast<int>(IDX_SPHEREMP), igp, jgp) = spheremp[k_scalars];
-        h_2d_scalars(ie, static_cast<int>(IDX_METDET),   igp, jgp) = metdet[k_scalars];
-        h_2d_scalars(ie, static_cast<int>(IDX_PHIS),     igp, jgp) = phis[k_scalars];
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
+      Kokkos::create_mirror_view(m_fcor);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_metdet =
+      Kokkos::create_mirror_view(m_metdet);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
+      Kokkos::create_mirror_view(m_spheremp);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
+      Kokkos::create_mirror_view(m_phis);
+
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
+      Kokkos::create_mirror_view(m_d);
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
+      Kokkos::create_mirror_view(m_dinv);
+
+  // 2d scalars
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp, ++k_scalars) {
+        h_fcor(ie, igp, jgp) = fcor[k_scalars];
+        h_spheremp(ie, igp, jgp) = spheremp[k_scalars];
+        h_metdet(ie, igp, jgp) = metdet[k_scalars];
+        h_phis(ie, igp, jgp) = phis[k_scalars];
       }
     }
+  }
 
-    // 2d tensors
-    for (int jdim=0; jdim<2; ++jdim)
-    {
-      for (int idim=0; idim<2; ++idim)
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp, ++k_tensors)
-          {
-            h_2d_tensors(ie,static_cast<int>(IDX_D),   idim,jdim,igp,jgp) = D[k_tensors];
-            h_2d_tensors(ie,static_cast<int>(IDX_DINV),idim,jdim,igp,jgp) = Dinv[k_tensors];
+  // 2d tensors
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    for (int idim = 0; idim < 2; ++idim) {
+      for (int jdim = 0; jdim < 2; ++jdim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+            h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
+            h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
           }
         }
       }
     }
   }
 
-  Kokkos::deep_copy(m_2d_scalars, h_2d_scalars);
-  Kokkos::deep_copy(m_2d_tensors, h_2d_tensors);
+  Kokkos::deep_copy(m_fcor, h_fcor);
+  Kokkos::deep_copy(m_metdet, h_metdet);
+  Kokkos::deep_copy(m_spheremp, h_spheremp);
+  Kokkos::deep_copy(m_phis, h_phis);
+
+  Kokkos::deep_copy(m_d, h_d);
+  Kokkos::deep_copy(m_dinv, h_dinv);
 }
 
 void Region::random_init(const int num_elems, std::mt19937_64 &engine) {
   init(num_elems);
-  std::uniform_real_distribution<Real> random_dist(0.0625, 1.0);
+  constexpr const Real min_value = 0.015625;
+  std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
 
-  int k_scalars = 0;
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
+      Kokkos::create_mirror_view(m_fcor);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
+      Kokkos::create_mirror_view(m_spheremp);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_metdet =
+      Kokkos::create_mirror_view(m_metdet);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
+      Kokkos::create_mirror_view(m_phis);
 
-  ExecViewManaged<Real *[NUM_2D_SCALARS][NP][NP]>::HostMirror h_2d_scalars = Kokkos::create_mirror_view(m_2d_scalars);
-  ExecViewManaged<Real *[NUM_2D_TENSORS][2][2][NP][NP]>::HostMirror h_2d_tensors = Kokkos::create_mirror_view(m_2d_tensors);
-  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
-  ExecViewManaged<Real *[NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_4d_scalars = Kokkos::create_mirror_view(m_4d_scalars);
-  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
+      Kokkos::create_mirror_view(m_d);
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
+      Kokkos::create_mirror_view(m_dinv);
 
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    // 2d scalars
-    for (int jgp=0; jgp<NP; ++jgp)
-    {
-      for (int igp=0; igp<NP; ++igp, ++k_scalars)
-      {
-        for(int idx_2d = 0; idx_2d < NUM_2D_SCALARS; ++idx_2d) {
-          h_2d_scalars(ie, idx_2d, igp, jgp) = random_dist(engine);
-        }
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
+      Kokkos::create_mirror_view(m_omega_p);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
+      Kokkos::create_mirror_view(m_pecnd);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
+      Kokkos::create_mirror_view(m_phi);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
+      Kokkos::create_mirror_view(m_derived_un0);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+      Kokkos::create_mirror_view(m_derived_vn0);
 
-        for(int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for(int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
-            for(int idx_4d = 0; idx_4d < NUM_4D_SCALARS; ++idx_4d) {
-              h_4d_scalars(ie, timelevel, idx_4d, ilev, igp, jgp) = random_dist(engine);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
+      Kokkos::create_mirror_view(m_u);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
+      Kokkos::create_mirror_view(m_v);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
+      Kokkos::create_mirror_view(m_t);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
+  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
+
+  ExecViewManaged<
+      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
+      Kokkos::create_mirror_view(m_qdp);
+
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
+      Kokkos::create_mirror_view(m_eta_dot_dpdn);
+
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        // 2d scalars
+        h_fcor(ie, igp, jgp) = random_dist(engine);
+        h_spheremp(ie, igp, jgp) = random_dist(engine);
+        h_metdet(ie, igp, jgp) = random_dist(engine);
+        h_phis(ie, igp, jgp) = random_dist(engine);
+
+        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+          // 3d scalars
+          h_omega_p(ie, igp, jgp, ilev) = random_dist(engine);
+          h_pecnd(ie, igp, jgp, ilev) = random_dist(engine);
+          h_phi(ie, igp, jgp, ilev) = random_dist(engine);
+          h_derived_un0(ie, igp, jgp, ilev) = random_dist(engine);
+          h_derived_vn0(ie, igp, jgp, ilev) = random_dist(engine);
+
+          // 4d scalars
+          for (int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
+            h_u(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
+            h_v(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
+            h_t(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
+            h_dp3d(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
+          }
+
+          for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
+               ++q_timelevel) {
+            for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
+              h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev) = random_dist(engine);
             }
           }
-          for(int idx_3d = 0; idx_3d < NUM_3D_SCALARS; ++idx_3d) {
-            h_3d_scalars(ie, idx_3d, ilev, igp, jgp) = random_dist(engine);
-          }
-          for(int idx_3d = 0; idx_3d < NUM_3D_BUFFERS; ++idx_3d) {
-            h_3d_buffers(ie, idx_3d, ilev, igp, jgp) = random_dist(engine);
-          }
         }
-        for(int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
-          h_eta_dot_dpdn(ie, ilev, igp, jgp) = random_dist(engine);
-        }
-      }
-    }
 
-    // 2d tensors
-    for (int jdim=0; jdim<2; ++jdim)
-    {
-      for (int idim=0; idim<2; ++idim)
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp)
-          {
-            h_2d_tensors(ie,static_cast<int>(IDX_D),   idim,jdim,igp,jgp) = random_dist(engine);
-            h_2d_tensors(ie,static_cast<int>(IDX_DINV),idim,jdim,igp,jgp) = random_dist(engine);
+        for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
+          // 3d scalar at the interfaces of the levels
+          h_eta_dot_dpdn(ie, igp, jgp, ilev) = random_dist(engine);
+        }
+
+        Real determinant = 0.0;
+        while (std::abs(determinant) < min_value) {
+          // 2d tensors
+          for (int idim = 0; idim < 2; ++idim) {
+            for (int jdim = 0; jdim < 2; ++jdim) {
+              h_d(ie, idim, jdim, igp, jgp) = random_dist(engine);
+            }
           }
+          determinant = h_d(ie, 0, 0, igp, jgp) * h_d(ie, 1, 1, igp, jgp) -
+                        h_d(ie, 0, 1, igp, jgp) * h_d(ie, 1, 0, igp, jgp);
+          h_dinv(ie, 0, 0, igp, jgp) = h_d(ie, 1, 1, igp, jgp) / determinant;
+          h_dinv(ie, 0, 1, igp, jgp) = -h_d(ie, 1, 0, igp, jgp) / determinant;
+          h_dinv(ie, 1, 0, igp, jgp) = -h_d(ie, 0, 1, igp, jgp) / determinant;
+          h_dinv(ie, 1, 1, igp, jgp) = h_d(ie, 0, 0, igp, jgp) / determinant;
         }
       }
     }
   }
 
-  Kokkos::deep_copy(m_2d_scalars, h_2d_scalars);
-  Kokkos::deep_copy(m_2d_tensors, h_2d_tensors);
-  Kokkos::deep_copy(m_3d_scalars, h_3d_scalars);
-  Kokkos::deep_copy(m_4d_scalars, h_4d_scalars);
+  Kokkos::deep_copy(m_fcor, h_fcor);
+  Kokkos::deep_copy(m_metdet, h_metdet);
+  Kokkos::deep_copy(m_spheremp, h_spheremp);
+  Kokkos::deep_copy(m_phis, h_phis);
+
+  Kokkos::deep_copy(m_d, h_d);
+  Kokkos::deep_copy(m_dinv, h_dinv);
+
+  Kokkos::deep_copy(m_omega_p, h_omega_p);
+  Kokkos::deep_copy(m_pecnd, h_pecnd);
+  Kokkos::deep_copy(m_phi, h_phi);
+  Kokkos::deep_copy(m_derived_un0, h_derived_un0);
+  Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
+
+  Kokkos::deep_copy(m_u, h_u);
+  Kokkos::deep_copy(m_v, h_v);
+  Kokkos::deep_copy(m_t, h_t);
+  Kokkos::deep_copy(m_dp3d, h_dp3d);
+
   Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
-  Kokkos::deep_copy(m_3d_buffers, h_3d_buffers);
   return;
 }
 
+void Region::pull_from_f90_pointers(
+    CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
+    CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
+    CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
+  pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  pull_4d(state_v, state_t, state_dp3d);
+  pull_eta_dot(derived_eta_dot_dpdn);
+  pull_qdp(state_qdp);
+}
 
-void Region::pull_qdp (CF90Ptr& field_ptr)
-{
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp_ie_exec = Kokkos::subview(m_Qdp, ie, ALL, ALL, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qdp_ie_host = Kokkos::create_mirror_view(qdp_ie_exec);
-    for (int itl=0; itl<Q_NUM_TIME_LEVELS; ++itl)
-    {
-      for (int iq=0; iq<QSIZE_D; ++iq)
-      {
-        for (int k=0; k<NUM_LEV; ++k)
-        {
-          for (int j=0; j<NP; ++j)
-          {
-            for (int i=0; i<NP; ++i, ++iter)
-            {
-              qdp_ie_host(itl,iq,k,i,j) = field_ptr[iter];
+void Region::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
+                         CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
+      Kokkos::create_mirror_view(m_omega_p);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
+      Kokkos::create_mirror_view(m_pecnd);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
+      Kokkos::create_mirror_view(m_phi);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
+      Kokkos::create_mirror_view(m_derived_un0);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+      Kokkos::create_mirror_view(m_derived_vn0);
+  for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
+    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
+            h_omega_p(ie, igp, jgp, ilev)[ivector] = derived_omega_p[k_3d_scalars];
+            h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
+            h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
+          }
+        }
+
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          }
+        }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(m_omega_p, h_omega_p);
+  Kokkos::deep_copy(m_pecnd, h_pecnd);
+  Kokkos::deep_copy(m_phi, h_phi);
+  Kokkos::deep_copy(m_derived_un0, h_derived_un0);
+  Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
+}
+
+void Region::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
+                         CF90Ptr &state_dp3d) {
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
+      Kokkos::create_mirror_view(m_u);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
+      Kokkos::create_mirror_view(m_v);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
+      Kokkos::create_mirror_view(m_t);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
+  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
+  for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
+    for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
+              h_dp3d(ie, tl, igp, jgp, ilev)[ivector] = state_dp3d[k_4d_scalars];
+              h_t(ie, tl, igp, jgp, ilev)[ivector] = state_t[k_4d_scalars];
             }
           }
-        }
-      }
-    }
-    Kokkos::deep_copy(qdp_ie_exec, qdp_ie_host);
-  }
-}
 
-void Region::push_qdp (F90Ptr&  field_ptr)
-{
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> qdp_ie_exec = Kokkos::subview(m_Qdp, ie, ALL, ALL, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qdp_ie_host = Kokkos::create_mirror_view(qdp_ie_exec);
-    Kokkos::deep_copy(qdp_ie_host, qdp_ie_exec);
-    for (int itl=0; itl<Q_NUM_TIME_LEVELS; ++itl)
-    {
-      for (int iq=0; iq<QSIZE_D; ++iq)
-      {
-        for (int k=0; k<NUM_LEV; ++k)
-        {
-          for (int j=0; j<NP; ++j)
-          {
-            for (int i=0; i<NP; ++i, ++iter)
-            {
-              field_ptr[iter] = qdp_ie_host(itl,iq,k,i,j);
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              h_u(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
             }
           }
-        }
-      }
-    }
-  }
-}
-
-void Region::pull_q_buffer (CF90Ptr& field_ptr)
-{
-  int iter=0;
-  int num_tracers = get_control().qsize;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> qb_ie_exec = Kokkos::subview(m_q_buffer, ie, ALL, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qb_ie_host = Kokkos::create_mirror_view(qb_ie_exec);
-    for (int iq=0; iq<num_tracers; ++iq)
-    {
-      for (int k=0; k<NUM_LEV; ++k)
-      {
-        for (int j=0; j<NP; ++j)
-        {
-          for (int i=0; i<NP; ++i, ++iter)
-          {
-            qb_ie_host(iq,k,i,j) = field_ptr[iter];
-          }
-        }
-      }
-    }
-    Kokkos::deep_copy(qb_ie_exec, qb_ie_host);
-  }
-}
-
-void Region::push_q_buffer (F90Ptr&  field_ptr)
-{
-  int iter=0;
-  int num_tracers = get_control().qsize;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]> qb_ie_exec = Kokkos::subview(m_q_buffer, ie, ALL, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qb_ie_host = Kokkos::create_mirror_view(qb_ie_exec);
-    Kokkos::deep_copy(qb_ie_host, qb_ie_exec);
-    for (int iq=0; iq<num_tracers; ++iq)
-    {
-      for (int k=0; k<NUM_LEV; ++k)
-      {
-        for (int j=0; j<NP; ++j)
-        {
-          for (int i=0; i<NP; ++i, ++iter)
-          {
-            field_ptr[iter] = qb_ie_host(iq,k,i,j);
-          }
-        }
-      }
-    }
-  }
-}
-
-void Region::pull_eta_dot_dpdn (CF90Ptr& field_ptr)
-{
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]> eta_dot_dpdn_ie_exec = Kokkos::subview(m_eta_dot_dpdn, ie, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]>::HostMirror eta_dot_dpdn_ie_host = Kokkos::create_mirror_view(eta_dot_dpdn_ie_exec);
-
-    for (int k=0; k<NUM_LEV; ++k)
-    {
-      for (int j=0; j<NP; ++j)
-      {
-        for (int i=0; i<NP; ++i, ++iter)
-        {
-          eta_dot_dpdn_ie_host(k,i,j) = field_ptr[iter];
-        }
-      }
-    }
-    Kokkos::deep_copy(eta_dot_dpdn_ie_exec, eta_dot_dpdn_ie_host);
-  }
-}
-
-void Region::push_eta_dot_dpdn (F90Ptr&  field_ptr)
-{
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]> eta_dot_dpdn_ie_exec = Kokkos::subview(m_eta_dot_dpdn, ie, ALL, ALL, ALL);
-    ExecViewUnmanaged<Real[NUM_LEV_P][NP][NP]>::HostMirror eta_dot_dpdn_ie_host = Kokkos::create_mirror_view(eta_dot_dpdn_ie_exec);
-
-    Kokkos::deep_copy(eta_dot_dpdn_ie_host, eta_dot_dpdn_ie_exec);
-    for (int k=0; k<NUM_LEV; ++k)
-    {
-      for (int j=0; j<NP; ++j)
-      {
-        for (int i=0; i<NP; ++i, ++iter)
-        {
-          field_ptr[iter] = eta_dot_dpdn_ie_host(k,i,j);
-        }
-      }
-    }
-  }
-}
-
-void Region::pull_from_f90_pointers(CF90Ptr& state_v, CF90Ptr& state_t, CF90Ptr& state_dp3d,
-                                    CF90Ptr& derived_phi, CF90Ptr& derived_pecnd,
-                                    CF90Ptr& derived_omega_p, CF90Ptr& derived_v,
-                                    CF90Ptr& derived_eta_dot_dpdn, CF90Ptr& state_Qdp)
-{
-
-  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
-  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  for (int ie=0, k_3d_scalars=0, k_3d_vectors=0, k_eta_dot_dp_dn=0; ie<m_num_elems; ++ie)
-  {
-    for (int ilev=0; ilev<NUM_LEV; ++ilev)
-    {
-      for (int jgp=0; jgp<NP; ++jgp)
-      {
-        for (int igp=0; igp<NP;
-             ++igp, ++k_3d_scalars, ++k_eta_dot_dp_dn)
-        {
-          h_3d_scalars(ie, static_cast<int>(IDX_OMEGA_P), ilev, igp, jgp) = derived_omega_p[k_3d_scalars];
-          h_3d_scalars(ie, static_cast<int>(IDX_PECND),   ilev, igp, jgp) = derived_pecnd[k_3d_scalars];
-          h_3d_scalars(ie, static_cast<int>(IDX_PHI),     ilev, igp, jgp) = derived_phi[k_3d_scalars];
-          h_eta_dot_dpdn (ie, ilev, igp, jgp) = derived_eta_dot_dpdn[k_eta_dot_dp_dn];
-        }
-      }
-
-      for (int idim : {static_cast<int>(IDX_DERIVED_UN0), static_cast<int>(IDX_DERIVED_VN0)} )
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp, ++k_3d_vectors)
-          {
-            h_3d_scalars(ie, idim, ilev, igp, jgp) = derived_v[k_3d_vectors];
-          }
-        }
-      }
-    }
-    // Extra level of eta_dot_dpdn
-    for (int jgp=0; jgp<NP; ++jgp)
-    {
-      for (int igp=0; igp<NP; ++igp, ++k_eta_dot_dp_dn)
-      {
-        h_eta_dot_dpdn (ie, NUM_LEV, igp, jgp) = derived_eta_dot_dpdn[k_eta_dot_dp_dn];
-      }
-    }
-  }
-  // what():  deep_copy given views that would require a temporary allocation
-  Kokkos::deep_copy (m_3d_scalars, h_3d_scalars);
-  Kokkos::deep_copy (m_eta_dot_dpdn, h_eta_dot_dpdn);
-
-  // 4d scalars
-  int k_4d_scalars = 0;
-  int k_4d_vectors = 0;
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_4d_scalars = Kokkos::create_mirror_view(m_4d_scalars);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int tl=0; tl<NUM_TIME_LEVELS; ++tl)
-    {
-      for (int ilev=0; ilev<NUM_LEV; ++ilev)
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp, ++k_4d_scalars)
-          {
-            h_4d_scalars(ie, tl, static_cast<int>(IDX_DP3D), ilev, igp, jgp) = state_dp3d[k_4d_scalars];
-            h_4d_scalars(ie, tl, static_cast<int>(IDX_T),    ilev, igp, jgp) = state_t[k_4d_scalars];
-          }
-        }
-
-        for (int idim : {static_cast<int>(IDX_U), static_cast<int>(IDX_V)} )
-        {
-          for (int jgp=0; jgp<NP; ++jgp)
-          {
-            for (int igp=0; igp<NP; ++igp, ++k_4d_vectors)
-            {
-              h_4d_scalars(ie, tl, idim, ilev, igp, jgp) = state_v[k_4d_vectors];
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              h_v(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
             }
           }
         }
       }
     }
   }
-  Kokkos::deep_copy (m_4d_scalars, h_4d_scalars);
+  Kokkos::deep_copy(m_u, h_u);
+  Kokkos::deep_copy(m_v, h_v);
+  Kokkos::deep_copy(m_t, h_t);
+  Kokkos::deep_copy(m_dp3d, h_dp3d);
+}
 
-  // Qdp
-  int k_qdp = 0;
-  ExecViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror h_Qdp = Kokkos::create_mirror_view(m_Qdp);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int qni=0; qni<Q_NUM_TIME_LEVELS; ++qni)
-    {
-      for (int iq=0; iq<QSIZE_D; ++iq)
-      {
-        for (int ilev=0; ilev<NUM_LEV; ++ilev)
-        {
-          for (int jgp=0; jgp<NP; ++jgp)
-          {
-            for (int igp=0; igp<NP; ++igp, ++k_qdp)
-            {
-              h_Qdp(ie,qni,iq,ilev,igp,jgp) = state_Qdp[k_qdp];
+void Region::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
+
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
+      Kokkos::create_mirror_view(m_eta_dot_dpdn);
+  for (int ie = 0, k_eta_dot_dp_dn = 0; ie < num_elems(); ++ie) {
+    // Note: we must process only NUM_PHYSICAL_LEV, since the F90
+    //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
+    //       and on vector length, we would have to treat the last pack with care
+    for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
+          h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector] =
+              derived_eta_dot_dpdn[k_eta_dot_dp_dn];
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
+}
+
+void Region::pull_qdp(CF90Ptr &state_qdp) {
+  ExecViewManaged<
+      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
+      Kokkos::create_mirror_view(m_qdp);
+  for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
+    for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
+      for (int iq = 0; iq < QSIZE_D; ++iq) {
+        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+          for (int iv = 0; iv < VECTOR_SIZE; ++iv) {
+            for (int igp = 0; igp < NP; ++igp) {
+              for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
+                h_qdp(ie, qni, iq, igp, jgp, ilev)[iv] = state_qdp[k_qdp];
+              }
             }
           }
         }
       }
     }
   }
-  Kokkos::deep_copy (m_Qdp, h_Qdp);
+  Kokkos::deep_copy(m_qdp, h_qdp);
 }
 
-void Region::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& state_dp3d,
-                                      F90Ptr& derived_phi, F90Ptr& derived_pecnd,
-                                      F90Ptr& derived_omega_p, F90Ptr& derived_v,
-                                      F90Ptr& derived_eta_dot_dpdn, F90Ptr& state_Qdp) const
-{
-  // 3d scalars
-  int k_3d_scalars    = 0;
-  int k_3d_vectors    = 0;
+void Region::push_to_f90_pointers(
+    F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d, F90Ptr &derived_phi,
+    F90Ptr &derived_pecnd, F90Ptr &derived_omega_p, F90Ptr &derived_v,
+    F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const {
+  push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  push_4d(state_v, state_t, state_dp3d);
+  push_eta_dot(derived_eta_dot_dpdn);
+  push_qdp(state_qdp);
+}
+
+void Region::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+                         F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
+      Kokkos::create_mirror_view(m_omega_p);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
+      Kokkos::create_mirror_view(m_pecnd);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
+      Kokkos::create_mirror_view(m_phi);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
+      Kokkos::create_mirror_view(m_derived_un0);
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+      Kokkos::create_mirror_view(m_derived_vn0);
+
+  Kokkos::deep_copy(h_omega_p, m_omega_p);
+  Kokkos::deep_copy(h_pecnd, m_pecnd);
+  Kokkos::deep_copy(h_phi, m_phi);
+  Kokkos::deep_copy(h_derived_un0, m_derived_un0);
+  Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
+  for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
+    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
+            derived_omega_p[k_3d_scalars] =
+                h_omega_p(ie, igp, jgp, ilev)[ivector];
+            derived_pecnd[k_3d_scalars] = h_pecnd(ie, igp, jgp, ilev)[ivector];
+            derived_phi[k_3d_scalars] = h_phi(ie, igp, jgp, ilev)[ivector];
+          }
+        }
+
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            derived_v[k_3d_vectors] =
+                h_derived_un0(ie, igp, jgp, ilev)[ivector];
+          }
+        }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+            derived_v[k_3d_vectors] =
+                h_derived_vn0(ie, igp, jgp, ilev)[ivector];
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::push_4d(F90Ptr &state_v, F90Ptr &state_t,
+                         F90Ptr &state_dp3d) const {
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
+      Kokkos::create_mirror_view(m_u);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
+      Kokkos::create_mirror_view(m_v);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
+      Kokkos::create_mirror_view(m_t);
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
+  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
+  Kokkos::deep_copy(h_u, m_u);
+  Kokkos::deep_copy(h_v, m_v);
+  Kokkos::deep_copy(h_t, m_t);
+  Kokkos::deep_copy(h_dp3d, m_dp3d);
+  for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
+    for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
+              state_dp3d[k_4d_scalars] = h_dp3d(ie, tl, igp, jgp, ilev)[ivector];
+              state_t[k_4d_scalars] = h_t(ie, tl, igp, jgp, ilev)[ivector];
+            }
+          }
+
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              state_v[k_4d_vectors] = h_u(ie, tl, igp, jgp, ilev)[ivector];
+            }
+          }
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              state_v[k_4d_vectors] = h_v(ie, tl, igp, jgp, ilev)[ivector];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
+  ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
+      Kokkos::create_mirror_view(m_eta_dot_dpdn);
+  Kokkos::deep_copy(h_eta_dot_dpdn, m_eta_dot_dpdn);
   int k_eta_dot_dp_dn = 0;
-  ExecViewManaged<Real *[NUM_3D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_3d_scalars = Kokkos::create_mirror_view(m_3d_scalars);
-  ExecViewManaged<Real *[NUM_LEV_P][NP][NP]>::HostMirror h_eta_dot_dpdn = Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  Kokkos::deep_copy (h_3d_scalars, m_3d_scalars);
-  Kokkos::deep_copy (h_eta_dot_dpdn, m_eta_dot_dpdn);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int ilev=0; ilev<NUM_LEV; ++ilev)
-    {
-      for (int jgp=0; jgp<NP; ++jgp)
-      {
-        for (int igp=0; igp<NP; ++igp, ++k_3d_scalars)
-        {
-          derived_omega_p[k_3d_scalars] = h_3d_scalars(ie, static_cast<int>(IDX_OMEGA_P), ilev, igp, jgp);
-          derived_pecnd[k_3d_scalars]   = h_3d_scalars(ie, static_cast<int>(IDX_PECND),   ilev, igp, jgp);
-          derived_phi[k_3d_scalars]     = h_3d_scalars(ie, static_cast<int>(IDX_PHI),     ilev, igp, jgp);
-          derived_eta_dot_dpdn[k_eta_dot_dp_dn] = h_eta_dot_dpdn (ie, ilev, igp, jgp);
-        }
-      }
-
-      for (int idim : {static_cast<int>(IDX_DERIVED_UN0), static_cast<int>(IDX_DERIVED_VN0)} )
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp, ++k_3d_vectors)
-          {
-            derived_v[k_3d_vectors] = h_3d_scalars(ie, idim, ilev, igp, jgp);
-          }
-        }
-      }
-    }
-    // Extra level of eta_dot_dpdn
-    for (int jgp=0; jgp<NP; ++jgp)
-    {
-      for (int igp=0; igp<NP; ++igp, ++k_eta_dot_dp_dn)
-      {
-        derived_eta_dot_dpdn[k_eta_dot_dp_dn] = h_eta_dot_dpdn (ie, NUM_LEV, igp, jgp);
-      }
-    }
-  }
-
-  // 4d scalars
-  int k_4d_scalars = 0;
-  int k_4d_vectors = 0;
-  ExecViewManaged<Real *[NUM_TIME_LEVELS][NUM_4D_SCALARS][NUM_LEV][NP][NP]>::HostMirror h_4d_scalars = Kokkos::create_mirror_view(m_4d_scalars);
-  Kokkos::deep_copy (h_4d_scalars, m_4d_scalars);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int tl=0; tl<NUM_TIME_LEVELS; ++tl)
-    {
-      for (int ilev=0; ilev<NUM_LEV; ++ilev)
-      {
-        for (int jgp=0; jgp<NP; ++jgp)
-        {
-          for (int igp=0; igp<NP; ++igp, ++k_4d_scalars)
-          {
-            state_dp3d[k_4d_scalars] = h_4d_scalars(ie, tl, static_cast<int>(IDX_DP3D), ilev, igp, jgp);
-            state_t[k_4d_scalars]    = h_4d_scalars(ie, tl, static_cast<int>(IDX_T),    ilev, igp, jgp);
-          }
-        }
-
-        for (int idim : {static_cast<int>(IDX_U), static_cast<int>(IDX_V)} )
-        {
-          for (int jgp=0; jgp<NP; ++jgp)
-          {
-            for (int igp=0; igp<NP; ++igp, ++k_4d_vectors)
-            {
-              state_v[k_4d_vectors] = h_4d_scalars(ie, tl, idim, ilev, igp, jgp);
-            }
-          }
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    // Note: we must process only NUM_PHYSICAL_LEV, since the F90
+    //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
+    //       and on vector length, we would have to treat the last pack with care
+    for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
+          derived_eta_dot_dpdn[k_eta_dot_dp_dn] =
+              h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector];
         }
       }
     }
   }
+}
 
-  // Qdp
-  int k_qdp = 0;
-  ExecViewManaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]>::HostMirror h_Qdp = Kokkos::create_mirror_view(m_Qdp);
-  Kokkos::deep_copy (h_Qdp, m_Qdp);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int qni=0; qni<Q_NUM_TIME_LEVELS; ++qni)
-    {
-      for (int iq=0; iq<QSIZE_D; ++iq)
-      {
-        for (int ilev=0; ilev<NUM_LEV; ++ilev)
-        {
-          for (int jgp=0; jgp<NP; ++jgp)
-          {
-            for (int igp=0; igp<NP; ++igp, ++k_qdp)
-            {
-              state_Qdp[k_qdp] = h_Qdp(ie,qni,iq,ilev,igp,jgp);
+void Region::push_qdp(F90Ptr &state_qdp) const {
+  ExecViewManaged<
+      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
+      Kokkos::create_mirror_view(m_qdp);
+  Kokkos::deep_copy(m_qdp, h_qdp);
+  for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
+    for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
+      for (int iq = 0; iq < QSIZE_D; ++iq) {
+        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+          for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
+            for (int igp = 0; igp < NP; ++igp) {
+              for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
+                state_qdp[k_qdp] = h_qdp(ie, qni, iq, igp, jgp, ilev)[ivector];
+              }
             }
           }
         }
@@ -494,15 +502,163 @@ void Region::push_to_f90_pointers(F90Ptr& state_v, F90Ptr& state_t, F90Ptr& stat
   }
 }
 
-void Region::d(Real *d_ptr, int ie) {
-  ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_D), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror d_host = Kokkos::create_mirror_view(d_device),
-    d_wrapper(d_ptr);
+void Region::pull_scalar_buffer (CF90Ptr& field_ptr, int IDX)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_SCALAR_BUFFERS && "Error! scalar buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.scalars, ie, IDX);
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    for (int k=0; k<NUM_LEV; ++k) {
+      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+        for (int i=0; i<NP; ++i) {
+          for (int j=0; j<NP; ++j, ++iter) {
+            view_ie_host(i,j,k)[iv] = field_ptr[iter];
+          }
+        }
+      }
+    }
+    Kokkos::deep_copy(view_ie_exec, view_ie_host);
+  }
+}
+
+void Region::push_scalar_buffer (F90Ptr&  field_ptr, int IDX)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_SCALAR_BUFFERS && "Error! scalar buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.scalars, ie, IDX);
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    Kokkos::deep_copy(view_ie_host, view_ie_exec);
+    for (int k=0; k<NUM_LEV; ++k) {
+      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+        for (int j=0; j<NP; ++j) {
+          for (int i=0; i<NP; ++i, ++iter) {
+            field_ptr[iter] = view_ie_host(i,j,k)[iv];
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::pull_vector_buffer (CF90Ptr& field_ptr, int IDX)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! vector buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.vectors, ie, IDX);
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    for (int k=0; k<NUM_LEV; ++k) {
+      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+        for (int icomp=0; icomp<2; ++icomp) {
+          for (int j=0; j<NP; ++j) {
+            for (int i=0; i<NP; ++i, ++iter) {
+              view_ie_host(icomp,i,j,k)[iv] = field_ptr[iter];
+            }
+          }
+        }
+      }
+    }
+    Kokkos::deep_copy(view_ie_exec, view_ie_host);
+  }
+}
+
+void Region::push_vector_buffer (F90Ptr&  field_ptr, int IDX)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! vector buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.vectors, ie, IDX);
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    Kokkos::deep_copy(view_ie_host, view_ie_exec);
+    for (int k=0; k<NUM_LEV; ++k) {
+      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+        for (int icomp=0; icomp<2; ++icomp) {
+          for (int j=0; j<NP; ++j) {
+            for (int i=0; i<NP; ++i, ++iter) {
+              field_ptr[iter] = view_ie_host(icomp,i,j,k)[iv];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! tracer buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.tracers, ie, IDX);
+    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    for (int iq=0; iq<qsize; ++iq) {
+      for (int k=0; k<NUM_LEV; ++k) {
+        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+          for (int j=0; j<NP; ++j) {
+            for (int i=0; i<NP; ++i, ++iter) {
+              view_ie_host(iq,i,j,k)[iv] = field_ptr[iter];
+            }
+          }
+        }
+      }
+    }
+    Kokkos::deep_copy(view_ie_exec, view_ie_host);
+  }
+}
+
+void Region::push_tracer_buffer (F90Ptr&  field_ptr, int IDX, int qsize)
+{
+  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! tracer buffer index out of bounds.\n");
+
+  int iter=0;
+  for (int ie=0; ie<m_num_elems; ++ie)
+  {
+    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.tracers, ie, IDX);
+    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
+
+    Kokkos::deep_copy(view_ie_host, view_ie_exec);
+    for (int iq=0; iq<qsize; ++iq) {
+      for (int k=0; k<NUM_LEV; ++k) {
+        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+          for (int j=0; j<NP; ++j) {
+            for (int i=0; i<NP; ++i, ++iter) {
+              field_ptr[iter] = view_ie_host(iq,i,j,k)[iv];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void Region::d(Real *d_ptr, int ie) const {
+  ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(
+      m_d, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
+  d_host = Kokkos::create_mirror_view(d_device),
+  d_wrapper(d_ptr);
   Kokkos::deep_copy(d_host, d_device);
-  for(int m = 0; m < 2; ++m) {
-    for(int n = 0; n < 2; ++n) {
-      for(int igp = 0; igp < NP; ++igp) {
-        for(int jgp = 0; jgp < NP; ++jgp) {
+  for (int m = 0; m < 2; ++m) {
+    for (int n = 0; n < 2; ++n) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
           d_wrapper(m, n, jgp, igp) = d_host(n, m, igp, jgp);
         }
       }
@@ -510,94 +666,39 @@ void Region::d(Real *d_ptr, int ie) {
   }
 }
 
-void Region::dinv(Real *dinv_ptr, int ie) {
-  ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(m_2d_tensors, ie, static_cast<int>(IDX_DINV), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host = Kokkos::create_mirror_view(dinv_device),
-    dinv_wrapper(dinv_ptr);
+void Region::dinv(Real *dinv_ptr, int ie) const {
+  ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(
+      m_dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host(dinv_ptr);
   Kokkos::deep_copy(dinv_host, dinv_device);
-  for(int m = 0; m < 2; ++m) {
-    for(int n = 0; n < 2; ++n) {
-      for(int igp = 0; igp < NP; ++igp) {
-        for(int jgp = 0; jgp < NP; ++jgp) {
-          dinv_wrapper(m, n, jgp, igp) = dinv_host(n, m, igp, jgp);
-        }
-      }
-    }
-  }
 }
 
-void Region::pull_from_f90_buffers(CF90Ptr& buff1, CF90Ptr& buff2, CF90Ptr& buff3, CF90Ptr& buff4)
-{
-  int buf_pos = 0;
-  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int ilev=0; ilev<NUM_LEV; ++ilev)
-    {
-      for (int jgp=0; jgp<NP; ++jgp)
-      {
-        for (int igp=0; igp<NP; ++igp, ++buf_pos)
-        {
-          if (buff1!=nullptr)
-          {
-            h_3d_buffers(ie, 0, ilev, igp, jgp) = buff1[buf_pos];
-          }
-          if (buff2!=nullptr)
-          {
-            h_3d_buffers(ie, 1, ilev, igp, jgp) = buff2[buf_pos];
-          }
-          if (buff3!=nullptr)
-          {
-            h_3d_buffers(ie, 2, ilev, igp, jgp) = buff3[buf_pos];
-          }
-          if (buff4!=nullptr)
-          {
-            h_3d_buffers(ie, 3, ilev, igp, jgp) = buff4[buf_pos];
-          }
-        }
-      }
-    }
-  }
-  Kokkos::deep_copy(m_3d_buffers, h_3d_buffers);
+void Region::BufferViews::init(int num_elems) {
+  pressure =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
+  pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Gradient of pressure", num_elems);
+  temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Virtual Temperature", num_elems);
+  temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Gradient of temperature", num_elems);
+  omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Omega_P why two named the same thing???", num_elems);
+  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
+                                                      num_elems);
+  ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Kinetic Energy + Geopotential Energy", num_elems);
+  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
+                                                             num_elems);
+  vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
+
+  scalars = ExecViewManaged<Scalar *[NUM_SCALAR_BUFFERS][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
+  vectors = ExecViewManaged<Scalar *[NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
+  tracers = ExecViewManaged<Scalar *[NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
 }
 
-void Region::push_to_f90_buffers (F90Ptr& buff1, F90Ptr& buff2, F90Ptr& buff3, F90Ptr& buff4) const
-{
-  int buf_pos = 0;
-  ExecViewManaged<Real *[NUM_3D_BUFFERS][NUM_LEV][NP][NP]>::HostMirror h_3d_buffers = Kokkos::create_mirror_view(m_3d_buffers);
-  Kokkos::deep_copy(h_3d_buffers, m_3d_buffers);
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    for (int ilev=0; ilev<NUM_LEV; ++ilev)
-    {
-      for (int jgp=0; jgp<NP; ++jgp)
-      {
-        for (int igp=0; igp<NP; ++igp, ++buf_pos)
-        {
-          if (buff1!=nullptr)
-          {
-             buff1[buf_pos] = h_3d_buffers(ie, 0, ilev, igp, jgp);
-          }
-          if (buff2!=nullptr)
-          {
-             buff2[buf_pos] = h_3d_buffers(ie, 1, ilev, igp, jgp);
-          }
-          if (buff3!=nullptr)
-          {
-             buff3[buf_pos] = h_3d_buffers(ie, 2, ilev, igp, jgp);
-          }
-          if (buff4!=nullptr)
-          {
-             buff4[buf_pos] = h_3d_buffers(ie, 3, ilev, igp, jgp);
-          }
-        }
-      }
-    }
-  }
-}
-
-Region& get_region()
-{
+Region &get_region() {
   static Region r;
   return r;
 }

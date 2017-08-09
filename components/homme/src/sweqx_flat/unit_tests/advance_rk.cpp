@@ -143,6 +143,7 @@ void divergence_sphere_c(int ie, const Vector_QP &v,
                          const HommeExecView3D &rmetdet,
                          const HommeExecView5D &dinv,
                          Scalar_QP &divergence);
+
 }
 
 template <typename rngAlg, typename dist, typename number>
