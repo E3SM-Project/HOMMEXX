@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_CAAR_CONTROL_HPP
 #define HOMMEXX_CAAR_CONTROL_HPP
 
-#include "Dimensions.hpp"
 #include "Types.hpp"
 
 #include <cstdlib>
@@ -19,7 +18,18 @@ struct Control {
     }
     else
     {
-      team_size = -1;
+      var = getenv("OMP_NUM_THREADS");
+      if (var!=0)
+      {
+        // team size is not set, but we want to later setting it
+        // above the omp number of threads, so we set team_size to 0
+        team_size = -std::atoi(var);
+      }
+      else
+      {
+        // We did not find any information in the environment, so we give up
+        team_size = 0;
+      }
     }
   }
 
@@ -29,6 +39,9 @@ struct Control {
              const int qn0,  const Real dt2, const Real ps0,
              const bool compute_diagonstics, const Real eta_ave_w,
              CRCPtr hybrid_a_ptr);
+
+  // This method sets team_size if it wasn't already set via environment variable in the constructor
+  void set_team_size ();
 
   // The desired team size for kokkos team policy
   int team_size;

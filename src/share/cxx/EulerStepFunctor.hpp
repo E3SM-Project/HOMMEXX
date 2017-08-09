@@ -15,8 +15,12 @@ struct EulerStepFunctor
   const Region      m_region;
   const Derivative  m_deriv;
 
-  static constexpr int USTAR = 0;
-  static constexpr int VSTAR = 1;
+  static constexpr int IDX_USTAR = 0;
+  static constexpr int IDX_VSTAR = 1;
+
+  static constexpr int IDX_VBUFF = 0;
+
+  static constexpr int IDX_TBUFF = 0;
 
   EulerStepFunctor (const Control& data)
    : m_data    (data)
@@ -27,32 +31,20 @@ struct EulerStepFunctor
   }
 
   KOKKOS_INLINE_FUNCTION
-  static size_t shmem_size(int team_size) {
+  static size_t shmem_size(int /*team_size*/) {
     // One scalar buffer and two vector buffers
-    size_t mem_size = (sizeof(Real[NP][NP]) + 2*sizeof(Real[2][NP][NP])) * team_size;
-    return mem_size;
-  }
-
-  template <typename Primitive, typename Data>
-  KOKKOS_INLINE_FUNCTION
-  Primitive* allocate_thread(const TeamMember& team) const {
-    ScratchView<Data> view(team.thread_scratch(0));
-    return view.data();
+    return 0;
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (TeamMember team) const
   {
-    const int ie = team.league_rank();
-    ExecViewUnmanaged<Real[NP][NP]>     scalar_buf   (allocate_thread<Real,Real[NP][NP]>(team));
-    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_1 (allocate_thread<Real,Real[2][NP][NP]>(team));
-    ExecViewUnmanaged<Real[2][NP][NP]>  vector_buf_2 (allocate_thread<Real,Real[2][NP][NP]>(team));
+    KernelVariables kv(team);
 
-    ExecViewUnmanaged<const Real[NP][NP]>       metdet_ie = m_region.METDET(ie);
-    ExecViewUnmanaged<const Real[2][2][NP][NP]> dinv_ie   = m_region.DINV(ie);
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> vector_buf = ::Homme::subview(m_region.buffers.vectors,kv.ie,IDX_VBUFF);
 
-    ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> ustar = m_region.get_3d_buffer(ie,USTAR);
-    ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> vstar = m_region.get_3d_buffer(ie,VSTAR);
+    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> ustar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_USTAR);
+    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> vstar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_VSTAR);
 
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(team,NUM_LEV*m_data.qsize),
@@ -61,8 +53,8 @@ struct EulerStepFunctor
         const int iq   = lev_q / NUM_LEV;
         const int ilev = lev_q % NUM_LEV;
 
-        ExecViewUnmanaged<const Real[NP][NP]> qdp   = m_region.QDP(ie,m_data.qn0,iq,ilev);
-        ExecViewUnmanaged<Real[NP][NP]>       q_buf = m_region.get_q_buffer(ie,iq,ilev);
+        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> qdp   = ::Homme::subview(m_region.m_qdp,kv.ie,m_data.qn0,iq);
+        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       q_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_TBUFF,iq);
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
@@ -71,15 +63,16 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            vector_buf_1(0,igp,jgp) = ustar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
-            vector_buf_1(1,igp,jgp) = vstar(ilev,igp,jgp) * qdp(iq,ilev,igp,jgp);
-            q_buf(igp,jgp)          = qdp(igp,jgp);
+            vector_buf(0,igp,jgp,ilev) = ustar(igp,jgp,ilev) * qdp(igp,jgp,ilev);
+            vector_buf(1,igp,jgp,ilev) = vstar(igp,jgp,ilev) * qdp(igp,jgp,ilev);
+            q_buf(igp,jgp,ilev)        = qdp(igp,jgp,ilev);
           }
         );
 
-        divergence_sphere_update(team, -m_data.dt, 1.0,
-                                 m_deriv.get_dvv(), metdet_ie,dinv_ie,
-                                 vector_buf_1, vector_buf_2, scalar_buf);
+        divergence_sphere_update(kv, -m_data.dt, 1.0,
+                                 m_region.m_dinv, m_region.m_metdet,
+                                 m_deriv.get_dvv(),
+                                 vector_buf, q_buf);
       }
     );
   }

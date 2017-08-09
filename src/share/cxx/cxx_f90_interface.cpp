@@ -40,6 +40,8 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
   control.qsize = qsize;
   control.dt    = dt;
+
+  control.set_team_size();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -57,9 +59,9 @@ void init_region_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr&
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                                     CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_pecnd_ptr,
-                                     CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
-                                     CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
+                       CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_pecnd_ptr,
+                       CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
+                       CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
 {
   Region& r = get_region();
   // Copy data from f90 pointers to cxx views
@@ -70,9 +72,9 @@ void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF9
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                                     F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
-                                     F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
-                                     F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
+                          F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
+                          F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
+                          F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
   Region& r = get_region();
   r.push_to_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
@@ -84,17 +86,18 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
 void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& ustar_ptr, CF90Ptr& vstar_ptr)
 {
   Region& r = get_region();
-  // Copy data from f90 pointers to cxx views
 
-  r.pull_3d_buffer<EulerStepFunctor::USTAR>(ustar_ptr);
-  r.pull_3d_buffer<EulerStepFunctor::VSTAR>(vstar_ptr);
+  // Copy data from f90 pointers to cxx views
+  r.pull_scalar_buffer(ustar_ptr,EulerStepFunctor::IDX_USTAR);
+  r.pull_scalar_buffer(vstar_ptr,EulerStepFunctor::IDX_VSTAR);
   r.pull_qdp(elem_state_Qdp_ptr);
 }
 
 void euler_push_results_c (F90Ptr& qtens_ptr)
 {
   Region& r = get_region();
-  r.push_q_buffer(qtens_ptr);
+  const Control& data = get_control();
+  r.push_tracer_buffer(qtens_ptr,EulerStepFunctor::IDX_TBUFF,data.qsize);
 }
 
 void caar_pre_exchange_monolithic_c()
@@ -103,7 +106,6 @@ void caar_pre_exchange_monolithic_c()
   Control& data  = get_control();
 
   // Retrieve the team size
-  DefaultThreadsDistribution<ExecSpace>::init();
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team   = data.team_size;
 
@@ -115,7 +117,7 @@ void caar_pre_exchange_monolithic_c()
   CaarFunctor func(data);
 
   // Dispatch parallel for
-  Kokkos::parallel_for(policy, func);
+  Kokkos::parallel_for("main caar loop", policy, func);
 
   // Finalize
   ExecSpace::fence();
@@ -130,7 +132,6 @@ void advance_qdp_c()
   EulerStepFunctor func(data);
 
   // Retrieve the team size
-  DefaultThreadsDistribution<ExecSpace>::init();
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team   = data.team_size;
 
