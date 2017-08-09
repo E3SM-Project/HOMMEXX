@@ -208,7 +208,7 @@ struct CaarFunctor {
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
-  void preq_hydrostatic(KernelVariables &kv) const {
+  void preq_hydrostatic(const KernelVariables &kv) const {
     const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> pressure =
         m_region.get_3d_buffer(kv.ie, PRESSURE);
     const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T_v =
@@ -235,33 +235,13 @@ struct CaarFunctor {
             kv.scalar_buf_1(igp, jgp) +=
                 PhysicalConstants::Rgas * T_v(ilev, igp, jgp) * 2.0 *
                 (dp_n0(ilev, igp, jgp) * 0.5 / pressure(ilev, igp, jgp));
-            /*
-             *        kv.vector_buf_2(0, igp, jgp) =
-             *PhysicalConstants::Rgas /
-             *pressure(kv.ilev, igp, jgp);
-             *        kv.vector_buf_2(0, igp, jgp) *=
-             *T_v(kv.ilev, igp, jgp);
-             *        kv.vector_buf_2(0, igp, jgp) *=
-             *dp_n0(kv.ilev, igp, jgp);
-             *
-             *        phi(kv.ilev, igp, jgp) = phis(igp,
-             *jgp) +
-             *kv.scalar_buf_1(igp,
-             *jgp);
-             *        // FMA so no temporary register needed
-             *        phi(kv.ilev, igp, jgp) += 0.5 *
-             *kv.vector_buf_2(0, igp, jgp);
-             *
-             *        kv.scalar_buf_1(igp, jgp) +=
-             *kv.vector_buf_2(0, igp, jgp);
-             */
           }
-        });
+    });
   }
 
   // Depends on pressure, U_current, V_current, div_vdp, omega_p
   KOKKOS_INLINE_FUNCTION
-  void preq_omega_ps(KernelVariables &kv) const {
+  void preq_omega_ps(const KernelVariables &kv) const {
     // NOTE: we can't use a single TeamThreadRange loop, since
     //       gradient_sphere requires a 'consistent' pressure,
     //       meaning that we cannot update the different pressure
@@ -510,53 +490,6 @@ struct CaarFunctor {
           m_region.DP3D(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
               m_region.SPHEREMP(kv.ie, igp, jgp) * tmp;
         });
-  }
-
-  // Computes the vertical advection of T and v
-  // Not currently used
-  KOKKOS_INLINE_FUNCTION
-  void preq_vertadv(
-      const TeamMember &team,
-      const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> T,
-      const ExecViewUnmanaged<const Real[NUM_LEV][2][NP][NP]> v,
-      const ExecViewUnmanaged<const Real[NUM_LEV_P][NP][NP]> eta_dp_deta,
-      const ExecViewUnmanaged<const Real[NUM_LEV][NP][NP]> rpdel,
-      ExecViewUnmanaged<Real[NUM_LEV][NP][NP]> T_vadv,
-      ExecViewUnmanaged<Real[NUM_LEV][2][NP][NP]> v_vadv) {
-    constexpr const int k_0 = 0;
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Real facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
-        T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
-        }
-      }
-    }
-    constexpr const int k_f = NUM_LEV - 1;
-    for (int k = k_0 + 1; k < k_f; ++k) {
-      for (int j = 0; j < NP; ++j) {
-        for (int i = 0; i < NP; ++i) {
-          Real facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
-          Real facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
-          T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
-                            facm * (T(k, j, i) - T(k - 1, j, i));
-          for (int h = 0; h < 2; ++h) {
-            v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
-                                 facm * (v(k, h, j, i) - v(k - 1, h, j, i));
-          }
-        }
-      }
-    }
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Real facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
-        T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
-        }
-      }
-    }
   }
 
   KOKKOS_INLINE_FUNCTION
