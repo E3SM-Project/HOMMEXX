@@ -122,6 +122,10 @@ class compute_subfunctor_test {
   HostViewManaged<Real * [2][2][NP][NP]> dinv;
   HostViewManaged<Real[NP][NP]> dvv;
 
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> vgrad_p;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp;
+
   const int nets;
   const int nete;
 
@@ -148,7 +152,7 @@ class compute_energy_grad_test {
   }
 };
 
-TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
+TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 128.0;
   constexpr const int num_elems = 10;
@@ -221,4 +225,54 @@ TEST_CASE("monolithic compute_and_apply_rhs", "compute_energy_grad") {
       }
     }
   }
-};  // end of TEST_CASE(...,"compute_energy_grad")
+}  // end of TEST_CASE(...,"compute_energy_grad")
+
+class preq_omega_ps_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.preq_omega_ps(kv);
+  }
+};
+
+TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 128.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  compute_subfunctor_test<preq_omega_ps_test> test_functor(num_elems);
+  test_functor.run_functor();
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
+  Kokkos::deep_copy(omega_p, region.buffers.omega_p);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(
+      "Fortran omega_p");
+  for (int ie = 0; ie < num_elems; ++ie) {
+    preq_omega_ps_c_int(omega_p_f90.data(),
+                        Kokkos::subview(test_functor.pressure, ie, Kokkos::ALL,
+                                        Kokkos::ALL, Kokkos::ALL).data(),
+                        Kokkos::subview(test_functor.vgrad_p, ie, Kokkos::ALL,
+                                        Kokkos::ALL, Kokkos::ALL).data(),
+                        Kokkos::subview(test_functor.div_vdp, ie, Kokkos::ALL,
+                                        Kokkos::ALL, Kokkos::ALL).data());
+    for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
+            omega_p(ie, igp, jgp, vec_lev)[v] == omega_p_f90(k, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+}
+
