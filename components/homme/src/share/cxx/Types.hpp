@@ -75,6 +75,9 @@ private:
 };
 #endif
 
+using MemoryManaged   = Kokkos::MemoryTraits<Kokkos::Restrict>;
+using MemoryUnmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict>;
+
 // The memory spaces
 using ExecMemSpace    = ExecSpace::memory_space;
 using ScratchMemSpace = ExecSpace::scratch_memory_space;
@@ -92,19 +95,19 @@ using ViewType = Kokkos::View<DataType,Kokkos::LayoutRight,Types...>;
 
 // Further specializations for execution space and managed/unmanaged memory
 template<typename DataType>
-using ExecViewManaged = ViewType<DataType,ExecMemSpace,Kokkos::MemoryManaged>;
+using ExecViewManaged = ViewType<DataType,ExecMemSpace,MemoryManaged>;
 template<typename DataType>
-using ExecViewUnmanaged = ViewType<DataType,ExecMemSpace,Kokkos::MemoryUnmanaged>;
+using ExecViewUnmanaged = ViewType<DataType,ExecMemSpace,MemoryUnmanaged>;
 
 // Further specializations for host space.
 template<typename DataType>
-using HostViewManaged = ViewType<DataType,HostMemSpace,Kokkos::MemoryManaged>;
+using HostViewManaged = ViewType<DataType,HostMemSpace,MemoryManaged>;
 template<typename DataType>
-using HostViewUnmanaged = ViewType<DataType,HostMemSpace,Kokkos::MemoryUnmanaged>;
+using HostViewUnmanaged = ViewType<DataType,HostMemSpace,MemoryUnmanaged>;
 
 // The scratch view type: always unmanaged, and always with c pointers
 template<typename DataType>
-using ScratchView = ViewType<DataType,ScratchMemSpace,Kokkos::MemoryUnmanaged>;
+using ScratchView = ViewType<DataType,ScratchMemSpace,MemoryUnmanaged>;
 
 // To view the fully expanded name of a complicated template type T,
 // just try to access some non-existent field of MyDebug<T>. E.g.:
