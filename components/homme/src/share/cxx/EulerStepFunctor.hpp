@@ -18,9 +18,10 @@ struct EulerStepFunctor
   static constexpr int IDX_USTAR = 0;
   static constexpr int IDX_VSTAR = 1;
 
-  static constexpr int IDX_VBUFF = 0;
+  static constexpr int IDX_QBUFF = 0;
+  static constexpr int IDX_UBUFF = 1;
+  static constexpr int IDX_VBUFF = 2;
 
-  static constexpr int IDX_TBUFF = 0;
 
   EulerStepFunctor (const Control& data)
    : m_data    (data)
@@ -41,8 +42,6 @@ struct EulerStepFunctor
   {
     KernelVariables kv(team);
 
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> vector_buf = ::Homme::subview(m_region.buffers.vectors,kv.ie,IDX_VBUFF);
-
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> ustar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_USTAR);
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> vstar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_VSTAR);
 
@@ -57,7 +56,10 @@ struct EulerStepFunctor
         kv.ilev = lev_q % NUM_LEV;
 
         ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> qdp   = ::Homme::subview(m_region.m_qdp,kv.ie,m_data.qn0,iq);
-        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       q_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_TBUFF,iq);
+        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       q_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_QBUFF,iq);
+        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       u_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_UBUFF,iq);
+        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       v_buf = ::Homme::subview(m_region.buffers.tracers,kv.ie,IDX_VBUFF,iq);
+
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
@@ -66,14 +68,14 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            vector_buf(0,igp,jgp,kv.ilev) = ustar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
-            vector_buf(1,igp,jgp,kv.ilev) = vstar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
-            q_buf(igp,jgp,kv.ilev)        = qdp(igp,jgp,kv.ilev);
+            u_buf(igp,jgp,kv.ilev) = ustar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
+            v_buf(igp,jgp,kv.ilev) = vstar(igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
+            q_buf(igp,jgp,kv.ilev) = qdp(igp,jgp,kv.ilev);
           }
         );
 
         divergence_sphere_update(kv, -m_data.dt, 1.0, dinv, metdet,
-                                 m_deriv.get_dvv(), vector_buf, q_buf);
+                                 m_deriv.get_dvv(), u_buf, v_buf, q_buf);
       }
     );
   }
