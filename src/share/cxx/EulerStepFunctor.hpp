@@ -46,6 +46,9 @@ struct EulerStepFunctor
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> ustar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_USTAR);
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> vstar = ::Homme::subview(m_region.buffers.scalars,kv.ie,IDX_VSTAR);
 
+    ExecViewUnmanaged<const Real[2][2][NP][NP]> dinv   = ::Homme::subview(m_region.m_dinv,kv.ie);
+    ExecViewUnmanaged<const Real[NP][NP]>       metdet = ::Homme::subview(m_region.m_metdet,kv.ie);
+
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(team,NUM_LEV*m_data.qsize),
       [&] (const int lev_q)
@@ -69,10 +72,8 @@ struct EulerStepFunctor
           }
         );
 
-        divergence_sphere_update(kv, -m_data.dt, 1.0,
-                                 m_region.m_dinv, m_region.m_metdet,
-                                 m_deriv.get_dvv(),
-                                 vector_buf, q_buf);
+        divergence_sphere_update(kv, -m_data.dt, 1.0, dinv, metdet,
+                                 m_deriv.get_dvv(), vector_buf, q_buf);
       }
     );
   }

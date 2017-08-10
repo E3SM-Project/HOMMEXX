@@ -5,6 +5,28 @@
 
 namespace Homme {
 
+// ================ Subviews of 2d views ======================= //
+// Note: we still template on ScalarType (should always be Homme::Real here)
+//       to allow const/non-const version
+template<typename MemSpace, typename MemManagement, typename ScalarType>
+ViewUnmanaged<ScalarType[NP][NP],MemSpace>
+subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [NP][NP],MemSpace>(&v_in(ie,0,0));
+}
+
+// Here, usually, DIM1=DIM2=2 (D and DInv)
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>(&v_in(ie,0,0,0,0));
+}
+
+// ================ Subviews of 2d views ======================= //
+// Note: we still template on ScalarType (should always be Homme::Scalar here)
+//       to allow const/non-const version
+
 template<typename MemSpace, typename MemManagement, typename ScalarType>
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemManagement,MemSpace> v_in, int ie)

@@ -316,8 +316,8 @@ divergence_sphere(const KernelVariables &kv,
 KOKKOS_INLINE_FUNCTION void
 divergence_sphere_update(const KernelVariables &kv,
                          const Real alpha, const Real beta,
-                         const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                         const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
+                         const ExecViewUnmanaged<const Real [2][2][NP][NP]> dinv,
+                         const ExecViewUnmanaged<const Real [NP][NP]> metdet,
                          const ExecViewUnmanaged<const Real[NP][NP]> dvv,
                          const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
                          const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
@@ -327,8 +327,8 @@ divergence_sphere_update(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    gv[0][igp][jgp] = (dinv(kv.ie, 0, 0, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(kv.ie, 1, 0, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(kv.ie, igp, jgp);
-    gv[1][igp][jgp] = (dinv(kv.ie, 0, 1, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(kv.ie, 1, 1, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(kv.ie, igp, jgp);
+    gv[0][igp][jgp] = (dinv(0, 0, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 0, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
+    gv[1][igp][jgp] = (dinv(0, 1, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 1, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
   });
 
   constexpr int div_iters = NP * NP;
@@ -343,7 +343,7 @@ divergence_sphere_update(const KernelVariables &kv,
     }
 
     div_v(igp,jgp,kv.ilev) *= beta;
-    div_v(igp,jgp,kv.ilev) += alpha*((dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) * PhysicalConstants::rrearth));
+    div_v(igp,jgp,kv.ilev) += alpha*((dudx + dvdy) * ((1.0 / metdet(igp, jgp)) * PhysicalConstants::rrearth));
   });
 }
 
