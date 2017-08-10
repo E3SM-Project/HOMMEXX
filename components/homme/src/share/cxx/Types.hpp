@@ -112,9 +112,9 @@ using ViewType = Kokkos::View<DataType, Kokkos::LayoutRight, MemorySpace, Memory
 
 // Managed/Unmanaged view
 template <typename DataType, typename MemorySpace>
-using ViewManaged = ViewType<DataType, MemorySpace, Kokkos::MemoryManaged>;
+using ViewManaged = ViewType<DataType, MemorySpace, MemoryManaged>;
 template <typename DataType, typename MemorySpace>
-using ViewUnmanaged = ViewType<DataType, MemorySpace, Kokkos::MemoryManaged>;
+using ViewUnmanaged = ViewType<DataType, MemorySpace, MemoryUnmanaged>;
 
 // Host/Device views
 template <typename DataType, typename MemoryManagement>
