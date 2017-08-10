@@ -87,8 +87,9 @@ struct CaarFunctor {
       const int igp = (idx / NP) % NP;
       const int jgp = idx % NP;
 
+      Real Rgas = PhysicalConstants::Rgas;
       m_region.buffers.energy_grad(kv.ie, hgp, igp, jgp, kv.ilev) =
-          PhysicalConstants::Rgas *
+          Rgas *
           (m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) /
            m_region.buffers.pressure(kv.ie, igp, jgp, kv.ilev)) *
           m_region.buffers.pressure_grad(kv.ie, hgp, igp, jgp, kv.ilev);
@@ -397,8 +398,9 @@ struct CaarFunctor {
 
       // vgrad_t + kappa * T_v * omega_p
       Scalar ttens;
+      Real kappa = PhysicalConstants::kappa;
       ttens = -vgrad_t +
-              PhysicalConstants::kappa *
+                kappa *
                   m_region.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) *
                   m_region.buffers.omega_p(kv.ie, igp, jgp, kv.ilev);
 

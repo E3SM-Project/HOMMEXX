@@ -13,11 +13,15 @@ IF(USE_TRILINOS)
                  -DTrilinos_ENABLE_KokkosAlgorithms=ON
                  -DTrilinos_ENABLE_KokkosContainers=ON
                  -DTrilinos_ENABLE_KokkosCore=ON
-                 -DTrilinos_ENABLE_KokkosExample=OFF)
+                 -DTrilinos_ENABLE_KokkosExample=OFF
+                 -DTrilinos_ENABLE_ALL_OPTIONAL_PACKAGES=OFF
+                 -DTrilinos_ENABLE_Sacado=ON
+                 -DTrilinos_ENABLE_Stokhos=ON
+    )
     SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
                          -DKokkos_ENABLE_MPI=ON)
   
-    SET(Kokkos_LIBRARIES "kokkosalgorithms kokkoscore kokkoscontainers")
+    SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscore;kokkoscontainers")
     SET(Kokkos_TPL_LIBRARIES "dl")
   
     IF(${OPENMP_FOUND})
@@ -117,7 +121,8 @@ ENDIF()
 
 macro(link_to_trilinos targetName)
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
-  TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
+  #TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
+  TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib ${Trilinos_LIBRARIES})
 
   IF("${ENABLE_CUDA}")
     TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda -DCUDA_BUILD)

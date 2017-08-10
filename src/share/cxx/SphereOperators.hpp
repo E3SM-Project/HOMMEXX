@@ -232,8 +232,9 @@ gradient_sphere(const KernelVariables &kv,
       dsdx += dvv(jgp, kgp) * scalar(igp, kgp, kv.ilev);
       dsdy += dvv(jgp, kgp) * scalar(kgp, igp, kv.ilev);
     }
-    temp_v[0][igp][jgp] = dsdx * PhysicalConstants::rrearth;
-    temp_v[1][jgp][igp] = dsdy * PhysicalConstants::rrearth;
+    Real rrearth = PhysicalConstants::rrearth;
+    temp_v[0][igp][jgp] = dsdx * rrearth;
+    temp_v[1][jgp][igp] = dsdy * rrearth;
   });
 
   constexpr int grad_iters = NP * NP;
@@ -263,8 +264,11 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
       dsdx += dvv(jgp, kgp) * scalar(igp, kgp, kv.ilev);
       dsdy += dvv(igp, kgp) * scalar(kgp, jgp, kv.ilev);
     }
-    temp_v[0][igp][jgp] = dsdx * PhysicalConstants::rrearth;
-    temp_v[1][igp][jgp] = dsdy * PhysicalConstants::rrearth;
+    Real rrearth = PhysicalConstants::rrearth;
+    temp_v[0][igp][jgp] = dsdx * rrearth;
+    temp_v[1][igp][jgp] = dsdy * rrearth;
+    //temp_v[0][igp][jgp] = dsdx * PhysicalConstants::rrearth;
+    //temp_v[1][igp][jgp] = dsdy * PhysicalConstants::rrearth;
   });
 
   constexpr int grad_iters = NP * NP;

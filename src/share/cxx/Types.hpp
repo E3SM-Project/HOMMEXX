@@ -12,6 +12,26 @@
 #include "config.h.c"
 #endif
 
+// This must be above the macro below that messes with underscores
+//
+//#define USE_STOKHOS_VECTOR
+#ifdef USE_STOKHOS_VECTOR
+#include "Sacado.hpp"
+//#include "Stokhos_Sacado_Kokkos.hpp"
+#include "Stokhos_Sacado_Kokkos_MathFunctions.hpp"
+
+#include "Stokhos_KokkosTraits.hpp"
+#include "Stokhos_StaticFixedStorage.hpp"
+#include "Stokhos_ViewStorage.hpp"
+
+#include "Sacado_MP_ExpressionTraits.hpp"
+#include "Sacado_MP_VectorTraits.hpp"
+#include "Sacado_MP_Vector.hpp"
+//#include "Kokkos_View_MP_Vector.hpp"
+#include "Kokkos_Atomic_MP_Vector.hpp"
+//#include "Sacado_MP_Vector.hpp"
+#endif
+
 #define __MACRO_STRING(MacroVal) #MacroVal
 #define MACRO_STRING(MacroVal) __MACRO_STRING(MacroVal)
 
@@ -78,6 +98,10 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
 
+
+#ifndef USE_STOKHOS_VECTOR
+
+// Use Kyung-Joo Vector
 #if (AVX_VERSION > 0)
 using VectorTagType =
     KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
@@ -90,6 +114,13 @@ using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
 
 using Scalar = KokkosKernels::Batched::Experimental::Vector<VectorType>;
+
+#else // Use Phipps Vector
+
+using MPStorageType = Stokhos::StaticFixedStorage<int, Real, VECTOR_SIZE, ExecSpace>;
+using Scalar =  Sacado::MP::Vector<MPStorageType>;
+
+#endif
 
 // The memory spaces
 using ExecMemSpace = ExecSpace::memory_space;

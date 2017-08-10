@@ -37,7 +37,7 @@ SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 IF (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
   SET (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -warn all")
 ELSE()
-  SET (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Wall")
+  SET (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Wall -Wno-unused-variable -Wno-unused-function -Wno-unused-dummy-argument -Wno-maybe-uninitialized -Wno-tabs -Wno-conversion")
 ENDIF()
 
 IF (DEFINED BASE_FFLAGS)
