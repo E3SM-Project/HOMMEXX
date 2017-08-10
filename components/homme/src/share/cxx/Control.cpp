@@ -30,14 +30,8 @@ void Control::init(const int nets_in, const int nete_in,
 
 void Control::set_team_size()
 {
-  if (team_size == 0) {
-    team_size =
-        DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets);
-  }
-  else if (team_size < 0) {
-    // We found OMP_NUM_THREADS in the environment. We should not exceed that number
-    team_size = std::min(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets),-team_size);
-  }
+  // If the size requested at the beginning
+  team_size = std::min(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), default_team_size);
 }
 
 Control &get_control() {

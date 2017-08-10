@@ -11,25 +11,25 @@ struct Control {
 
   Control ()
   {
-    const char* var = getenv("HOMMEXX_TEAM_SIZE");
+    // We start by setting
+    team_size         = 0;
+    default_team_size = 99999;
+
+    const char* var;
+    var = getenv("OMP_NUM_THREADS");
     if (var!=0)
     {
-      team_size = std::atoi(var);
+      // the team size canno exceed the value of OMP_NUM_THREADS, so se note it down
+      default_team_size = std::atoi(var);
     }
-    else
+
+    var = getenv("HOMMEXX_TEAM_SIZE");
+    if (var!=0)
     {
-      var = getenv("OMP_NUM_THREADS");
-      if (var!=0)
-      {
-        // team size is not set, but we want to later setting it
-        // above the omp number of threads, so we set team_size to 0
-        team_size = -std::atoi(var);
-      }
-      else
-      {
-        // We did not find any information in the environment, so we give up
-        team_size = 0;
-      }
+      // The user requested a team size for homme. We accept it, provided that
+      // it does not exceed the value of OMP_NUM_THREADS. If it does exceed that,
+      // we simply set it to OMP_NUM_THREADS.
+      default_team_size = std::min(std::atoi(var),default_team_size);
     }
   }
 
@@ -42,6 +42,9 @@ struct Control {
 
   // This method sets team_size if it wasn't already set via environment variable in the constructor
   void set_team_size ();
+
+  // The desired team size for kokkos team policy
+  int default_team_size;
 
   // The desired team size for kokkos team policy
   int team_size;

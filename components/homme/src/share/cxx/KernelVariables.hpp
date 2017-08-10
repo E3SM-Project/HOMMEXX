@@ -34,6 +34,16 @@ struct KernelVariables {
   // Fast memory for the kernel
   ExecViewUnmanaged<Real[NP][NP]> scratch_mem;
 
+  struct BufferViews {
+    static constexpr int NUM_SCALAR_BUFFERS = Region::BufferViews::NUM_SCALAR_BUFFERS;
+    static constexpr int NUM_VECTOR_BUFFERS = Region::BufferViews::NUM_VECTOR_BUFFERS;
+    static constexpr int NUM_TRACER_BUFFERS = Region::BufferViews::NUM_TRACER_BUFFERS;
+
+    ExecViewUnmanaged<Scalar [NUM_SCALAR_BUFFERS][NP][NP][NUM_LEV]>          scalars;
+    ExecViewUnmanaged<Scalar [NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>       vectors;
+    ExecViewUnmanaged<Scalar [NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]> tracers;
+  } buffers;
+
   int ie, ilev;
 }; // KernelVariables
 
