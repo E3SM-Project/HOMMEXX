@@ -384,8 +384,8 @@ divergence_sphere_wk(const KernelVariables &kv,
 
 }//end of divergence_sphere_wk
 
-
-KOKKOS_INLINE_FUNCTION void laplace_wk(
+//analog of laplace_simple_c_callable
+KOKKOS_INLINE_FUNCTION void laplace_simple(
     const KernelVariables &kv,
     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
     const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
@@ -396,8 +396,45 @@ KOKKOS_INLINE_FUNCTION void laplace_wk(
     // let's ignore var coef and tensor hv
        gradient_sphere(kv, DInv, dvv, field, grad_s);
        divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
-}//end of laplace_wk
+}//end of laplace_simple
 
+//analog of laplace_wk_c_callable
+KOKKOS_INLINE_FUNCTION void laplace_tensor(
+    const KernelVariables &kv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
+    const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> field,         // input
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace) {
+
+       gradient_sphere(kv, DInv, dvv, field, grad_s);
+//now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
+//but it requites a tem var to store a result. the result is then placed to grad_s,
+//or should it be an extra temp var instead of an extra loop?
+       constexpr int num_iters = NP * NP;
+       Scalar gv[2][NP][NP];
+       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                          [&](const int loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          gv[0][igp][jgp] = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                            tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+          gv[1][igp][jgp] = tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                            tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+       });
+
+       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                          [&](const int loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          grad_s(0,igp,jgp, kv.ilev) = gv[0][igp][jgp];
+          grad_s(1,igp,jgp, kv.ilev) = gv[1][igp][jgp];
+       });
+
+       divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
+}//end of laplace_tensor
 
 
 /*

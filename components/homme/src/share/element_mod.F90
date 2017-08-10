@@ -481,7 +481,11 @@ module element_mod
 
      real (kind=real_kind)    :: variable_hyperviscosity(np,np)       ! hyperviscosity based on above
      real (kind=real_kind)    :: hv_courant                           ! hyperviscosity courant number
+#ifdef HOMME_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer    :: tensorVisc(:,:,:,:)
+#else
      real (kind=real_kind)    :: tensorVisc(np,np,2,2)                !og, matrix V for tensor viscosity
+#endif
 
      ! Edge connectivity information
 !     integer(kind=int_kind)   :: node_numbers(4)

@@ -102,7 +102,7 @@ private
   public  :: divergence_sphere_wk
   public  :: laplace_sphere_wk
   public  :: laplace_simple
-  public  :: laplace_simple_c_int
+  public  :: laplace_simple_c_callable
   public  :: vlaplace_sphere_wk
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
@@ -2165,6 +2165,57 @@ end do
 
   end function laplace_sphere_wk
 
+
+!  subroutine laplace_sphere_wk_c_callable(s,deriv,elem,var_coef,laplace) bind(c)
+!hypervis_power, hypervis_scaling are in control_mod
+!here will they be in c?
+!derive has dvv
+!var_coef is boolean
+!ignore option with variable_hyperviscosity for now (really, it is probably never
+!used)
+  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,&
+                                          hvpower, hvscaling, var_coef,laplace) bind(c)
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
+    logical, intent(in) :: var_coef
+    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
+    real(kind=real_kind),intent(out)     :: laplace(np,np)
+!local
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+!redefining params from control_mod, not the usual homme practice, but...
+    hypervis_power = hvpower
+    hypervis_scaling = hvscaling
+
+    deriv%dvv = dvv
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+    allocate(elem%tensorVisc(np, np, 2, 2))
+#endif
+
+    elem%Dinv = Dinv
+    elem%spheremp = spheremp
+    elem%tensorVisc = tensorVisc
+
+    laplace=laplace_sphere_wk(s,deriv,elem,var_coef)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+    deallocate(elem%tensorVisc)
+#endif
+
+  end subroutine laplace_sphere_wk_c_callable
+
+
+
+
 ! not a homme function, for debugging cxx
 ! make it not take elem in
   function laplace_simple(s,dvv,dinv,spheremp) result(laplace)
@@ -2202,7 +2253,7 @@ end do
   end function laplace_simple
 
 !not a homme subroutine, to call from C++ unit testing
-  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
+  subroutine laplace_simple_c_callable(s,dvv,dinv,metdet,laplace) bind(c)
     use kinds, only: real_kind
     use dimensions_mod, only: np
 
@@ -2214,7 +2265,7 @@ end do
 
     laplace=laplace_simple(s,dvv,dinv,metdet)
 
-  end subroutine laplace_simple_c_int
+  end subroutine laplace_simple_c_callable
 
 !DIR$ ATTRIBUTES FORCEINLINE :: vlaplace_sphere_wk
   function vlaplace_sphere_wk(v,deriv,elem,var_coef,nu_ratio) result(laplace)

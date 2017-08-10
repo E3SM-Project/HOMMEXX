@@ -28,7 +28,7 @@ void caar_compute_energy_grad_c_int(
 // inserting names of params for _c_callable functions.
 // instead of using names as in function descriptions, using
 // verbose names
-void laplace_simple_c_int(const Real *input,
+void laplace_simple_c_callable(const Real *input,
                           const Real *dvv, const Real *dinv,
                           const Real *metdet, Real *output);
 
@@ -485,7 +485,7 @@ class compute_sphere_operator_test_ml {
         Kokkos::TeamThreadRange(kv.team, NUM_LEV),
         [&](const int &level) {
           kv.ilev = level;
-          laplace_wk(kv, dinv_d, spheremp_d, dvv_d,
+          laplace_simple(kv, dinv_d, spheremp_d, dvv_d,
                      local_temp1_d, local_scalar_input_d,
                      local_scalar_output_d);
         });  // end parallel_for for level
@@ -817,7 +817,7 @@ TEST_CASE("Testing laplace_simple_sl()",
       }
 
     // run F code
-    laplace_simple_c_int(
+    laplace_simple_c_callable(
         &(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]),
         &(sphf[0][0]), &(local_fortran_output[0][0]));
 
@@ -1153,7 +1153,7 @@ TEST_CASE("Testing simple laplace_wk_ml()",
                         _index, _d1, _d2, _i, _j);
           }
 
-        laplace_simple_c_int(&(sf[0][0]), &(dvvf[0][0]),
+        laplace_simple_c_callable(&(sf[0][0]), &(dvvf[0][0]),
                              &(dinvf[0][0][0][0]),
                              &(sphf[0][0]),
                              &(local_fortran_output[0][0]));
