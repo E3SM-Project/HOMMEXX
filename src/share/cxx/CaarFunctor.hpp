@@ -75,10 +75,11 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
+    // gradient_sphere(
+    //     kv, m_elements.m_dinv, m_deriv.get_dvv(),
+    //     Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+    //     Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
+    //                     ALL));
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP),
                          [&](const int idx) {
       const int hgp = (idx / NP) / NP;
@@ -195,12 +196,12 @@ struct CaarFunctor {
     // pressure, meaning that we cannot update the different
     // pressure points within a level before the gradient is
     // complete!
-    ExecViewUnmanaged<Real[NP][NP]> integration = kv.scratch_mem;
+    Real integration[NP][NP];
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      integration(igp, jgp) = 0.0;
+      integration[igp][jgp] = 0.0;
     });
 
     for (kv.ilev = 0; kv.ilev < NUM_LEV; ++kv.ilev) {
@@ -228,8 +229,8 @@ struct CaarFunctor {
           Real ckk =
               0.5 / m_elements.buffers.pressure(kv.ie, igp, jgp, kv.ilev)[vec];
           m_elements.buffers.omega_p(kv.ie, igp, jgp, kv.ilev)[vec] -=
-              (2.0 * ckk * integration(igp, jgp) + ckk * div_vdp);
-          integration(igp, jgp) += div_vdp;
+              (2.0 * ckk * integration[igp][jgp] + ckk * div_vdp);
+          integration[igp][jgp] += div_vdp;
         }
       });
     }
