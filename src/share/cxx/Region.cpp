@@ -600,7 +600,7 @@ void Region::push_vector_buffer (F90Ptr&  field_ptr, int IDX)
 
 void Region::pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize)
 {
-  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! tracer buffer index out of bounds.\n");
+  assert (IDX>=0 && IDX<BufferViews::NUM_TRACER_BUFFERS && "Error! tracer buffer index out of bounds.\n");
 
   int iter=0;
   for (int ie=0; ie<m_num_elems; ++ie)
@@ -625,7 +625,7 @@ void Region::pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize)
 
 void Region::push_tracer_buffer (F90Ptr&  field_ptr, int IDX, int qsize)
 {
-  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! tracer buffer index out of bounds.\n");
+  assert (IDX>=0 && IDX<BufferViews::NUM_TRACER_BUFFERS && "Error! tracer buffer index out of bounds.\n");
 
   int iter=0;
   for (int ie=0; ie<m_num_elems; ++ie)
