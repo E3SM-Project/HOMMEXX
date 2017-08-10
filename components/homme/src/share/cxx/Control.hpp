@@ -12,8 +12,8 @@ struct Control {
   Control ()
   {
     // We start by setting
-    team_size         = 0;
-    default_team_size = 99999;
+    team_size         = 1;
+    default_team_size = 1;
 
     const char* var;
     var = getenv("OMP_NUM_THREADS");
