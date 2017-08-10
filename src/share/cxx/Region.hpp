@@ -55,7 +55,7 @@ public:
   struct BufferViews {
     static constexpr int NUM_SCALAR_BUFFERS = 6;
     static constexpr int NUM_VECTOR_BUFFERS = 4;
-    static constexpr int NUM_TRACER_BUFFERS = 1;
+    static constexpr int NUM_TRACER_BUFFERS = 3;
 
     BufferViews() = default;
     void init(const int num_elems);

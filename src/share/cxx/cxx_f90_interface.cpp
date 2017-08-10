@@ -97,7 +97,7 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
 {
   Region& r = get_region();
   const Control& data = get_control();
-  r.push_tracer_buffer(qtens_ptr,EulerStepFunctor::IDX_TBUFF,data.qsize);
+  r.push_tracer_buffer(qtens_ptr,EulerStepFunctor::IDX_QBUFF,data.qsize);
 }
 
 void caar_pre_exchange_monolithic_c()
