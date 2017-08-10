@@ -23,7 +23,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
   return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>(&v_in(ie,0,0,0,0));
 }
 
-// ================ Subviews of 2d views ======================= //
+// ================ Subviews of 3d views ======================= //
 // Note: we still template on ScalarType (should always be Homme::Scalar here)
 //       to allow const/non-const version
 
