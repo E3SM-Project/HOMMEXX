@@ -64,17 +64,17 @@ public:
     ExecViewManaged<Scalar * [NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>       vectors;
     ExecViewManaged<Scalar * [NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]> tracers;
 
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       omega_p;
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       div_vdp;
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       ephi;
-    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       vorticity;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       omega_p;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       div_vdp;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       ephi;
+    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       vorticity;
 
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       pressure_grad;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       temperature_grad;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       energy_grad;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       vdp;
+    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       pressure_grad;
+    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       temperature_grad;
+    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       energy_grad;
+    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       vdp;
   } buffers;
 
   Region() = default;

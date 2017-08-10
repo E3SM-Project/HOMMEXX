@@ -674,28 +674,28 @@ void Region::dinv(Real *dinv_ptr, int ie) const {
 }
 
 void Region::BufferViews::init(int num_elems) {
-  pressure =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
-  pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of pressure", num_elems);
-  temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Virtual Temperature", num_elems);
-  temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of temperature", num_elems);
-  omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Omega_P why two named the same thing???", num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
-  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
-                                                      num_elems);
-  ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Kinetic Energy + Geopotential Energy", num_elems);
-  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
-                                                             num_elems);
-  vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
+  //pressure =
+  //    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
+  //pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+  //    "Gradient of pressure", num_elems);
+  //temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+  //    "Virtual Temperature", num_elems);
+  //temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+  //    "Gradient of temperature", num_elems);
+  //omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+  //    "Omega_P why two named the same thing???", num_elems);
+  //vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+  //div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
+  //                                                    num_elems);
+  //ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+  //    "Kinetic Energy + Geopotential Energy", num_elems);
+  //energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
+  //                                                           num_elems);
+  //vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
   scalars = ExecViewManaged<Scalar *[NUM_SCALAR_BUFFERS][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
-  vectors = ExecViewManaged<Scalar *[NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
-  tracers = ExecViewManaged<Scalar *[NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
+  vectors = ExecViewManaged<Scalar *[NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("vector buffers", num_elems);
+  tracers = ExecViewManaged<Scalar *[NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]>("tracer buffers", num_elems);
 }
 
 Region &get_region() {

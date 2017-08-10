@@ -29,9 +29,23 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
 
 template<typename MemSpace, typename MemManagement, typename ScalarType>
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemManagement,MemSpace> v_in, int ie)
+subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int idim)
+{
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(idim,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
@@ -39,6 +53,20 @@ ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim)
 {
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int idim1)
+{
+  return ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(idim1,0,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
