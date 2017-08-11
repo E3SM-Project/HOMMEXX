@@ -399,6 +399,8 @@ KOKKOS_INLINE_FUNCTION void laplace_simple(
 }//end of laplace_simple
 
 //analog of laplace_wk_c_callable
+//but without if-statements for hypervis_power, var_coef, and hypervis_scaling.
+//for 2d fields, there should be either laplace_simple, or laplace_tensor for the whole run.
 KOKKOS_INLINE_FUNCTION void laplace_tensor(
     const KernelVariables &kv,
     const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
@@ -411,7 +413,7 @@ KOKKOS_INLINE_FUNCTION void laplace_tensor(
 
        gradient_sphere(kv, DInv, dvv, field, grad_s);
 //now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
-//but it requites a tem var to store a result. the result is then placed to grad_s,
+//but it requires a temp var to store a result. the result is then placed to grad_s,
 //or should it be an extra temp var instead of an extra loop?
        constexpr int num_iters = NP * NP;
        Scalar gv[2][NP][NP];

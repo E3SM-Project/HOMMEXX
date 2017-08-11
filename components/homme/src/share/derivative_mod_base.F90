@@ -103,6 +103,7 @@ private
   public  :: laplace_sphere_wk
   public  :: laplace_simple
   public  :: laplace_simple_c_callable
+  public  :: laplace_sphere_wk_c_callable
   public  :: vlaplace_sphere_wk
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
@@ -2173,37 +2174,51 @@ end do
 !var_coef is boolean
 !ignore option with variable_hyperviscosity for now (really, it is probably never
 !used)
-  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,&
-                                          hvpower, hvscaling, var_coef,laplace) bind(c)
+
+!  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,hvpower,hvscaling,var_coef,laplace) bind(c)
+  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,laplace) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    use control_mod, only: hypervis_power, hypervis_scaling
     real(kind=real_kind), intent(in) :: s(np,np)
     real(kind=real_kind), intent(in) :: dvv(np, np)
     real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
-    logical, intent(in) :: var_coef
-    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
+!    logical, intent(in) :: var_coef
+!    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
     real(kind=real_kind),intent(out)     :: laplace(np,np)
 !local
     type (derivative_t) :: deriv
     type (element_t) :: elem
 
+!print *, 'in F   1111111', hvpower, hvscaling, var_coef
 !redefining params from control_mod, not the usual homme practice, but...
-    hypervis_power = hvpower
-    hypervis_scaling = hvscaling
+    hypervis_power = 0.0 !hvpower
+    hypervis_scaling = 1.0 !hvscaling
 
     deriv%dvv = dvv
-
+!print *, 'in F', hvpower, hvscaling, var_coef
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%spheremp(np, np))
     allocate(elem%tensorVisc(np, np, 2, 2))
 #endif
 
+!print *,'dinv', dinv
+!print *, 'tensor', tensorVisc
+!print *, 'spheremp', spheremp
+
     elem%Dinv = Dinv
     elem%spheremp = spheremp
     elem%tensorVisc = tensorVisc
 
-    laplace=laplace_sphere_wk(s,deriv,elem,var_coef)
+!print *,'dinv', elem%dinv
+print *, 'tensor', elem%tensorVisc
+!print *, 'spheremp', elem%spheremp
+
+    laplace=laplace_sphere_wk(s,deriv,elem,.true.)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
