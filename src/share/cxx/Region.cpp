@@ -502,152 +502,6 @@ void Region::push_qdp(F90Ptr &state_qdp) const {
   }
 }
 
-void Region::pull_scalar_buffer (CF90Ptr& field_ptr, int IDX)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_SCALAR_BUFFERS && "Error! scalar buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.scalars, ie, IDX);
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    for (int k=0; k<NUM_LEV; ++k) {
-      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int i=0; i<NP; ++i) {
-          for (int j=0; j<NP; ++j, ++iter) {
-            view_ie_host(i,j,k)[iv] = field_ptr[iter];
-          }
-        }
-      }
-    }
-    Kokkos::deep_copy(view_ie_exec, view_ie_host);
-  }
-}
-
-void Region::push_scalar_buffer (F90Ptr&  field_ptr, int IDX)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_SCALAR_BUFFERS && "Error! scalar buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.scalars, ie, IDX);
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    Kokkos::deep_copy(view_ie_host, view_ie_exec);
-    for (int k=0; k<NUM_LEV; ++k) {
-      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int i=0; i<NP; ++i) {
-          for (int j=0; j<NP; ++j, ++iter) {
-            field_ptr[iter] = view_ie_host(i,j,k)[iv];
-          }
-        }
-      }
-    }
-  }
-}
-
-void Region::pull_vector_buffer (CF90Ptr& field_ptr, int IDX)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! vector buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.vectors, ie, IDX);
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    for (int k=0; k<NUM_LEV; ++k) {
-      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int icomp=0; icomp<2; ++icomp) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-              view_ie_host(icomp,i,j,k)[iv] = field_ptr[iter];
-            }
-          }
-        }
-      }
-    }
-    Kokkos::deep_copy(view_ie_exec, view_ie_host);
-  }
-}
-
-void Region::push_vector_buffer (F90Ptr&  field_ptr, int IDX)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_VECTOR_BUFFERS && "Error! vector buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.vectors, ie, IDX);
-    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    Kokkos::deep_copy(view_ie_host, view_ie_exec);
-    for (int k=0; k<NUM_LEV; ++k) {
-      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int icomp=0; icomp<2; ++icomp) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-              field_ptr[iter] = view_ie_host(icomp,i,j,k)[iv];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-void Region::pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_TRACER_BUFFERS && "Error! tracer buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.tracers, ie, IDX);
-    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    for (int iq=0; iq<qsize; ++iq) {
-      for (int k=0; k<NUM_LEV; ++k) {
-        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-              view_ie_host(iq,i,j,k)[iv] = field_ptr[iter];
-            }
-          }
-        }
-      }
-    }
-    Kokkos::deep_copy(view_ie_exec, view_ie_host);
-  }
-}
-
-void Region::push_tracer_buffer (F90Ptr&  field_ptr, int IDX, int qsize)
-{
-  assert (IDX>=0 && IDX<BufferViews::NUM_TRACER_BUFFERS && "Error! tracer buffer index out of bounds.\n");
-
-  int iter=0;
-  for (int ie=0; ie<m_num_elems; ++ie)
-  {
-    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]> view_ie_exec = ::Homme::subview(buffers.tracers, ie, IDX);
-    ExecViewUnmanaged<Scalar[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror view_ie_host = Kokkos::create_mirror_view(view_ie_exec);
-
-    Kokkos::deep_copy(view_ie_host, view_ie_exec);
-    for (int iq=0; iq<qsize; ++iq) {
-      for (int k=0; k<NUM_LEV; ++k) {
-        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-              field_ptr[iter] = view_ie_host(iq,i,j,k)[iv];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
 void Region::d(Real *d_ptr, int ie) const {
   ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(
       m_d, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
@@ -674,28 +528,28 @@ void Region::dinv(Real *dinv_ptr, int ie) const {
 }
 
 void Region::BufferViews::init(int num_elems) {
-  //pressure =
-  //    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
-  //pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-  //    "Gradient of pressure", num_elems);
-  //temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-  //    "Virtual Temperature", num_elems);
-  //temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-  //    "Gradient of temperature", num_elems);
-  //omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-  //    "Omega_P why two named the same thing???", num_elems);
-  //vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
-  //div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
-  //                                                    num_elems);
-  //ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-  //    "Kinetic Energy + Geopotential Energy", num_elems);
-  //energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
-  //                                                           num_elems);
-  //vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
+  pressure =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
+  pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Gradient of pressure", num_elems);
+  temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Virtual Temperature", num_elems);
+  temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Gradient of temperature", num_elems);
+  omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Omega_P why two named the same thing???", num_elems);
+  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
+                                                      num_elems);
+  ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Kinetic Energy + Geopotential Energy", num_elems);
+  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
+                                                             num_elems);
+  vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
-  scalars = ExecViewManaged<Scalar *[NUM_SCALAR_BUFFERS][NP][NP][NUM_LEV]>("scalar buffers", num_elems);
-  vectors = ExecViewManaged<Scalar *[NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("vector buffers", num_elems);
-  tracers = ExecViewManaged<Scalar *[NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]>("tracer buffers", num_elems);
+  qtens     = ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]> ("buffer for tracers", num_elems);
+  vstar     = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>          ("buffer for v/dp", num_elems);
+  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]> ("buffer for vstar*qdp", num_elems);
 }
 
 Region &get_region() {

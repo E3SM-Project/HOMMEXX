@@ -53,28 +53,28 @@ public:
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
   struct BufferViews {
-    static constexpr int NUM_SCALAR_BUFFERS = 6;
-    static constexpr int NUM_VECTOR_BUFFERS = 4;
-    static constexpr int NUM_TRACER_BUFFERS = 3;
 
     BufferViews() = default;
     void init(const int num_elems);
 
-    ExecViewManaged<Scalar * [NUM_SCALAR_BUFFERS][NP][NP][NUM_LEV]>          scalars;
-    ExecViewManaged<Scalar * [NUM_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>       vectors;
-    ExecViewManaged<Scalar * [NUM_TRACER_BUFFERS][QSIZE_D][NP][NP][NUM_LEV]> tracers;
+    // Buffers for CaarFunctor
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       omega_p;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       div_vdp;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       ephi;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       vorticity;
 
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       omega_p;
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       div_vdp;
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       ephi;
-    //ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       vorticity;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       pressure_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       temperature_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       energy_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       vdp;
 
-    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       pressure_grad;
-    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       temperature_grad;
-    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       energy_grad;
-    //ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       vdp;
+    // Buffers for EulerStepFunctor
+    ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]>   qtens;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>            vstar;
+    ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>   vstar_qdp;
+
   } buffers;
 
   Region() = default;
@@ -112,15 +112,6 @@ public:
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
   void push_qdp(F90Ptr &state_qdp) const;
-
-  void pull_scalar_buffer (CF90Ptr& field_ptr, int IDX);
-  void push_scalar_buffer (F90Ptr&  field_ptr, int IDX);
-
-  void pull_vector_buffer (CF90Ptr& field_ptr, int IDX);
-  void push_vector_buffer (F90Ptr&  field_ptr, int IDX);
-
-  void pull_tracer_buffer (CF90Ptr& field_ptr, int IDX, int qsize);
-  void push_tracer_buffer (F90Ptr&  field_ptr, int IDX, int qsize);
 
   void d(Real *d_ptr, int ie) const;
   void dinv(Real *dinv_ptr, int ie) const;
