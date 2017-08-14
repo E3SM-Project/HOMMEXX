@@ -313,6 +313,8 @@ divergence_sphere(const KernelVariables &kv,
   });
 }
 
+// Note: this updates the field div_v as follows:
+//     div_v = beta*div_v + alpha*div(v)
 KOKKOS_INLINE_FUNCTION void
 divergence_sphere_update(const KernelVariables &kv,
                          const Real alpha, const Real beta,
