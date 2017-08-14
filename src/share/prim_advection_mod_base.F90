@@ -104,12 +104,12 @@ module prim_advection_mod_base
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr,Ustar_ptr, Vstar_ptr) bind(c)
+    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Ustar_ptr,Vstar_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr
     end subroutine euler_pull_data_c
     subroutine euler_push_results_c(Qtens_ptr) bind(c)
       use iso_c_binding, only : c_ptr
@@ -124,15 +124,14 @@ module prim_advection_mod_base
 
 contains
 
-  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
+  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
     use kinds,          only : real_kind
     use derivative_mod, only : derivative_t
     use element_mod,    only : element_t
     !
     ! Inputs
     !
-    real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Ustar
-    real (kind=real_kind), intent(in),  dimension(np,np,nlev,nets:nete) :: Vstar
+    real (kind=real_kind), intent(in),  dimension(np,np,2,nlev,nets:nete) :: Vstar
     real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
     type (element_t),      intent(in),  dimension(:) :: elem
     type (derivative_t),   intent(in) :: deriv
@@ -154,8 +153,8 @@ contains
       do q = 1 , qsize
         do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
           ! div( U dp Q),
-          gradQ(:,:,1) = Ustar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-          gradQ(:,:,2) = Vstar(:,:,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          gradQ(:,:,1) = Vstar(:,:,1,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          gradQ(:,:,2) = Vstar(:,:,2,k,ie) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
           dp_star(:,:) = divergence_sphere( gradQ , deriv , elem(ie) )
           Qtens(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
         enddo
@@ -1476,13 +1475,13 @@ end subroutine ALE_parametric_coords
 
   interface
     subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt) bind(c)
-      use iso_c_binding, only : c_int
+      use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
       ! Inputs
       !
       integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize
-      real (kind=real_kind), intent(in) :: dt
+      real (kind=c_double), intent(in) :: dt
     end subroutine init_control_euler_c
   end interface
 
@@ -1498,8 +1497,7 @@ end subroutine ALE_parametric_coords
   integer              , intent(in   )         :: rhs_multiplier
 
   ! local
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete),       target :: Ustar
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete),       target :: Vstar
+  real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
   real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
   real(kind=real_kind), dimension(np,np,nlev,nets:nete)               :: dpdissk
   real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
@@ -1511,7 +1509,7 @@ end subroutine ALE_parametric_coords
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Ustar_ptr, Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
+  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1698,8 +1696,8 @@ OMP_SIMD
       ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
       ! but that's ok because rhs_multiplier=0 on the first stage:
       dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
-      Ustar(:,:,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
-      Vstar(:,:,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
+      Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
+      Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
 
       if ( limiter_option == 8) then
         ! Note that the term dpdissk is independent of Q
@@ -1726,12 +1724,11 @@ OMP_SIMD
   enddo
 
 #ifdef USE_KOKKOS_KERNELS
-  Ustar_ptr = c_loc(Ustar)
   Vstar_ptr = c_loc(Vstar)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
   call init_control_euler_c (nets, nete, n0_qdp, qsize, dt)
 
-  call euler_pull_data_c(elem_state_Qdp_ptr, Ustar_ptr, Vstar_ptr)
+  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr)
 
   call t_startf("advance_qdp")
   call advance_qdp_c()
@@ -1741,7 +1738,7 @@ OMP_SIMD
   call euler_push_results_c(Qtens_ptr)
 #else
   call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete,n0_qdp,dt,Ustar,Vstar,elem,deriv,Qtens)
+  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
   call t_stopf("advance_qdp")
 #endif
 

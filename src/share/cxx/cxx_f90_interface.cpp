@@ -83,21 +83,59 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& ustar_ptr, CF90Ptr& vstar_ptr)
+void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
 {
   Region& r = get_region();
+  const Control& data = get_control();
 
   // Copy data from f90 pointers to cxx views
-  r.pull_scalar_buffer(ustar_ptr,EulerStepFunctor::IDX_USTAR);
-  r.pull_scalar_buffer(vstar_ptr,EulerStepFunctor::IDX_VSTAR);
   r.pull_qdp(elem_state_Qdp_ptr);
+
+  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>             vstar_exec = r.buffers.vstar;
+  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror vstar_host = Kokkos::create_mirror_view(vstar_exec);
+
+  int iter=0;
+  for (int ie=0; ie<data.num_elems; ++ie)
+  {
+    for (int k=0; k<NUM_LEV; ++k) {
+      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+        for (int idim=0; idim<2; ++idim) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
+              vstar_host(ie,idim,i,j,k)[iv] = vstar_ptr[iter];
+            }
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(vstar_exec, vstar_host);
 }
 
 void euler_push_results_c (F90Ptr& qtens_ptr)
 {
-  Region& r = get_region();
+  const Region& r = get_region();
   const Control& data = get_control();
-  r.push_tracer_buffer(qtens_ptr,EulerStepFunctor::IDX_QBUFF,data.qsize);
+
+  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>             qtens_exec = r.buffers.qtens;
+  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror qtens_host = Kokkos::create_mirror_view(qtens_exec);
+  Kokkos::deep_copy(qtens_host, qtens_exec);
+
+  int iter=0;
+  for (int ie=0; ie<data.num_elems; ++ie)
+  {
+    for (int iq=0; iq<data.qsize; ++iq) {
+      for (int k=0; k<NUM_LEV; ++k) {
+        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+          for (int i=0; i<NP; ++i) {
+            for (int j=0; j<NP; ++j, ++iter) {
+               qtens_ptr[iter] = qtens_host(ie,iq,i,j,k)[iv];
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 void caar_pre_exchange_monolithic_c()
