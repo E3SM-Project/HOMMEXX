@@ -321,8 +321,7 @@ divergence_sphere_update(const KernelVariables &kv,
                          const ExecViewUnmanaged<const Real [2][2][NP][NP]> dinv,
                          const ExecViewUnmanaged<const Real [NP][NP]> metdet,
                          const ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                         const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> u,
-                         const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> v,
+                         const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
                          const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
   constexpr int contra_iters = NP * NP;
   Scalar gv[2][NP][NP];
@@ -330,8 +329,8 @@ divergence_sphere_update(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    gv[0][igp][jgp] = (dinv(0, 0, igp, jgp) * u(igp, jgp, kv.ilev) + dinv(1, 0, igp, jgp) * v(igp, jgp, kv.ilev)) * metdet(igp, jgp);
-    gv[1][igp][jgp] = (dinv(0, 1, igp, jgp) * u(igp, jgp, kv.ilev) + dinv(1, 1, igp, jgp) * v(igp, jgp, kv.ilev)) * metdet(igp, jgp);
+    gv[0][igp][jgp] = (dinv(0, 0, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 0, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
+    gv[1][igp][jgp] = (dinv(0, 1, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 1, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
   });
 
   constexpr int div_iters = NP * NP;
