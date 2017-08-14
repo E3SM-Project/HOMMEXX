@@ -35,13 +35,6 @@ subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int 
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
-ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-subview(ViewType<ScalarType[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int idim)
-{
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(idim,0,0,0));
-}
-
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
 ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
@@ -53,13 +46,6 @@ ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim)
 {
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim,0,0,0));
-}
-
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
-ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>
-subview(ViewType<ScalarType[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int idim1)
-{
-  return ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(idim1,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
@@ -82,20 +68,6 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement
 {
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,0,0,0));
 }
-
-//template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
-//ViewUnmanaged<ScalarType [DIM3][NP][NP][NUM_LEV],MemSpace>
-//subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
-//{
-//  return ViewUnmanaged<ScalarType [DIM3][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,0,0,0,0));
-//}
-
-//template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
-//ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-//subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2, int idim3)
-//{
-//  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,idim3,0,0,0));
-//}
 
 template<typename ViewType>
 typename std::enable_if<!std::is_same<typename ViewType::value_type,Scalar>::value,Real>::type frobenius_norm (const ViewType view)
