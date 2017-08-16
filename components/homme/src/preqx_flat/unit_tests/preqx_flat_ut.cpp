@@ -50,14 +50,17 @@ void divergence_sphere_wk_c_callable(const Real *input,
 //So, settings for usual HV are var_coef=FALSE.
 //Settings for tensor HV are var_coef=TRUE, hvpower=0, hvscaling >0.
 //(don't ask me why this is so).
+//Update, copypasting from stackoverflow: 
+//Typical Fortran implementations pass all arguments by reference, 
+//while in C(++) the default is by value. This fixes an issue with hvpower, etc.
 void laplace_sphere_wk_c_callable(const Real * input,
                                   const Real * dvv,
                                   const Real * dinv,
                                   const Real * spheremp,
                                   const Real * tensorVisc,
-//                                  const Real hvpower,//should be set to 0 always
-//                                  const Real hvscaling,//should be set to !=0 value
-//                                  const bool var_coef,//should be set to 1 for tensor HV
+                                  Real &hvpower,//should be set to 0 always
+                                  Real &hvscaling,//should be set to !=0 value
+                                  const bool &var_coef,//should be set to 1 for tensor HV
                                   Real * output);
 
 }  // extern C
@@ -1331,7 +1334,7 @@ std::cout << "here 4\n";
 
 Real _hp = 0.0;
 Real _hs = 1.0;
-bool vc = true;
+bool _vc = true;
 
 std::cout << "some vars: sf " << sf[0][0] << ", dvvf " << dvvf[0][0] << "\n";
 std::cout << "tensorf " << tensorf[0][0][0][0] << "\n";
@@ -1340,7 +1343,8 @@ std::cout << "tensorf " << tensorf[0][0][0][0] << "\n";
         laplace_sphere_wk_c_callable(&(sf[0][0]), &(dvvf[0][0]),
                              &(dinvf[0][0][0][0]),
                              &(sphf[0][0]),&(tensorf[0][0][0][0]),
-//                             0.0, 1.0, true,
+                             _hp, _hs, 
+                             &_vc,
                              &(local_fortran_output[0][0]));
 
 
