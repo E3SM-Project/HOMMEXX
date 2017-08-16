@@ -1323,7 +1323,7 @@ std::cout << "here 3 \n";
 //<< "\n";
 
                 tensorf[_d1][_d2][_i][_j] =
-     testing_tensor_laplace.tensor_host( _index, _d2, _d1, _i, _j);
+     testing_tensor_laplace.tensor_host( _index, _d1, _d2, _i, _j);
 
 //std::cout << "tensorf" << tensorf[_d1][_d2][_i][_j] << "\n";
 
