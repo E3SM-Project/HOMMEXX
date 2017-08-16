@@ -422,8 +422,8 @@ KOKKOS_INLINE_FUNCTION void laplace_tensor(
           const int igp = loop_idx / NP;
           const int jgp = loop_idx % NP;
           gv[0][igp][jgp] = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
-                            tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
-          gv[1][igp][jgp] = tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                            tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+          gv[1][igp][jgp] = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
                             tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
        });
 
