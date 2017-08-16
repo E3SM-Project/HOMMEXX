@@ -2176,7 +2176,8 @@ end do
 !used)
 
 !  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,hvpower,hvscaling,var_coef,laplace) bind(c)
-  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,laplace) bind(c)
+  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,&
+             hvpower, hvscaling, var_coef,laplace) bind(c)
     use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
@@ -2186,8 +2187,8 @@ end do
     real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
-!    logical, intent(in) :: var_coef
-!    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
+    logical, intent(in) :: var_coef
+    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
     real(kind=real_kind),intent(out)     :: laplace(np,np)
 !local
     type (derivative_t) :: deriv
@@ -2195,8 +2196,8 @@ end do
 
 !print *, 'in F   1111111', hvpower, hvscaling, var_coef
 !redefining params from control_mod, not the usual homme practice, but...
-    hypervis_power = 0.0 !hvpower
-    hypervis_scaling = 1.0 !hvscaling
+    hypervis_power = hvpower
+    hypervis_scaling = hvscaling
 
     deriv%dvv = dvv
 !print *, 'in F', hvpower, hvscaling, var_coef
@@ -2218,7 +2219,7 @@ end do
 print *, 'tensor', elem%tensorVisc
 !print *, 'spheremp', elem%spheremp
 
-    laplace=laplace_sphere_wk(s,deriv,elem,.true.)
+    laplace=laplace_sphere_wk(s,deriv,elem,var_coef)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
