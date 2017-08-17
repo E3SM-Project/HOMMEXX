@@ -27,12 +27,20 @@ namespace Homme {
 
 #else
 
+#ifndef USE_SACADO_MP_VECTOR
+
 #if   (AVX_VERSION == 0)
 static constexpr const int VECTOR_SIZE = 1;
 #elif (AVX_VERSION == 1 || AVX_VERSION == 2)
 static constexpr const int VECTOR_SIZE = 4;
 #elif (AVX_VERSION == 512)
 static constexpr const int VECTOR_SIZE = 8;
+#endif
+
+#else
+
+static constexpr const int VECTOR_SIZE = PLEV;
+
 #endif
 
 static constexpr const int NUM_PHYSICAL_LEV = PLEV;

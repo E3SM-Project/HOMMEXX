@@ -14,10 +14,8 @@
 
 // This must be above the macro below that messes with underscores
 //
-//#define USE_STOKHOS_VECTOR
-#ifdef USE_STOKHOS_VECTOR
+#ifdef USE_SACADO_MP_VECTOR
 #include "Sacado.hpp"
-//#include "Stokhos_Sacado_Kokkos.hpp"
 #include "Stokhos_Sacado_Kokkos_MathFunctions.hpp"
 
 #include "Stokhos_KokkosTraits.hpp"
@@ -29,7 +27,6 @@
 #include "Sacado_MP_Vector.hpp"
 //#include "Kokkos_View_MP_Vector.hpp"
 #include "Kokkos_Atomic_MP_Vector.hpp"
-//#include "Sacado_MP_Vector.hpp"
 #endif
 
 #define __MACRO_STRING(MacroVal) #MacroVal
@@ -99,7 +96,7 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #endif // HOMMEXX_EXEC_SPACE
 
 
-#ifndef USE_STOKHOS_VECTOR
+#ifndef USE_SACADO_MP_VECTOR
 
 // Use Kyung-Joo Vector
 #if (AVX_VERSION > 0)

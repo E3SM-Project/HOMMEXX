@@ -7,6 +7,18 @@ IF(USE_TRILINOS)
 
   FIND_PACKAGE(Trilinos QUIET PATHS ${TRILINOS_INSTALL_DIR}/lib/cmake/Trilinos)
 
+  # This can be defined true in machine file or cmake script with -D USE_SACADO_MP_VECTOR=True
+  SET (USE_SACADO_MP_VECTOR FALSE CACHE BOOL "Flag to turn on use of Sadaco_MP_Vector")
+
+  IF (${USE_SACADO_MP_VECTOR})
+    MESSAGE("** Using SACADO_MP_VECTOR **")
+    ADD_DEFINITIONS(-DUSE_SACADO_MP_VECTOR)
+    SET(SACADO_PACKAGES -DTrilinos_ENABLE_Sacado=ON -DTrilinos_ENABLE_Stokhos=ON)
+  ELSE()
+    MESSAGE("** NOT Using SACADO_MP_VECTOR **")
+    SET(SACADO_PACKAGES "")
+  ENDIF()
+
   IF(NOT Trilinos_FOUND OR NOT "${Trilinos_PACKAGE_LIST}" MATCHES "Kokkos")
 
     SET(PACKAGES -DTrilinos_ENABLE_Kokkos=ON
@@ -15,14 +27,18 @@ IF(USE_TRILINOS)
                  -DTrilinos_ENABLE_KokkosCore=ON
                  -DTrilinos_ENABLE_KokkosExample=OFF
                  -DTrilinos_ENABLE_ALL_OPTIONAL_PACKAGES=OFF
-                 -DTrilinos_ENABLE_Sacado=ON
-                 -DTrilinos_ENABLE_Stokhos=ON
+                 ${SACADO_PACKAGES}
     )
+
     SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
                          -DKokkos_ENABLE_MPI=ON)
   
     SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscore;kokkoscontainers")
     SET(Kokkos_TPL_LIBRARIES "dl")
+
+    IF (${USE_SACADO_MP_VECTOR})
+      SET(Trilinos_LIBRARIES "stokhos_sacado;stokhos;sacado;teuchosremainder;teuchosnumerics;teuchoscomm;teuchosparameterlist;teuchoscore")
+    ENDIF()
   
     IF(${OPENMP_FOUND})
       MESSAGE(STATUS "Enabling Trilinos' OpenMP")
@@ -120,9 +136,9 @@ ELSE(USE_TRILINOS)
 ENDIF()
 
 macro(link_to_trilinos targetName)
+
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
-  #TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
-  TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib ${Trilinos_LIBRARIES})
+  TARGET_LINK_LIBRARIES(${targetName} -L${TRILINOS_INSTALL_DIR}/lib ${Trilinos_LIBRARIES} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES})
 
   IF("${ENABLE_CUDA}")
     TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda -DCUDA_BUILD)
