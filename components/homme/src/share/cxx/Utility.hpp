@@ -69,9 +69,10 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,0,0,0));
 }
 
-template<typename ViewType>
-typename std::enable_if<!std::is_same<typename ViewType::value_type,Scalar>::value,Real>::type frobenius_norm (const ViewType view)
-{
+template <typename ViewType>
+typename std::enable_if<
+    !std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type
+frobenius_norm(const ViewType view) {
   typename ViewType::pointer_type data = view.data();
 
   size_t length = view.size();
@@ -80,9 +81,8 @@ typename std::enable_if<!std::is_same<typename ViewType::value_type,Scalar>::val
   Real norm = 0;
   Real c = 0;
   Real temp, y;
-  for (size_t i=0; i<length; ++i)
-  {
-    y = data[i]*data[i] - c;
+  for (size_t i = 0; i < length; ++i) {
+    y = data[i] * data[i] - c;
     temp = norm + y;
     c = (temp - norm) - y;
     norm = temp;
@@ -91,9 +91,10 @@ typename std::enable_if<!std::is_same<typename ViewType::value_type,Scalar>::val
   return std::sqrt(norm);
 }
 
-template<typename ViewType>
-typename std::enable_if<std::is_same<typename ViewType::value_type,Scalar>::value,Real>::type frobenius_norm (const ViewType view)
-{
+template <typename ViewType>
+typename std::enable_if<
+    std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type
+frobenius_norm(const ViewType view) {
   typename ViewType::pointer_type data = view.data();
 
   size_t length = view.size();
@@ -102,11 +103,9 @@ typename std::enable_if<std::is_same<typename ViewType::value_type,Scalar>::valu
   Real norm = 0;
   Real c = 0;
   Real temp, y;
-  for (size_t i=0; i<length; ++i)
-  {
-    for (int v=0; v<VECTOR_SIZE; ++v)
-    {
-      y = data[i][v]*data[i][v] - c;
+  for (size_t i = 0; i < length; ++i) {
+    for (int v = 0; v < VECTOR_SIZE; ++v) {
+      y = data[i][v] * data[i][v] - c;
       temp = norm + y;
       c = (temp - norm) - y;
       norm = temp;
