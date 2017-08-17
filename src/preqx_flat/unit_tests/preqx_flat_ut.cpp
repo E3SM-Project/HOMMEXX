@@ -26,6 +26,12 @@ void caar_compute_energy_grad_c_int(
     const Real *const &pecnd, const Real *const &phi,
     const Real *const &velocity,
     Real *const &vtemp);  //(&vtemp)[2][NP][NP]);
+
+void preq_omega_ps_c_int(const Real *omega_p,
+                         const Real *pressure,
+                         const Real *vgrad_p,
+                         Real *div_vdp);
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -53,6 +59,9 @@ class compute_subfunctor_test {
         qdp("QDP", num_elems),
         dinv("DInv", num_elems),
         dvv("dvv"),
+        pressure("pressure", num_elems),
+        vgrad_p("vgrad_p", num_elems),
+        div_vdp("div_vdp", num_elems),
         nets(1),
         nete(num_elems) {
     Real hybrid_a[NUM_LEV_P] = {0};
