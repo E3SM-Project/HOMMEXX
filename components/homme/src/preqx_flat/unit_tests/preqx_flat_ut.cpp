@@ -58,8 +58,8 @@ void laplace_sphere_wk_c_callable(const Real * input,
                                   const Real * dinv,
                                   const Real * spheremp,
                                   const Real * tensorVisc,
-                                  Real &hvpower,//should be set to 0 always
-                                  Real &hvscaling,//should be set to !=0 value
+                                  const Real &hvpower,//should be set to 0 always
+                                  const Real &hvscaling,//should be set to !=0 value
                                   const bool &var_coef,//should be set to 1 for tensor HV
                                   Real * output);
 
@@ -933,7 +933,7 @@ TEST_CASE("Testing laplace_simple_sl()",
     }    // igp
   }      // end of for loop for elements
 
-  std::cout << "simple_laplace_sl test finished.\n";
+  std::cout << "simple_laplace_sl single level test finished.\n";
 
 };  // end of TEST_CASE(..., "simple laplace")
 
@@ -1004,7 +1004,7 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
     }    // igp
   };     // end of elements loop
 
-  std::cout << "div_wk_sl test finished.\n";
+  std::cout << "div_wk single level test finished.\n";
 
 }  // end of TEST_CASE(...,"divergence_sphere_wk")
 
@@ -1069,13 +1069,13 @@ TEST_CASE("Testing gradient_sphere_sl()",
 
   }  // end of loop for elements
 
-  std::cout << "grad_sl test finished.\n";
+  std::cout << "grad single level test finished.\n";
 
 };  // end of TEST_CASE(..., "gradient_sphere")
 
 // SHMEM ????
 
-TEST_CASE("Testing gradient_sphere_ml()",
+TEST_CASE("Testing gradient_sphere()",
           "gradient_sphere") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -1144,12 +1144,12 @@ TEST_CASE("Testing gradient_sphere_ml()",
     }        // level
   }          //_index
 
-  std::cout << "test grad_ml finished. \n";
+  std::cout << "test grad multilevel finished. \n";
 
 }  // end fo test grad_sphere_ml
 
-TEST_CASE("Testing divergence_sphere_wk_ml()",
-          "divergence_sphere_wk_ml") {
+TEST_CASE("Testing divergence_sphere_wk()",
+          "divergence_sphere_wk") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
@@ -1207,12 +1207,12 @@ TEST_CASE("Testing divergence_sphere_wk_ml()",
     }        // level
   }          //_index
 
-  std::cout << "test div_wk_ml finished. \n";
+  std::cout << "test div_wk multilevel finished. \n";
 
 }  // end of test div_sphere_wk_ml
 
-TEST_CASE("Testing simple laplace_wk_ml()",
-          "laplace_wk_ml") {
+TEST_CASE("Testing simple laplace_wk()",
+          "laplace_wk") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
@@ -1272,7 +1272,7 @@ TEST_CASE("Testing simple laplace_wk_ml()",
     }        // level
   }          //_index
 
-  std::cout << "test laplace_simple multil finished. \n";
+  std::cout << "test laplace_simple multilevel finished. \n";
 
 }  // end of test laplace_simple multilevel
 
@@ -1302,8 +1302,6 @@ std::cout << "here 2 \n";
         Real tensorf[2][2][NP][NP];
         Real sphf[NP][NP];
 
-std::cout << "here 3 \n";
-
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] =
@@ -1319,26 +1317,15 @@ std::cout << "here 3 \n";
                 dinvf[_d1][_d2][_i][_j] = 
      testing_tensor_laplace.dinv_host( _index, _d1, _d2, _i, _j);
 
-//std::cout << "tensor_host " << testing_tensor_laplace.tensor_host( _index, _d2, _d1, _i, _j)
-//<< "\n";
-
                 tensorf[_d1][_d2][_i][_j] =
      testing_tensor_laplace.tensor_host( _index, _d1, _d2, _i, _j);
-
-//std::cout << "tensorf" << tensorf[_d1][_d2][_i][_j] << "\n";
 
               }//end of d2 loop
           }
 
-std::cout << "here 4\n";
-
 Real _hp = 0.0;
 Real _hs = 1.0;
 bool _vc = true;
-
-std::cout << "some vars: sf " << sf[0][0] << ", dvvf " << dvvf[0][0] << "\n";
-std::cout << "tensorf " << tensorf[0][0][0][0] << "\n";
- 
 
         laplace_sphere_wk_c_callable(&(sf[0][0]), &(dvvf[0][0]),
                              &(dinvf[0][0][0][0]),
@@ -1347,16 +1334,6 @@ std::cout << "tensorf " << tensorf[0][0][0][0] << "\n";
                              &_vc,
                              &(local_fortran_output[0][0]));
 
-
-/*
-        laplace_simple_c_callable(&(sf[0][0]), &(dvvf[0][0]),
-                             &(tensorf[0][0][0][0]),
-                             &(sphf[0][0]),
-                             &(local_fortran_output[0][0]));
-*/
-
-
-
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
 
@@ -1364,8 +1341,8 @@ std::cout << "tensorf " << tensorf[0][0][0][0] << "\n";
                 testing_tensor_laplace.scalar_output_host(
                     _index, igp, jgp, level)[v];
 
-std::cout << igp << "," << jgp << " F output  = " <<
-local_fortran_output[igp][jgp] << ", C output" << coutput0 << "\n";
+//std::cout << igp << "," << jgp << " F output  = " <<
+//local_fortran_output[igp][jgp] << ", C output" << coutput0 << "\n";
 
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
@@ -1380,7 +1357,7 @@ local_fortran_output[igp][jgp] << ", C output" << coutput0 << "\n";
     }        // level
   }          //_index
 
-  std::cout << "test laplace_tensor multil finished. \n";
+  std::cout << "test laplace_tensor multilevel finished. \n";
 
 }  // end of test laplace_tensor multilevel
 
