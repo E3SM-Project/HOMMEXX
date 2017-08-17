@@ -281,11 +281,6 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   test_functor.run_functor();
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
   Kokkos::deep_copy(omega_p, region.buffers.omega_p);
-  for(int igp = 0; igp < NP; ++igp) {
-    for(int jgp = 0; jgp < NP; ++jgp) {
-      printf("");
-    }
-  }
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(
       "Fortran omega_p");
@@ -308,7 +303,9 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(omega_p(ie, igp, jgp, vec_lev)[v]));
             REQUIRE(!std::isnan(omega_p_f90(k, igp, jgp)));
-            REQUIRE(omega_p(ie, igp, jgp, vec_lev)[v] == omega_p_f90(k, igp, jgp));
+            Real rel_error = compare_answers(omega_p(ie, igp, jgp, vec_lev)[v],
+                                             omega_p_f90(k, igp, jgp));
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
