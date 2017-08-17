@@ -27,10 +27,12 @@ void caar_compute_energy_grad_c_int(
     const Real *const &velocity,
     Real *const &vtemp);  //(&vtemp)[2][NP][NP]);
 
-void preq_omega_ps_c_int(const Real *omega_p,
+void preq_omega_ps_c_int(Real *omega_p,
+                         const Real *velocity,
                          const Real *pressure,
-                         const Real *vgrad_p,
-                         Real *div_vdp);
+                         const Real *div_vdp,
+                         const Real *dinv,
+                         const Real *dvv);
 
 }  // extern C
 
@@ -59,9 +61,6 @@ class compute_subfunctor_test {
         qdp("QDP", num_elems),
         dinv("DInv", num_elems),
         dvv("dvv"),
-        pressure("pressure", num_elems),
-        vgrad_p("vgrad_p", num_elems),
-        div_vdp("div_vdp", num_elems),
         nets(1),
         nete(num_elems) {
     Real hybrid_a[NUM_LEV_P] = {0};
@@ -131,10 +130,6 @@ class compute_subfunctor_test {
   HostViewManaged<Real * [2][2][NP][NP]> dinv;
   HostViewManaged<Real[NP][NP]> dvv;
 
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure;
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> vgrad_p;
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp;
-
   const int nets;
   const int nete;
 
@@ -160,6 +155,25 @@ class compute_energy_grad_test {
         });
   }
 };
+
+void sync_to_device(HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]> source,
+                    ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]> dest) {
+  ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror dest_mirror =
+      Kokkos::create_mirror_view(dest);
+  for(int ie = 0; ie < source.extent_int(0); ++ie) {
+    for(int vector_level = 0, level = 0; vector_level < NUM_LEV; ++vector_level) {
+      for(int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for(int igp = 0; igp < NP; ++igp) {
+          for(int jgp = 0; jgp < NP; ++jgp) {
+            dest_mirror(ie, igp, jgp, vector_level)[vector] =
+              source(ie, level, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(dest, dest_mirror);
+}
 
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
@@ -194,12 +208,6 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
             }
           }
         }
-
-// void caar_compute_energy_grad_c_int(
-//     const Real *const &dvv, const Real *const &Dinv,
-//     const Real *const &pecnd, const Real *const &phi,
-//     const Real *const &velocity,
-//     Real *const &vtemp);  //(&vtemp)[2][NP][NP]);
         caar_compute_energy_grad_c_int(
             test_functor.dvv.data(),
             reinterpret_cast<Real *>(
@@ -258,26 +266,49 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   region.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure", num_elems);
+  genRandArray(reinterpret_cast<Real *>(pressure.data()),
+               pressure.span(), engine,
+               std::uniform_real_distribution<Real>(0, 100.0));
+  sync_to_device(pressure, region.buffers.pressure);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp", num_elems);
+  genRandArray(reinterpret_cast<Real *>(div_vdp.data()),
+               div_vdp.span(), engine,
+               std::uniform_real_distribution<Real>(0, 100.0));
+  sync_to_device(div_vdp, region.buffers.div_vdp);
+
   compute_subfunctor_test<preq_omega_ps_test> test_functor(num_elems);
   test_functor.run_functor();
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
   Kokkos::deep_copy(omega_p, region.buffers.omega_p);
+  for(int igp = 0; igp < NP; ++igp) {
+    for(int jgp = 0; jgp < NP; ++jgp) {
+      printf("");
+    }
+  }
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(
       "Fortran omega_p");
   for (int ie = 0; ie < num_elems; ++ie) {
     preq_omega_ps_c_int(omega_p_f90.data(),
-                        Kokkos::subview(test_functor.pressure, ie, Kokkos::ALL,
+                        Kokkos::subview(pressure, ie, Kokkos::ALL,
                                         Kokkos::ALL, Kokkos::ALL).data(),
-                        Kokkos::subview(test_functor.vgrad_p, ie, Kokkos::ALL,
+                        Kokkos::subview(test_functor.velocity, ie, test_functor.n0,
+                                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                        Kokkos::ALL).data(),
+                        Kokkos::subview(div_vdp, ie, Kokkos::ALL,
                                         Kokkos::ALL, Kokkos::ALL).data(),
-                        Kokkos::subview(test_functor.div_vdp, ie, Kokkos::ALL,
-                                        Kokkos::ALL, Kokkos::ALL).data());
+                        Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL,
+                                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+                        test_functor.dvv.data());
     for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp) {
-          for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
-            omega_p(ie, igp, jgp, vec_lev)[v] == omega_p_f90(k, igp, jgp);
+      // Note this MUST be this loop so that k is set properly
+      for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            REQUIRE(!std::isnan(omega_p(ie, igp, jgp, vec_lev)[v]));
+            REQUIRE(!std::isnan(omega_p_f90(k, igp, jgp)));
+            REQUIRE(omega_p(ie, igp, jgp, vec_lev)[v] == omega_p_f90(k, igp, jgp));
           }
         }
       }
