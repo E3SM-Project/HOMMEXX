@@ -91,6 +91,7 @@ private
 !
   public  :: gradient_sphere
   public  :: gradient_sphere_wk_testcov
+  public  :: gradient_sphere_wk_testcov_c_callable
   public  :: gradient_sphere_wk_testcontra   ! only used for debugging
   public  :: ugradv_sphere
   public  :: vorticity_sphere
@@ -98,6 +99,7 @@ private
   public  :: divergence_sphere
   public  :: curl_sphere
   public  :: curl_sphere_wk_testcov
+  public  :: curl_sphere_wk_testcov_c_callable
 ! public  :: curl_sphere_wk_testcontra  ! not coded
   public  :: divergence_sphere_wk
   public  :: laplace_sphere_wk
@@ -1372,6 +1374,40 @@ end do
     end function curl_sphere_wk_testcov
 
 
+  subroutine curl_sphere_wk_testcov_c_callable(s,dvv,D,mp,ds) bind(c)
+!needs dvv, mp, D
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind) :: ds(np,np,2)
+
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+
+    ds = gradient_sphere_wk_testcov(s,deriv,elem)
+          
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+#endif
+
+  end subroutine curl_sphere_wk_testcov_c_callable
+
+
   function gradient_sphere_wk_testcov(s,deriv,elem) result(ds)
 !
 !   integrated-by-parts gradient, w.r.t. COVARIANT test functions
@@ -1436,8 +1472,48 @@ end do
        enddo
     enddo
 
-    end function gradient_sphere_wk_testcov
+ end function gradient_sphere_wk_testcov
 
+ subroutine gradient_sphere_wk_testcov_c_callable(s,dvv,metinv,metdet,D,mp,ds) bind(c)
+!needs dvv, metinv, metdet, D, mp (what is it?)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(out) :: ds(np,np,2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: metinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+    allocate(elem%metinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+    elem%metinv = metinv
+    elem%metdet = metdet
+
+    ds = gradient_sphere_wk_testcov(s,deriv,elem)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+    deallocate(elem%metinv)
+    deallocate(elem%metdet)
+#endif
+
+ end subroutine gradient_sphere_wk_testcov_c_callable
 
   function gradient_sphere_wk_testcontra(s,deriv,elem) result(ds)
 !
