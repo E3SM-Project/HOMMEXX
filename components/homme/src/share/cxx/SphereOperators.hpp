@@ -438,57 +438,62 @@ KOKKOS_INLINE_FUNCTION void laplace_tensor(
        divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
 }//end of laplace_tensor
 
+//check mp, why is it an ie quantity?
+KOKKOS_INLINE_FUNCTION void
+curl_sphere_wk_testcov(const KernelVariables &kv,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> D,
+                const ExecViewUnmanaged<const Real * [NP][NP]> mp,
+                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> curls) {
 
-/*
-  function laplace_sphere_wk(s,deriv,elem,var_coef) result(laplace)
-!
-!   input:  s = scalar
-!   ouput:  -< grad(PHI), grad(s) >   = weak divergence of grad(s)
-!     note: for this form of the operator, grad(s) does not need to be made C0
-!
-    real(kind=real_kind), intent(in) :: s(np,np)
-    logical, intent(in) :: var_coef
-    type (derivative_t), intent(in) :: deriv
-    type (element_t), intent(in) :: elem
-    real(kind=real_kind)             :: laplace(np,np)
-    real(kind=real_kind)             :: laplace2(np,np)
-    integer i,j
+  Scalar dscontra[2][NP][NP];
 
-    ! Local
-    real(kind=real_kind) :: grads(np,np,2), oldgrads(np,np,2)
+  constexpr int np_squared = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
 
-    grads=gradient_sphere(s,deriv,elem%Dinv)
+    dscontra[0][igp][jgp] = 0.0; 
+    dscontra[1][igp][jgp] = 0.0; 
 
-    if (var_coef) then
-       if (hypervis_power/=0 ) then
-          ! scalar viscosity with variable coefficient
-          grads(:,:,1) = grads(:,:,1)*elem%variable_hyperviscosity(:,:)
-          grads(:,:,2) = grads(:,:,2)*elem%variable_hyperviscosity(:,:)
-       else if (hypervis_scaling /=0 ) then
-          ! tensor hv, (3)
-          oldgrads=grads
-          do j=1,np
-             do i=1,np
-!JMD                grads(i,j,1) = sum(oldgrads(i,j,:)*elem%tensorVisc(i,j,1,:))
-!JMD                grads(i,j,2) = sum(oldgrads(i,j,:)*elem%tensorVisc(i,j,2,:))
-                grads(i,j,1) = oldgrads(i,j,1)*elem%tensorVisc(i,j,1,1) + &
-                               oldgrads(i,j,2)*elem%tensorVisc(i,j,1,2)
-                grads(i,j,2) = oldgrads(i,j,1)*elem%tensorVisc(i,j,2,1) + &
-                               oldgrads(i,j,2)*elem%tensorVisc(i,j,2,2)
-             end do
-          end do
-       else
-          ! do nothing: constant coefficient viscsoity
-       endif
-    endif
+  });
+//in here, which array should be addressed fastest?
+  constexpr int np_cubed = NP * NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_cubed),
+                       [&](const int loop_idx) {
+    const int ngp = loop_idx / NP / NP; //slowest
+    const int mgp = (loop_idx / NP) % NP;
+    const int jgp = loop_idx % NP; //fastest
+//move this multiplication to the last loop after debug
+    dscontra[0][ngp][mgp] -= 
+       mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,kv.ilev)*dvv(jgp,ngp)*PhysicalConstants::rrearth; 
+    dscontra[1][ngp][mgp] += 
+       mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,kv.ilev)*dvv(jgp,mgp)*PhysicalConstants::rrearth; 
+  });
 
-    ! note: divergnece_sphere and divergence_sphere_wk are identical *after*
-bndry_exchange
-    ! if input is C_0.  Here input is not C_0, so we should use
-divergence_sphere_wk().
-    laplace=divergence_sphere_wk(grads,deriv,elem)
-end function
-*/
+for(int i=0; i< NP; i++)
+for(int j=0; j< NP; j++){
+
+std::cout << "i=" << i << ", j=" << j << ", ds = " 
+<< dscontra[0][i][j][0] << ", " << dscontra[1][i][j][0] <<"\n";
+}
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    curls(0,igp,jgp,kv.ilev) = D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]; 
+    curls(1,igp,jgp,kv.ilev) = D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]; 
+  });
+}
+
+
+
+
 
 } // namespace Homme
 
