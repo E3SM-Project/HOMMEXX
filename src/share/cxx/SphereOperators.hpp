@@ -484,6 +484,77 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
 }
 
 
+KOKKOS_INLINE_FUNCTION void
+grad_sphere_wk_testcov(const KernelVariables &kv,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> D,
+                const ExecViewUnmanaged<const Real * [NP][NP]> mp,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> metinv,
+                const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
+                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> scalar,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grads) {
+
+  Scalar dscontra[2][NP][NP];
+  constexpr int np_squared = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    dscontra[0][igp][jgp] = 0.0;
+    dscontra[1][igp][jgp] = 0.0;
+
+  });
+
+  constexpr int np_cubed = NP * NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_cubed),
+                       [&](const int loop_idx) {
+    const int ngp = loop_idx / NP / NP; //slowest
+    const int mgp = (loop_idx / NP) % NP;
+    const int jgp = loop_idx % NP; //fastest
+    dscontra[0][ngp][mgp] -=(
+       mp(kv.ie,ngp,jgp)*
+       metinv(kv.ie,0,0,ngp,mgp)*
+       metdet(kv.ie,ngp,mgp)*
+       scalar(ngp,jgp,kv.ilev)*
+       dvv(jgp,mgp)
+       +
+       mp(kv.ie,jgp,mgp)*
+       metinv(kv.ie,0,1,ngp,mgp)*
+       metdet(kv.ie,ngp,mgp)*
+       scalar(jgp,mgp,kv.ilev)*
+       dvv(jgp,ngp)
+                            )*PhysicalConstants::rrearth;
+
+    dscontra[1][ngp][mgp] -=(
+       mp(kv.ie,ngp,jgp)*
+       metinv(kv.ie,1,0,ngp,mgp)*
+       metdet(kv.ie,ngp,mgp)*
+       scalar(ngp,jgp,kv.ilev)*
+       dvv(jgp,mgp)
+       +
+       mp(kv.ie,jgp,mgp)*
+       metinv(kv.ie,1,1,ngp,mgp)*
+       metdet(kv.ie,ngp,mgp)*
+       scalar(jgp,mgp,kv.ilev)*
+       dvv(jgp,ngp)
+                            )*PhysicalConstants::rrearth;
+
+  });
+
+//don't forget to move rrearth here and in curl and in F code.
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    grads(0,igp,jgp,kv.ilev) = (D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]);
+    grads(1,igp,jgp,kv.ilev) = (D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]);
+  });
+}
+
+
+
 
 
 
