@@ -1351,6 +1351,12 @@ end do
     integer i,j,l,m,n
     real(kind=real_kind) ::  dscontra(np,np,2)
 
+print *, 'In CURL.....'
+print *, 's(1,1)=', s(1,1), ' mp(1,1)= ', elem%mp(1,1), ' deriv =',deriv%dvv(1,1)
+print *, 'D = ', elem%D(1,1,1,1) 
+
+
+
     dscontra=0
     do n=1,np
        do m=1,np
@@ -1361,6 +1367,13 @@ end do
              ! phi(m)_x  sum over first index, second index fixed at n
              dscontra(m,n,2)=dscontra(m,n,2)+(elem%mp(j,n)*s(j,n)*deriv%Dvv(m,j) )*rrearth
           enddo
+       enddo
+    enddo
+
+
+    do i=1,np
+       do j=1,np
+print *, 'i,j=',i,j, dscontra(i,j,1), dscontra(i,j,2)
        enddo
     enddo
 
@@ -1398,7 +1411,7 @@ end do
     elem%D = D
     elem%mp = mp
 
-    ds = gradient_sphere_wk_testcov(s,deriv,elem)
+    ds = curl_sphere_wk_testcov(s,deriv,elem)
           
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
