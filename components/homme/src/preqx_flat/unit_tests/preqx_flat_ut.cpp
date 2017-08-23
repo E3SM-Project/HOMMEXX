@@ -1478,6 +1478,14 @@ std::cout << "here 2 \n";
 
 std::cout << igp << "," << jgp << " F output0  = " <<
 local_fortran_output[0][igp][jgp] << ", C output0 = " << coutput0 << "\n";
+std::cout << "difference=" << local_fortran_output[0][igp][jgp] - coutput0 << "\n";
+std::cout << "rel difference=" << (local_fortran_output[0][igp][jgp] - coutput0)/coutput0 << "\n";
+
+std::cout << "difference=" << local_fortran_output[1][igp][jgp] - coutput1 << "\n";
+std::cout << "rel difference=" << (local_fortran_output[1][igp][jgp] - coutput1)/coutput1 << "\n";
+
+std::cout << "epsilon = " << std::numeric_limits<Real>::epsilon() << "\n";
+
 
             REQUIRE(!std::isnan(
                 local_fortran_output[0][igp][jgp]));
@@ -1502,7 +1510,7 @@ local_fortran_output[0][igp][jgp] << ", C output0 = " << coutput0 << "\n";
     }        // level
   }          //_index
 
-  std::cout << "test laplace_tensor multilevel finished. \n";
+  std::cout << "test curl_sphere_wk_testcov multilevel finished. \n";
 
 }  // end of test laplace_tensor multilevel
 

@@ -448,13 +448,11 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
                 ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> curls) {
 
   Scalar dscontra[2][NP][NP];
-
   constexpr int np_squared = NP * NP;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
-
     dscontra[0][igp][jgp] = 0.0; 
     dscontra[1][igp][jgp] = 0.0; 
 
@@ -466,28 +464,22 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
     const int ngp = loop_idx / NP / NP; //slowest
     const int mgp = (loop_idx / NP) % NP;
     const int jgp = loop_idx % NP; //fastest
-//move this multiplication to the last loop after debug
+//One can move multiplication by rrearth to the last loop, but it breaks BFB
+//property for curl. 
     dscontra[0][ngp][mgp] -= 
        mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,kv.ilev)*dvv(jgp,ngp)*PhysicalConstants::rrearth; 
     dscontra[1][ngp][mgp] += 
        mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,kv.ilev)*dvv(jgp,mgp)*PhysicalConstants::rrearth; 
   });
 
-for(int i=0; i< NP; i++)
-for(int j=0; j< NP; j++){
-
-std::cout << "i=" << i << ", j=" << j << ", ds = " 
-<< dscontra[0][i][j][0] << ", " << dscontra[1][i][j][0] <<"\n";
-}
-
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
-    curls(0,igp,jgp,kv.ilev) = D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]; 
-    curls(1,igp,jgp,kv.ilev) = D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]; 
+    curls(0,igp,jgp,kv.ilev) = (D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]); 
+    curls(1,igp,jgp,kv.ilev) = (D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
+                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]); 
   });
 }
 
