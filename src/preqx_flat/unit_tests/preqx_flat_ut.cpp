@@ -34,7 +34,7 @@ void preq_omega_ps_c_int(Real *omega_p,
                          const Real *dinv,
                          const Real *dvv);
 
-void caar_compute_dp3d_np1_c_int(const int &np1, const int &nm1,
+void caar_compute_dp3d_np1_c_int(const int np1, const int nm1,
                                  const Real &dt2,
                                  const Real *spheremp,
                                  const Real *divdp,
@@ -81,7 +81,10 @@ class compute_subfunctor_test {
         velocity.data(), temperature.data(), dp3d.data(),
         phi.data(), pecnd.data(), omega_p.data(),
         derived_v.data(), eta_dpdn.data(), qdp.data());
-    for(int ie = 0; ie < num_elems; ++ie) {
+
+    Kokkos::deep_copy(spheremp, region.m_spheremp);
+
+    for(int ie = 0; ie < region.num_elems(); ++ie) {
       elements.dinv(
           Kokkos::subview(dinv, ie, Kokkos::ALL,
                           Kokkos::ALL, Kokkos::ALL,
@@ -142,8 +145,11 @@ class compute_subfunctor_test {
   const int nete;
 
   static constexpr int nm1 = 0;
+  static constexpr int nm1_f90 = nm1 + 1;
   static constexpr int n0 = 1;
+  static constexpr int n0_f90 = n0 + 1;
   static constexpr int np1 = 2;
+  static constexpr int np1_f90 = np1 + 1;
   static constexpr int qn0 = -1;
   static constexpr int ps0 = 1;
   static constexpr Real dt2 = 1.0;
@@ -152,8 +158,8 @@ class compute_subfunctor_test {
 
 void sync_to_host(ExecViewUnmanaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]> source,
                   HostViewUnmanaged<Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dest) {
-  ExecViewUnmanaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror source_mirror =
-      Kokkos::create_mirror_view(source);
+  ExecViewUnmanaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
+    source_mirror(Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for(int ie = 0; ie < source.extent_int(0); ++ie) {
     for(int time = 0; time < NUM_TIME_LEVELS; ++time) {
@@ -333,8 +339,8 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(omega_p(ie, igp, jgp, vec_lev)[v]));
             REQUIRE(!std::isnan(omega_p_f90(k, igp, jgp)));
-            Real rel_error = compare_answers(omega_p(ie, igp, jgp, vec_lev)[v],
-                                             omega_p_f90(k, igp, jgp));
+            Real rel_error = compare_answers(omega_p_f90(k, igp, jgp),
+                                             omega_p(ie, igp, jgp, vec_lev)[v]);
             REQUIRE(rel_threshold >= rel_error);
           }
         }
@@ -347,9 +353,12 @@ class dp3d_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if(kv.team.team_rank() == 0) {
-      functor.compute_dp3d_np1(kv);
-    }
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+        [&](const int &ilev) {
+          kv.ilev = ilev;
+          functor.compute_dp3d_np1(kv);
+        });
   }
 };
 
@@ -374,25 +383,41 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   sync_to_device(div_vdp, region.buffers.div_vdp);
 
   compute_subfunctor_test<dp3d_test> test_functor(region);
+
+  // To ensure the Fortran doesn't pass without doing anything,
+  // copy the initial state before running any of the test
+  HostViewManaged<Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d_f90("dp3d fortran", num_elems);
+  Kokkos::deep_copy(dp3d_f90, test_functor.dp3d);
+
   test_functor.run_functor();
   sync_to_host(region.m_dp3d, test_functor.dp3d);
 
-  HostViewManaged<Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d;
   for(int ie = 0; ie < num_elems; ++ie) {
-    caar_compute_dp3d_np1_c_int(test_functor.functor.m_data.np1,
-                                test_functor.functor.m_data.nm1,
+    caar_compute_dp3d_np1_c_int(test_functor.np1_f90,
+                                test_functor.nm1_f90,
                                 test_functor.functor.m_data.dt2,
-                                test_functor.spheremp.data(), div_vdp.data(),
-                                test_functor.eta_dpdn.data(), dp3d.data());
+                                Kokkos::subview(test_functor.spheremp, ie,
+                                                Kokkos::ALL, Kokkos::ALL).data(),
+                                Kokkos::subview(div_vdp, ie, Kokkos::ALL,
+                                                Kokkos::ALL, Kokkos::ALL).data(),
+                                Kokkos::subview(test_functor.eta_dpdn, ie,
+                                                Kokkos::ALL, Kokkos::ALL,
+                                                Kokkos::ALL).data(),
+                                Kokkos::subview(dp3d_f90, ie, Kokkos::ALL,
+                                                Kokkos::ALL, Kokkos::ALL,
+                                                Kokkos::ALL).data());
     for(int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       for(int igp = 0; igp < NP; ++igp) {
         for(int jgp = 0; jgp < NP; ++jgp) {
-          REQUIRE(!std::isnan(dp3d(ie, test_functor.functor.m_data.np1, k, igp, jgp)));
-          REQUIRE(!std::isnan(test_functor.dp3d(ie, test_functor.functor.m_data.np1, k, igp,
-                                                jgp)));
-          Real rel_error = compare_answers(test_functor.dp3d(ie, test_functor.functor.m_data.np1,
-                                                             k, igp, jgp),
-                                           dp3d(ie, test_functor.functor.m_data.np1, k, igp, jgp));
+          REQUIRE(dp3d_f90(ie, test_functor.functor.m_data.nm1, k, igp, jgp) ==
+                  test_functor.dp3d(ie, test_functor.functor.m_data.nm1, k, igp, jgp));
+          Real correct = dp3d_f90(ie, test_functor.functor.m_data.np1, k, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          Real computed = test_functor.dp3d(ie, test_functor.functor.m_data.np1,
+                                            k, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          Real rel_error = compare_answers(correct,
+                                           computed);
           REQUIRE(rel_threshold >= rel_error);
         }
       }

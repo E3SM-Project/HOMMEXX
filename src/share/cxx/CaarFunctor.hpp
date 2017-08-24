@@ -415,10 +415,10 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      Scalar tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, jgp, igp, kv.ilev);
-      tmp -= m_data.dt * m_elements.buffers.div_vdp(kv.ie, jgp, igp, kv.ilev);
-      m_elements.m_dp3d(kv.ie, m_data.np1, jgp, igp, kv.ilev) =
-          m_elements.m_spheremp(kv.ie, jgp, igp) * tmp;
+      Scalar tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev);
+      tmp -= m_data.dt2 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, kv.ilev);
+      m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
+          m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
     });
   }
 
