@@ -193,6 +193,31 @@ contains
     vtemp = gradient_sphere(Ephi, deriv, Dinv)
   end subroutine caar_compute_energy_grad
 
+  subroutine caar_compute_dp3d_np1_c_int(np1, nm1, dt2, spheremp, divdp, eta_dot_dpdn, dp3d) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    integer, intent(in) :: np1, nm1
+    real (kind=real_kind), intent(in) :: dt2
+    real (kind=real_kind), intent(in) :: spheremp(:, :) ! (np, np)
+    real (kind=real_kind), intent(in) :: divdp(:, :, :) ! (np, np, nlev)
+    real (kind=real_kind), intent(in) :: eta_dot_dpdn(:, :, :) ! (np, np, nlev)
+    real (kind=real_kind), intent(out) :: dp3d(:, :, :, :) ! (np, np, nlev, num_timelevels)
+
+    ! locals
+    integer :: i, j, k
+
+    do k = 1, nlev
+      do j = 1, np
+        do i = 1, np
+          dp3d(i, j, k, np1) = &
+               spheremp(i, j) * (dp3d(i, j, k, nm1) - &
+               dt2 * (divdp(i, j, k) + eta_dot_dpdn(i, j, k + 1) - eta_dot_dpdn(i, j, k)))
+        end do
+      end do
+    end do
+  end subroutine caar_compute_dp3d_np1_c_int
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -333,7 +358,9 @@ contains
 #endif
       do k=1,nlev
         ! if rsplit=0, then we computed grad_p by hand from grad_ps
-        if (rsplit>0) grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+         if (rsplit>0) then
+           grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+         end if
 
         rdp(:,:,k) = 1.0D0/dp(:,:,k)
 
@@ -728,6 +755,8 @@ contains
 !        elem(ie)%state%ps_v(:,:,np1) = -elem(ie)%spheremp(:,:)*sdot_sum
 !      else
 
+      call caar_compute_dp3d_np1_c_int(np1, nm1, dt2, elem(ie)%spheremp, &
+           divdp, eta_dot_dpdn, elem(ie)%state%dp3d)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,tempflux)
 #endif
@@ -735,10 +764,6 @@ contains
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
         elem(ie)%state%T(:,:,k,np1) = elem(ie)%spheremp(:,:)*(elem(ie)%state%T(:,:,k,nm1) + dt2*ttens(:,:,k))
-        if (rsplit>0) &
-             elem(ie)%state%dp3d(:,:,k,np1) = &
-               elem(ie)%spheremp(:,:) * (elem(ie)%state%dp3d(:,:,k,nm1) - &
-               dt2 * (divdp(:,:,k) + eta_dot_dpdn(:,:,k+1)-eta_dot_dpdn(:,:,k)))
         if (0<rsplit.and.0<ntrac.and.eta_ave_w.ne.0.) then
            v(:,:,1) =  elem(ie)%Dinv(:,:,1,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,1,2)*vdp(:,:,2,k)
            v(:,:,2) =  elem(ie)%Dinv(:,:,2,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,2,2)*vdp(:,:,2,k)
