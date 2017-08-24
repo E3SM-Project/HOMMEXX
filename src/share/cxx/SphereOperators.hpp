@@ -541,6 +541,7 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
 
   });
 
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //don't forget to move rrearth here and in curl and in F code.
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
                        [&](const int loop_idx) {
@@ -553,9 +554,72 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
   });
 }
 
+//needs dvv, dinv, spheremp, tensor, vec_sph2cart, 
+KOKKOS_INLINE_FUNCTION void
+vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
+                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+                const ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
+                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+//temps to store results
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grads,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> component0,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> component1,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> component2,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace0,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace1,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace2,
+                const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> vector,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> laplace) {
+
+//  Scalar dum_cart[2][NP][NP];
+  constexpr int np_squared = NP * NP;
+//  constexpr int np_squared_3;
+/* // insert after debugging? still won't work because dum_comp cannot be input for laplace
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared_3),
+                       [&](const int loop_idx) {
+    const int comp = loop_idx % 3 ;        //fastest
+    const int igp = (loop_idx / 3 ) / NP ; //slowest
+    const int jgp = (loop_idx / 3 ) % NP; 
+    dum_cart[comp][igp][jgp] = vec_sph2cart(kv.ie,0,comp,igp,jgp)*vector(0,igp,jgp)
+                        + vec_sph2cart(kv.ie,1,comp,igp,jgp)*vector(1,igp,jgp) ;
+}
+*/
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+//this is for debug
+    component0(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,0,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+    component1(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,1,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,1,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+    component2(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,2,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,2,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+  });
+//apply laplace to each component
+//WE NEED LAPLACE_UPDATE(or replace?), way too many temp vars
+  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component0,laplace0);
+  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component1,laplace1);
+  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component2,laplace2);
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    laplace(0,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,0,1,igp,jgp)*laplace1(igp,jgp,kv.ilev) 
+                       + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+
+    laplace(1,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,1,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,1,1,igp,jgp)*laplace1(igp,jgp,kv.ilev) 
+                       + vec_sph2cart(kv.ie,1,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+                       
+  });
 
 
-
+}//end of vlaplace_cartesian
 
 
 } // namespace Homme
