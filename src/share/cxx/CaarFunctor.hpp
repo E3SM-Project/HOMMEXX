@@ -420,50 +420,50 @@ struct CaarFunctor {
 
   // Computes the vertical advection of T and v
   // Not currently used
-  //KOKKOS_INLINE_FUNCTION
-  //void preq_vertadv(
-  //    const TeamMember &,
-  //    const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> T,
-  //    const ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
-  //    const ExecViewUnmanaged<const Scalar[NUM_LEV_P][NP][NP]> eta_dp_deta,
-  //    const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> rpdel,
-  //    ExecViewUnmanaged<Scalar[NUM_LEV][NP][NP]> T_vadv,
-  //    ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> v_vadv) {
-  //  constexpr const int k_0 = 0;
-  //  for (int j = 0; j < NP; ++j) {
-  //    for (int i = 0; i < NP; ++i) {
-  //      Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
-  //      T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
-  //      for (int h = 0; h < 2; ++h) {
-  //        v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
-  //      }
-  //    }
-  //  }
-  //  constexpr const int k_f = NUM_LEV - 1;
-  //  for (int k = k_0 + 1; k < k_f; ++k) {
-  //    for (int j = 0; j < NP; ++j) {
-  //      for (int i = 0; i < NP; ++i) {
-  //        Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
-  //        Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
-  //        T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
-  //                          facm * (T(k, j, i) - T(k - 1, j, i));
-  //        for (int h = 0; h < 2; ++h) {
-  //          v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
-  //                               facm * (v(k, h, j, i) - v(k - 1, h, j, i));
-  //        }
-  //      }
-  //    }
-  //  }
-  //  for (int j = 0; j < NP; ++j) {
-  //    for (int i = 0; i < NP; ++i) {
-  //      Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
-  //      T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
-  //      for (int h = 0; h < 2; ++h) {
-  //        v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
-  //      }
-  //    }
-  //  }
-  //}
+  KOKKOS_INLINE_FUNCTION
+  void preq_vertadv(
+      const TeamMember &,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> T,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV_P][NP][NP]> eta_dp_deta,
+      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> rpdel,
+      ExecViewUnmanaged<Scalar[NUM_LEV][NP][NP]> T_vadv,
+      ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> v_vadv) {
+    constexpr const int k_0 = 0;
+    for (int j = 0; j < NP; ++j) {
+      for (int i = 0; i < NP; ++i) {
+        Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
+        T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
+        for (int h = 0; h < 2; ++h) {
+          v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
+        }
+      }
+    }
+    constexpr const int k_f = NUM_LEV - 1;
+    for (int k = k_0 + 1; k < k_f; ++k) {
+      for (int j = 0; j < NP; ++j) {
+        for (int i = 0; i < NP; ++i) {
+          Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
+          Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
+          T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
+                            facm * (T(k, j, i) - T(k - 1, j, i));
+          for (int h = 0; h < 2; ++h) {
+            v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
+                                 facm * (v(k, h, j, i) - v(k - 1, h, j, i));
+          }
+        }
+      }
+    }
+    for (int j = 0; j < NP; ++j) {
+      for (int i = 0; i < NP; ++i) {
+        Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
+        T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
+        for (int h = 0; h < 2; ++h) {
+          v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
+        }
+      }
+    }
+  }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TeamMember team) const {
