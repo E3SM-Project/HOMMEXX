@@ -9,8 +9,9 @@
 #include "SphereOperators.hpp"
 
 #include "Utility.hpp"
-
 #include "profiling.hpp"
+
+#include <assert.h>
 
 namespace Homme {
 
@@ -57,6 +58,21 @@ struct CaarFunctor {
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   }
 
+#ifdef NDEBUG
+  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {}
+#else
+  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                   NP * NP * VECTOR_SIZE),
+                         [&](const int &idx) {
+      const int igp = idx / NP / VECTOR_SIZE;
+      const int jgp = (idx % NP) / VECTOR_SIZE;
+      const int vec = idx % VECTOR_SIZE;
+      assert(m_region.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev)[vec] > 0.0);
+    });
+  }
+#endif
+
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
@@ -68,6 +84,7 @@ struct CaarFunctor {
       compute_temperature_np1(kv);
       compute_velocity_np1(kv);
       compute_dp3d_np1(kv);
+      check_dp3d(kv);
     });
   }
 
@@ -314,21 +331,21 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      m_elements.buffers.vdp(kv.ie, 0, jgp, igp, kv.ilev) =
-          m_elements.m_u(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
-          m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
+      m_elements.buffers.vdp(kv.ie, 0, igp, jgp, kv.ilev) =
+          m_elements.m_u(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
+          m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, kv.ilev);
 
-      m_elements.buffers.vdp(kv.ie, 1, jgp, igp, kv.ilev) =
-          m_elements.m_v(kv.ie, m_data.n0, jgp, igp, kv.ilev) *
-          m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev);
+      m_elements.buffers.vdp(kv.ie, 1, igp, jgp, kv.ilev) =
+          m_elements.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
+          m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, kv.ilev);
 
-      m_elements.m_derived_un0(kv.ie, jgp, igp, kv.ilev) =
-          m_elements.m_derived_un0(kv.ie, jgp, igp, kv.ilev) +
-          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 0, jgp, igp, kv.ilev);
+      m_elements.m_derived_un0(kv.ie, igp, jgp, kv.ilev) =
+          m_elements.m_derived_un0(kv.ie, igp, jgp, kv.ilev) +
+          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 0, igp, jgp, kv.ilev);
 
-      m_elements.m_derived_vn0(kv.ie, jgp, igp, kv.ilev) =
-          m_elements.m_derived_vn0(kv.ie, jgp, igp, kv.ilev) +
-          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, jgp, igp, kv.ilev);
+      m_elements.m_derived_vn0(kv.ie, igp, jgp, kv.ilev) =
+          m_elements.m_derived_vn0(kv.ie, igp, jgp, kv.ilev) +
+          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, igp, jgp, kv.ilev);
     });
 
     divergence_sphere(
