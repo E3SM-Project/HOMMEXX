@@ -34,12 +34,23 @@ void preq_omega_ps_c_int(Real *omega_p,
                          const Real *dinv,
                          const Real *dvv);
 
-void caar_compute_dp3d_np1_c_int(const int np1, const int nm1,
+void caar_compute_dp3d_np1_c_int(int np1, int nm1,
                                  const Real &dt2,
                                  const Real *spheremp,
                                  const Real *divdp,
                                  const Real *eta_dot_dpdn,
                                  Real *dp3d);
+
+void caar_compute_divdp_c_int(const Real eta_ave_w,
+                              const Real *velocity,
+                              const Real *dp3d,
+                              const Real *dinv,
+                              const Real *metdet,
+                              const Real *dvv,
+                              Real *derived_vn0,
+                              Real *vdp,
+                              Real *divdp);
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -65,6 +76,7 @@ class compute_subfunctor_test {
         derived_v("Derived V?", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
         qdp("QDP", elements.num_elems()),
+        metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()),
         dvv("dvv"),
@@ -83,6 +95,7 @@ class compute_subfunctor_test {
         derived_v.data(), eta_dpdn.data(), qdp.data());
 
     Kokkos::deep_copy(spheremp, region.m_spheremp);
+    Kokkos::deep_copy(metdet, region.m_metdet);
 
     for(int ie = 0; ie < region.num_elems(); ++ie) {
       elements.dinv(
@@ -137,6 +150,7 @@ class compute_subfunctor_test {
                   [Q_NUM_TIME_LEVELS]
                       [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
       qdp;
+  HostViewManaged<Real * [NP][NP]> metdet;
   HostViewManaged<Real * [2][2][NP][NP]> dinv;
   HostViewManaged<Real * [NP][NP]> spheremp;
   HostViewManaged<Real[NP][NP]> dvv;
@@ -170,6 +184,30 @@ void sync_to_host(ExecViewUnmanaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]> 
               dest(ie, time, level, igp, jgp) =
                 source_mirror(ie, time, igp, jgp, vector_level)[vector];
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+void sync_to_host(ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]> source_1,
+                  ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]> source_2,
+                  HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][2][NP][NP]> dest) {
+  ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror
+    source_1_mirror(Kokkos::create_mirror_view(source_1)),
+    source_2_mirror(Kokkos::create_mirror_view(source_2));
+  Kokkos::deep_copy(source_1_mirror, source_1);
+  Kokkos::deep_copy(source_2_mirror, source_2);
+  for(int ie = 0; ie < source_1.extent_int(0); ++ie) {
+    for(int vector_level = 0, level = 0; vector_level < NUM_LEV; ++vector_level) {
+      for(int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for(int igp = 0; igp < NP; ++igp) {
+          for(int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, level, 0, igp, jgp) =
+              source_1_mirror(ie, igp, jgp, vector_level)[vector];
+            dest(ie, level, 1, igp, jgp) =
+              source_2_mirror(ie, igp, jgp, vector_level)[vector];
           }
         }
       }
@@ -354,11 +392,11 @@ public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
     Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &ilev) {
-          kv.ilev = ilev;
-          functor.compute_dp3d_np1(kv);
-        });
+      Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+      [&](const int &ilev) {
+        kv.ilev = ilev;
+        functor.compute_dp3d_np1(kv);
+      });
   }
 };
 
@@ -421,6 +459,62 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
           REQUIRE(rel_threshold >= rel_error);
         }
       }
+    }
+  }
+}
+
+class vdp_vn0_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+      [&](const int idx) {
+        kv.ilev = idx;
+        functor.compute_div_vdp(kv);
+    });
+  }
+};
+
+TEST_CASE("vdp_vn0_test", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 128.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  compute_subfunctor_test<vdp_vn0_test> test_functor(region);
+  test_functor.run_functor();
+
+  sync_to_host(region.m_derived_un0, region.m_derived_vn0, test_functor.derived_v);
+  HostViewManaged<Scalar *[2][NP][NP][NUM_LEV]> vdp("vdp results", num_elems);
+  Kokkos::deep_copy(vdp, region.buffers.vdp);
+  HostViewManaged<Scalar *[NP][NP][NUM_LEV]> div_vdp("div_vdp results", num_elems);
+  Kokkos::deep_copy(div_vdp, region.buffers.div_vdp);
+
+  HostViewManaged<Real [2][NP][NP]> vdp_f90("vdp f90 results");
+  HostViewManaged<Real [2][NP][NP]> vn0_f90("vdp f90 results");
+  HostViewManaged<Real [NP][NP]> div_vdp_f90("vdp f90 results");
+  for(int ie = 0; ie < num_elems; ++ie) {
+    for(int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      caar_compute_divdp_c_int(compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
+                               Kokkos::subview(test_functor.velocity, ie, test_functor.n0, level,
+                                               Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, level,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(test_functor.metdet, ie, Kokkos::ALL,
+                                               Kokkos::ALL).data(),
+                               test_functor.dvv.data(),
+                               vn0_f90.data(), vdp_f90.data(), div_vdp_f90.data()
+                               );
     }
   }
 }

@@ -228,7 +228,7 @@ contains
     use derivative_mod, only : derivative_t
     use dimensions_mod, only : np, nlev
 
-    real (kind=real_kind), intent(in) :: eta_ave_w
+    real (kind=real_kind), value, intent(in) :: eta_ave_w
     real (kind=real_kind), intent(in) :: velocity(np, np, 2)
     real (kind=real_kind), intent(in) :: dp3d(np, np)
     real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
