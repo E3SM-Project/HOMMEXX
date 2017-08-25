@@ -146,12 +146,12 @@ contains
     use derivative_mod, only : derivative_t
     type (c_ptr), intent(in) :: pecnd_ptr, phi_ptr, v_ptr, Dinv_ptr, dvv_ptr, vtemp_ptr
 
-    real (kind=c_double), pointer :: pecnd(:,:) ! (np,np)
-    real (kind=c_double), pointer :: phi(:,:) ! (np,np)
-    real (kind=c_double), pointer :: v(:,:,:) ! (np,np,2)
-    real (kind=c_double), pointer :: Dinv(:,:,:,:)
-    real (kind=c_double), pointer :: dvv(:,:)
-    real (kind=c_double), pointer :: vtemp(:,:,:)
+    real (kind=c_double), pointer :: pecnd(:,:) ! (np, np)
+    real (kind=c_double), pointer :: phi(:,:) ! (np, np)
+    real (kind=c_double), pointer :: v(:,:,:) ! (np, np, 2)
+    real (kind=c_double), pointer :: Dinv(:,:,:,:) ! (np, np, 2, 2)
+    real (kind=c_double), pointer :: dvv(:,:) ! (np, np)
+    real (kind=c_double), pointer :: vtemp(:,:,:) ! (np, np, 2)
 
     type (derivative_t) :: deriv
 
@@ -173,11 +173,11 @@ contains
     use derivative_mod, only : derivative_t, gradient_sphere
     use physical_constants, only : Rgas
     type (derivative_t), intent(in) :: deriv
-    real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np,np,2,2)
-    real (kind=real_kind), intent(in) :: pecnd(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: phi(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
-    real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
+    real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: pecnd(:,:) ! (np, np)
+    real (kind=real_kind), intent(in) :: phi(:,:) ! (np, np)
+    real (kind=real_kind), intent(in) :: v(:,:,:) ! (np, np, 2)
+    real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np, np, 2)
 
     integer :: h, i, j
     real (kind=real_kind), dimension(np,np) :: Ephi, gpterm
@@ -219,6 +219,83 @@ contains
       end do
     end do
   end subroutine caar_compute_dp3d_np1_c_int
+
+  ! computes derived_vn0, vdp and divdp
+  subroutine caar_compute_divdp_c_int(eta_ave_w, velocity, dp3d, dinv, metdet, &
+                                      dvv, derived_vn0, vdp, divdp) bind(c)
+    use kinds, only : real_kind
+    use element_mod, only : element_t
+    use derivative_mod, only : derivative_t
+    use dimensions_mod, only : np, nlev
+
+    real (kind=real_kind), intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: dp3d(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: metdet(np, np)
+    real (kind=real_kind), intent(in) :: dvv(np, np)
+
+    real (kind=real_kind), intent(out) :: derived_vn0(np, np, 2)
+    real (kind=real_kind), intent(out) :: vdp(np, np, 2)
+    real (kind=real_kind), intent(out) :: divdp(np, np)
+
+    type(element_t) :: elem
+    type(derivative_t) :: deriv
+
+    deriv%dvv = dvv
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    ! This code is only used for unit testing, so allocates are okay
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+#endif
+
+    elem%Dinv = dinv
+    elem%metdet = metdet
+
+    call caar_compute_divdp(elem, deriv, eta_ave_w, dp3d, &
+                            velocity, derived_vn0, vdp, divdp)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%metdet)
+#endif
+  end subroutine caar_compute_divdp_c_int
+
+  ! computes derived_vn0, vdp and divdp
+  subroutine caar_compute_divdp(elem, deriv, eta_ave_w, dp3d, &
+                                velocity, derived_vn0, vdp, divdp)
+    use kinds, only : real_kind
+    use element_mod, only : element_t
+    use derivative_mod, only : derivative_t, divergence_sphere
+    use dimensions_mod, only : np, nlev
+
+    type(element_t), intent(in) :: elem
+    type(derivative_t), intent(in) :: deriv
+
+    real (kind=real_kind), intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: dp3d(np, np)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+
+    real (kind=real_kind), intent(out) :: derived_vn0(np, np, 2)
+    real (kind=real_kind), intent(out) :: vdp(np, np, 2)
+    real (kind=real_kind), intent(out) :: divdp(np, np)
+
+    ! locals
+    integer :: i, j, k
+    do k = 1, 2
+      do j = 1, np
+        do i = 1, np
+           vdp(i, j, k) = velocity(i, j, k) * dp3d(i, j)
+           ! ================================
+           ! Accumulate mean Vel_rho flux in vn0
+           ! ================================
+           derived_vn0(i, j, k) = derived_vn0(i, j, k) + eta_ave_w * vdp(i, j, k)
+        end do
+      end do
+    end do
+    divdp = divergence_sphere(vdp, deriv, elem)
+  end subroutine caar_compute_divdp
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -369,6 +446,9 @@ contains
         ! ============================
         ! compute vgrad_lnps
         ! ============================
+        call caar_compute_divdp(elem(ie), deriv, eta_ave_w, elem(ie)%state%dp3d(:, :, k, n0), &
+                                elem(ie)%state%v(:, :, :, k, n0), elem(ie)%derived%vn0(:, :, :, k), &
+                                vdp(:, :, :, k), divdp(:, :, k))
         do j=1,np
           do i=1,np
             v1 = elem(ie)%state%v(i,j,1,k,n0)
@@ -376,8 +456,6 @@ contains
   !          vgrad_p(i,j,k) = &
   !               hvcoord%hybm(k)*(v1*grad_ps(i,j,1) + v2*grad_ps(i,j,2))
             vgrad_p(i,j,k) = (v1*grad_p(i,j,1,k) + v2*grad_p(i,j,2,k))
-            vdp(i,j,1,k) = v1*dp(i,j,k)
-            vdp(i,j,2,k) = v2*dp(i,j,k)
           end do
         end do
 
@@ -394,18 +472,11 @@ contains
         endif
 #endif
 
-        ! ================================
-        ! Accumulate mean Vel_rho flux in vn0
-        ! ================================
-        elem(ie)%derived%vn0(:,:,:,k)=elem(ie)%derived%vn0(:,:,:,k)+eta_ave_w*vdp(:,:,:,k)
-
-
         ! =========================================
         !
         ! Compute relative vorticity and divergence
         !
         ! =========================================
-        divdp(:,:,k)=divergence_sphere(vdp(:,:,:,k),deriv,elem(ie))
         vort(:,:,k)=vorticity_sphere(elem(ie)%state%v(:,:,:,k,n0),deriv,elem(ie))
       enddo
 
