@@ -554,6 +554,12 @@ void Elements::BufferViews::init(int num_elems) {
   qtens     = ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]> ("buffer for tracers", num_elems);
   vstar     = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>          ("buffer for v/dp", num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]> ("buffer for vstar*qdp", num_elems);
+
+  preq_buf = ExecViewManaged<Real *[NP][NP]>("Preq Buffer", num_elems);
+
+  div_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Divergence Buffer", num_elems);
+  grad_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Gradient Buffer", num_elems);
+  vort_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Vorticity Buffer", num_elems);
 }
 
 Elements &get_elements() {

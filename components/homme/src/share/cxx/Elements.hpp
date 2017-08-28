@@ -56,7 +56,6 @@ public:
 
     BufferViews() = default;
     void init(const int num_elems);
-
     // Buffers for CaarFunctor
     ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
     ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
@@ -75,6 +74,11 @@ public:
     ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>            vstar;
     ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>   vstar_qdp;
 
+    ExecViewManaged<Real *[NP][NP]> preq_buf;
+    // Buffers for spherical operators
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> div_buf;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> grad_buf;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> vort_buf;
   } buffers;
 
   Elements() = default;
