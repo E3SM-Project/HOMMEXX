@@ -54,8 +54,10 @@ struct CaarFunctor {
 
     gradient_sphere_update(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Homme::subview(m_elements.buffers.ephi, kv.ie),
-        Homme::subview(m_elements.buffers.energy_grad, kv.ie));
+        Kokkos::subview(m_elements.buffers.ephi, kv.ie, ALL, ALL, ALL),
+        m_elements.buffers.grad_buf,
+        Kokkos::subview(m_elements.buffers.energy_grad, kv.ie, ALL, ALL, ALL,
+                        ALL));
   }
 
 #ifdef NDEBUG
@@ -68,7 +70,7 @@ struct CaarFunctor {
       const int igp = idx / NP / VECTOR_SIZE;
       const int jgp = (idx % NP) / VECTOR_SIZE;
       const int vec = idx % VECTOR_SIZE;
-      assert(m_region.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev)[vec] > 0.0);
+      assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev)[vec] > 0.0);
     });
   }
 #endif
@@ -114,9 +116,10 @@ struct CaarFunctor {
 
     vorticity_sphere(
         kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_u, kv.ie, m_data.n0),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.vorticity, kv.ie));
+        Kokkos::subview(m_elements.m_u, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Kokkos::subview(m_elements.m_v, kv.ie, m_data.n0, ALL, ALL, ALL),
+        m_elements.buffers.vort_buf,
+        Kokkos::subview(m_elements.buffers.vorticity, kv.ie, ALL, ALL, ALL));
 
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -213,20 +216,21 @@ struct CaarFunctor {
     // pressure, meaning that we cannot update the different
     // pressure points within a level before the gradient is
     // complete!
-    Real integration[NP][NP];
+    ExecViewUnmanaged<Real *[NP][NP]> integration = m_elements.buffers.preq_buf;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      integration[igp][jgp] = 0.0;
+      integration(kv.ie, igp, jgp) = 0.0;
     });
 
     for (kv.ilev = 0; kv.ilev < NUM_LEV; ++kv.ilev) {
       gradient_sphere(
           kv, m_elements.m_dinv, m_deriv.get_dvv(),
-          Homme::subview(m_elements.buffers.pressure, kv.ie),
-          Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
-
+          Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+          m_elements.buffers.grad_buf,
+          Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
+                          ALL));
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                            [&](const int loop_idx) {
         const int igp = loop_idx / NP;
@@ -246,8 +250,8 @@ struct CaarFunctor {
           Real ckk =
               0.5 / m_elements.buffers.pressure(kv.ie, igp, jgp, kv.ilev)[vec];
           m_elements.buffers.omega_p(kv.ie, igp, jgp, kv.ilev)[vec] -=
-              (2.0 * ckk * integration[igp][jgp] + ckk * div_vdp);
-          integration[igp][jgp] += div_vdp;
+              (2.0 * ckk * integration(kv.ie, igp, jgp) + ckk * div_vdp);
+          integration(kv.ie, igp, jgp) += div_vdp;
         }
       });
     }
@@ -264,9 +268,9 @@ struct CaarFunctor {
           m_data.hybrid_a(0) * m_data.ps0 +
           0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, 0)[0];
 
-      // TODO: change the sum into p(k) = p(k-1) + 0.5*(
-      // dp(k)+dp(k-1) ) to
-      // increase accuracy
+      // TODO: change the sum into
+      // p(k) = p(k-1) + 0.5*(dp(k)+dp(k-1))
+      // to increase accuracy
       for (kv.ilev = 1; kv.ilev < NUM_PHYSICAL_LEV; ++kv.ilev) {
         const int lev = kv.ilev / VECTOR_SIZE;
         const int vec = kv.ilev % VECTOR_SIZE;
@@ -286,6 +290,9 @@ struct CaarFunctor {
   // Modifies pressure, PHI
   KOKKOS_INLINE_FUNCTION
   void compute_scan_properties(KernelVariables &kv) const {
+    // Use this instead of Kokkos::single(Kokkos::PerTeam
+    // due to Kokkos failing to execute the ThreadVectorRange parallel for
+    // on CUDA
     if (kv.team.team_rank() == 0) {
       compute_pressure(kv);
       preq_hydrostatic(kv);
@@ -350,8 +357,9 @@ struct CaarFunctor {
 
     divergence_sphere(
         kv, m_elements.m_dinv, m_elements.m_metdet, m_deriv.get_dvv(),
-        Homme::subview(m_elements.buffers.vdp, kv.ie),
-        Homme::subview(m_elements.buffers.div_vdp, kv.ie));
+        Kokkos::subview(m_elements.buffers.vdp, kv.ie, ALL, ALL, ALL, ALL),
+        m_elements.buffers.div_buf,
+        Kokkos::subview(m_elements.buffers.div_vdp, kv.ie, ALL, ALL, ALL));
   }
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -396,8 +404,10 @@ struct CaarFunctor {
 
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
+        Kokkos::subview(m_elements.m_t, kv.ie, m_data.n0, ALL, ALL, ALL),
+        m_elements.buffers.grad_buf,
+        Kokkos::subview(m_elements.buffers.temperature_grad, kv.ie, ALL, ALL, ALL,
+                        ALL));
 
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -432,8 +442,16 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      Scalar tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev);
-      tmp -= m_data.dt2 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, kv.ilev);
+      Scalar tmp = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev);
+      tmp.shift_right(1);
+      tmp[0] = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev + 1)[VECTOR_SIZE - 1];
+      // Add div_vdp before subtracting the previous value to eta_dot_dpdn
+      // This will hopefully reduce numeric error
+      tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, kv.ilev);
+      tmp -= m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev);
+      tmp *= m_data.dt2;
+      tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev) - tmp;
+
       m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
           m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
     });

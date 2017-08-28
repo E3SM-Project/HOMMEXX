@@ -3,6 +3,8 @@
 
 /// \author Kyungjoo Kim (kyukim@sandia.gov)
 
+#include <assert.h>
+
 namespace KokkosKernels {
 namespace Batched {
 namespace Experimental {
@@ -88,6 +90,37 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   value_type &operator[](const int i) const { return _data[i]; }
+
+#ifdef NDEBUG
+  // left, right specify the closed range of indices to set to quiet NaNs
+  KOKKOS_INLINE_FUNCTION
+  void debug_set_invalid(int left, int right) {}
+#else
+  KOKKOS_INLINE_FUNCTION
+  void debug_set_invalid(int left, int right) {
+    for(int i = left; i <= right; i++) {
+      _data[i] = 0.0 / 0.0;
+    }
+  }
+#endif
+
+  KOKKOS_INLINE_FUNCTION
+  void shift_left(int num_values) {
+    assert(num_values > 0);
+    for(int i = 0; i < vector_length - num_values; i++) {
+      _data[i] = _data[i + num_values];
+    }
+    debug_set_invalid(vector_length - num_values, vector_length - 1);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void shift_right(int num_values) {
+    assert(num_values > 0);
+    for(int i = vector_length - 1; i >= num_values; i--) {
+      _data[i] = _data[i - num_values];
+    }
+    debug_set_invalid(0, num_values - 1);
+  }
 };
 
 template <typename T, typename SpT, int l>
