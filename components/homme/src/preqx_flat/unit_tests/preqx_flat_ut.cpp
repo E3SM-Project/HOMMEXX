@@ -320,12 +320,15 @@ class compute_sphere_operator_test_ml {
         mp_d("mp", num_elems), 
         dvv_d("dvv"),
         tensor_d("tensor", num_elems),
+        vec_sph2cart_d("ver_sph2cart", num_elems),
         scalar_output_d("scalar output", num_elems),
         vector_output_d("vector output", num_elems),
         temp1_d("temp1", num_elems),
         temp2_d("temp2", num_elems),
         temp3_d("temp3", num_elems),
-        temp4_d("temp4"),
+        temp4_d("temp4", num_elems),
+        temp5_d("temp5", num_elems),
+        temp6_d("temp6", num_elems),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
         vector_input_host(
@@ -340,13 +343,19 @@ class compute_sphere_operator_test_ml {
             Kokkos::create_mirror_view(mp_d)),
         dvv_host(Kokkos::create_mirror_view(dvv_d)),
         tensor_host(Kokkos::create_mirror_view(tensor_d)),
+        vec_sph2cart_host(Kokkos::create_mirror_view(vec_sph2cart_d)),
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
             Kokkos::create_mirror_view(vector_output_d)),
+//are these lines needed?
         temp1_host(Kokkos::create_mirror_view(temp1_d)),
         temp2_host(Kokkos::create_mirror_view(temp2_d)),
         temp3_host(Kokkos::create_mirror_view(temp3_d)),
+//are these lines needed?
+        temp4_host(Kokkos::create_mirror_view(temp4_d)),
+        temp5_host(Kokkos::create_mirror_view(temp5_d)),
+        temp6_host(Kokkos::create_mirror_view(temp6_d)),
         _num_elems(num_elems) {
     std::random_device rd;
     rngAlg engine(rd());
@@ -385,8 +394,9 @@ class compute_sphere_operator_test_ml {
     genRandArray(
         tensor_host.data(), tensor_len * _num_elems, engine,
         std::uniform_real_distribution<Real>(-1000, 1000.0));
-
-
+    genRandArray(
+        vec_sph2cart_host.data(), vec_sph2cart_len * _num_elems, engine,
+        std::uniform_real_distribution<Real>(-1000, 1000.0));
 //setting everything to 1 is good for debugging
 #if 1
 for(int i1=0; i1<_num_elems; i1++)
@@ -425,6 +435,7 @@ for(int i3=0; i3<NP; i3++){
   ExecViewManaged<Real * [NP][NP]> metdet_d;
   ExecViewManaged<Real[NP][NP]> dvv_d;
   ExecViewManaged<Real * [2][2][NP][NP]> tensor_d;
+  ExecViewManaged<Real * [2][3][NP][NP]> vec_sph2cart_d;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
       scalar_output_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
@@ -434,8 +445,7 @@ for(int i3=0; i3<NP; i3++){
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temp1_d,
       temp2_d, temp3_d;
 
-  ExecViewManaged<Scalar [NP][NP][NUM_LEV]>
-      temp4_d;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temp4_d, temp5_d, temp6_d;
 
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
@@ -478,13 +488,23 @@ for(int i3=0; i3<NP; i3++){
       tensor_host;
   const int tensor_len = 2 * 2 * NP * NP;  // temp code
 
+  ExecViewManaged<Real * [2][3][NP][NP]>::HostMirror
+      vec_sph2cart_host;
+  const int vec_sph2cart_len = 2 * 3 * NP * NP;  // temp code
+
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
       scalar_output_host;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
       vector_output_host;
+
+//do we need host views of temps???
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
       temp1_host,
       temp2_host, temp3_host;
+
+//same here -- is this needed?
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror temp4_host,
+      temp5_host, temp6_host;
 
   // tag for laplace_simple()
   struct TagSimpleLaplaceML {};
@@ -500,6 +520,8 @@ for(int i3=0; i3<NP; i3++){
   struct TagCurlSphereWkTestCovML {};
   // tag for grad_sphere_wk_testcov
   struct TagGradSphereWkTestCovML {};
+  // tag for vlaplace_sphere_wk_cartesian_reduced
+  struct TagVLaplaceCartesianReduceML {};
   // tag for default, a dummy
   struct TagDefault {};
 
@@ -652,7 +674,7 @@ for(int i3=0; i3<NP; i3++){
     for(int i=0; i< NP; i++)
     for(int j=0; j< NP; j++)
     for(int k = 0; k< NUM_LEV; k++){
-       temp4_d(i,j,k) = local_scalar_input_d(i,j,k);
+       temp4_d(_index,i,j,k) = local_scalar_input_d(i,j,k);
     }
 
 //NOT YET WORKING 
@@ -670,7 +692,7 @@ for(int i3=0; i3<NP; i3++){
     for(int j=0; j< NP; j++)
     for(int k = 0; k< NUM_LEV; k++){
        local_scalar_output_d(i,j,k) = local_scalar_input_d(i,j,k);
-       local_scalar_input_d(i,j,k) = temp4_d(i,j,k);
+       local_scalar_input_d(i,j,k) = temp4_d(_index,i,j,k);
     }
 
 
@@ -730,6 +752,38 @@ for(int i3=0; i3<NP; i3++){
 
   }  // end of op() for grad_sphere_wk_testcov
 
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagVLaplaceCartesianReduceML &,
+                  TeamMember team) const {
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
+        local_scalar_input_d = Kokkos::subview(
+            scalar_input_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
+        local_scalar_output_d = Kokkos::subview(
+            scalar_output_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
+        local_temp1_d = Kokkos::subview(
+            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+        [&](const int &level) {
+          kv.ilev = level;
+          laplace_tensor(kv, dinv_d, spheremp_d, dvv_d, tensor_d,
+                     local_temp1_d, local_scalar_input_d,
+                     local_scalar_output_d);
+        });  // end parallel_for for level
+
+  }  // end of op() for laplace_tensor multil
 
 
   void run_functor_gradient_sphere() const {
