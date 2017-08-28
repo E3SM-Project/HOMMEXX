@@ -438,6 +438,45 @@ KOKKOS_INLINE_FUNCTION void laplace_tensor(
        divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
 }//end of laplace_tensor
 
+
+//a version of laplace_tensor where input is replaced by output
+KOKKOS_INLINE_FUNCTION void laplace_tensor_replace(
+    const KernelVariables &kv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> DInv, // for grad, div
+    const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,     // for div
+    const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+    const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace) { //input/output
+
+       gradient_sphere(kv, DInv, dvv, laplace, grad_s);
+       constexpr int num_iters = NP * NP;
+       Scalar gv[2][NP][NP];
+       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                          [&](const int loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          gv[0][igp][jgp] = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                            tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+          gv[1][igp][jgp] = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                            tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+       });
+
+       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                          [&](const int loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          grad_s(0,igp,jgp, kv.ilev) = gv[0][igp][jgp];
+          grad_s(1,igp,jgp, kv.ilev) = gv[1][igp][jgp];
+       });
+
+       divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, laplace);
+}//end of laplace_tensor_replace
+
+
+
+
+
 //check mp, why is it an ie quantity?
 KOKKOS_INLINE_FUNCTION void
 curl_sphere_wk_testcov(const KernelVariables &kv,

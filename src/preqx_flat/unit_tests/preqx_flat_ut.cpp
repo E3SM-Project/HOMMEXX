@@ -325,6 +325,7 @@ class compute_sphere_operator_test_ml {
         temp1_d("temp1", num_elems),
         temp2_d("temp2", num_elems),
         temp3_d("temp3", num_elems),
+        temp4_d("temp4"),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
         vector_input_host(
@@ -433,6 +434,9 @@ for(int i3=0; i3<NP; i3++){
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temp1_d,
       temp2_d, temp3_d;
 
+  ExecViewManaged<Scalar [NP][NP][NUM_LEV]>
+      temp4_d;
+
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
@@ -490,6 +494,8 @@ for(int i3=0; i3<NP; i3++){
   struct TagDivergenceSphereWkML {};
   // tag for laplace_tensor
   struct TagTensorLaplaceML {};
+  // tag for laplace_tensor
+  struct TagTensorLaplaceReplaceML {};
   // tag for curl_sphere_wk_testcov
   struct TagCurlSphereWkTestCovML {};
   // tag for grad_sphere_wk_testcov
@@ -622,6 +628,56 @@ for(int i3=0; i3<NP; i3++){
 
 
   KOKKOS_INLINE_FUNCTION
+  void operator()(const TagTensorLaplaceReplaceML &,
+                  TeamMember team) const {
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
+        local_scalar_input_d = Kokkos::subview(
+            scalar_input_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
+        local_scalar_output_d = Kokkos::subview(
+            scalar_output_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+//temp vars could have no ie dim from the start...
+    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
+        local_temp1_d = Kokkos::subview(
+            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    for(int i=0; i< NP; i++)
+    for(int j=0; j< NP; j++)
+    for(int k = 0; k< NUM_LEV; k++){
+       temp4_d(i,j,k) = local_scalar_input_d(i,j,k);
+    }
+
+//NOT YET WORKING 
+//here is a problem, we'd like to store input in the usual variable
+//for F and output in the usual variable for comparison.
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+        [&](const int &level) {
+          kv.ilev = level;
+          laplace_tensor_replace(kv, dinv_d, spheremp_d, dvv_d, tensor_d,
+                     local_temp1_d, local_scalar_input_d);
+        });  // end parallel_for for level
+//record local_input to output, replace local_input
+    for(int i=0; i< NP; i++)
+    for(int j=0; j< NP; j++)
+    for(int k = 0; k< NUM_LEV; k++){
+       local_scalar_output_d(i,j,k) = local_scalar_input_d(i,j,k);
+       local_scalar_input_d(i,j,k) = temp4_d(i,j,k);
+    }
+
+
+  }  // end of op() for laplace_tensor multil
+
+
+  KOKKOS_INLINE_FUNCTION
   void operator()(const TagCurlSphereWkTestCovML &,
                   TeamMember team) const {
     KernelVariables kv(team);
@@ -704,6 +760,14 @@ for(int i3=0; i3<NP; i3++){
 
   void run_functor_tensor_laplace() const {
     Kokkos::TeamPolicy<ExecSpace, TagTensorLaplaceML>
+        policy(_num_elems, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
+  };
+
+  void run_functor_tensor_laplace_replace() const {
+    Kokkos::TeamPolicy<ExecSpace, TagTensorLaplaceReplaceML>
         policy(_num_elems, 16);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
@@ -1469,6 +1533,86 @@ bool _vc = true;
   std::cout << "test laplace_tensor multilevel finished. \n";
 
 }  // end of test laplace_tensor multilevel
+
+
+
+TEST_CASE("Testing laplace_tensor_replace() multilevel",
+          "laplace_tensor_replace") {
+  constexpr const Real rel_threshold =
+      1E-15;  // let's move this somewhere in *hpp?
+  constexpr const int elements = 10;
+
+  compute_sphere_operator_test_ml testing_tensor_laplace(
+      elements);
+std::cout << "here 1 \n";
+  testing_tensor_laplace.run_functor_tensor_laplace_replace();
+
+std::cout << "here 2 \n";
+  for(int _index = 0; _index < elements; _index++) {
+    for(int level = 0; level < NUM_LEV; ++level) {
+      for(int v = 0; v < VECTOR_SIZE; ++v) {
+        Real local_fortran_output[NP][NP];
+        Real sf[NP][NP];
+        Real dvvf[NP][NP];
+        Real dinvf[2][2][NP][NP];
+        Real tensorf[2][2][NP][NP];
+        Real sphf[NP][NP];
+
+        for(int _i = 0; _i < NP; _i++)
+          for(int _j = 0; _j < NP; _j++) {
+            sf[_i][_j] =
+                testing_tensor_laplace.scalar_input_host(
+                    _index, _i, _j, level)[v];
+            sphf[_i][_j] = testing_tensor_laplace.spheremp_host(
+                _index, _i, _j);
+            dvvf[_i][_j] =
+                testing_tensor_laplace.dvv_host(_i, _j);
+            for(int _d1 = 0; _d1 < 2; _d1++)
+              for(int _d2 = 0; _d2 < 2; _d2++){
+
+                dinvf[_d1][_d2][_i][_j] =
+     testing_tensor_laplace.dinv_host( _index, _d1, _d2, _i, _j);
+
+                tensorf[_d1][_d2][_i][_j] =
+     testing_tensor_laplace.tensor_host( _index, _d1, _d2, _i, _j);
+
+              }//end of d2 loop
+          }
+
+Real _hp = 0.0;
+Real _hs = 1.0;
+bool _vc = true;
+
+        laplace_sphere_wk_c_callable(&(sf[0][0]), &(dvvf[0][0]),
+                             &(dinvf[0][0][0][0]),
+                             &(sphf[0][0]),&(tensorf[0][0][0][0]),
+                             _hp, _hs,
+                             &_vc,
+                             &(local_fortran_output[0][0]));
+
+        for(int igp = 0; igp < NP; ++igp) {
+          for(int jgp = 0; jgp < NP; ++jgp) {
+
+            Real coutput0 =
+                testing_tensor_laplace.scalar_output_host(
+                    _index, igp, jgp, level)[v];
+
+           REQUIRE(!std::isnan(
+                local_fortran_output[igp][jgp]));
+            REQUIRE(!std::isnan(coutput0));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(
+                        local_fortran_output[igp][jgp],
+                        coutput0, 128.0));
+          }  // jgp
+        }    // igp
+      }      // v
+    }        // level
+  }          //_index
+
+  std::cout << "test laplace_tensor_replace multilevel finished. \n";
+
+}  // end of test laplace_tensor_replace multilevel
 
 
 
