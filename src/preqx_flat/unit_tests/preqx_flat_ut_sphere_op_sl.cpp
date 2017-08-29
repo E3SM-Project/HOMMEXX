@@ -38,25 +38,6 @@ void divergence_sphere_wk_c_callable(const Real *input,
 
 }  // extern C
 
-/*
-Real compare_answers(Real target, Real computed,
-                     Real relative_coeff = 1.0) {
-  Real denom = 1.0;
-  if(relative_coeff > 0.0 && target != 0.0) {
-    denom = relative_coeff * std::fabs(target);
-  }
-  return std::fabs(target - computed) / denom;
-}  // end of definition of compare_answers()
-
-void genRandArray(
-    Real *arr, int arr_len, rngAlg &engine,
-    std::uniform_real_distribution<Real> pdf) {
-  for(int i = 0; i < arr_len; ++i) {
-    arr[i] = pdf(engine);
-  }
-}  // end of definition of genRandArray()
-*/
-
 class compute_sphere_operator_test {
  public:
   compute_sphere_operator_test(int num_elems)
