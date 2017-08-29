@@ -1351,12 +1351,6 @@ end do
     integer i,j,l,m,n
     real(kind=real_kind) ::  dscontra(np,np,2)
 
-print *, 'In CURL.....'
-print *, 's(1,1)=', s(1,1), ' mp(1,1)= ', elem%mp(1,1), ' deriv =',deriv%dvv(1,1)
-print *, 'D = ', elem%D(1,1,1,1) 
-
-
-
     dscontra=0
     do n=1,np
        do m=1,np
@@ -1370,13 +1364,6 @@ print *, 'D = ', elem%D(1,1,1,1)
        enddo
     enddo
 
-
-    do i=1,np
-       do j=1,np
-print *, 'i,j=',i,j, dscontra(i,j,1), dscontra(i,j,2)
-       enddo
-    enddo
-
     ! convert contra -> latlon
     do j=1,np
        do i=1,np
@@ -1384,7 +1371,7 @@ print *, 'i,j=',i,j, dscontra(i,j,1), dscontra(i,j,2)
           ds(i,j,2)=(elem%D(i,j,2,1)*dscontra(i,j,1) + elem%D(i,j,2,2)*dscontra(i,j,2))
        enddo
     enddo
-    end function curl_sphere_wk_testcov
+  end function curl_sphere_wk_testcov
 
 
   subroutine curl_sphere_wk_testcov_c_callable(s,dvv,D,mp,ds) bind(c)
@@ -2449,7 +2436,7 @@ print *, 'i,j=',i,j, dscontra(i,j,1), dscontra(i,j,2)
 
 
 
-!OG logins around hvpower, ... var_coef is not clear, but cleaning it
+!OG logics around hvpower, ... var_coef is not clear, but cleaning it
 !would mean a different *nl for F and C, so, keeping these vars for now.
   subroutine vlaplace_sphere_wk_cartesian_c_callable(v, dvv, dinv, spheremp, &
              tensorVisc, vec_sph2cart, hvpower, hvscaling, var_coef, laplace) bind(c)

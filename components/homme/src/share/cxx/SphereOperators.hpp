@@ -593,7 +593,10 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
   });
 }
 
+
+//this version needs too many temp vars
 //needs dvv, dinv, spheremp, tensor, vec_sph2cart, 
+//NOT TESTED, not verified, MISSING LINES FOR RIGID ROTATION
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
                 const ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
@@ -659,6 +662,92 @@ vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
 
 
 }//end of vlaplace_cartesian
+
+
+
+KOKKOS_INLINE_FUNCTION void
+vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
+                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+                const ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
+                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+//temp vars
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> grads,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace0,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace1,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> laplace2,
+//input
+                const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> vector,
+//output
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> laplace) {
+  constexpr int np_squared = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    laplace0(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,0,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+    laplace1(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,1,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,1,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+    laplace2(igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,2,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                        + vec_sph2cart(kv.ie,1,2,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
+  });
+
+//std::cout<< "comp0 = laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
+
+  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace0);
+
+//std::cout<< "after laplace laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
+
+  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace1);
+  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace2);
+
+//std::cout<< "after all laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+
+//std::cout << "i,j= " << igp << ", " << jgp <<
+// "laplace 0, 1, 2 = " << laplace0(igp,jgp,kv.ilev)[0] <<
+//" " << laplace1(igp,jgp,kv.ilev)[0] << " " << laplace2(igp,jgp,kv.ilev)[0] << "\n";
+
+    laplace(0,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,0,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+
+    laplace(1,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,1,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,1,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,1,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+
+//std::cout << "result = " << laplace(0,igp,jgp,kv.ilev)[0] << ", " << laplace(1,igp,jgp,kv.ilev)[0] << "\n"; 
+
+  });
+
+#define UNDAMPRRCART
+#ifdef UNDAMPRRCART
+//rigid rotation is not damped
+//this code can be brought to the loop above
+
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    laplace(0,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+
+    laplace(1,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+  });
+
+#endif
+
+}//end of vlaplace_cartesian_reduced
+
+
+
 
 
 } // namespace Homme
