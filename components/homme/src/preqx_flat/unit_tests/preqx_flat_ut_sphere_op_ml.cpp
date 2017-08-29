@@ -10,7 +10,6 @@
 #include "Types.hpp"
 
 #include "utils_flat_ut.cpp"
-//#include "preqx_flat_ut_sphere_op_sl.cpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -87,25 +86,6 @@ void vlaplace_sphere_wk_cartesian_c_callable(const Real * input,
                                              Real * output);
 
 }  // extern C
-
-/*
-Real compare_answers(Real target, Real computed,
-                     Real relative_coeff = 1.0) {
-  Real denom = 1.0;
-  if(relative_coeff > 0.0 && target != 0.0) {
-    denom = relative_coeff * std::fabs(target);
-  }
-  return std::fabs(target - computed) / denom;
-}  // end of definition of compare_answers()
-
-void genRandArray(
-    Real *arr, int arr_len, rngAlg &engine,
-    std::uniform_real_distribution<Real> pdf) {
-  for(int i = 0; i < arr_len; ++i) {
-    arr[i] = pdf(engine);
-  }
-}  // end of definition of genRandArray()
-*/
 
 
 class compute_sphere_operator_test_ml {
@@ -975,10 +955,8 @@ TEST_CASE("Testing laplace_tensor_replace() multilevel",
 
   compute_sphere_operator_test_ml testing_tensor_laplace(
       elements);
-std::cout << "here 1 \n";
   testing_tensor_laplace.run_functor_tensor_laplace_replace();
 
-std::cout << "here 2 \n";
   for(int _index = 0; _index < elements; _index++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
@@ -1028,9 +1006,6 @@ bool _vc = true;
                 testing_tensor_laplace.scalar_output_host(
                     _index, igp, jgp, level)[v];
 
-std::cout << igp << "," << jgp << " F output0  = " <<
-local_fortran_output[igp][jgp] << ", C output0 = " << coutput0 << "\n";
-
            REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
@@ -1047,10 +1022,6 @@ local_fortran_output[igp][jgp] << ", C output0 = " << coutput0 << "\n";
   std::cout << "test laplace_tensor_replace multilevel finished. \n";
 
 }  // end of test laplace_tensor_replace multilevel
-
-
-
-
 
 
 
@@ -1154,13 +1125,9 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 1;
 
-std::cout << "here 1 \n";
-
   compute_sphere_operator_test_ml testing_grad(
       elements);
   testing_grad.run_functor_grad_sphere_wk_testcov();
-
-std::cout << "here 2 \n";
 
   for(int _index = 0; _index < elements; _index++) {
     for(int level = 0; level < NUM_LEV; ++level) {
@@ -1254,16 +1221,14 @@ std::cout << "here 2 \n";
 
 
 
-TEST_CASE("Testing vlaplace_sphere_wk_cartesian_reduced() multilevel",
-          "vlaplace_sphere_wk_cartesian_reduced") {
+TEST_CASE("Testing vlaplace_sphere_wk_cartesian() multilevel",
+          "vlaplace_sphere_wk_cartesian") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 1;
 
   compute_sphere_operator_test_ml testing_vlaplace(elements);
-std::cout << "here vlap cart 1 \n";
   testing_vlaplace.run_functor_vlaplace_cartesian_reduced();
-std::cout << "here vlap cart 2 \n";
 
   for(int _index = 0; _index < elements; _index++) {
     for(int level = 0; level < NUM_LEV; ++level) {
@@ -1318,8 +1283,8 @@ bool _vc = true;
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
 
-            Real coutput0 =testing_vlaplace.vector_output_host(_index, 0, igp, jgp, level)[v];
-            Real coutput1 =testing_vlaplace.vector_output_host(_index, 1, igp, jgp, level)[v];
+            Real coutput0 = testing_vlaplace.vector_output_host(_index, 0, igp, jgp, level)[v];
+            Real coutput1 = testing_vlaplace.vector_output_host(_index, 1, igp, jgp, level)[v];
 
             REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
@@ -1339,7 +1304,7 @@ bool _vc = true;
     }        // level
   }          //_index
 
-  std::cout << "test laplace_tensor_replace multilevel finished. \n";
+  std::cout << "test vlaplace_sphere_wk_cartesian multilevel finished. \n";
 
 }  // end of test laplace_tensor_replace multilevel
 

@@ -238,7 +238,7 @@ TEST_CASE("monolithic compute_and_apply_rhs",
       }
     }
   }
-  std::cout << "test finished.\n";
+  std::cout << "CaarFunctor: compute_energy_grad() test finished.\n";
 };  // end of TEST_CASE(...,"compute_energy_grad")
 
 
