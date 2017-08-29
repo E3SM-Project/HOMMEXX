@@ -443,14 +443,13 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Scalar tmp = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev);
-      tmp.shift_right(1);
-      tmp[0] = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev + 1)[VECTOR_SIZE - 1];
+      tmp.shift_left(1);
+      tmp[VECTOR_SIZE - 1] = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev + 1)[0];
       // Add div_vdp before subtracting the previous value to eta_dot_dpdn
       // This will hopefully reduce numeric error
       tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, kv.ilev);
       tmp -= m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev);
-      tmp *= m_data.dt2;
-      tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev) - tmp;
+      tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev) - tmp * m_data.dt2;
 
       m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
           m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
