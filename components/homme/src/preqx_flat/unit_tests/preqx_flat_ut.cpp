@@ -309,7 +309,9 @@ class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    functor.preq_omega_ps(kv);
+    if(kv.team.team_rank() == 0) {
+      functor.preq_omega_ps(kv);
+    }
   }
 };
 
