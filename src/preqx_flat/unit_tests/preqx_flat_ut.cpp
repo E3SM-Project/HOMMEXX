@@ -1988,21 +1988,8 @@ bool _vc = true;
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
 
-
             Real coutput0 =testing_vlaplace.vector_output_host(_index, 0, igp, jgp, level)[v];
             Real coutput1 =testing_vlaplace.vector_output_host(_index, 1, igp, jgp, level)[v];
-
-
-std::cout << igp << "," << jgp << " F output0  = " <<
-local_fortran_output[0][igp][jgp] << ", C output0 = " << coutput0 << "\n";
-//std::cout << "difference=" << local_fortran_output[0][igp][jgp] - coutput0 << "\n";
-std::cout << igp << "," << jgp << " F output1  = " <<
-local_fortran_output[1][igp][jgp] << ", C output1 = " << coutput1 << "\n";
-//std::cout << "rel difference=" << (local_fortran_output[0][igp][jgp] - coutput0)/coutput0 << "\n";
-//std::cout << "difference=" << local_fortran_output[1][igp][jgp] - coutput1 << "\n";
-//std::cout << "rel difference=" << (local_fortran_output[1][igp][jgp] - coutput1)/coutput1 << "\n";
-//std::cout << "epsilon = " << std::numeric_limits<Real>::epsilon() << "\n";
-
 
             REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
