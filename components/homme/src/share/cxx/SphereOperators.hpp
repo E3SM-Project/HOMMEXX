@@ -694,26 +694,14 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
                         + vec_sph2cart(kv.ie,1,2,igp,jgp)*vector(1,igp,jgp,kv.ilev) ;
   });
 
-//std::cout<< "comp0 = laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
-
   laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace0);
-
-//std::cout<< "after laplace laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
-
   laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace1);
   laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,laplace2);
-
-//std::cout<< "after all laplace0 = " << laplace0(0,0,kv.ilev)[0] << "\n";
 
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
-
-//std::cout << "i,j= " << igp << ", " << jgp <<
-// "laplace 0, 1, 2 = " << laplace0(igp,jgp,kv.ilev)[0] <<
-//" " << laplace1(igp,jgp,kv.ilev)[0] << " " << laplace2(igp,jgp,kv.ilev)[0] << "\n";
-
     laplace(0,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,0,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
@@ -721,9 +709,6 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
     laplace(1,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,1,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,1,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,1,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
-
-//std::cout << "result = " << laplace(0,igp,jgp,kv.ilev)[0] << ", " << laplace(1,igp,jgp,kv.ilev)[0] << "\n"; 
-
   });
 
 #define UNDAMPRRCART
