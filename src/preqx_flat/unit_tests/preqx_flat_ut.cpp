@@ -1,6 +1,8 @@
 #include <catch/catch.hpp>
 
 #include <limits>
+#include <random>
+#include <type_traits>
 
 #include "Control.hpp"
 #include "CaarFunctor.hpp"
@@ -14,7 +16,6 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <random>
 
 using namespace Homme;
 
@@ -155,6 +156,12 @@ public:
   static constexpr Real dt2 = 1.0;
   static constexpr Real eta_ave_w = 1.0;
 };
+// Template to verify at compile time that a view has the specified array type
+template <typename ViewT, typename ArrayT> struct exec_view_mappable {
+  using exec_view = ExecViewUnmanaged<ArrayT>;
+  static constexpr bool value = Kokkos::Impl::ViewMapping<
+      typename ViewT::traits, typename exec_view::traits, void>::is_assignable;
+};
 
 void sync_to_host(
     ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> source,
@@ -180,10 +187,43 @@ void sync_to_host(
   }
 }
 
-void
-sync_to_host(ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]> source_1,
-             ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]> source_2,
-             HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> dest) {
+// Kokkos views cannot be used to determine which overloaded function to call,
+// so implement this check ourselves with enable_if
+// TODO: Move these to Utility.hpp
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T,
+                       Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::value,
+    void>::type
+sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
+  ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
+  source_1_mirror(Kokkos::create_mirror_view(source_1)),
+      source_2_mirror(Kokkos::create_mirror_view(source_2));
+  Kokkos::deep_copy(source_1_mirror, source_1);
+  Kokkos::deep_copy(source_2_mirror, source_2);
+  for (int ie = 0; ie < source_1.extent_int(0); ++ie) {
+    for (int time = 0; time < NUM_TIME_LEVELS; ++time) {
+      for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+           ++vector_level) {
+        for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              dest(ie, time, level, 0, igp, jgp) =
+                  source_1_mirror(ie, time, igp, jgp, vector_level)[vector];
+              dest(ie, time, level, 1, igp, jgp) =
+                  source_2_mirror(ie, time, igp, jgp, vector_level)[vector];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV]>::value, void>::type
+sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror source_1_mirror(
       Kokkos::create_mirror_view(source_1)),
       source_2_mirror(Kokkos::create_mirror_view(source_2));
@@ -309,7 +349,7 @@ class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if(kv.team.team_rank() == 0) {
+    if (kv.team.team_rank() == 0) {
       functor.preq_omega_ps(kv);
     }
   }
@@ -463,10 +503,10 @@ public:
   }
 };
 
-TEST_CASE("vdp_vn0_test", "monolithic compute_and_apply_rhs") {
+TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 2048.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 1;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -512,7 +552,7 @@ TEST_CASE("vdp_vn0_test", "monolithic compute_and_apply_rhs") {
               // Check vdp
               Real correct = vdp_f90(hgp, igp, jgp);
               REQUIRE(!std::isnan(correct));
-              Real computed = vdp(ie, hgp, igp, jgp, level)[0];
+              Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
               REQUIRE(!std::isnan(computed));
               Real rel_error = compare_answers(correct, computed);
               REQUIRE(correct != 0.0);
@@ -522,7 +562,7 @@ TEST_CASE("vdp_vn0_test", "monolithic compute_and_apply_rhs") {
               // Check div_vdp
               Real correct = div_vdp_f90(igp, jgp);
               REQUIRE(!std::isnan(correct));
-              Real computed = div_vdp(ie, igp, jgp, level)[0];
+              Real computed = div_vdp(ie, igp, jgp, vec_lev)[vector];
               REQUIRE(!std::isnan(computed));
               Real rel_error = compare_answers(correct, computed);
               REQUIRE(correct != 0.0);
