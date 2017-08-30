@@ -702,15 +702,30 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
+#define UNDAMPRRCART
+#ifdef UNDAMPRRCART
     laplace(0,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,0,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
-                       + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+                       + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev)
+                       + 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
 
     laplace(1,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,1,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,1,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,1,2,igp,jgp)*laplace2(igp,jgp,kv.ilev)
+                       + 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+#else
+    laplace(0,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,0,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,0,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,0,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+    laplace(1,igp,jgp,kv.ilev) = vec_sph2cart(kv.ie,1,0,igp,jgp)*laplace0(igp,jgp,kv.ilev)
+                       + vec_sph2cart(kv.ie,1,1,igp,jgp)*laplace1(igp,jgp,kv.ilev)
                        + vec_sph2cart(kv.ie,1,2,igp,jgp)*laplace2(igp,jgp,kv.ilev);
+#endif
   });
 
+/*
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
 //rigid rotation is not damped
@@ -728,6 +743,8 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
   });
 
 #endif
+*/
+
 
 }//end of vlaplace_cartesian_reduced
 
