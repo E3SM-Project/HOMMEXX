@@ -2421,17 +2421,27 @@ end do
     do component=1,2
        ! vec_sphere2cart is its own pseudoinverse.
 !JMD       laplace(:,:,component)=sum( dum_cart(:,:,:)*elem%vec_sphere2cart(:,:,:,component) ,3)
-       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
-                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
-                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component)
-    end do
 
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
-    ! add in correction so we dont damp rigid rotation
-    laplace(:,:,1)=laplace(:,:,1) + 2*elem%spheremp(:,:)*v(:,:,1)*(rrearth**2)
-    laplace(:,:,2)=laplace(:,:,2) + 2*elem%spheremp(:,:)*v(:,:,2)*(rrearth**2)
+       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
+                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
+                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component) + &
+                                2*elem%spheremp(:,:)*v(:,:,component)*(rrearth**2)
+#else
+       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
+                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
+                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component) 
 #endif
+    end do
+
+!#define UNDAMPRRCART
+!#ifdef UNDAMPRRCART
+!    ! add in correction so we dont damp rigid rotation
+!    laplace(:,:,1)=laplace(:,:,1) + 2*elem%spheremp(:,:)*v(:,:,1)*(rrearth**2)
+!    laplace(:,:,2)=laplace(:,:,2) + 2*elem%spheremp(:,:)*v(:,:,2)*(rrearth**2)
+!#endif
+
   end function vlaplace_sphere_wk_cartesian
 
 
