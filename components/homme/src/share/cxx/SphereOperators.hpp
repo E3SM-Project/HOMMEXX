@@ -506,9 +506,9 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
 //One can move multiplication by rrearth to the last loop, but it breaks BFB
 //property for curl. 
     dscontra[0][ngp][mgp] -= 
-       mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,kv.ilev)*dvv(jgp,ngp)*PhysicalConstants::rrearth; 
+       mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,kv.ilev)*dvv(jgp,ngp); 
     dscontra[1][ngp][mgp] += 
-       mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,kv.ilev)*dvv(jgp,mgp)*PhysicalConstants::rrearth; 
+       mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,kv.ilev)*dvv(jgp,mgp); 
   });
 
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
@@ -516,9 +516,11 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
     curls(0,igp,jgp,kv.ilev) = (D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]); 
+                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp])
+                             *PhysicalConstants::rrearth; 
     curls(1,igp,jgp,kv.ilev) = (D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]); 
+                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp])
+                             *PhysicalConstants::rrearth; 
   });
 }
 
