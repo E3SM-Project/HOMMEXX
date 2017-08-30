@@ -561,8 +561,8 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
        metinv(kv.ie,0,1,ngp,mgp)*
        metdet(kv.ie,ngp,mgp)*
        scalar(jgp,mgp,kv.ilev)*
-       dvv(jgp,ngp)
-                            )*PhysicalConstants::rrearth;
+       dvv(jgp,ngp));
+//                            )*PhysicalConstants::rrearth;
 
     dscontra[1][ngp][mgp] -=(
        mp(kv.ie,ngp,jgp)*
@@ -575,8 +575,8 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
        metinv(kv.ie,1,1,ngp,mgp)*
        metdet(kv.ie,ngp,mgp)*
        scalar(jgp,mgp,kv.ilev)*
-       dvv(jgp,ngp)
-                            )*PhysicalConstants::rrearth;
+       dvv(jgp,ngp));
+//                            )*PhysicalConstants::rrearth;
 
   });
 
@@ -587,9 +587,11 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
     grads(0,igp,jgp,kv.ilev) = (D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp]);
+                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp])
+                             *PhysicalConstants::rrearth;
     grads(1,igp,jgp,kv.ilev) = (D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp]);
+                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp])
+                             *PhysicalConstants::rrearth;
   });
 }
 
