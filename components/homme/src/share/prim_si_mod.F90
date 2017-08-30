@@ -197,9 +197,6 @@ contains
         end do
       end do
    end do
-   ! pressure is correct
-   ! vgrad_p is correct
-   ! div_vdp is correct
 
     call preq_omega_ps(omega_p, hvcoord, pressure, vgrad_p, divdp)
   end subroutine preq_omega_ps_c_int
