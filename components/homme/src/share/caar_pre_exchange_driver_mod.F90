@@ -262,6 +262,33 @@ contains
 #endif
   end subroutine caar_compute_divdp_c_int
 
+  subroutine caar_compute_pressure_c_int(hyai, ps0, dp, pressure) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: hyai
+    real (kind=real_kind), intent(in) :: ps0
+    real (kind=real_kind), intent(in) :: dp(np, np, nlev)
+    real (kind=real_kind), intent(out) :: pressure(np, np, nlev)
+
+    integer :: i, j, k
+    do j = 1, np
+      do i = 1, np
+        pressure(i, j, 1) = hyai * ps0 + dp(i, j, 1) / 2
+      end do
+    end do
+    do k = 2, nlev
+      do j = 1, np
+        do i = 1, np
+          pressure(i, j, k) = pressure(i, j, k - 1) + &
+               dp(i, j, k - 1) / 2 + dp(i, j, k) / 2
+        end do
+      end do
+    end do
+  end subroutine caar_compute_pressure_c_int
+
   ! computes derived_vn0, vdp and divdp
   subroutine caar_compute_divdp(elem, deriv, eta_ave_w, dp3d, &
                                 velocity, derived_vn0, vdp, divdp)
@@ -413,7 +440,9 @@ contains
         do k=1,nlev
           dp(:,:,k) = (hvcoord%hyai(k+1)*hvcoord%ps0 + hvcoord%hybi(k+1)*elem(ie)%state%ps_v(:,:,n0)) &
                - (hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0))
+
           p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,n0)
+
           grad_p(:,:,:,k) = hvcoord%hybm(k)*grad_ps(:,:,:)
         enddo
       else
@@ -426,11 +455,10 @@ contains
         ! p(k+1)-p(k) = ph(k+1)-ph(k) + (dp(k+1)-dp(k))/2
         !             = dp(k) + (dp(k+1)-dp(k))/2 = (dp(k+1)+dp(k))/2
         dp(:,:,1) = elem(ie)%state%dp3d(:,:,1,n0)
-        p(:,:,1)=hvcoord%hyai(1)*hvcoord%ps0 + dp(:,:,1)/2
         do k=2,nlev
           dp(:,:,k) = elem(ie)%state%dp3d(:,:,k,n0)
-          p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
         enddo
+        call caar_compute_pressure_c_int(hvcoord%hyai(1), hvcoord%ps0, dp, p)
       endif
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,v1,v2,vtemp)

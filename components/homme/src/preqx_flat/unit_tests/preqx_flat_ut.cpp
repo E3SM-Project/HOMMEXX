@@ -42,8 +42,10 @@ void caar_compute_divdp_c_int(const Real eta_ave_w, const Real *velocity,
                               const Real *metdet, const Real *dvv,
                               Real *derived_vn0, Real *vdp, Real *divdp);
 
-}  // extern C
+void caar_compute_pressure_c_int(const Real &hyai, const Real &ps0,
+                                 const Real *dp, Real *pressure);
 
+}  // extern C
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
   Real denom = 1.0;
@@ -152,7 +154,7 @@ public:
   static constexpr int np1 = 2;
   static constexpr int np1_f90 = np1 + 1;
   static constexpr int qn0 = -1;
-  static constexpr int ps0 = 1;
+  static constexpr Real ps0 = 1.0;
   static constexpr Real dt2 = 1.0;
   static constexpr Real eta_ave_w = 1.0;
 };
@@ -280,7 +282,7 @@ public:
 
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
-      std::numeric_limits<Real>::epsilon() * 2048.0;
+      std::numeric_limits<Real>::epsilon() * 32768.0;
   constexpr const int num_elems = 10;
 
   std::random_device rd;
@@ -292,7 +294,7 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(region);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
   test_functor.run_functor();
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad("energy_grad",
                                                              num_elems);
@@ -357,7 +359,7 @@ public:
 
 TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
-      std::numeric_limits<Real>::epsilon() * 128.0;
+      std::numeric_limits<Real>::epsilon() * 256.0;
   constexpr const int num_elems = 10;
 
   std::random_device rd;
@@ -365,7 +367,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
+  Elements &elements = get_elements();
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
@@ -380,7 +382,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
                std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
-  compute_subfunctor_test<preq_omega_ps_test> test_functor(region);
+  compute_subfunctor_test<preq_omega_ps_test> test_functor(elements);
   test_functor.run_functor();
   // Results of the computation
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
@@ -438,7 +440,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
+  Elements &elements = get_elements();
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
@@ -448,7 +450,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
                std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
-  compute_subfunctor_test<dp3d_test> test_functor(region);
+  compute_subfunctor_test<dp3d_test> test_functor(elements);
 
   // To ensure the Fortran doesn't pass without doing anything,
   // copy the initial state before running any of the test
@@ -506,18 +508,18 @@ public:
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 2048.0;
-  constexpr const int num_elems = 1;
+  constexpr const int num_elems = 10;
 
   std::random_device rd;
   rngAlg engine(rd());
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
+  Elements &elements = get_elements();
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  compute_subfunctor_test<vdp_vn0_test> test_functor(region);
+  compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
   test_functor.run_functor();
 
   sync_to_host(elements.m_derived_un0, elements.m_derived_vn0,
@@ -568,6 +570,76 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
               REQUIRE(correct != 0.0);
               REQUIRE(rel_threshold >= rel_error);
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+class pressure_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    if (kv.team.team_rank() == 0) {
+      functor.compute_pressure(kv);
+    }
+  }
+};
+
+TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 1.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<pressure_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  TestType test_functor(elements);
+
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
+  genRandArray(reinterpret_cast<Real *>(hybrid_a_mirror.data()),
+               hybrid_a_mirror.span(), engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+                                   TestType::n0, TestType::np1, TestType::qn0,
+                                   TestType::dt2, TestType::ps0, false,
+                                   TestType::eta_ave_w, hybrid_a_mirror.data());
+
+  test_functor.run_functor();
+
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx", num_elems);
+  Kokkos::deep_copy(pressure_cxx, elements.buffers.pressure);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
+
+  sync_to_host(elements.m_dp3d, test_functor.dp3d);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_pressure_c_int(
+        hybrid_a_mirror(0), test_functor.functor.m_data.ps0,
+        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL).data(),
+        pressure_f90.data());
+    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
+      for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
+           ++vector, ++level) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            const Real correct = pressure_f90(level, igp, jgp);
+            const Real computed = pressure_cxx(ie, igp, jgp, vec_lev)[vector];
+            REQUIRE(!std::isnan(correct));
+            REQUIRE(!std::isnan(computed));
+            const Real rel_error = compare_answers(correct, computed);
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
