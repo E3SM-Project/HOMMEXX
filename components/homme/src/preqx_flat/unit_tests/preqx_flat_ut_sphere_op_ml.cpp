@@ -191,6 +191,10 @@ class compute_sphere_operator_test_ml {
     genRandArray(
         vec_sph2cart_host.data(), vec_sph2cart_len * _num_elems, engine,
         std::uniform_real_distribution<Real>(-1000, 1000.0));
+
+    genRandArray(
+        &nu_ratio, 1, engine,
+        std::uniform_real_distribution<Real>(-1000, 1000.0));
 //setting everything to 1 is good for debugging
 #if 0
 for(int i1=0; i1<_num_elems; i1++)
@@ -311,6 +315,8 @@ dvv_host(i2,i3)=1.0;
 //same here -- is this needed?
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror temp4_host,
       temp5_host, temp6_host;
+
+  Real nu_ratio;
 
   // tag for laplace_simple()
   struct TagSimpleLaplaceML {};
@@ -648,7 +654,7 @@ dvv_host(i2,i3)=1.0;
           vlaplace_sphere_wk_contra(
                      kv, d_d, dinv_d, mp_d, spheremp_d, 
                      metinv_d, metdet_d, dvv_d,
-                     1.0,
+                     nu_ratio,
                      local_temp4_d, local_temp5_d,
                      local_temp1_d, local_temp2_d,
                      local_vector_input_d,
@@ -1407,7 +1413,7 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
         Real metdetf[NP][NP];
         Real rmetdetf[NP][NP];
 //let's test with 1 first, then we need to test with random...        
-        Real nu_ratio = 1.0;
+        Real nu_ratio = testing_vlaplace.nu_ratio;
 
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
@@ -1440,7 +1446,7 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
                              &(metinvf[0][0][0][0]),
                              &(metdetf[0][0]),
                              &(rmetdetf[0][0]),
-                             1.0,
+                             nu_ratio,
                              &(local_fortran_output[0][0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {
@@ -1448,7 +1454,8 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
 
             Real coutput0 = testing_vlaplace.vector_output_host(_index, 0, igp, jgp, level)[v];
             Real coutput1 = testing_vlaplace.vector_output_host(_index, 1, igp, jgp, level)[v];
-
+//std::cout << igp << "," << jgp << " F output0  = " <<
+//local_fortran_output[0][igp][jgp] << ", C output0 = " << coutput0 << "\n";
             REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
