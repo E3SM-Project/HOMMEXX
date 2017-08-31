@@ -519,7 +519,10 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
+      "vn0 f90 results", num_elems);
+  sync_to_host(elements.m_derived_un0, elements.m_derived_vn0, vn0_f90);
+
   test_functor.run_functor();
 
   sync_to_host(elements.m_derived_un0, elements.m_derived_vn0,
@@ -531,8 +534,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   Kokkos::deep_copy(div_vdp, elements.buffers.div_vdp);
 
   HostViewManaged<Real[2][NP][NP]> vdp_f90("vdp f90 results");
-  HostViewManaged<Real[2][NP][NP]> vn0_f90("vdp f90 results");
-  HostViewManaged<Real[NP][NP]> div_vdp_f90("vdp f90 results");
+  HostViewManaged<Real[NP][NP]> div_vdp_f90("div_vdp f90 results");
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
       for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
@@ -546,19 +548,40 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                             Kokkos::ALL, Kokkos::ALL).data(),
             Kokkos::subview(test_functor.metdet, ie, Kokkos::ALL, Kokkos::ALL)
                 .data(),
-            test_functor.dvv.data(), vn0_f90.data(), vdp_f90.data(),
-            div_vdp_f90.data());
+            test_functor.dvv.data(),
+            Kokkos::subview(vn0_f90, ie, level, Kokkos::ALL, Kokkos::ALL,
+                            Kokkos::ALL).data(),
+            vdp_f90.data(), div_vdp_f90.data());
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             for (int hgp = 0; hgp < 2; ++hgp) {
-              // Check vdp
-              Real correct = vdp_f90(hgp, igp, jgp);
-              REQUIRE(!std::isnan(correct));
-              Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
-              REQUIRE(!std::isnan(computed));
-              Real rel_error = compare_answers(correct, computed);
-              REQUIRE(correct != 0.0);
-              REQUIRE(rel_threshold >= rel_error);
+              {
+                // Check vdp
+                Real correct = vdp_f90(hgp, igp, jgp);
+                REQUIRE(!std::isnan(correct));
+                Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
+                REQUIRE(!std::isnan(computed));
+                if(correct != 0.0) {
+                  Real rel_error = compare_answers(correct, computed);
+                  REQUIRE(rel_threshold >= rel_error);
+                }
+              }
+              {
+                // Check derived_vn0
+                Real correct = vn0_f90(ie, level, hgp, igp, jgp);
+                REQUIRE(!std::isnan(correct));
+                Real computed =
+                    test_functor.derived_v(ie, level, hgp, igp, jgp);
+                REQUIRE(!std::isnan(computed));
+                if(correct != 0.0) {
+                  Real rel_error = compare_answers(correct, computed);
+                  printf("%d %d %d %d: % .17e vs % .17e -> % .17e vs % .17e\n",
+                         level, hgp, igp, jgp,
+                         correct, computed,
+                         rel_threshold, rel_error);
+                  REQUIRE(rel_threshold >= rel_error);
+                }
+              }
             }
             {
               // Check div_vdp
@@ -567,7 +590,6 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
               Real computed = div_vdp(ie, igp, jgp, vec_lev)[vector];
               REQUIRE(!std::isnan(computed));
               Real rel_error = compare_answers(correct, computed);
-              REQUIRE(correct != 0.0);
               REQUIRE(rel_threshold >= rel_error);
             }
           }
@@ -616,7 +638,8 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   test_functor.run_functor();
 
-  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx", num_elems);
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx",
+                                                           num_elems);
   Kokkos::deep_copy(pressure_cxx, elements.buffers.pressure);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
