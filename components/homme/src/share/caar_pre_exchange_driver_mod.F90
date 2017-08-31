@@ -304,7 +304,7 @@ contains
     real (kind=real_kind), intent(in) :: dp3d(np, np)
     real (kind=real_kind), intent(in) :: velocity(np, np, 2)
 
-    real (kind=real_kind), intent(out) :: derived_vn0(np, np, 2)
+    real (kind=real_kind), intent(inout) :: derived_vn0(np, np, 2)
     real (kind=real_kind), intent(out) :: vdp(np, np, 2)
     real (kind=real_kind), intent(out) :: divdp(np, np)
 
@@ -324,6 +324,53 @@ contains
     divdp = divergence_sphere(vdp, deriv, elem)
   end subroutine caar_compute_divdp
 
+  subroutine caar_compute_temperature_no_tracers(T, T_v)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: T(np, np, nlev)
+    real (kind=real_kind), intent(out) :: T_v(np, np, nlev)
+
+    ! locals
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          T_v(i,j,k) = T(i,j,k)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_temperature_no_tracers
+
+  subroutine caar_compute_temperature_tracers(Qdp, dp, T, T_v)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    use physics_mod, only : virtual_temperature
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: Qdp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: dp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: T(np, np, nlev)
+    real (kind=real_kind), intent(out) :: T_v(np, np, nlev)
+
+    ! locals
+    real (kind=real_kind) :: Qt
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          Qt = Qdp(i, j, k) / dp(i, j, k)
+          T_v(i, j, k) = Virtual_Temperature(T(i, j, k), Qt)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_temperature_tracers
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -339,7 +386,7 @@ contains
     use hybrid_mod,     only: hybrid_t
 
     use physical_constants, only : cp, cpwater_vapor, Rgas, kappa
-    use physics_mod, only : virtual_specific_heat, virtual_temperature
+    use physics_mod, only : virtual_specific_heat
     use prim_si_mod, only : preq_vertadv, preq_omega_ps, preq_hydrostatic
 #if ( defined CAM )
     use control_mod, only: se_met_nudge_u, se_met_nudge_p, se_met_nudge_t, se_met_tevolve
@@ -511,31 +558,25 @@ contains
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
       if (qn0 == -1 ) then
+        call caar_compute_temperature_no_tracers(elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j)
 #endif
-        do k=1,nlev
-          do j=1,np
-            do i=1,np
-              T_v(i,j,k) = elem(ie)%state%T(i,j,k,n0)
+        do k = 1, nlev
+          do i = 1, np
+            do j = 1, np
               kappa_star(i,j,k) = kappa
             end do
           end do
         end do
       else
+        call caar_compute_temperature_tracers(elem(ie)%state%Qdp(:, :, :, 1, qn0), dp, elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,Qt)
 #endif
-
         do k=1,nlev
           do j=1,np
             do i=1,np
-              ! Qt = elem(ie)%state%Q(i,j,k,1)
-              Qt = elem(ie)%state%Qdp(i,j,k,1,qn0)/dp(i,j,k)
-!!XXgoldyXX
-!Qt=0._real_kind
-!!XXgoldyXX
-              T_v(i,j,k) = Virtual_Temperature(elem(ie)%state%T(i,j,k,n0),Qt)
               if (use_cpstar==1) then
                  kappa_star(i,j,k) =  Rgas/Virtual_Specific_Heat(Qt)
               else
