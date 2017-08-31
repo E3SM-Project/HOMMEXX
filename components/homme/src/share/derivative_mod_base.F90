@@ -2518,8 +2518,6 @@ end do
     real(kind=real_kind) :: vor(np,np),div(np,np)
     real(kind=real_kind) :: v1,v2,div1,div2,vor1,vor2,phi_x,phi_y
 
-!    div=divergence_sphere_wk(v,deriv,elem)
-
     div=divergence_sphere(v,deriv,elem)
     vor=vorticity_sphere(v,deriv,elem)
 
@@ -2528,29 +2526,11 @@ end do
           div = div*elem%variable_hyperviscosity(:,:)
           vor = vor*elem%variable_hyperviscosity(:,:)
     endif
+
     if (present(nu_ratio)) div = nu_ratio*div
 
-!     laplace(:,:,1) = div(:,:)
-!     laplace(:,:,2) = div(:,:)
-
-!print *, 'IN F'
-!    do i=1,np
-!       do j=1,np
-!print *, 'i,j=', i,j,' div(i,j=)',div(i,j)
-!print *, elem%spheremp(i,j)
-!       enddo
-!    enddo
-
     laplace = gradient_sphere_wk_testcov(div,deriv,elem) &
-         - curl_sphere_wk_testcov(vor,deriv,elem) !vor!!!!!!!!!!!!
-
-!    laplace = gradient_sphere_wk_testcov(div,deriv,elem)
-!    do i=1,np
-!       do j=1,np
-!print *, 'i,j=', i,j,' laplace(i,j=)',laplace(i,j,1), laplace(i,j,2)
-!       enddo
-!    enddo
-
+            - curl_sphere_wk_testcov(vor,deriv,elem) 
 
     do n=1,np
        do m=1,np
