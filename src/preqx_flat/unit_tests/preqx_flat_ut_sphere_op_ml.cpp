@@ -1449,12 +1449,6 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
             Real coutput0 = testing_vlaplace.vector_output_host(_index, 0, igp, jgp, level)[v];
             Real coutput1 = testing_vlaplace.vector_output_host(_index, 1, igp, jgp, level)[v];
 
-std::cout << igp << "," << jgp << " F output0  = " <<
-local_fortran_output[0][igp][jgp] << ", C output0 = " << coutput0 << "\n";
-//std::cout << "difference=" << local_fortran_output[0][igp][jgp] - coutput0 << "\n";
-////std::cout << "rel difference=" << (local_fortran_output[0][igp][jgp] - coutput0)/coutput0 << "\n";
-
-
             REQUIRE(!std::isnan(local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(local_fortran_output[1][igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
