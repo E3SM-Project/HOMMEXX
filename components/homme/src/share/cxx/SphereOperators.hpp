@@ -347,6 +347,43 @@ vorticity_sphere(const KernelVariables &kv,
   });
 }
 
+//Why does the prev version take u and v separately? 
+//rewriting this to take vector as the input.
+KOKKOS_INLINE_FUNCTION void
+vorticity_sphere_vector(const KernelVariables &kv,
+                 const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
+                 const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
+                 const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                 const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                 ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> vort) {
+  constexpr int covar_iters = NP * NP;
+  Scalar vcov[2][NP][NP];
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, covar_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    vcov[0][jgp][igp] = d(kv.ie, 0, 0, jgp, igp) * v(0,jgp, igp, kv.ilev) 
+                      + d(kv.ie, 0, 1, jgp, igp) * v(1,jgp, igp, kv.ilev);
+    vcov[1][jgp][igp] = d(kv.ie, 1, 0, jgp, igp) * v(0,jgp, igp, kv.ilev) 
+                      + d(kv.ie, 1, 1, jgp, igp) * v(1,jgp, igp, kv.ilev);
+  });
+
+  constexpr int vort_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, vort_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    Scalar dudy = 0.0;
+    Scalar dvdx = 0.0;
+    for (int kgp = 0; kgp < NP; ++kgp) {
+      dvdx += dvv(jgp, kgp) * vcov[1][igp][kgp];
+      dudy += dvv(igp, kgp) * vcov[0][kgp][jgp];
+    }
+    vort(igp, jgp, kv.ilev) = (dvdx - dudy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
+                                               PhysicalConstants::rrearth);
+  });
+}
+
 
 KOKKOS_INLINE_FUNCTION void
 divergence_sphere_wk(const KernelVariables &kv,
@@ -753,8 +790,97 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
 }//end of vlaplace_cartesian_reduced
 
 
+KOKKOS_INLINE_FUNCTION void
+vlaplace_sphere_wk_contra(const KernelVariables &kv,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
+                const ExecViewUnmanaged<const Real * [NP][NP]> mp,
+                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> metinv,
+                const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
+                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                const Real nu_ratio,
+//temps
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div,
+                ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> vort,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> gradcov,
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> curlcov,
+//input, later write a version to replace input with output
+                const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> vector,
+//output
+                ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> laplace) {
+
+//   divergence_sphere_wk(kv,dinv,spheremp,dvv,vector,div);
+
+   divergence_sphere(kv,dinv,metdet,dvv,vector,div);
+   vorticity_sphere_vector(kv,d,metdet,dvv,vector,vort);
+
+//std::cout << "IN C \n";
+//for (int i=0; i<NP;i++)
+//for(int j=0; j<NP;j++){
+//std::cout << "i,j= " << i << ", " << j << ", div= " << div(i,j,kv.ilev)[0] << "\n";
+//std::cout << "i,j= " << i << ", " << j << ", spheremp= " << spheremp(kv.ie,i,j) << "\n";
+//}
 
 
+   constexpr int np_squared = NP * NP;
+   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+     const int igp = loop_idx / NP; //slow
+     const int jgp = loop_idx % NP; //fast
+     div(igp,jgp,kv.ilev) *= nu_ratio;
+   });
+
+   grad_sphere_wk_testcov(kv,d,mp,metinv,metdet,dvv,div,gradcov);
+   curl_sphere_wk_testcov(kv,d,mp,dvv,vort,curlcov); //vort!!!!!
+
+//for (int i=0; i<NP;i++)
+//for(int j=0; j<NP;j++){
+//std::cout << "i,j= " << i << ", " << j << ", gradcov= " << gradcov(0,i,j,kv.ilev)[0] 
+//<< gradcov(1,i,j,kv.ilev)[0] << "\n";
+//}
+   
+   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+     const int igp = loop_idx / NP; //slow
+     const int jgp = loop_idx % NP; //fast
+
+//     laplace(0,igp,jgp,kv.ilev) = div(igp,jgp,kv.ilev);
+//     laplace(1,igp,jgp,kv.ilev) = div(igp,jgp,kv.ilev);
+     
+
+     laplace(0,igp,jgp,kv.ilev) = gradcov(0,igp,jgp,kv.ilev)- curlcov(0,igp,jgp,kv.ilev);
+     laplace(1,igp,jgp,kv.ilev) = gradcov(1,igp,jgp,kv.ilev)- curlcov(1,igp,jgp,kv.ilev);
+   });
+
+
+#define UNDAMPRRCART
+#ifdef UNDAMPRRCART
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP; //slowest
+    const int jgp = loop_idx % NP; //fastest
+    laplace(0,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+
+    laplace(1,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,kv.ilev)
+                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+  });
+
+#endif
+
+
+
+/*
+   div=divergence_sphere(v)
+   vort=vorticity_sphere(v)
+   div = nu_ratio*div
+   laplace = grad_testcov(div) - curl_testcov(vort)
+
+#ifdef UNDAMPRR
+*/
+
+}//end of vlaplace_sphere_wk_contra
 
 } // namespace Homme
 
