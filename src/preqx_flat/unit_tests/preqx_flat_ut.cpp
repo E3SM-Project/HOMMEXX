@@ -507,7 +507,7 @@ public:
 
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
-      std::numeric_limits<Real>::epsilon() * 2048.0;
+      std::numeric_limits<Real>::epsilon() * 128.0;
   constexpr const int num_elems = 10;
 
   std::random_device rd;
@@ -645,6 +645,78 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
 
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_pressure_c_int(
+        hybrid_a_mirror(0), test_functor.functor.m_data.ps0,
+        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL).data(),
+        pressure_f90.data());
+    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
+      for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
+           ++vector, ++level) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            const Real correct = pressure_f90(level, igp, jgp);
+            const Real computed = pressure_cxx(ie, igp, jgp, vec_lev)[vector];
+            REQUIRE(!std::isnan(correct));
+            REQUIRE(!std::isnan(computed));
+            const Real rel_error = compare_answers(correct, computed);
+            REQUIRE(rel_threshold >= rel_error);
+          }
+        }
+      }
+    }
+  }
+}
+
+class temperature_no_tracers_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int ilev) {
+      functor.compute_temperature_no_tracers_helper(kv);
+    });
+  }
+};
+
+TEST_CASE("temperature no tracers", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 1.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<temperature_no_tracers_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  TestType test_functor(region);
+
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
+  genRandArray(reinterpret_cast<Real *>(hybrid_a_mirror.data()),
+               hybrid_a_mirror.span(), engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+                                   TestType::n0, TestType::np1, TestType::qn0,
+                                   TestType::dt2, TestType::ps0, false,
+                                   TestType::eta_ave_w, hybrid_a_mirror.data());
+
+  test_functor.run_functor();
+
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx",
+                                                           num_elems);
+  Kokkos::deep_copy(pressure_cxx, region.buffers.pressure);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
+
+  sync_to_host(region.m_dp3d, test_functor.dp3d);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
