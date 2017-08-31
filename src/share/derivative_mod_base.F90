@@ -107,9 +107,8 @@ private
   public  :: laplace_simple_c_callable
   public  :: laplace_sphere_wk_c_callable
   public  :: vlaplace_sphere_wk
-
   public  :: vlaplace_sphere_wk_cartesian_c_callable
-
+  public  :: vlaplace_sphere_wk_contra_c_callable
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
   public  :: limiter_optim_iter_full
@@ -2519,6 +2518,8 @@ end do
     real(kind=real_kind) :: vor(np,np),div(np,np)
     real(kind=real_kind) :: v1,v2,div1,div2,vor1,vor2,phi_x,phi_y
 
+!    div=divergence_sphere_wk(v,deriv,elem)
+
     div=divergence_sphere(v,deriv,elem)
     vor=vorticity_sphere(v,deriv,elem)
 
@@ -2527,11 +2528,29 @@ end do
           div = div*elem%variable_hyperviscosity(:,:)
           vor = vor*elem%variable_hyperviscosity(:,:)
     endif
-
     if (present(nu_ratio)) div = nu_ratio*div
 
-    laplace = gradient_sphere_wk_testcov(div,deriv,elem) - &
-         curl_sphere_wk_testcov(vor,deriv,elem)
+!     laplace(:,:,1) = div(:,:)
+!     laplace(:,:,2) = div(:,:)
+
+!print *, 'IN F'
+!    do i=1,np
+!       do j=1,np
+!print *, 'i,j=', i,j,' div(i,j=)',div(i,j)
+!print *, elem%spheremp(i,j)
+!       enddo
+!    enddo
+
+    laplace = gradient_sphere_wk_testcov(div,deriv,elem) &
+         - curl_sphere_wk_testcov(vor,deriv,elem) !vor!!!!!!!!!!!!
+
+!    laplace = gradient_sphere_wk_testcov(div,deriv,elem)
+!    do i=1,np
+!       do j=1,np
+!print *, 'i,j=', i,j,' laplace(i,j=)',laplace(i,j,1), laplace(i,j,2)
+!       enddo
+!    enddo
+
 
     do n=1,np
        do m=1,np
@@ -2544,6 +2563,67 @@ end do
        enddo
     enddo
   end function vlaplace_sphere_wk_contra
+
+
+!needs whatever is in strong div, vorticity, grad_testcov, curl_testcov  
+!and nu_ratio
+!and dvv
+!Also, make this interface only for the case of const HV, so, no logic
+!for var_coef hyperviscosity.
+  subroutine vlaplace_sphere_wk_contra_c_callable(v, dvv, d, dinv, mp, spheremp, metinv,&
+                                                  metdet, rmetdet, nu_ratio, laplace) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: v(np,np,2)
+    real(kind=real_kind), intent(out) :: laplace(np,np,2)
+    real(kind=real_kind), intent(in) :: nu_ratio
+
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: metinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+    allocate(elem%spheremp(np, np))
+    allocate(elem%metinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+    allocate(elem%rmetdet(np, np))
+    allocate(elem%Dinv(np, np, 2, 2))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+    elem%spheremp = spheremp
+    elem%metinv = metinv
+    elem%metdet = metdet
+    elem%Dinv = dinv
+    elem%rmetdet = rmetdet
+
+    laplace = vlaplace_sphere_wk_contra(v,deriv,elem,.false.,nu_ratio)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+    deallocate(elem%spheremp)
+    deallocate(elem%metinv)
+    deallocate(elem%metdet)
+    deallocate(elem%rmetdet)
+    deallocate(elem%Dinv)
+#endif
+
+  end subroutine vlaplace_sphere_wk_contra_c_callable
+
 
 
   function subcell_dss_fluxes(dss, p, n, metdet, C) result(fluxes)
