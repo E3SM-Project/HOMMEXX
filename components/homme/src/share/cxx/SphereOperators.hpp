@@ -828,23 +828,19 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
                        [&](const int loop_idx) {
      const int igp = loop_idx / NP; //slow
      const int jgp = loop_idx % NP; //fast
-     laplace(0,igp,jgp,kv.ilev) = gradcov(0,igp,jgp,kv.ilev)- curlcov(0,igp,jgp,kv.ilev);
-     laplace(1,igp,jgp,kv.ilev) = gradcov(1,igp,jgp,kv.ilev)- curlcov(1,igp,jgp,kv.ilev);
-   });
 
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
-  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-    laplace(0,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,kv.ilev)
-                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+     laplace(0,igp,jgp,kv.ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,kv.ilev)
+                                *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
 
-    laplace(1,igp,jgp,kv.ilev) += 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,kv.ilev)
-                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
-  });
+     laplace(1,igp,jgp,kv.ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,kv.ilev)
+                                *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
 #endif
+
+     laplace(0,igp,jgp,kv.ilev) += (gradcov(0,igp,jgp,kv.ilev)- curlcov(0,igp,jgp,kv.ilev));
+     laplace(1,igp,jgp,kv.ilev) += (gradcov(1,igp,jgp,kv.ilev)- curlcov(1,igp,jgp,kv.ilev));
+   });
 
 }//end of vlaplace_sphere_wk_contra
 
