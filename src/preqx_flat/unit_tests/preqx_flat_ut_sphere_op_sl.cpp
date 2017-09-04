@@ -22,8 +22,10 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 void laplace_simple_c_callable(const Real *input,
-                          const Real *dvv, const Real *dinv,
-                          const Real *metdet, Real *output);
+                               const Real *dvv,
+                               const Real *dinv,
+                               const Real *metdet,
+                               Real *output);
 
 void gradient_sphere_c_callable(const Real *input,
                                 const Real *dvv,
@@ -78,8 +80,8 @@ class compute_sphere_operator_test {
     rngAlg engine(rd());
 
     // check singularities? divergence_wk uses both D and
-    // Dinv, does it matter if ther are  not inverses of each
-    // other?
+    // Dinv, does it matter if ther are  not inverses of
+    // each other?
     genRandArray(
         scalar_input_host.data(),
         scalar_input_len * _num_elems, engine,
@@ -356,7 +358,8 @@ TEST_CASE("Testing laplace_simple_sl()",
     }    // igp
   }      // end of for loop for elements
 
-  std::cout << "simple_laplace_sl single level test finished.\n";
+  std::cout
+      << "simple_laplace_sl single level test finished.\n";
 
 };  // end of TEST_CASE(..., "simple laplace")
 
@@ -497,10 +500,3 @@ TEST_CASE("Testing gradient_sphere_sl()",
 };  // end of TEST_CASE(..., "gradient_sphere")
 
 // SHMEM ????
-
-
-
-
-
-
-

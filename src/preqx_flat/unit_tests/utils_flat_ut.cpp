@@ -38,4 +38,3 @@ void genRandArray(
 }  // end of definition of genRandArray()
 
 #endif
-
