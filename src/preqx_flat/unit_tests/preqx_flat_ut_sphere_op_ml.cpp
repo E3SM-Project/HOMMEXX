@@ -104,6 +104,7 @@ class compute_sphere_operator_test_ml {
  public:
   compute_sphere_operator_test_ml(int num_elems)
       : scalar_input_d("scalar input", num_elems),
+        scalar_input_COPY2_d("scalar input 2", num_elems),
         vector_input_d("vector input", num_elems),
         d_d("d", num_elems),
         dinv_d("dinv", num_elems),
@@ -124,6 +125,8 @@ class compute_sphere_operator_test_ml {
         temp6_d("temp6", num_elems),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
+        scalar_input_COPY2_host(
+            Kokkos::create_mirror_view(scalar_input_COPY2_d)),
         vector_input_host(
             Kokkos::create_mirror_view(vector_input_d)),
         d_host(Kokkos::create_mirror_view(d_d)),
@@ -157,6 +160,14 @@ class compute_sphere_operator_test_ml {
         reinterpret_cast<Real *>(scalar_input_host.data()),
         scalar_input_len * _num_elems, engine,
         std::uniform_real_distribution<Real>(-1000.0, 1000.0));
+    //now copy 1st scalar input into the second
+    //num_elems, np, np, num_lev
+    for(int ie=0; ie < num_elems; ie++)
+    for(int i=0; i<NP; i++)
+    for(int j=0; j<NP; j++)
+    for(int k=0; k<NUM_LEV; k++)
+        scalar_input_COPY2_host(ie,i,j,k) = scalar_input_host(ie,i,j,k);
+     
     genRandArray(
         reinterpret_cast<Real *>(vector_input_host.data()),
         vector_input_len * _num_elems, engine,
@@ -235,6 +246,8 @@ dvv_host(i2,i3)=1.0;
   // device
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
       scalar_input_d;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+      scalar_input_COPY2_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
       vector_input_d;
   ExecViewManaged<Real * [2][2][NP][NP]> d_d;
@@ -260,7 +273,7 @@ dvv_host(i2,i3)=1.0;
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
-      scalar_input_host;
+      scalar_input_host, scalar_input_COPY2_host;
   const int scalar_input_len =
       NUM_PHYSICAL_LEV * NP * NP;  // temp code
 
@@ -471,7 +484,7 @@ dvv_host(i2,i3)=1.0;
 
     ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
         local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
+            scalar_input_COPY2_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
     ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
@@ -484,11 +497,11 @@ dvv_host(i2,i3)=1.0;
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    for(int i=0; i< NP; i++)
-    for(int j=0; j< NP; j++)
-    for(int k = 0; k< NUM_LEV; k++){
-       temp4_d(_index,i,j,k) = local_scalar_input_d(i,j,k);
-    }
+//    for(int i=0; i< NP; i++)
+//    for(int j=0; j< NP; j++)
+//    for(int k = 0; k< NUM_LEV; k++){
+//       temp4_d(_index,i,j,k) = local_scalar_input_d(i,j,k);
+//    }
 
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(kv.team, NUM_LEV),
@@ -496,10 +509,12 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           laplace_tensor_replace(kv, dinv_d, spheremp_d, dvv_d, tensor_d,
                      local_temp1_d, local_scalar_input_d);
+
+//if team rank == 0? only 1 thread is allowed to overwrite?
     for(int i=0; i< NP; i++)
     for(int j=0; j< NP; j++){
        local_scalar_output_d(i,j,level) = local_scalar_input_d(i,j,level);
-       local_scalar_input_d(i,j,level) = temp4_d(_index,i,j,level);
+//       local_scalar_input_d(i,j,level) = temp4_d(_index,i,j,level);
     }
     });//end of par_for for level
 
