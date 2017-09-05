@@ -87,11 +87,16 @@ void vlaplace_sphere_wk_cartesian_c_callable(
     Real *output);
 
 void vlaplace_sphere_wk_contra_c_callable(
-    const Real *v, const Real *dvv, const Real *d,
+    const Real *input, const Real *dvv, const Real *d,
     const Real *dinv, const Real *mp, const Real *spheremp,
     const Real *metinv, const Real *metdet,
     const Real *rmetdet, const Real &nu_ratio,
-    Real *laplace);
+    Real *output);
+
+void vorticity_sphere_c_callable(
+    const Real *input, const Real *dvv,
+    const Real *metdet, const Real *d,
+    Real *output);
 
 }  // extern C
 
@@ -354,6 +359,8 @@ dvv_host(i2,i3)=1.0;
   struct TagVLaplaceCartesianReducedML {};
   // tag for vlaplace_sphere_wk_contra
   struct TagVLaplaceContraML {};
+  // tag for vorticity_sphere
+  struct TagVorticityVectorML {};
   // tag for default, a dummy
   struct TagDefault {};
 
@@ -675,6 +682,35 @@ dvv_host(i2,i3)=1.0;
 
   }  // end of op() for laplace_tensor multil
 
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagVorticityVectorML &,
+                  TeamMember team) const {
+    KernelVariables kv(team);
+    int _index = team.league_rank();
+
+    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
+        local_vector_input_d = Kokkos::subview(
+            vector_input_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+
+    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
+        local_scalar_output_d = Kokkos::subview(
+            scalar_output_d, _index, Kokkos::ALL,
+            Kokkos::ALL, Kokkos::ALL);
+
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+        [&](const int &level) {
+          kv.ilev = level;
+          vorticity_sphere_vector(kv, d_d, metdet_d,
+                               dvv_d, local_vector_input_d,
+                               local_scalar_output_d);
+        });  // end parallel_for for level
+
+  }  // end of op() for vorticity_sphere_vector multilevel
+
+
   void run_functor_gradient_sphere() const {
     // league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagGradientSphereML>
@@ -748,6 +784,14 @@ dvv_host(i2,i3)=1.0;
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
+  };
+
+  void run_functor_vorticity_sphere_vector() const {
+    Kokkos::TeamPolicy<ExecSpace, TagVorticityVectorML>
+        policy(_num_elems, 16);
+    Kokkos::parallel_for(policy, *this);
+    ExecSpace::fence();
+    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
 };  // end of class def compute_sphere_op_test_ml
@@ -1512,3 +1556,73 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
                "finished. \n";
 
 }  // end of test vlaplace_contra multilevel
+
+TEST_CASE("Testing vorticity_sphere_vector()",
+          "vorticity_sphere_vector") {
+  constexpr const Real rel_threshold =
+      1E-15;  // let's move this somewhere in *hpp?
+  constexpr const int elements = 10;
+
+  compute_sphere_operator_test_ml testing_vort(elements);
+  testing_vort.run_functor_vorticity_sphere_vector();
+
+  for(int _index = 0; _index < elements; _index++) {
+    for(int level = 0; level < NUM_LEV; ++level) {
+      for(int v = 0; v < VECTOR_SIZE; ++v) {
+        Real local_fortran_output[NP][NP];
+        Real vf[2][NP][NP];
+        Real dvvf[NP][NP];
+        Real df[2][2][NP][NP];
+        Real metdetf[NP][NP];
+
+        for(int _i = 0; _i < NP; _i++)
+          for(int _j = 0; _j < NP; _j++) {
+            metdetf[_i][_j] = testing_vort.metdet_host(
+                _index, _i, _j);
+            dvvf[_i][_j] = testing_vort.dvv_host(_i, _j);
+            for(int _d1 = 0; _d1 < 2; _d1++) {
+              vf[_d1][_i][_j] =
+                  testing_vort.vector_input_host(
+                      _index, _d1, _i, _j, level)[v];
+              for(int _d2 = 0; _d2 < 2; _d2++)
+                df[_d1][_d2][_i][_j] =
+                    testing_vort.d_host(_index, _d1,
+                                             _d2, _i, _j);
+            }
+          }
+        vorticity_sphere_c_callable(
+            &(vf[0][0][0]), &(dvvf[0][0]), &(metdetf[0][0]),
+            &(df[0][0][0][0]),
+            &(local_fortran_output[0][0]));
+        for(int igp = 0; igp < NP; ++igp) {
+          for(int jgp = 0; jgp < NP; ++jgp) {
+            Real coutput0 =
+                testing_vort.scalar_output_host(
+                    _index, igp, jgp, level)[v];
+            REQUIRE(!std::isnan(
+                local_fortran_output[igp][jgp]));
+            REQUIRE(!std::isnan(coutput0));
+            REQUIRE(std::numeric_limits<Real>::epsilon() >=
+                    compare_answers(
+                        local_fortran_output[igp][jgp],
+                        coutput0, 128.0));
+          }  // jgp
+        }    // igp
+      }      // v
+    }        // level
+  }          //_index
+
+  std::cout << "test vorticity_sphere_vector multilevel finished. \n";
+
+}  // end of test div_sphere_wk_ml
+
+
+
+
+
+
+
+
+
+
+

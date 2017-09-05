@@ -95,6 +95,7 @@ private
   public  :: gradient_sphere_wk_testcontra   ! only used for debugging
   public  :: ugradv_sphere
   public  :: vorticity_sphere
+  public  :: vorticity_sphere_c_callable
   public  :: vorticity_sphere_diag
   public  :: divergence_sphere
   public  :: curl_sphere
@@ -2018,19 +2019,19 @@ end do
 
     do j=1,np
        do i=1,np
-          vort(i,j)=(vort(i,j)-vtemp(i,j))*(1/elem%metdet(i,j)*rrearth)
+          vort(i,j)=(vort(i,j)-vtemp(i,j))*(1.0d0/elem%metdet(i,j)*rrearth)
        end do
     end do
 
   end function vorticity_sphere
 
-  subroutine vorticity_sphere_c_callable(v, dvv, rmetdet, d, vort) bind(c)
+  subroutine vorticity_sphere_c_callable(v, dvv, metdet, d, vort) bind(c)
     use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np, np, 2)
     real(kind=real_kind), intent(in) :: dvv(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
     real(kind=real_kind), intent(in) :: d(np, np, 2, 2)
     real(kind=real_kind), intent(out) :: vort(np, np)
 
@@ -2042,18 +2043,15 @@ end do
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
     allocate(elem%metdet(np, np))
-    allocate(elem%rmetdet(np, np))
 #endif
     elem%D = d
-    elem%rmetdet = rmetdet
-    elem%metdet = 1.0 / rmetdet
+    elem%metdet = metdet
 
     vort = vorticity_sphere(v, deriv, elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%metdet)
-    deallocate(elem%rmetdet)
 #endif
   end subroutine vorticity_sphere_c_callable
 
