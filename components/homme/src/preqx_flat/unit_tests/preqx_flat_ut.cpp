@@ -45,6 +45,13 @@ void caar_compute_divdp_c_int(const Real eta_ave_w, const Real *velocity,
 void caar_compute_pressure_c_int(const Real &hyai, const Real &ps0,
                                  const Real *dp, Real *pressure);
 
+void caar_compute_temperature_no_tracers_c_int(const Real *temperature,
+                                               Real *virt_temperature);
+
+void caar_compute_temperature_tracers_c_int(const Real *qdp, const Real *dp,
+                                            const Real *temperature,
+                                            Real *virt_temperature);
+
 }  // extern C
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -153,22 +160,36 @@ public:
   static constexpr int n0_f90 = n0 + 1;
   static constexpr int np1 = 2;
   static constexpr int np1_f90 = np1 + 1;
-  static constexpr int qn0 = -1;
+  static constexpr int qn0 = 0;
   static constexpr Real ps0 = 1.0;
   static constexpr Real dt2 = 1.0;
   static constexpr Real eta_ave_w = 1.0;
 };
-// Template to verify at compile time that a view has the specified array type
+
+// Templates to verify at compile time that a view has the specified array type
 template <typename ViewT, typename ArrayT> struct exec_view_mappable {
   using exec_view = ExecViewUnmanaged<ArrayT>;
   static constexpr bool value = Kokkos::Impl::ViewMapping<
       typename ViewT::traits, typename exec_view::traits, void>::is_assignable;
 };
 
-void sync_to_host(
-    ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> source,
-    HostViewUnmanaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>
-        dest) {
+template <typename ViewT, typename ArrayT> struct host_view_mappable {
+  using host_view = HostViewUnmanaged<ArrayT>;
+  static constexpr bool value = Kokkos::Impl::ViewMapping<
+      typename ViewT::traits, typename host_view::traits, void>::is_assignable;
+};
+
+// Kokkos views cannot be used to determine which overloaded function to call,
+// so implement this check ourselves with enable_if.
+// Despite the ugly templates, this provides much better error messages
+// TODO: Move these to Utility.hpp
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::
+        value &&host_view_mappable<
+            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
   source_mirror(Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
@@ -189,13 +210,66 @@ void sync_to_host(
   }
 }
 
-// Kokkos views cannot be used to determine which overloaded function to call,
-// so implement this check ourselves with enable_if
-// TODO: Move these to Utility.hpp
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV]>::value &&
+        host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+         ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, level, igp, jgp) =
+                source_mirror(ie, igp, jgp, vector_level)[vector];
+          }
+        }
+      }
+    }
+  }
+}
+
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T,
-                       Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::value,
+                       Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::
+        value &&host_view_mappable<
+            Dest_T, Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP]
+                                              [NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  typename Source_T::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int time = 0; time < Q_NUM_TIME_LEVELS; ++time) {
+      for (int tracer = 0; tracer < QSIZE_D; ++tracer) {
+        for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+             ++vector_level) {
+          for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+            for (int igp = 0; igp < NP; ++igp) {
+              for (int jgp = 0; jgp < NP; ++jgp) {
+                dest(ie, time, tracer, level, igp, jgp) = source_mirror(
+                    ie, time, tracer, igp, jgp, vector_level)[vector];
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::
+        value &&host_view_mappable<
+            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>::value,
     void>::type
 sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
@@ -224,7 +298,9 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
-    exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV]>::value, void>::type
+    exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV]>::value &&
+        host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value,
+    void>::type
 sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror source_1_mirror(
       Kokkos::create_mirror_view(source_1)),
@@ -248,10 +324,13 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   }
 }
 
-void sync_to_device(HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source,
-                    ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]> dest) {
-  ExecViewUnmanaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror dest_mirror =
-      Kokkos::create_mirror_view(dest);
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NUM_PHYSICAL_LEV][NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Scalar * [NP][NP][NUM_LEV]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest) {
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
     for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
          ++vector_level) {
@@ -507,7 +586,7 @@ public:
 
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
-      std::numeric_limits<Real>::epsilon() * 128.0;
+      std::numeric_limits<Real>::epsilon() * 512.0;
   constexpr const int num_elems = 10;
 
   std::random_device rd;
@@ -561,7 +640,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                 REQUIRE(!std::isnan(correct));
                 Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
                 REQUIRE(!std::isnan(computed));
-                if(correct != 0.0) {
+                if (correct != 0.0) {
                   Real rel_error = compare_answers(correct, computed);
                   REQUIRE(rel_threshold >= rel_error);
                 }
@@ -573,12 +652,8 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                 Real computed =
                     test_functor.derived_v(ie, level, hgp, igp, jgp);
                 REQUIRE(!std::isnan(computed));
-                if(correct != 0.0) {
+                if (correct != 0.0) {
                   Real rel_error = compare_answers(correct, computed);
-                  printf("%d %d %d %d: % .17e vs % .17e -> % .17e vs % .17e\n",
-                         level, hgp, igp, jgp,
-                         correct, computed,
-                         rel_threshold, rel_error);
                   REQUIRE(rel_threshold >= rel_error);
                 }
               }
@@ -676,6 +751,7 @@ public:
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                          [&](const int ilev) {
+      kv.ilev = ilev;
       functor.compute_temperature_no_tracers_helper(kv);
     });
   }
@@ -693,49 +769,100 @@ TEST_CASE("temperature no tracers", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
-  region.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
 
-  TestType test_functor(region);
-
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
-  genRandArray(reinterpret_cast<Real *>(hybrid_a_mirror.data()),
-               hybrid_a_mirror.span(), engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
-  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-                                   TestType::n0, TestType::np1, TestType::qn0,
-                                   TestType::dt2, TestType::ps0, false,
-                                   TestType::eta_ave_w, hybrid_a_mirror.data());
-
+  TestType test_functor(elements);
+  sync_to_host(elements.m_t, test_functor.temperature);
   test_functor.run_functor();
 
-  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx",
-                                                           num_elems);
-  Kokkos::deep_copy(pressure_cxx, region.buffers.pressure);
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+  temperature_virt_cxx("virtual temperature cxx", num_elems);
 
-  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
+  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
 
-  sync_to_host(region.m_dp3d, test_functor.dp3d);
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
+      "virtual temperature f90");
 
   for (int ie = 0; ie < num_elems; ++ie) {
-    caar_compute_pressure_c_int(
-        hybrid_a_mirror(0), test_functor.functor.m_data.ps0,
+    caar_compute_temperature_no_tracers_c_int(
+        Kokkos::subview(test_functor.temperature, ie, test_functor.n0,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        temperature_virt_f90.data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = temperature_virt_f90(level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = temperature_virt_cxx(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+        }
+      }
+    }
+  }
+}
+
+class temperature_with_tracers_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int ilev) {
+      kv.ilev = ilev;
+      functor.compute_temperature_tracers_helper(kv);
+    });
+  }
+};
+
+TEST_CASE("temperature with tracers", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 4.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<temperature_with_tracers_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
+
+  TestType test_functor(elements);
+  sync_to_host(elements.m_qdp, test_functor.qdp);
+  sync_to_host(elements.m_dp3d, test_functor.dp3d);
+  sync_to_host(elements.m_t, test_functor.temperature);
+  test_functor.run_functor();
+
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+  temperature_virt_cxx("virtual temperature cxx", num_elems);
+
+  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
+      "virtual temperature f90");
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_temperature_tracers_c_int(
+        Kokkos::subview(test_functor.qdp, ie, test_functor.qn0, 0, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL).data(),
-        pressure_f90.data());
-    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
-           ++vector, ++level) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            const Real correct = pressure_f90(level, igp, jgp);
-            const Real computed = pressure_cxx(ie, igp, jgp, vec_lev)[vector];
-            REQUIRE(!std::isnan(correct));
-            REQUIRE(!std::isnan(computed));
-            const Real rel_error = compare_answers(correct, computed);
-            REQUIRE(rel_threshold >= rel_error);
-          }
+        Kokkos::subview(test_functor.temperature, ie, test_functor.n0,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        temperature_virt_f90.data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = temperature_virt_f90(level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = temperature_virt_cxx(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
         }
       }
     }
