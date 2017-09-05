@@ -324,7 +324,7 @@ contains
     divdp = divergence_sphere(vdp, deriv, elem)
   end subroutine caar_compute_divdp
 
-  subroutine caar_compute_temperature_no_tracers(T, T_v)
+  subroutine caar_compute_temperature_no_tracers_c_int(T, T_v) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
 
@@ -339,13 +339,13 @@ contains
     do k=1,nlev
       do j=1,np
         do i=1,np
-          T_v(i,j,k) = T(i,j,k)
+          T_v(i, j, k) = T(i, j, k)
         end do
       end do
     end do
-  end subroutine caar_compute_temperature_no_tracers
+  end subroutine caar_compute_temperature_no_tracers_c_int
 
-  subroutine caar_compute_temperature_tracers(Qdp, dp, T, T_v)
+  subroutine caar_compute_temperature_tracers_c_int(Qdp, dp, T, T_v) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
     use physics_mod, only : virtual_temperature
@@ -369,7 +369,7 @@ contains
         end do
       end do
     end do
-  end subroutine caar_compute_temperature_tracers
+  end subroutine caar_compute_temperature_tracers_c_int
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -558,7 +558,7 @@ contains
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
       if (qn0 == -1 ) then
-        call caar_compute_temperature_no_tracers(elem(ie)%state%T(:, :, :, n0), T_v)
+        call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j)
 #endif
@@ -570,7 +570,7 @@ contains
           end do
         end do
       else
-        call caar_compute_temperature_tracers(elem(ie)%state%Qdp(:, :, :, 1, qn0), dp, elem(ie)%state%T(:, :, :, n0), T_v)
+        call caar_compute_temperature_tracers_c_int(elem(ie)%state%Qdp(:, :, :, 1, qn0), dp, elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,Qt)
 #endif
