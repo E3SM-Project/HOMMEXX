@@ -164,6 +164,11 @@ contains
   end subroutine preq_omegap
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+!
+!  compute omega/p using ps, modeled after CCM3 formulas
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
   subroutine preq_omega_ps_c_int(omega_p, pressure, velocity, divdp, dinv, dvv) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
@@ -201,12 +206,6 @@ contains
     call preq_omega_ps(omega_p, hvcoord, pressure, vgrad_p, divdp)
   end subroutine preq_omega_ps_c_int
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-!
-!  compute omega/p using ps, modeled after CCM3 formulas
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
   subroutine preq_omega_ps(omega_p,hvcoord,p,vgrad_p,divdp)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
@@ -337,6 +336,20 @@ contains
 !  CCM3 hydrostatic integral
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  subroutine preq_hydrostatic_c_int(phi, phis, T_v, pressure, dp) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    implicit none
+
+    real(kind=real_kind), intent(out) :: phi(np,np,nlev)
+    real(kind=real_kind), intent(in) :: phis(np,np)
+    real(kind=real_kind), intent(in) :: T_v(np,np,nlev)
+    real(kind=real_kind), intent(in) :: pressure(np,np,nlev)
+    real(kind=real_kind), intent(in) :: dp(np,np,nlev)
+
+    call preq_hydrostatic(phi, phis, T_v, pressure, dp)
+  end subroutine preq_hydrostatic_c_int
+
   subroutine preq_hydrostatic(phi,phis,T_v,p,dp)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev

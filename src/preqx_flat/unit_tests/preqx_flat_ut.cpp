@@ -33,6 +33,10 @@ void preq_omega_ps_c_int(Real *omega_p, const Real *velocity,
                          const Real *pressure, const Real *div_vdp,
                          const Real *dinv, const Real *dvv);
 
+void preq_hydrostatic_c_int(Real *phi, const Real *phis,
+                            const Real *virt_temperature, const Real *pressure,
+                            const Real *delta_pressure);
+
 void caar_compute_dp3d_np1_c_int(int np1, int nm1, const Real &dt2,
                                  const Real *spheremp, const Real *divdp,
                                  const Real *eta_dot_dpdn, Real *dp3d);
@@ -84,7 +88,8 @@ public:
       : functor(), velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
-        pecnd("PE_CND", elements.num_elems()),
+        phis("Phis?", elements.num_elems()),
+        pecnd("Potential Energy CND?", elements.num_elems()),
         omega_p("Omega_P", elements.num_elems()),
         derived_v("Derived V?", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
@@ -140,6 +145,7 @@ public:
   temperature;
   HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> phi;
+  HostViewManaged<Real * [NP][NP]> phis;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
@@ -491,6 +497,75 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
                                              omega_p(ie, igp, jgp, vec_lev)[v]);
             REQUIRE(rel_threshold >= rel_error);
           }
+        }
+      }
+    }
+  }
+}
+
+class preq_hydrostatic_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    if (kv.team.team_rank() == 0) {
+      functor.preq_hydrostatic(kv);
+    }
+  }
+};
+
+TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 4.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<preq_hydrostatic_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarElements &elements = get_elements();
+  elements.random_init(num_elems, engine);
+
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
+      "host virtual temperature", num_elems);
+  genRandArray(reinterpret_cast<Real *>(temperature_virt.data()),
+               temperature_virt.span(), engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
+                                                              num_elems);
+  genRandArray(reinterpret_cast<Real *>(pressure.data()), pressure.span(),
+               engine, std::uniform_real_distribution<Real>(0.0125, 1.0));
+  sync_to_device(pressure, elements.buffers.pressure);
+
+  TestType test_functor(elements);
+  Kokkos::deep_copy(test_functor.phis, elements.m_phis);
+  sync_to_host(elements.m_dp3d, test_functor.dp3d);
+  test_functor.run_functor();
+  sync_to_host(elements.m_phi, test_functor.phi);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> phi_f90("Fortran phi");
+  for (int ie = 0; ie < num_elems; ++ie) {
+    preq_hydrostatic_c_int(
+        phi_f90.data(),
+        Kokkos::subview(test_functor.phis, ie, Kokkos::ALL, Kokkos::ALL).data(),
+        Kokkos::subview(temperature_virt, ie, Kokkos::ALL, Kokkos::ALL,
+                        Kokkos::ALL).data(),
+        Kokkos::subview(pressure, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
+            .data(),
+        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL).data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = phi_f90(level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = test_functor.phi(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
         }
       }
     }
