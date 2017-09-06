@@ -56,6 +56,9 @@ void caar_compute_temperature_tracers_c_int(const Real *qdp, const Real *dp,
                                             const Real *temperature,
                                             Real *virt_temperature);
 
+void caar_compute_omega_p_c_int(const Real eta_ave_w,
+                                const Real *omega_p_buffer, Real *omega_p);
+
 }  // extern C
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -935,6 +938,78 @@ TEST_CASE("temperature with tracers", "monolithic compute_and_apply_rhs") {
           const Real correct = temperature_virt_f90(level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           const Real computed = temperature_virt_cxx(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+        }
+      }
+    }
+  }
+}
+
+class omega_p_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                         [&](const int ilev) {
+      kv.ilev = ilev;
+      functor.compute_omega_p(kv);
+    });
+  }
+};
+
+TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<omega_p_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
+
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
+      "source omega p", num_elems);
+  genRandArray(reinterpret_cast<Real *>(source_omega_p.data()),
+               source_omega_p.span(), engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  sync_to_device(source_omega_p, region.buffers.omega_p);
+
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90("omega p f90",
+                                                                 num_elems);
+
+  TestType test_functor(region);
+  sync_to_host(region.m_omega_p, omega_p_f90);
+  test_functor.run_functor();
+  sync_to_host(region.m_omega_p, test_functor.omega_p);
+
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+  temperature_virt_cxx("virtual temperature cxx", num_elems);
+
+  sync_to_host(region.buffers.temperature_virt, temperature_virt_cxx);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
+      "virtual temperature f90");
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_omega_p_c_int(test_functor.eta_ave_w,
+                               Kokkos::subview(source_omega_p, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(omega_p_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL,
+                                               Kokkos::ALL).data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = omega_p_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = test_functor.omega_p(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
