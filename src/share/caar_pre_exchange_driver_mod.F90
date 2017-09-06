@@ -371,6 +371,29 @@ contains
     end do
   end subroutine caar_compute_temperature_tracers_c_int
 
+  subroutine caar_compute_omega_p_c_int(eta_ave_w, omega_p_source, omega_p_dest) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: omega_p_source(np, np, nlev)
+    real (kind=real_kind), intent(inout) :: omega_p_dest(np, np, nlev)
+
+    ! locals
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          omega_p_dest(i, j, k) = &
+               omega_p_dest(i, j, k) + eta_ave_w * omega_p_source(i, j, k)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_omega_p_c_int
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -648,14 +671,13 @@ contains
       ! ================================
       ! accumulate mean vertical flux:
       ! ================================
+      call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
 #if (defined COLUMN_OPENMP)
        !$omp parallel do private(k)
 #endif
       do k=1,nlev  !  Loop index added (AAM)
          elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
               elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
-         elem(ie)%derived%omega_p(:,:,k) = &
-              elem(ie)%derived%omega_p(:,:,k) + eta_ave_w*omega_p(:,:,k)
       enddo
       elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
            elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
