@@ -2,7 +2,7 @@
 #define HOMMEXX_SPHERE_OPERATORS_HPP
 
 #include "Types.hpp"
-#include "Region.hpp"
+#include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "PhysicalConstants.hpp"

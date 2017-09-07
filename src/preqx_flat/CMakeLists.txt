@@ -143,7 +143,7 @@ SET(PREQX_FLAT_DEPS_C
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/cxx_f90_interface.cpp
   ${SRC_SHARE_DIR}/cxx/Control.cpp
-  ${SRC_SHARE_DIR}/cxx/Region.cpp
+  ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/kokkos_init.cpp
 )
