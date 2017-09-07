@@ -91,19 +91,25 @@ private
 !
   public  :: gradient_sphere
   public  :: gradient_sphere_wk_testcov
+  public  :: gradient_sphere_wk_testcov_c_callable
   public  :: gradient_sphere_wk_testcontra   ! only used for debugging
   public  :: ugradv_sphere
   public  :: vorticity_sphere
+  public  :: vorticity_sphere_c_callable
   public  :: vorticity_sphere_diag
   public  :: divergence_sphere
   public  :: curl_sphere
   public  :: curl_sphere_wk_testcov
+  public  :: curl_sphere_wk_testcov_c_callable
 ! public  :: curl_sphere_wk_testcontra  ! not coded
   public  :: divergence_sphere_wk
   public  :: laplace_sphere_wk
   public  :: laplace_simple
-  public  :: laplace_simple_c_int
+  public  :: laplace_simple_c_callable
+  public  :: laplace_sphere_wk_c_callable
   public  :: vlaplace_sphere_wk
+  public  :: vlaplace_sphere_wk_cartesian_c_callable
+  public  :: vlaplace_sphere_wk_contra_c_callable
   public  :: element_boundary_integral
   public  :: edge_flux_u_cg
   public  :: limiter_optim_iter_full
@@ -1351,9 +1357,9 @@ end do
 !DIR$ UNROLL(NP)
           do j=1,np
              ! phi(n)_y  sum over second index, 1st index fixed at m
-             dscontra(m,n,1)=dscontra(m,n,1)-(elem%mp(m,j)*s(m,j)*deriv%Dvv(n,j) )*rrearth
+             dscontra(m,n,1)=dscontra(m,n,1)-(elem%mp(m,j)*s(m,j)*deriv%Dvv(n,j))
              ! phi(m)_x  sum over first index, second index fixed at n
-             dscontra(m,n,2)=dscontra(m,n,2)+(elem%mp(j,n)*s(j,n)*deriv%Dvv(m,j) )*rrearth
+             dscontra(m,n,2)=dscontra(m,n,2)+(elem%mp(j,n)*s(j,n)*deriv%Dvv(m,j))
           enddo
        enddo
     enddo
@@ -1361,11 +1367,47 @@ end do
     ! convert contra -> latlon
     do j=1,np
        do i=1,np
-          ds(i,j,1)=(elem%D(i,j,1,1)*dscontra(i,j,1) + elem%D(i,j,1,2)*dscontra(i,j,2))
-          ds(i,j,2)=(elem%D(i,j,2,1)*dscontra(i,j,1) + elem%D(i,j,2,2)*dscontra(i,j,2))
+          ds(i,j,1)=(elem%D(i,j,1,1)*dscontra(i,j,1) + elem%D(i,j,1,2)*dscontra(i,j,2)) &
+                    *rrearth
+          ds(i,j,2)=(elem%D(i,j,2,1)*dscontra(i,j,1) + elem%D(i,j,2,2)*dscontra(i,j,2)) &
+                    *rrearth
        enddo
     enddo
-    end function curl_sphere_wk_testcov
+  end function curl_sphere_wk_testcov
+
+
+  subroutine curl_sphere_wk_testcov_c_callable(s,dvv,D,mp,ds) bind(c)
+!needs dvv, mp, D
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind) :: ds(np,np,2)
+
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+
+    ds = curl_sphere_wk_testcov(s,deriv,elem)
+          
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+#endif
+
+  end subroutine curl_sphere_wk_testcov_c_callable
 
 
   function gradient_sphere_wk_testcov(s,deriv,elem) result(ds)
@@ -1414,26 +1456,64 @@ end do
           do j=1,np
              dscontra(m,n,1)=dscontra(m,n,1)-(&
                   (elem%mp(j,n)*elem%metinv(m,n,1,1)*elem%metdet(m,n)*s(j,n)*deriv%Dvv(m,j) ) +&
-                  (elem%mp(m,j)*elem%metinv(m,n,2,1)*elem%metdet(m,n)*s(m,j)*deriv%Dvv(n,j) ) &
-                  ) *rrearth
+                  (elem%mp(m,j)*elem%metinv(m,n,2,1)*elem%metdet(m,n)*s(m,j)*deriv%Dvv(n,j) ) )
 
              dscontra(m,n,2)=dscontra(m,n,2)-(&
                   (elem%mp(j,n)*elem%metinv(m,n,1,2)*elem%metdet(m,n)*s(j,n)*deriv%Dvv(m,j) ) +&
-                  (elem%mp(m,j)*elem%metinv(m,n,2,2)*elem%metdet(m,n)*s(m,j)*deriv%Dvv(n,j) ) &
-                  ) *rrearth
+                  (elem%mp(m,j)*elem%metinv(m,n,2,2)*elem%metdet(m,n)*s(m,j)*deriv%Dvv(n,j) ) )
           enddo
        enddo
     enddo
     ! convert contra -> latlon
     do j=1,np
        do i=1,np
-          ds(i,j,1)=(elem%D(i,j,1,1)*dscontra(i,j,1) + elem%D(i,j,1,2)*dscontra(i,j,2))
-          ds(i,j,2)=(elem%D(i,j,2,1)*dscontra(i,j,1) + elem%D(i,j,2,2)*dscontra(i,j,2))
+          ds(i,j,1)=(elem%D(i,j,1,1)*dscontra(i,j,1) + elem%D(i,j,1,2)*dscontra(i,j,2))*rrearth
+          ds(i,j,2)=(elem%D(i,j,2,1)*dscontra(i,j,1) + elem%D(i,j,2,2)*dscontra(i,j,2))*rrearth
        enddo
     enddo
 
-    end function gradient_sphere_wk_testcov
+ end function gradient_sphere_wk_testcov
 
+ subroutine gradient_sphere_wk_testcov_c_callable(s,dvv,metinv,metdet,D,mp,ds) bind(c)
+!needs dvv, metinv, metdet, D, mp (what is it?)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(out) :: ds(np,np,2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: metinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+    allocate(elem%metinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+    elem%metinv = metinv
+    elem%metdet = metdet
+
+    ds = gradient_sphere_wk_testcov(s,deriv,elem)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+    deallocate(elem%metinv)
+    deallocate(elem%metdet)
+#endif
+
+ end subroutine gradient_sphere_wk_testcov_c_callable
 
   function gradient_sphere_wk_testcontra(s,deriv,elem) result(ds)
 !
@@ -1939,19 +2019,19 @@ end do
 
     do j=1,np
        do i=1,np
-          vort(i,j)=(vort(i,j)-vtemp(i,j))*(1/elem%metdet(i,j)*rrearth)
+          vort(i,j)=(vort(i,j)-vtemp(i,j))*(1.0d0/elem%metdet(i,j)*rrearth)
        end do
     end do
 
   end function vorticity_sphere
 
-  subroutine vorticity_sphere_c_callable(v, dvv, rmetdet, d, vort) bind(c)
+  subroutine vorticity_sphere_c_callable(v, dvv, metdet, d, vort) bind(c)
     use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np, np, 2)
     real(kind=real_kind), intent(in) :: dvv(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
     real(kind=real_kind), intent(in) :: d(np, np, 2, 2)
     real(kind=real_kind), intent(out) :: vort(np, np)
 
@@ -1963,18 +2043,15 @@ end do
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%D(np, np, 2, 2))
     allocate(elem%metdet(np, np))
-    allocate(elem%rmetdet(np, np))
 #endif
     elem%D = d
-    elem%rmetdet = rmetdet
-    elem%metdet = 1.0 / rmetdet
+    elem%metdet = metdet
 
     vort = vorticity_sphere(v, deriv, elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%D)
     deallocate(elem%metdet)
-    deallocate(elem%rmetdet)
 #endif
   end subroutine vorticity_sphere_c_callable
 
@@ -2165,6 +2242,62 @@ end do
 
   end function laplace_sphere_wk
 
+
+!  subroutine laplace_sphere_wk_c_callable(s,deriv,elem,var_coef,laplace) bind(c)
+!hypervis_power, hypervis_scaling are in control_mod
+!here will they be in c?
+!derive has dvv
+!var_coef is boolean
+!ignore option with variable_hyperviscosity for now (really, it is probably never
+!used)
+
+!  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,hvpower,hvscaling,var_coef,laplace) bind(c)
+  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,&
+             hvpower, hvscaling, var_coef,laplace) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    use control_mod, only: hypervis_power, hypervis_scaling
+    real(kind=real_kind), intent(in) :: s(np,np)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
+    logical, intent(in) :: var_coef
+    real(kind=real_kind), intent(in) :: hvpower, hvscaling 
+    real(kind=real_kind),intent(out)     :: laplace(np,np)
+!local
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+!redefining params from control_mod, not the usual homme practice, but...
+    hypervis_power = hvpower
+    hypervis_scaling = hvscaling
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+    allocate(elem%tensorVisc(np, np, 2, 2))
+#endif
+
+    elem%Dinv = Dinv
+    elem%spheremp = spheremp
+    elem%tensorVisc = tensorVisc
+
+    laplace=laplace_sphere_wk(s,deriv,elem,var_coef)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+    deallocate(elem%tensorVisc)
+#endif
+
+  end subroutine laplace_sphere_wk_c_callable
+
+
+
+
 ! not a homme function, for debugging cxx
 ! make it not take elem in
   function laplace_simple(s,dvv,dinv,spheremp) result(laplace)
@@ -2202,7 +2335,7 @@ end do
   end function laplace_simple
 
 !not a homme subroutine, to call from C++ unit testing
-  subroutine laplace_simple_c_int(s,dvv,dinv,metdet,laplace) bind(c)
+  subroutine laplace_simple_c_callable(s,dvv,dinv,metdet,laplace) bind(c)
     use kinds, only: real_kind
     use dimensions_mod, only: np
 
@@ -2214,7 +2347,7 @@ end do
 
     laplace=laplace_simple(s,dvv,dinv,metdet)
 
-  end subroutine laplace_simple_c_int
+  end subroutine laplace_simple_c_callable
 
 !DIR$ ATTRIBUTES FORCEINLINE :: vlaplace_sphere_wk
   function vlaplace_sphere_wk(v,deriv,elem,var_coef,nu_ratio) result(laplace)
@@ -2285,19 +2418,80 @@ end do
     do component=1,2
        ! vec_sphere2cart is its own pseudoinverse.
 !JMD       laplace(:,:,component)=sum( dum_cart(:,:,:)*elem%vec_sphere2cart(:,:,:,component) ,3)
-       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
-                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
-                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component)
-    end do
 
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
-    ! add in correction so we dont damp rigid rotation
-    laplace(:,:,1)=laplace(:,:,1) + 2*elem%spheremp(:,:)*v(:,:,1)*(rrearth**2)
-    laplace(:,:,2)=laplace(:,:,2) + 2*elem%spheremp(:,:)*v(:,:,2)*(rrearth**2)
+       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
+                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
+                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component) + &
+                                2*elem%spheremp(:,:)*v(:,:,component)*(rrearth**2)
+#else
+       laplace(:,:,component) = dum_cart(:,:,1)*elem%vec_sphere2cart(:,:,1,component) + &
+                                dum_cart(:,:,2)*elem%vec_sphere2cart(:,:,2,component) + &
+                                dum_cart(:,:,3)*elem%vec_sphere2cart(:,:,3,component) 
 #endif
+    end do
+
+!#define UNDAMPRRCART
+!#ifdef UNDAMPRRCART
+!    ! add in correction so we dont damp rigid rotation
+!    laplace(:,:,1)=laplace(:,:,1) + 2*elem%spheremp(:,:)*v(:,:,1)*(rrearth**2)
+!    laplace(:,:,2)=laplace(:,:,2) + 2*elem%spheremp(:,:)*v(:,:,2)*(rrearth**2)
+!#endif
+
   end function vlaplace_sphere_wk_cartesian
 
+
+
+!OG logics around hvpower, ... var_coef is not clear, but cleaning it
+!would mean a different *nl for F and C, so, keeping these vars for now.
+  subroutine vlaplace_sphere_wk_cartesian_c_callable(v, dvv, dinv, spheremp, &
+             tensorVisc, vec_sph2cart, hvpower, hvscaling, var_coef, laplace) bind(c)
+
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    use control_mod, only: hypervis_power, hypervis_scaling
+    real(kind=real_kind), intent(in) :: v(np,np,2)
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: vec_sph2cart(np, np, 3, 2)
+    logical, intent(in) :: var_coef
+    real(kind=real_kind), intent(in) :: hvpower, hvscaling
+    real(kind=real_kind), intent(out)     :: laplace(np,np,2)
+!local
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+!redefining params from control_mod, not the usual homme practice, but...
+    hypervis_power = hvpower
+    hypervis_scaling = hvscaling
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%spheremp(np, np))
+    allocate(elem%tensorVisc(np, np, 2, 2))
+    allocate(elem%vec_sphere2cart(np, np, 3, 2))    
+#endif
+
+    elem%Dinv = Dinv
+    elem%spheremp = spheremp
+    elem%tensorVisc = tensorVisc
+    elem%vec_sphere2cart = vec_sph2cart
+
+    laplace=vlaplace_sphere_wk_cartesian(v,deriv,elem,var_coef)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%spheremp)
+    deallocate(elem%tensorVisc)
+    deallocate(elem%vec_sphere2cart)
+#endif
+
+  end subroutine vlaplace_sphere_wk_cartesian_c_callable
 
 
   function vlaplace_sphere_wk_contra(v,deriv,elem,var_coef,nu_ratio) result(laplace)
@@ -2333,20 +2527,82 @@ end do
 
     if (present(nu_ratio)) div = nu_ratio*div
 
-    laplace = gradient_sphere_wk_testcov(div,deriv,elem) - &
-         curl_sphere_wk_testcov(vor,deriv,elem)
-
     do n=1,np
        do m=1,np
           ! add in correction so we dont damp rigid rotation
 #define UNDAMPRR
 #ifdef UNDAMPRR
-          laplace(m,n,1)=laplace(m,n,1) + 2*elem%spheremp(m,n)*v(m,n,1)*(rrearth**2)
-          laplace(m,n,2)=laplace(m,n,2) + 2*elem%spheremp(m,n)*v(m,n,2)*(rrearth**2)
+          laplace(m,n,1)=2*elem%spheremp(m,n)*v(m,n,1)*(rrearth**2)
+          laplace(m,n,2)=2*elem%spheremp(m,n)*v(m,n,2)*(rrearth**2)
 #endif
        enddo
     enddo
+
+    laplace = laplace+ (gradient_sphere_wk_testcov(div,deriv,elem) &
+            - curl_sphere_wk_testcov(vor,deriv,elem) )
+
   end function vlaplace_sphere_wk_contra
+
+
+!needs whatever is in strong div, vorticity, grad_testcov, curl_testcov  
+!and nu_ratio
+!and dvv
+!Also, make this interface only for the case of const HV, so, no logic
+!for var_coef hyperviscosity.
+  subroutine vlaplace_sphere_wk_contra_c_callable(v, dvv, d, dinv, mp, spheremp, metinv,&
+                                                  metdet, rmetdet, nu_ratio, laplace) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np
+    use element_mod, only: element_t
+    real(kind=real_kind), intent(in) :: v(np,np,2)
+    real(kind=real_kind), intent(out) :: laplace(np,np,2)
+    real(kind=real_kind), intent(in) :: nu_ratio
+
+    real(kind=real_kind), intent(in) :: dvv(np, np)
+    real(kind=real_kind), intent(in) :: D(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: mp(np, np)
+    real(kind=real_kind), intent(in) :: spheremp(np, np)
+    real(kind=real_kind), intent(in) :: metdet(np, np)
+    real(kind=real_kind), intent(in) :: metinv(np, np, 2, 2)
+    real(kind=real_kind), intent(in) :: rmetdet(np, np)
+    real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+
+    type (derivative_t) :: deriv
+    type (element_t) :: elem
+
+    deriv%dvv = dvv
+#ifdef HOMME_USE_FLAT_ARRAYS
+    allocate(elem%D(np, np, 2, 2))
+    allocate(elem%mp(np, np))
+    allocate(elem%spheremp(np, np))
+    allocate(elem%metinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+    allocate(elem%rmetdet(np, np))
+    allocate(elem%Dinv(np, np, 2, 2))
+#endif
+
+    elem%D = D
+    elem%mp = mp
+    elem%spheremp = spheremp
+    elem%metinv = metinv
+    elem%metdet = metdet
+    elem%Dinv = dinv
+    elem%rmetdet = rmetdet
+
+    laplace = vlaplace_sphere_wk_contra(v,deriv,elem,.false.,nu_ratio)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%D)
+    deallocate(elem%mp)
+    deallocate(elem%spheremp)
+    deallocate(elem%metinv)
+    deallocate(elem%metdet)
+    deallocate(elem%rmetdet)
+    deallocate(elem%Dinv)
+#endif
+
+  end subroutine vlaplace_sphere_wk_contra_c_callable
+
 
 
   function subcell_dss_fluxes(dss, p, n, metdet, C) result(fluxes)
