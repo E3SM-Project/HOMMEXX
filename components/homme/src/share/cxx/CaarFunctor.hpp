@@ -84,6 +84,8 @@ struct CaarFunctor {
       compute_omega_p(kv);
       compute_temperature_np1(kv);
       compute_velocity_np1(kv);
+      // Note this is dependent on eta_dot_dpdn from other levels and will cause
+      // issues when rsplit is 0
       compute_dp3d_np1(kv);
       check_dp3d(kv);
     });
