@@ -1,11 +1,11 @@
-#include "Region.hpp"
+#include "Elements.hpp"
 #include "Utility.hpp"
 
 #include <assert.h>
 
 namespace Homme {
 
-void Region::init(const int num_elems) {
+void Elements::init(const int num_elems) {
   m_num_elems = num_elems;
 
   buffers.init(num_elems);
@@ -43,7 +43,7 @@ void Region::init(const int num_elems) {
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn", m_num_elems);
 }
 
-void Region::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                          CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
@@ -96,7 +96,7 @@ void Region::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_dinv, h_dinv);
 }
 
-void Region::random_init(const int num_elems, std::mt19937_64 &engine) {
+void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
   init(num_elems);
   constexpr const Real min_value = 0.015625;
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
@@ -222,7 +222,7 @@ void Region::random_init(const int num_elems, std::mt19937_64 &engine) {
   return;
 }
 
-void Region::pull_from_f90_pointers(
+void Elements::pull_from_f90_pointers(
     CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
     CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
     CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
@@ -232,7 +232,7 @@ void Region::pull_from_f90_pointers(
   pull_qdp(state_qdp);
 }
 
-void Region::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
+void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
                          CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
@@ -275,7 +275,7 @@ void Region::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
 }
 
-void Region::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
+void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
                          CF90Ptr &state_dp3d) {
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
       Kokkos::create_mirror_view(m_u);
@@ -316,7 +316,7 @@ void Region::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
   Kokkos::deep_copy(m_dp3d, h_dp3d);
 }
 
-void Region::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
+void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
 
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
@@ -338,7 +338,7 @@ void Region::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
 }
 
-void Region::pull_qdp(CF90Ptr &state_qdp) {
+void Elements::pull_qdp(CF90Ptr &state_qdp) {
   ExecViewManaged<
       Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
@@ -360,7 +360,7 @@ void Region::pull_qdp(CF90Ptr &state_qdp) {
   Kokkos::deep_copy(m_qdp, h_qdp);
 }
 
-void Region::push_to_f90_pointers(
+void Elements::push_to_f90_pointers(
     F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d, F90Ptr &derived_phi,
     F90Ptr &derived_pecnd, F90Ptr &derived_omega_p, F90Ptr &derived_v,
     F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const {
@@ -370,7 +370,7 @@ void Region::push_to_f90_pointers(
   push_qdp(state_qdp);
 }
 
-void Region::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
                          F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
@@ -417,7 +417,7 @@ void Region::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
   }
 }
 
-void Region::push_4d(F90Ptr &state_v, F90Ptr &state_t,
+void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
                          F90Ptr &state_dp3d) const {
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
       Kokkos::create_mirror_view(m_u);
@@ -458,7 +458,7 @@ void Region::push_4d(F90Ptr &state_v, F90Ptr &state_t,
   }
 }
 
-void Region::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
+void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
   Kokkos::deep_copy(h_eta_dot_dpdn, m_eta_dot_dpdn);
@@ -480,7 +480,7 @@ void Region::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   }
 }
 
-void Region::push_qdp(F90Ptr &state_qdp) const {
+void Elements::push_qdp(F90Ptr &state_qdp) const {
   ExecViewManaged<
       Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
@@ -502,7 +502,7 @@ void Region::push_qdp(F90Ptr &state_qdp) const {
   }
 }
 
-void Region::d(Real *d_ptr, int ie) const {
+void Elements::d(Real *d_ptr, int ie) const {
   ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(
       m_d, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
@@ -520,14 +520,14 @@ void Region::d(Real *d_ptr, int ie) const {
   }
 }
 
-void Region::dinv(Real *dinv_ptr, int ie) const {
+void Elements::dinv(Real *dinv_ptr, int ie) const {
   ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(
       m_dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
   ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host(dinv_ptr);
   Kokkos::deep_copy(dinv_host, dinv_device);
 }
 
-void Region::BufferViews::init(int num_elems) {
+void Elements::BufferViews::init(int num_elems) {
   pressure =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
   pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
@@ -552,8 +552,8 @@ void Region::BufferViews::init(int num_elems) {
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]> ("buffer for vstar*qdp", num_elems);
 }
 
-Region &get_region() {
-  static Region r;
+Elements &get_elements() {
+  static Elements r;
   return r;
 }
 

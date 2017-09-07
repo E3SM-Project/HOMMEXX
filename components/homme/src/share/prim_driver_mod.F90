@@ -668,7 +668,7 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
   interface
-    subroutine init_region_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
+    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
                                  elem_spheremp_ptr, elem_metdet_ptr, phis_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
@@ -677,7 +677,7 @@ contains
       integer      , intent(in) :: nelemd
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
       type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_metdet_ptr, phis_ptr
-    end subroutine init_region_2d_c
+    end subroutine init_elements_2d_c
   end interface
 #endif
 
@@ -1001,7 +1001,7 @@ contains
     elem_spheremp_ptr   = c_loc(elem_spheremp)
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_state_phis_ptr = c_loc(elem_state_phis)
-    call init_region_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
+    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
                            elem_fcor_ptr, elem_spheremp_ptr,  &
                            elem_metdet_ptr, elem_state_phis_ptr)
 #endif

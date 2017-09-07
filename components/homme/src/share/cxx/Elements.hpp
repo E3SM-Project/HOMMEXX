@@ -11,7 +11,7 @@
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
-class Region {
+class Elements {
 public:
   // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
@@ -77,7 +77,7 @@ public:
 
   } buffers;
 
-  Region() = default;
+  Elements() = default;
 
   void init(const int num_elems);
 
@@ -121,7 +121,7 @@ private:
 };
 
 // TODO: DON'T USE SINGLETONS
-Region &get_region();
+Elements &get_elements();
 
 } // Homme
 
