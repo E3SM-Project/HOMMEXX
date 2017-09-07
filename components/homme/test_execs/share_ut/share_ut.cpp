@@ -13,15 +13,18 @@ using namespace Homme;
 
 extern "C" {
 
-void init_deriv_f90(F90Ptr &dvv);
-void gradient_sphere_f90(CF90Ptr &scalar_f90, CF90Ptr &DInv_f90,
-                         F90Ptr &vector_f90, const int &nelems);
-void divergence_sphere_f90(CF90Ptr &vector_f90, CF90Ptr &DInv_f90,
-                           CF90Ptr &metdet_f90, F90Ptr &scalar_f90,
-                           const int &nelems);
-void vorticity_sphere_f90(CF90Ptr &vector_f90, CF90Ptr &D_f90,
-                          CF90Ptr &metdet_f90, F90Ptr &scalar_f90,
-                          const int &nelems);
+void init_deriv_f90(Real *dvv);
+
+void gradient_sphere_c_callable(const Real *scalar, const Real *dvv,
+                                const Real *DInv, Real *vector);
+
+void divergence_sphere_c_callable(const Real *vector, const Real *dvv,
+                                  const Real *metdet, const Real *DInv,
+                                  Real *scalar);
+
+void vorticity_sphere_c_callable(const Real *vector, const Real *dvv,
+                                 const Real *metdet, const Real *D,
+                                 Real *scalar);
 
 } // extern "C"
 
@@ -34,10 +37,7 @@ void genRandArray(Real *const x, int length, rngAlg &engine, PDF &pdf) {
 
 template <typename ViewType, typename rngAlg, typename PDF>
 void genRandArray(ViewType view, rngAlg &engine, PDF &pdf) {
-  Real *data = view.data();
-  for (int i = 0; i < view.size(); ++i) {
-    data[i] = pdf(engine);
-  }
+  genRandArray(view.data(), view.size(), engine, pdf);
 }
 
 Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
@@ -51,7 +51,7 @@ Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
 
 // ================================= TESTS ============================ //
 
-TEST_CASE("flip arrays", "flip arrays routines") {
+TEST_CASE("flip_arrays", "flip arrays routines") {
   constexpr int N1 = 2;
   constexpr int N2 = 3;
   constexpr int N3 = 4;
@@ -156,10 +156,13 @@ TEST_CASE("flip arrays", "flip arrays routines") {
 
 // ====================== SPHERE OPERATORS =========================== //
 
-TEST_CASE("SphereOperators", "Testing spherical differential operators") {
+TEST_CASE("Single_Level_Sphere_Operators",
+          "Testing spherical differential operators") {
   // Short names
   using Kokkos::subview;
   using Kokkos::ALL;
+
+  constexpr Real rel_threshold = std::numeric_limits<Real>::epsilon() * 32768.0;
 
   constexpr int nelems = 1;
   constexpr int num_rand_test = 10;
@@ -179,6 +182,8 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   ExecViewManaged<Real * [2][2][NP][NP]> D_exec("D_cxx_exec", nelems);
   ExecViewManaged<Real * [NP][NP]> metdet_exec("metdet_cxx_exec", nelems);
   ExecViewManaged<Real * [2][NP][NP]> tmp_exec("tmp_cxx", nelems);
+  ExecViewManaged<Real[2][NP][NP]> buffer("buffer_cxx");
+
   // Output exec views
   HostViewManaged<Real * [NP][NP]> scalar_output("scalar_exec_output", nelems);
   HostViewManaged<Real * [2][NP][NP]> vector_output("vector_exec_output",
@@ -188,7 +193,7 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
   std::random_device rd;
   using rngAlg = std::mt19937_64;
   rngAlg engine(rd());
-  std::uniform_real_distribution<Real> dreal(0, 1);
+  std::uniform_real_distribution<Real> dreal(0.0125, 1);
 
   // Initialize derivative
   init_deriv_f90(dvv_h.data());
@@ -203,14 +208,14 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
                                        vectors_per_thread);
   policy.set_chunk_size(1);
 
-  SECTION("gradient sphere") {
+  SECTION("gradient sphere single level") {
     for (int itest = 0; itest < num_rand_test; ++itest) {
 
       // Initialize input(s)
       genRandArray(scalar_h, engine, dreal);
-      genRandArray(DInv_h, engine, dreal);
-
       Kokkos::deep_copy(scalar_exec, scalar_h);
+
+      genRandArray(DInv_h, engine, dreal);
       Kokkos::deep_copy(DInv_exec, DInv_h);
 
       // Compute cxx
@@ -218,24 +223,29 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
         KernelVariables kv(team_member);
 
         gradient_sphere_sl(kv, DInv_exec, deriv.get_dvv(),
-                           Kokkos::subview(scalar_exec, kv.ie, ALL, ALL),
-                           Kokkos::subview(vector_exec, kv.ie, ALL, ALL, ALL));
+                           subview(scalar_exec, kv.ie, ALL, ALL), buffer,
+                           subview(vector_exec, kv.ie, ALL, ALL, ALL));
       });
 
       // Deep copy back to host
       Kokkos::deep_copy(vector_output, vector_exec);
 
-      // Compute f90
-      gradient_sphere_f90(scalar_h.data(), DInv_h.data(), vector_h.data(),
-                          nelems);
-
-      // Check the answer
       for (int ie = 0; ie < nelems; ++ie) {
+        // Compute f90
+        gradient_sphere_c_callable(
+            subview(scalar_h, ie, ALL, ALL).data(),
+            subview(dvv_h, ie, ALL, ALL).data(),
+            subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
+            subview(vector_h, ie, ALL, ALL, ALL).data());
+
+        // Check the answer
         for (int dim = 0; dim < 2; ++dim) {
           for (int j = 0; j < NP; ++j) {
             for (int i = 0; i < NP; ++i) {
-              REQUIRE(compare_answers(vector_h(ie, dim, j, i),
-                                      vector_output(ie, dim, j, i)) == 0.0);
+              const Real correct = vector_h(ie, dim, j, i);
+              const Real computed = vector_output(ie, dim, j, i);
+              const Real rel_error = compare_answers(correct, computed);
+              REQUIRE(rel_threshold >= rel_error);
             }
           }
         }
@@ -243,7 +253,7 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
     }
   }
 
-  SECTION("divergence sphere") {
+  SECTION("divergence sphere single level") {
 
     for (int itest = 0; itest < num_rand_test; ++itest) {
       // Initialize input(s)
@@ -265,29 +275,34 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
             subview(scalar_exec, kv.ie, ALL, ALL);
 
         divergence_sphere_sl(kv, DInv_exec, metdet_exec, deriv.get_dvv(),
-                             vector_ie, div_ie);
+                             vector_ie, buffer, div_ie);
       });
 
       // Deep copy back to host
       Kokkos::deep_copy(scalar_output, scalar_exec);
 
-      // Compute f90
-      divergence_sphere_f90(vector_h.data(), DInv_h.data(), metdet_h.data(),
-                            scalar_h.data(), nelems);
-
-      // Check the answer
       for (int ie = 0; ie < nelems; ++ie) {
+        // Compute f90
+        divergence_sphere_c_callable(
+            subview(vector_h, ie, ALL, ALL, ALL).data(),
+            subview(dvv_h, ie, ALL, ALL).data(),
+            subview(metdet_h, ie, ALL, ALL).data(),
+            subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
+            subview(scalar_h, ie, ALL, ALL).data());
+        // Check the answer
         for (int j = 0; j < NP; ++j) {
           for (int i = 0; i < NP; ++i) {
-            REQUIRE(compare_answers(scalar_h(ie, i, j),
-                                    scalar_output(ie, i, j)) == 0.0);
+            const Real correct = scalar_h(ie, i, j);
+            const Real computed = scalar_output(ie, i, j);
+            const Real rel_error = compare_answers(correct, computed);
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
     }
   }
 
-  SECTION("vorticity sphere") {
+  SECTION("vorticity sphere single level") {
     for (int itest = 0; itest < num_rand_test; ++itest) {
       // Initialize input(s)
       genRandArray(vector_h, engine, dreal);
@@ -310,22 +325,27 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
             subview(scalar_exec, kv.ie, ALL, ALL);
 
         vorticity_sphere_sl(kv, D_exec, metdet_exec, deriv.get_dvv(),
-                            vector_x_ie, vector_y_ie, vort_ie);
+                            vector_x_ie, vector_y_ie, buffer, vort_ie);
       });
-
-      // Compute f90
-      vorticity_sphere_f90(vector_h.data(), D_h.data(), metdet_h.data(),
-                           scalar_h.data(), nelems);
 
       // Deep copy back to host
       Kokkos::deep_copy(scalar_output, scalar_exec);
 
-      // Check the answer
       for (int ie = 0; ie < nelems; ++ie) {
+        // Compute f90
+        vorticity_sphere_c_callable(subview(vector_h, ie, ALL, ALL, ALL).data(),
+                                    subview(dvv_h, ie, ALL, ALL).data(),
+                                    subview(metdet_h, ie, ALL, ALL).data(),
+                                    subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
+                                    subview(scalar_h, ie, ALL, ALL).data());
+        // Check the answer
         for (int i = 0; i < NP; ++i) {
           for (int j = 0; j < NP; ++j) {
-            REQUIRE(compare_answers(scalar_h(ie, i, j),
-                                    scalar_output(ie, i, j)) == 0.0);
+            const Real correct = scalar_h(ie, i, j);
+            const Real computed = scalar_output(ie, i, j);
+            const Real rel_error =
+                compare_answers(scalar_h(ie, i, j), scalar_output(ie, i, j));
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
