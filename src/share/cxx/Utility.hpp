@@ -85,7 +85,8 @@ template <typename ViewT, typename ArrayT> struct host_view_mappable {
 // Kokkos views cannot be used to determine which overloaded function to call,
 // so implement this check ourselves with enable_if.
 // Despite the ugly templates, this provides much better error messages
-// These functions synchronize views from the Fortran layout to the Kernel layout
+// These functions synchronize views from the Fortran layout to the Kernel
+// layout
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::
@@ -130,6 +131,32 @@ sync_to_host(Source_T source, Dest_T dest) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             dest(ie, level, igp, jgp) =
                 source_mirror(ie, igp, jgp, vector_level)[vector];
+          }
+        }
+      }
+    }
+  }
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [2][NP][NP][NUM_LEV]>::value &&
+        host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+         ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int dim = 0; dim < 2; ++dim) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              dest(ie, level, dim, igp, jgp) =
+                  source_mirror(ie, dim, igp, jgp, vector_level)[vector];
+            }
           }
         }
       }
@@ -242,6 +269,60 @@ sync_to_device(Source_T source, Dest_T dest) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             dest_mirror(ie, igp, jgp, vector_level)[vector] =
                 source(ie, level, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(dest, dest_mirror);
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Scalar * [NP][NP][NUM_LEV]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest_1, Dest_T dest_2) {
+  typename Dest_T::HostMirror dest_1_mirror =
+      Kokkos::create_mirror_view(dest_1);
+  typename Dest_T::HostMirror dest_2_mirror =
+      Kokkos::create_mirror_view(dest_2);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+         ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest_1_mirror(ie, igp, jgp, vector_level)[vector] =
+                source(ie, level, 0, igp, jgp);
+            dest_2_mirror(ie, igp, jgp, vector_level)[vector] =
+                source(ie, level, 1, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(dest_1, dest_1_mirror);
+  Kokkos::deep_copy(dest_2, dest_2_mirror);
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Scalar * [2][NP][NP][NUM_LEV]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest) {
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+         ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int dim = 0; dim < 2; ++dim) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              dest_mirror(ie, dim, igp, jgp, vector_level)[vector] =
+                  source(ie, level, dim, igp, jgp);
+            }
           }
         }
       }
