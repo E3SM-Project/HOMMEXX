@@ -2,9 +2,9 @@
 
 #include <limits>
 
-#include "CaarControl.hpp"
+#include "Control.hpp"
 #include "CaarFunctor.hpp"
-#include "CaarRegion.hpp"
+#include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
@@ -63,12 +63,12 @@ class compute_subfunctor_test {
 
     get_derivative().dvv(dvv.data());
 
-    get_region().push_to_f90_pointers(
+    get_elements().push_to_f90_pointers(
         velocity.data(), temperature.data(), dp3d.data(),
         phi.data(), pecnd.data(), omega_p.data(),
         derived_v.data(), eta_dpdn.data(), qdp.data());
     for(int ie = 0; ie < num_elems; ++ie) {
-      get_region().dinv(
+      get_elements().dinv(
           Kokkos::subview(dinv, ie, Kokkos::ALL,
                           Kokkos::ALL, Kokkos::ALL,
                           Kokkos::ALL)
@@ -168,8 +168,8 @@ TEST_CASE("monolithic compute_and_apply_rhs",
 
   // This must be a reference to ensure the views are
   // initialized in the singleton
-  CaarRegion &region = get_region();
-  region.random_init(num_elems, engine);
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
   compute_subfunctor_test<compute_energy_grad_test>
@@ -178,7 +178,7 @@ TEST_CASE("monolithic compute_and_apply_rhs",
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
       energy_grad("energy_grad", num_elems);
   Kokkos::deep_copy(energy_grad,
-                    region.buffers.energy_grad);
+                    elements.buffers.energy_grad);
 
   for(int ie = 0; ie < num_elems; ++ie) {
     for(int level = 0; level < NUM_LEV; ++level) {

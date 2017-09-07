@@ -5,25 +5,68 @@
 
 namespace Homme {
 
-template<typename MemSpace, typename ScalarType>
+// ================ Subviews of 2d views ======================= //
+// Note: we still template on ScalarType (should always be Homme::Real here)
+//       to allow const/non-const version
+template<typename MemSpace, typename MemManagement, typename ScalarType>
+ViewUnmanaged<ScalarType[NP][NP],MemSpace>
+subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [NP][NP],MemSpace>(&v_in(ie,0,0));
+}
+
+// Here, usually, DIM1=DIM2=2 (D and DInv)
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>(&v_in(ie,0,0,0,0));
+}
+
+// ================ Subviews of 3d views ======================= //
+// Note: we still template on ScalarType (should always be Homme::Scalar here)
+//       to allow const/non-const version
+
+template<typename MemSpace, typename MemManagement, typename ScalarType>
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-subview(ViewUnmanaged<ScalarType*[NP][NP][NUM_LEV],MemSpace> v_in, int ie)
+subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0));
 }
 
-template<typename MemSpace, typename ScalarType>
-ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-subview(ViewUnmanaged<ScalarType*[NUM_TIME_LEVELS][NP][NP][NUM_LEV],MemSpace> v_in, int ie, int itl)
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,itl,0,0,0));
+  return ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0));
 }
 
-template<typename MemSpace, typename ScalarType>
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
-subview(ViewUnmanaged<ScalarType*[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV],MemSpace> v_in, int ie, int itl, int iq)
+subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim)
 {
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,itl,iq,0,0,0));
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
+{
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1)
+{
+  return ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,0,0,0,0));
+}
+
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
+{
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,0,0,0));
 }
 
 template<typename ViewType>

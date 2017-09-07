@@ -7,18 +7,29 @@
 
 namespace Homme {
 
-struct CaarControl {
+struct Control {
 
-  CaarControl ()
+  Control ()
   {
-    const char* var = getenv("HOMMEXX_TEAM_SIZE");
+    // We start by setting
+    team_size         = 1;
+    default_team_size = 1;
+
+    const char* var;
+    var = getenv("OMP_NUM_THREADS");
     if (var!=0)
     {
-      team_size = std::atoi(var);
+      // the team size canno exceed the value of OMP_NUM_THREADS, so se note it down
+      default_team_size = std::atoi(var);
     }
-    else
+
+    var = getenv("HOMMEXX_TEAM_SIZE");
+    if (var!=0)
     {
-      team_size = -1;
+      // The user requested a team size for homme. We accept it, provided that
+      // it does not exceed the value of OMP_NUM_THREADS. If it does exceed that,
+      // we simply set it to OMP_NUM_THREADS.
+      default_team_size = std::min(std::atoi(var),default_team_size);
     }
   }
 
@@ -28,6 +39,12 @@ struct CaarControl {
              const int qn0,  const Real dt2, const Real ps0,
              const bool compute_diagonstics, const Real eta_ave_w,
              CRCPtr hybrid_a_ptr);
+
+  // This method sets team_size if it wasn't already set via environment variable in the constructor
+  void set_team_size ();
+
+  // The desired team size for kokkos team policy
+  int default_team_size;
 
   // The desired team size for kokkos team policy
   int team_size;
@@ -47,8 +64,11 @@ struct CaarControl {
   // Tracers timelevel, inclusive range of 0-1
   int qn0;
 
-  // Time step squared
-  Real dt2;
+  // Number of tracers (may be lower than QSIZE_D)
+  int qsize;
+
+  // Time step
+  Real dt;
 
   // Weight for eta_dot_dpdn mean flux
   Real eta_ave_w;
@@ -65,7 +85,7 @@ struct CaarControl {
   ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
 };
 
-CaarControl& get_control ();
+Control& get_control ();
 
 } // Namespace Homme
 
