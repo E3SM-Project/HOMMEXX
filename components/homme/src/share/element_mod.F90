@@ -481,7 +481,11 @@ module element_mod
 
      real (kind=real_kind)    :: variable_hyperviscosity(np,np)       ! hyperviscosity based on above
      real (kind=real_kind)    :: hv_courant                           ! hyperviscosity courant number
+#ifdef HOMME_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer    :: tensorVisc(:,:,:,:)
+#else
      real (kind=real_kind)    :: tensorVisc(np,np,2,2)                !og, matrix V for tensor viscosity
+#endif
 
      ! Edge connectivity information
 !     integer(kind=int_kind)   :: node_numbers(4)
@@ -514,6 +518,7 @@ module element_mod
      type (spherical_polar_t), pointer :: spherep(:,:)                       ! Spherical coords of GLL points
 
      real (kind=real_kind), pointer    :: sub_elem_mass_flux(:,:,:,:)
+     real (kind=real_kind), pointer    :: vec_sphere2cart(:,:,:,:)
 #else
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
@@ -570,11 +575,11 @@ module element_mod
      !  ---------------------------------------------------------------
      !          First Coordinate ------->
      real (kind=real_kind) :: sub_elem_mass_flux(nc,nc,4,nlev)
-#endif
 
      ! Convert vector fields from spherical to rectangular components
      ! The transpose of this operation is its pseudoinverse.
      real (kind=real_kind)    :: vec_sphere2cart(np,np,3,2)
+#endif
 
      integer(kind=long_kind)  :: gdofP(np,np)                         ! global degree of freedom (P-grid)
 
