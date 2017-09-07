@@ -2,8 +2,8 @@
 #define HOMME_REGION_HPP
 
 #include "Types.hpp"
+#include "Utility.hpp"
 
-#include "CaarControl.hpp"
 #include <Kokkos_Core.hpp>
 
 #include <random>
@@ -11,7 +11,7 @@
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
-class CaarRegion {
+class Elements {
 public:
   // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
@@ -53,21 +53,31 @@ public:
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
   struct BufferViews {
+
     BufferViews() = default;
     void init(const int num_elems);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temperature_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> vorticity;
+
+    // Buffers for CaarFunctor
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       pressure;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       temperature_virt;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       omega_p;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       div_vdp;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       ephi;
+    ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>       vorticity;
+
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       pressure_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       temperature_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       energy_grad;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>       vdp;
+
+    // Buffers for EulerStepFunctor
+    ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]>   qtens;
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>            vstar;
+    ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>   vstar_qdp;
+
   } buffers;
 
-  CaarRegion() = default;
+  Elements() = default;
 
   void init(const int num_elems);
 
@@ -88,7 +98,8 @@ public:
   void pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
                CF90Ptr &derived_omega_p, CF90Ptr &derived_v);
   void pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d);
-  void pull_extra(CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp);
+  void pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn);
+  void pull_qdp(CF90Ptr &state_qdp);
 
   // Push the results from the exec space views to the F90 pointers
   void push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp,
@@ -99,7 +110,8 @@ public:
   void push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
                F90Ptr &derived_omega_p, F90Ptr &derived_v) const;
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
-  void push_extra(F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const;
+  void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
+  void push_qdp(F90Ptr &state_qdp) const;
 
   void d(Real *d_ptr, int ie) const;
   void dinv(Real *dinv_ptr, int ie) const;
@@ -109,7 +121,7 @@ private:
 };
 
 // TODO: DON'T USE SINGLETONS
-CaarRegion &get_region();
+Elements &get_elements();
 
 } // Homme
 
