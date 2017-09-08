@@ -42,6 +42,13 @@ module vertremap_mod_base
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
 
+  public remap1_c_callable
+  public remap_q_ppm_c_callable
+  public compute_ppm_grids_c_callable
+  public compute_ppm_c_callable
+
+  implicit none
+
   contains
 
 !=======================================================================================================!
@@ -660,7 +667,33 @@ end function compute_ppm_grids
 
 !=======================================================================================================!
 
+subroutine compute_ppm_grids_c_callable(dx,rslt,alg) bind(c)
+  use iso_c_binding, only: c_int
+  use control_mod, only: vert_remap_q_alg
+  integer(c_int), intent(in) :: alg
+  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
+  real(kind=real_kind), intent(out):: rslt(10,0:nlev+1)  !grid spacings
 
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    rslt = compute_ppm_grids(dx)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
+end subroutine compute_ppm_grids_c_callable
+
+!=======================================================================================================!
+
+subroutine compute_ppm_c_callable(a,dx,coefs) bind(c)
+  real(kind=real_kind), intent(in) :: a    (    -1:nlev+2)  !Cell-mean values
+  real(kind=real_kind), intent(in) :: dx   (10,  0:nlev+1)  !grid spacings
+  real(kind=real_kind), intent(out):: coefs(0:2,   nlev  )  !PPM coefficients (for parabola)
+
+  coefs = compute_ppm(a,dx)
+end subroutine compute_ppm_c_callable
+
+!=======================================================================================================!
 
 !This computes a limited parabolic interpolant using a net 5-cell stencil, but the stages of computation are broken up into 3 stages
 function compute_ppm( a , dx )    result(coefs)
