@@ -16,6 +16,7 @@ module element_mod
 
   real (kind=real_kind),    allocatable, target, public :: elem_Dinv      (:,:,:,:,:) ! (np,np,2,2,nelemd)
   real (kind=real_kind),    allocatable, target, public :: elem_D         (:,:,:,:,:) ! (np,np,2,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_metinv    (:,:,:,:,:) ! (np,np,2,2,nelemd)
   real (kind=real_kind),    allocatable, target, public :: elem_metdet    (:,:,:)     ! (np,np,nelemd)
   real (kind=real_kind),    allocatable, target, public :: elem_rmetdet   (:,:,:)     ! (np,np,nelemd)
   real (kind=real_kind),    allocatable, target, public :: elem_fcor      (:,:,:)     ! (np,np,nelemd)
@@ -29,6 +30,8 @@ module element_mod
 
   real (kind=real_kind),    allocatable, target, public :: elem_sub_elem_mass_flux (:,:,:,:,:)    ! (nc,nc,4,nlev,nelemd)
 
+  real (kind=real_kind),    allocatable, target, public :: elem_vec_sphere2cart(:,:,:,:,:) ! (np,np,3,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_tensorVisc     (:,:,:,:,:) ! (np,np,2,2,nelemd)
 #ifdef _PRIM
 
   public :: setup_element_pointers
@@ -502,8 +505,9 @@ module element_mod
 #endif
      ! Metric terms
      real (kind=real_kind)    :: met(np,np,2,2)                       ! metric tensor on velocity and pressure grid
-     real (kind=real_kind)    :: metinv(np,np,2,2)                    ! metric tensor on velocity and pressure grid
+
 #ifdef HOMME_USE_FLAT_ARRAYS
+     real (kind=real_kind), pointer    :: metinv(:,:,:,:)
      real (kind=real_kind), pointer    :: metdet(:,:)
      real (kind=real_kind), pointer    :: rmetdet(:,:)
      real (kind=real_kind), pointer    :: Dinv(:,:,:,:)
@@ -520,6 +524,7 @@ module element_mod
      real (kind=real_kind), pointer    :: sub_elem_mass_flux(:,:,:,:)
      real (kind=real_kind), pointer    :: vec_sphere2cart(:,:,:,:)
 #else
+     real (kind=real_kind)    :: metinv(np,np,2,2) 
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
@@ -786,6 +791,7 @@ contains
     allocate( elem_Dinv                (np,np,2,2,nelemd) )
     allocate( elem_metdet              (np,np,nelemd)     )
     allocate( elem_rmetdet             (np,np,nelemd)     )
+    allocate( elem_metinv              (np,np,2,2,nelemd) )
     allocate( elem_fcor                (np,np, nelemd)    )
     allocate( elem_mp                  (np,np, nelemd)    )
     allocate( elem_rmp                 (np,np, nelemd)    )
@@ -793,9 +799,12 @@ contains
     allocate( elem_spheremp            (np,np, nelemd)    )
     allocate( elem_rspheremp           (np,np, nelemd)    )
     allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
+    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd) )
+    allocate( elem_tensorVisc          (np,np,2,2,nelemd) )
 
     do ie = 1 , nelemd
       elem(ie)%D                      => elem_D(:,:,:,:,ie)
+      elem(ie)%metinv                 => elem_metinv(:,:,:,:,ie)
       elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
@@ -806,6 +815,8 @@ contains
       elem(ie)%spheremp               => elem_spheremp(:,:,ie)
       elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
       elem(ie)%sub_elem_mass_flux     => elem_sub_elem_mass_flux(:,:,:,:,ie)
+      elem(ie)%vec_sphere2cart        => elem_vec_sphere2cart(:,:,:,:,ie)
+      elem(ie)%tensorVisc             => elem_tensorVisc(:,:,:,:,ie)
     enddo
 
     ! elem_state_t arrays
@@ -953,6 +964,7 @@ contains
     allocate( elem_rmetdet             (np,np,nelemd)            )
     allocate( elem_Dinv                (np,np,2,2,nelemd)        )
     allocate( elem_D                   (np,np,2,2,nelemd)        )
+    allocate( elem_metinv              (np,np,2,2,nelemd)        )
     allocate( elem_state_p             (np,np,nlev,timelevels,nelemd) )
     allocate( elem_state_ps            (np,np,nelemd) )
     allocate( elem_state_v             (np,np,2,nlev,timelevels,nelemd) )
@@ -962,11 +974,14 @@ contains
     allocate( elem_rspheremp           (np,np, nelemd)          )
     allocate( elem_spherep             (np,np, nelemd)          )
     allocate( elem_fcor                (np,np, nelemd)          )
+    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd)        )
+    allocate( elem_tensorVisc          (np,np,2,2,nelemd)        )
     do ie = 1 , nelemd
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
       elem(ie)%Dinv                   => elem_Dinv(:,:,:,:,ie)
       elem(ie)%D                      => elem_D(:,:,:,:,ie)
+      elem(ie)%metinv                 => elem_metinv(:,:,:,:,ie)
       elem(ie)%state%p                => elem_state_p(:,:,:,:,ie)
       elem(ie)%state%ps               => elem_state_ps(:,:,ie)
       elem(ie)%state%v                => elem_state_v(:,:,:,:,:,ie)
@@ -976,6 +991,8 @@ contains
       elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
       elem(ie)%spherep                => elem_spherep(:,:,ie)
       elem(ie)%fcor                   => elem_fcor(:,:,ie)
+      elem(ie)%vec_sphere2cart        => elem_vec_sphere2cart(:,:,:,:,ie)
+      elem(ie)%tensorVisc             => elem_tensorVisc(:,:,:,:,ie)
     enddo
 #endif
   end subroutine setup_element_pointers_sw
