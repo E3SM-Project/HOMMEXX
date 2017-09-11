@@ -52,6 +52,12 @@ static constexpr const int Q_NUM_TIME_LEVELS = 2;
 
 #endif // CUDA_BUILD
 
+
+constexpr const int RSLT_DIM1 = NUM_PHYSICAL_LEV + 2,
+                    RSLT_DIM2 = 10,
+                    DX_DIM = NUM_PHYSICAL_LEV + 4;
+
+
 } // namespace TinMan
 
 #endif // HOMMEXX_DIMENSIONS_HPP

@@ -6,11 +6,13 @@
 #include "CaarFunctor.hpp"
 #include "CaarRegion.hpp"
 #include "Dimensions.hpp"
+//#include "RemapDimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 
 #include "preqx_flat_ut_sphere_op_ml.cpp"
 #include "preqx_flat_ut_sphere_op_sl.cpp"
+#include "preqx_flat_ut_remap.cpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -149,6 +151,7 @@ class compute_energy_grad_test {
   }
 };
 
+#if 0
 TEST_CASE("monolithic compute_and_apply_rhs",
           "compute_energy_grad") {
   printf(
@@ -239,3 +242,7 @@ TEST_CASE("monolithic compute_and_apply_rhs",
   std::cout << "CaarFunctor: compute_energy_grad() test "
                "finished.\n";
 };  // end of TEST_CASE(...,"compute_energy_grad")
+
+#endif
+
+

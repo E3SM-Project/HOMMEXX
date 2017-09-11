@@ -37,17 +37,17 @@ module vertremap_mod_base
   use parallel_mod, only           : abortmp, parallel_t
   use control_mod, only : vert_remap_q_alg
 
+  implicit none
+
   public remap1                  ! remap any field, splines, monotone
   public remap1_nofilter         ! remap any field, splines, no filter
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
 
-  public remap1_c_callable
-  public remap_q_ppm_c_callable
+!  public remap1_c_callable
+!  public remap_q_ppm_c_callable
   public compute_ppm_grids_c_callable
-  public compute_ppm_c_callable
-
-  implicit none
+!  public compute_ppm_c_callable
 
   contains
 
@@ -674,10 +674,18 @@ subroutine compute_ppm_grids_c_callable(dx,rslt,alg) bind(c)
   real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
   real(kind=real_kind), intent(out):: rslt(10,0:nlev+1)  !grid spacings
 
+print *, 'in F routine'
+
+print *, 'agl in F = ', alg
+
   !aim for alg=1 or alg=2 only
   if((alg == 1).OR.(alg == 2)) then
     vert_remap_q_alg = alg
+
+print * , 'inside this if'
+
     rslt = compute_ppm_grids(dx)
+
   else
     call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
   endif
