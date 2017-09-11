@@ -633,6 +633,11 @@ function compute_ppm_grids( dx )   result(rslt)
   integer :: indB, indE
 
   !Calculate grid-based coefficients for stage 1 of compute_ppm
+
+  ! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
+
+  rslt(:,:) = 0.0d0
+
   if (vert_remap_q_alg == 2) then
     indB = 2
     indE = nlev-1
@@ -640,11 +645,20 @@ function compute_ppm_grids( dx )   result(rslt)
     indB = 0
     indE = nlev+1
   endif
+
+!print *,'rslt in routine 1 ', rslt(1,0)
+
+!do j=-1,nlev+2
+!print *, dx(j)
+!enddo
+
   do j = indB , indE
     rslt( 1,j) = dx(j) / ( dx(j-1) + dx(j) + dx(j+1) )
     rslt( 2,j) = ( 2.*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
     rslt( 3,j) = ( dx(j) + 2.*dx(j+1) ) / ( dx(j-1) + dx(j) )
   enddo
+
+!print *,'rslt again ', rslt(1,0)
 
   !Caculate grid-based coefficients for stage 2 of compute_ppm
   if (vert_remap_q_alg == 2) then
@@ -655,6 +669,9 @@ function compute_ppm_grids( dx )   result(rslt)
     indE = nlev
   endif
   do j = indB , indE
+
+!print *,'rslt and again',j, rslt(1,0)
+
     rslt( 4,j) = dx(j) / ( dx(j) + dx(j+1) )
     rslt( 5,j) = 1. / sum( dx(j-1:j+2) )
     rslt( 6,j) = ( 2. * dx(j+1) * dx(j) ) / ( dx(j) + dx(j+1 ) )
@@ -681,10 +698,9 @@ print *, 'agl in F = ', alg
   !aim for alg=1 or alg=2 only
   if((alg == 1).OR.(alg == 2)) then
     vert_remap_q_alg = alg
-
-print * , 'inside this if'
-
     rslt = compute_ppm_grids(dx)
+
+print *,'rslt after ', rslt(1,0)
 
   else
     call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')

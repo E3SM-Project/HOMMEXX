@@ -37,10 +37,15 @@ class remap_test {
     rngAlg engine(rd());
     genRandArray(
         dx, DX_DIM, engine,
-        std::uniform_real_distribution<Real>(-1000.0,1000.0));
-    genRandArray(
-        &(rslt[0][0]), ( RSLT_DIM1*RSLT_DIM2 ), engine,
-        std::uniform_real_distribution<Real>(-1000.0,1000.0));
+        std::uniform_real_distribution<Real>(0.0,1000.0));
+//    genRandArray(
+//        &(rslt[0][0]), ( RSLT_DIM1*RSLT_DIM2 ), engine,
+//        std::uniform_real_distribution<Real>(-1000.0,1000.0));
+
+  for(int _i = 0; _i < RSLT_DIM1; ++_i) 
+    for(int _j = 0; _j < RSLT_DIM2; ++_j) 
+       rslt[_i][_j] = 0.0;
+
   }  // end of constructor
 
   Real dx[DX_DIM];
@@ -77,8 +82,10 @@ std::cout << "here 2 \n";
   // F input
   Real dxf[DX_DIM];
 
-  for(int _i = 0; _i < DX_DIM; _i++)
+  for(int _i = 0; _i < DX_DIM; _i++){
+std::cout << "dx=" << test.dx[_i] << "\n";
     dxf[_i] = test.dx[_i];
+}
 
   // running F version of operator
   compute_ppm_grids_c_callable( &(dxf[0]), &(fortran_output[0][0]), 2 );
@@ -89,6 +96,8 @@ std::cout << "here after F \n";
     for(int _j = 0; _j < out_len2; ++_j) {
        Real coutput0 = test.rslt[_i][_j];
        
+std::cout << "F result = " << fortran_output[_i][_j] << ", C output = " << coutput0 << "\n";
+
        REQUIRE(!std::isnan(fortran_output[_i][_j]));
        REQUIRE(!std::isnan(coutput0));
             // what is 128 here?

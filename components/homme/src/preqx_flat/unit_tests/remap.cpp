@@ -32,7 +32,7 @@ void compute_ppm_grids(const Real dx[DX_DIM],
 {
 
 
-std::cout << "here in f() 1 \n";
+std::cout << rslt[0][0] << " , here in f() 1 \n";
 
 if((alg != 1)&&(alg != 2)){
   //ABORT
@@ -44,7 +44,7 @@ const int nlev = NUM_PHYSICAL_LEV;
 //where to get nlev from?
 int indB = 2;
 int indE = nlev - 1;
-if (alg == 2){
+if (alg == 1){
   indB = 0;
   indE = nlev+1;
 }
@@ -69,6 +69,8 @@ if(alg == 2){
 }
 
 std::cout << "nlev=" << nlev << ", alg = " << alg <<" here in f() 5 \n";
+std::cout << "rslt00 " << rslt[0][0] << "\n";
+
 for(int j = indB; j <= indE; j++){
 
 std::cout << "in loop, j=" << j << "\n";
