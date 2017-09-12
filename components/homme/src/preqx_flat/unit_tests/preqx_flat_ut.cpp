@@ -6,7 +6,6 @@
 #include "CaarFunctor.hpp"
 #include "CaarRegion.hpp"
 #include "Dimensions.hpp"
-//#include "RemapDimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 
@@ -17,6 +16,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <random>
+
 
 using namespace Homme;
 
