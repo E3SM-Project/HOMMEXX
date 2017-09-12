@@ -160,25 +160,26 @@ struct CaarFunctor {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Real integration = 0.0;
-      for (kv.ilev = NUM_LEV - 1; kv.ilev >= 0; --kv.ilev) {
+      for (int ilevel = NUM_PHYSICAL_LEV - 1; ilevel >= 0; --ilevel) {
+        kv.ilev = ilevel / VECTOR_SIZE;
+        int v   = ilevel % VECTOR_SIZE;
         // compute phi
-        for (int v = VECTOR_SIZE - 1; v >= 0; --v) {
-          m_elements.m_phi(kv.ie, jgp, igp, kv.ilev)[v] =
-              m_elements.m_phis(kv.ie, jgp, igp) + integration +
-              PhysicalConstants::Rgas * m_elements.buffers.temperature_virt(
-                                            kv.ie, jgp, igp, kv.ilev)[v] *
-                  (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev)[v] *
-                   0.5 /
-                   m_elements.buffers.pressure(kv.ie, jgp, igp, kv.ilev)[v]);
+        m_elements.m_phi(kv.ie, jgp, igp, kv.ilev)[v] =
+            m_elements.m_phis(kv.ie, jgp, igp) + integration +
+            PhysicalConstants::Rgas * m_elements.buffers.temperature_virt(
+                                          kv.ie, jgp, igp, kv.ilev)[v] *
+                (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev)[v] *
+                 0.5 /
+                 m_elements.buffers.pressure(kv.ie, jgp, igp, kv.ilev)[v]);
 
-          // update phii
-          integration +=
-              PhysicalConstants::Rgas *
-              m_elements.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev)[v] *
-              2.0 *
-              (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev)[v] * 0.5 /
-               m_elements.buffers.pressure(kv.ie, jgp, igp, kv.ilev)[v]);
-        }
+        // update phii
+        integration +=
+            PhysicalConstants::Rgas *
+            m_elements.buffers.temperature_virt(kv.ie, jgp, igp, kv.ilev)[v] *
+            2.0 *
+            (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, kv.ilev)[v] * 0.5 /
+             m_elements.buffers.pressure(kv.ie, jgp, igp, kv.ilev)[v]);
+
       }
     });
   }

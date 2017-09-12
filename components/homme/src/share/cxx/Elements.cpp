@@ -245,25 +245,25 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
-    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
-            h_omega_p(ie, igp, jgp, ilev)[ivector] = derived_omega_p[k_3d_scalars];
-            h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
-            h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
-          }
+    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
+          h_omega_p(ie, igp, jgp, ilev)[ivector] = derived_omega_p[k_3d_scalars];
+          h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
+          h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
         }
+      }
 
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-            h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
-          }
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+          h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-            h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
-          }
+      }
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+          h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
       }
     }
@@ -287,24 +287,24 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
   h_dp3d = Kokkos::create_mirror_view(m_dp3d);
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-        for (int ivector=0; ivector<VECTOR_SIZE; ++ivector) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
-              h_dp3d(ie, tl, igp, jgp, ilev)[ivector] = state_dp3d[k_4d_scalars];
-              h_t(ie, tl, igp, jgp, ilev)[ivector] = state_t[k_4d_scalars];
-            }
+      for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+        int ilev    = ilevel / VECTOR_SIZE;
+        int ivector = ilevel % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
+            h_dp3d(ie, tl, igp, jgp, ilev)[ivector] = state_dp3d[k_4d_scalars];
+            h_t(ie, tl, igp, jgp, ilev)[ivector] = state_t[k_4d_scalars];
           }
+        }
 
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-              h_u(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
-            }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+            h_u(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
           }
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-              h_v(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
-            }
+        }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+            h_v(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
           }
         }
       }
@@ -320,7 +320,7 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
 
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
-  for (int ie = 0, k_eta_dot_dp_dn = 0; ie < num_elems(); ++ie) {
+  for (int ie = 0, k_eta_dot_dp_dn = 0; ie < m_num_elems; ++ie) {
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
     //       and on vector length, we would have to treat the last pack with care
@@ -345,12 +345,12 @@ void Elements::pull_qdp(CF90Ptr &state_qdp) {
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
-        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for (int iv = 0; iv < VECTOR_SIZE; ++iv) {
-            for (int igp = 0; igp < NP; ++igp) {
-              for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
-                h_qdp(ie, qni, iq, igp, jgp, ilev)[iv] = state_qdp[k_qdp];
-              }
+        for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+          int ilev    = ilevel / VECTOR_SIZE;
+          int ivector = ilevel % VECTOR_SIZE;
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
+              h_qdp(ie, qni, iq, igp, jgp, ilev)[ivector] = state_qdp[k_qdp];
             }
           }
         }
@@ -389,28 +389,28 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
   Kokkos::deep_copy(h_derived_un0, m_derived_un0);
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
-    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
-            derived_omega_p[k_3d_scalars] =
-                h_omega_p(ie, igp, jgp, ilev)[ivector];
-            derived_pecnd[k_3d_scalars] = h_pecnd(ie, igp, jgp, ilev)[ivector];
-            derived_phi[k_3d_scalars] = h_phi(ie, igp, jgp, ilev)[ivector];
-          }
+    for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+      int ilev    = ilevel / VECTOR_SIZE;
+      int ivector = ilevel % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
+          derived_omega_p[k_3d_scalars] =
+              h_omega_p(ie, igp, jgp, ilev)[ivector];
+          derived_pecnd[k_3d_scalars] = h_pecnd(ie, igp, jgp, ilev)[ivector];
+          derived_phi[k_3d_scalars] = h_phi(ie, igp, jgp, ilev)[ivector];
         }
+      }
 
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-            derived_v[k_3d_vectors] =
-                h_derived_un0(ie, igp, jgp, ilev)[ivector];
-          }
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+          derived_v[k_3d_vectors] =
+              h_derived_un0(ie, igp, jgp, ilev)[ivector];
         }
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-            derived_v[k_3d_vectors] =
-                h_derived_vn0(ie, igp, jgp, ilev)[ivector];
-          }
+      }
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
+          derived_v[k_3d_vectors] =
+              h_derived_vn0(ie, igp, jgp, ilev)[ivector];
         }
       }
     }
@@ -433,24 +433,24 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
   Kokkos::deep_copy(h_dp3d, m_dp3d);
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-        for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
-              state_dp3d[k_4d_scalars] = h_dp3d(ie, tl, igp, jgp, ilev)[ivector];
-              state_t[k_4d_scalars] = h_t(ie, tl, igp, jgp, ilev)[ivector];
-            }
+      for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+        int ilev    = ilevel / VECTOR_SIZE;
+        int ivector = ilevel % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
+            state_dp3d[k_4d_scalars] = h_dp3d(ie, tl, igp, jgp, ilev)[ivector];
+            state_t[k_4d_scalars] = h_t(ie, tl, igp, jgp, ilev)[ivector];
           }
+        }
 
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-              state_v[k_4d_vectors] = h_u(ie, tl, igp, jgp, ilev)[ivector];
-            }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+            state_v[k_4d_vectors] = h_u(ie, tl, igp, jgp, ilev)[ivector];
           }
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-              state_v[k_4d_vectors] = h_v(ie, tl, igp, jgp, ilev)[ivector];
-            }
+        }
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+            state_v[k_4d_vectors] = h_v(ie, tl, igp, jgp, ilev)[ivector];
           }
         }
       }
@@ -488,12 +488,12 @@ void Elements::push_qdp(F90Ptr &state_qdp) const {
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
-        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for (int ivector = 0; ivector < VECTOR_SIZE; ++ivector) {
-            for (int igp = 0; igp < NP; ++igp) {
-              for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
-                state_qdp[k_qdp] = h_qdp(ie, qni, iq, igp, jgp, ilev)[ivector];
-              }
+        for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
+          int ilev    = ilevel / VECTOR_SIZE;
+          int ivector = ilevel % VECTOR_SIZE;
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
+              state_qdp[k_qdp] = h_qdp(ie, qni, iq, igp, jgp, ilev)[ivector];
             }
           }
         }
