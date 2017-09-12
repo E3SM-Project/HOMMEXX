@@ -47,7 +47,7 @@ module vertremap_mod_base
 !  public remap1_c_callable
 !  public remap_q_ppm_c_callable
   public compute_ppm_grids_c_callable
-!  public compute_ppm_c_callable
+  public compute_ppm_c_callable
 
   contains
 
@@ -692,12 +692,21 @@ end subroutine compute_ppm_grids_c_callable
 
 !=======================================================================================================!
 
-subroutine compute_ppm_c_callable(a,dx,coefs) bind(c)
+subroutine compute_ppm_c_callable(a,dx,coefs,alg) bind(c)
+  use iso_c_binding, only: c_int
+  use control_mod, only: vert_remap_q_alg
+  integer(c_int), intent(in) :: alg
   real(kind=real_kind), intent(in) :: a    (    -1:nlev+2)  !Cell-mean values
   real(kind=real_kind), intent(in) :: dx   (10,  0:nlev+1)  !grid spacings
   real(kind=real_kind), intent(out):: coefs(0:2,   nlev  )  !PPM coefficients (for parabola)
 
-  coefs = compute_ppm(a,dx)
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    coefs = compute_ppm(a,dx)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
 end subroutine compute_ppm_c_callable
 
 !=======================================================================================================!

@@ -26,8 +26,8 @@ using namespace Homme;
 
 
 //save dims for all these intermediate arrays somewhere?
-void compute_ppm_grids(const Real dx[DX_DIM], 
-  Real rslt[RSLT_DIM1][RSLT_DIM2], 
+void compute_ppm_grids(const Real dx[NLEVP4], 
+  Real rslt[NLEVP2][DIM10], 
   const int alg)
 {
 
@@ -76,10 +76,28 @@ for(int j = indB; j <= indE; j++){
   rslt[j][8] = dx[j+1]*( dx[j] + dx[j+1] ) / ( 2.*dx[j+1] + dx[j+2] );
 
   rslt[j][9] = dx[j+2]*( dx[j+2] + dx[j+3] ) / ( dx[j+1] + 2.*dx[j+2] );
-}
+}//end of for j
 
 
-}
+}//end of compute_ppm_grids()
+
+
+#if 0
+void compute_ppm(const Real a[A_DIM], 
+  const Real dx[DX_DIM],
+  Real rslt[RSLT_DIM1][RSLT_DIM2],
+    const int alg)
+{
+
+  if((alg != 1)&&(alg != 2)){
+     //ABORT
+  }
+
+  const int nlev = NUM_PHYSICAL_LEV;
+#endif
+  
+
+
 
 
 #endif //REMAP_CPP

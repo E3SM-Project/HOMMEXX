@@ -53,9 +53,12 @@ static constexpr const int Q_NUM_TIME_LEVELS = 2;
 #endif // CUDA_BUILD
 
 
-constexpr const int RSLT_DIM1 = NUM_PHYSICAL_LEV + 2,
-                    RSLT_DIM2 = 10,
-                    DX_DIM = NUM_PHYSICAL_LEV + 4;
+constexpr const int NLEVP2 = NUM_PHYSICAL_LEV + 2,
+                    DIM10 = 10,
+                    NLEVP4 = NUM_PHYSICAL_LEV + 4,
+                    NLEVP3 = NUM_PHYSICAL_LEV + 3,
+                    NLEV = NUM_PHYSICAL_LEV,
+                    DIM3 = 3;
 
 
 } // namespace TinMan

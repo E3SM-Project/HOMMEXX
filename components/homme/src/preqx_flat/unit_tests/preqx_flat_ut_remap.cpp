@@ -37,20 +37,24 @@ class remap_test {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(
-        dx, DX_DIM, engine,
+        dx, dx_dim, engine,
         std::uniform_real_distribution<Real>(0.0,1000.0));
 //    genRandArray(
 //        &(rslt[0][0]), ( RSLT_DIM1*RSLT_DIM2 ), engine,
 //        std::uniform_real_distribution<Real>(-1000.0,1000.0));
 
-  for(int _i = 0; _i < RSLT_DIM1; ++_i) 
-    for(int _j = 0; _j < RSLT_DIM2; ++_j) 
+  for(int _i = 0; _i < rslt_dim1; ++_i) 
+    for(int _j = 0; _j < rslt_dim2; ++_j) 
        rslt[_i][_j] = 0.0;
 
   }  // end of constructor
 
-  Real dx[DX_DIM];
-  Real rslt [RSLT_DIM1][RSLT_DIM2];
+//let's avoid static
+  const int dx_dim = NLEVP4;
+  const int rslt_dim1 = NLEVP2;
+  const int rslt_dim2 = DIM10;
+  Real dx[NLEVP4];
+  Real rslt [NLEVP2][DIM10];
   int  alg;
 
   void run_compute_ppm_grids(){
@@ -72,14 +76,15 @@ TEST_CASE("Testing compute_ppm_grids() with alg=1","compute_ppm_grids, alg=1") {
   test.run_compute_ppm_grids();
 
   // fortran output
-  const int out_len1 = RSLT_DIM1,
-            out_len2 = RSLT_DIM2;
+  const int out_len1 = test.rslt_dim1,
+            out_len2 = test.rslt_dim2,
+            dx_dim = test.dx_dim;
                       
   Real fortran_output[out_len1][out_len2];
   // F input
-  Real dxf[DX_DIM];
+  Real dxf[dx_dim];
 
-  for(int _i = 0; _i < DX_DIM; _i++){
+  for(int _i = 0; _i < dx_dim; _i++){
     dxf[_i] = test.dx[_i];
   }
 
@@ -107,7 +112,6 @@ TEST_CASE("Testing compute_ppm_grids() with alg=1","compute_ppm_grids, alg=1") {
 };  // end fo test compute_ppm_grids, alg=1
 
 
-
 TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -119,14 +123,15 @@ TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
 
   test.run_compute_ppm_grids();
 
-  const int out_len1 = RSLT_DIM1,
-            out_len2 = RSLT_DIM2;
+  const int out_len1 = test.rslt_dim1,
+            out_len2 = test.rslt_dim2,
+            dx_len = test.dx_dim;
 
   Real fortran_output[out_len1][out_len2];
 
-  Real dxf[DX_DIM];
+  Real dxf[dx_len];
 
-  for(int _i = 0; _i < DX_DIM; _i++){
+  for(int _i = 0; _i < dx_len; _i++){
     dxf[_i] = test.dx[_i];
   }
 
@@ -146,7 +151,6 @@ TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
 
   std::cout << "test compute_ppm_grids (alg=2) finished. \n";
 };  // end fo test compute_ppm_grids, alg=1
-
 
 
 
