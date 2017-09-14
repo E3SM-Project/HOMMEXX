@@ -4,7 +4,10 @@
 #include <random>
 #include <type_traits>
 
+#undef NDEBUG
+
 #include "Control.hpp"
+
 #include "CaarFunctor.hpp"
 #include "Elements.hpp"
 #include "Dimensions.hpp"
@@ -23,12 +26,12 @@ using namespace Homme;
 using rngAlg = std::mt19937_64;
 
 extern "C" {
-void caar_compute_energy_grad_c_int(const Real *const &dvv,
-                                    const Real *const &Dinv,
-                                    const Real *const &pecnd,
-                                    const Real *const &phi,
-                                    const Real *const &velocity,
-                                    Real *const &vtemp); //(&vtemp)[2][NP][NP]);
+void caar_compute_energy_grad_c_int(const Real *dvv,
+                                    const Real *Dinv,
+                                    const Real *pecnd,
+                                    const Real *phi,
+                                    const Real *velocity,
+                                    Real *vtemp);
 
 void preq_omega_ps_c_int(Real *omega_p, const Real *velocity,
                          const Real *pressure, const Real *div_vdp,
@@ -175,7 +178,7 @@ public:
 
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
-      std::numeric_limits<Real>::epsilon() * 32768.0;
+      std::numeric_limits<Real>::epsilon() * 64.0;
   constexpr const int num_elems = 10;
 
   std::random_device rd;
@@ -187,20 +190,35 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
+<<<<<<< HEAD
   compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
   test_functor.run_functor();
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad("energy_grad",
                                                              num_elems);
   Kokkos::deep_copy(energy_grad, elements.buffers.energy_grad);
+=======
+  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_in(
+      "energy_grad input", num_elems);
+  genRandArray(energy_grad_in, engine,
+               std::uniform_real_distribution<Real>(0, 100.0));
+  Kokkos::deep_copy(region.buffers.energy_grad, energy_grad_in);
 
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(region);
+  test_functor.run_functor();
+>>>>>>> Fix caar_compute_energy_grad test. Also significantly lower the number of tolerable bits wrong
+
+  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
+      "energy_grad output", num_elems);
+  Kokkos::deep_copy(energy_grad_out, region.buffers.energy_grad);
+
+  HostViewManaged<Real[2][NP][NP]> vtemp("vtemp");
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_LEV; ++level) {
       for (int v = 0; v < VECTOR_SIZE; ++v) {
-        Real vtemp[2][NP][NP];
         for (int h = 0; h < 2; h++) {
           for (int i = 0; i < NP; i++) {
             for (int j = 0; j < NP; j++) {
-              vtemp[h][i][j] = std::numeric_limits<Real>::quiet_NaN();
+              vtemp(h, i, j) = energy_grad_in(ie, h, i, j, level)[v];
             }
           }
         }
@@ -219,20 +237,21 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
                 Kokkos::subview(test_functor.velocity, ie, test_functor.n0,
                                 level * VECTOR_SIZE + v, Kokkos::ALL,
                                 Kokkos::ALL, Kokkos::ALL).data()),
-            &vtemp[0][0][0]);
+            reinterpret_cast<Real *>(vtemp.data()));
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
-            REQUIRE(!std::isnan(vtemp[1][igp][jgp]));
-            REQUIRE(!std::isnan(energy_grad(ie, 0, igp, jgp, level)[v]));
-            REQUIRE(!std::isnan(energy_grad(ie, 1, igp, jgp, level)[v]));
-            Real rel_error = compare_answers(
-                vtemp[0][igp][jgp], energy_grad(ie, 0, igp, jgp, level)[v]);
-            REQUIRE(rel_threshold >= rel_error);
+            const Real correct[2] = { vtemp(0, igp, jgp), vtemp(1, igp, jgp) };
+            const Real computed[2] = {
+              energy_grad_out(ie, 0, igp, jgp, level)[v],
+              energy_grad_out(ie, 1, igp, jgp, level)[v]
+            };
+            for (int dim = 0; dim < 2; ++dim) {
+              Real rel_error = compare_answers(correct[dim], computed[dim]);
+              REQUIRE(!std::isnan(correct[dim]));
+              REQUIRE(!std::isnan(computed[dim]));
 
-            rel_error = compare_answers(vtemp[1][igp][jgp],
-                                        energy_grad(ie, 1, igp, jgp, level)[v]);
-            REQUIRE(rel_threshold >= rel_error);
+              REQUIRE(rel_threshold >= rel_error);
+            }
           }
         }
       }
@@ -266,8 +285,15 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
+<<<<<<< HEAD
   genRandArray(pressure, engine, std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(pressure, elements.buffers.pressure);
+=======
+  genRandArray(pressure, engine,
+               std::uniform_real_distribution<Real>(0, 100.0));
+  sync_to_device(pressure, region.buffers.pressure);
+
+>>>>>>> Fix caar_compute_energy_grad test. Also significantly lower the number of tolerable bits wrong
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
@@ -341,7 +367,8 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   sync_to_device(temperature_virt, elements.buffers.temperature_virt);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-  genRandArray(pressure, engine, std::uniform_real_distribution<Real>(0.0125, 1.0));
+  genRandArray(pressure, engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
   sync_to_device(pressure, elements.buffers.pressure);
 
   TestType test_functor(elements);
@@ -404,8 +431,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
-  genRandArray(div_vdp, engine,
-               std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
   compute_subfunctor_test<dp3d_test> test_functor(elements);
@@ -635,7 +661,8 @@ public:
   }
 };
 
-TEST_CASE("virtual temperature no tracers", "monolithic compute_and_apply_rhs") {
+TEST_CASE("virtual temperature no tracers",
+          "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
   constexpr const int num_elems = 10;
@@ -694,7 +721,8 @@ public:
   }
 };
 
-TEST_CASE("virtual temperature with tracers", "monolithic compute_and_apply_rhs") {
+TEST_CASE("virtual temperature with tracers",
+          "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
   constexpr const int num_elems = 10;
@@ -702,7 +730,8 @@ TEST_CASE("virtual temperature with tracers", "monolithic compute_and_apply_rhs"
   std::random_device rd;
   rngAlg engine(rd());
 
-  using TestType = compute_subfunctor_test<virtual_temperature_with_tracers_test>;
+  using TestType =
+      compute_subfunctor_test<virtual_temperature_with_tracers_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
