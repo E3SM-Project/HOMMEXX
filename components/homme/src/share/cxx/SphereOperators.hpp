@@ -278,10 +278,10 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    grad_s(0, igp, jgp, kv.ilev) =
+    grad_s(0, igp, jgp, kv.ilev) +=
         dinv(kv.ie, 0, 0, igp, jgp) * v_buf(kv.ie, buf_lev, 0, igp, jgp) +
         dinv(kv.ie, 0, 1, igp, jgp) * v_buf(kv.ie, buf_lev, 1, igp, jgp);
-    grad_s(1, igp, jgp, kv.ilev) =
+    grad_s(1, igp, jgp, kv.ilev) +=
         dinv(kv.ie, 1, 0, igp, jgp) * v_buf(kv.ie, buf_lev, 0, igp, jgp) +
         dinv(kv.ie, 1, 1, igp, jgp) * v_buf(kv.ie, buf_lev, 1, igp, jgp);
   });

@@ -208,7 +208,7 @@ operator-(const typename VectorTag<SIMD<T, SpT>, l>::value_type a,
 
 template <typename T, typename SpT, int l>
 KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
-operator-(Vector<VectorTag<SIMD<T, SpT>, l> > const &a) {
+operator-(Vector<VectorTag<SIMD<T, SpT>, l> > a) {
 #pragma ivdep
   for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
     a[i] = -a[i];
