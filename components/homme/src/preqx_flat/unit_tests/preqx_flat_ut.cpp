@@ -62,21 +62,6 @@ void caar_compute_omega_p_c_int(const Real eta_ave_w,
 
 }  // extern C
 
-Real compare_answers(Real target, Real computed, Real relative_coeff = 1.0) {
-  Real denom = 1.0;
-  if (relative_coeff > 0.0 && target != 0.0) {
-    denom = relative_coeff * std::fabs(target);
-  }
-  return std::fabs(target - computed) / denom;
-} // end of definition of compare_answers()
-
-void genRandArray(Real *arr, int arr_len, rngAlg &engine,
-                  std::uniform_real_distribution<Real> pdf) {
-  for (int i = 0; i < arr_len; ++i) {
-    arr[i] = pdf(engine);
-  }
-} // end of definition of genRandArray()
-
 /* compute_subfunctor_test
  *
  * Randomly initializes all of the input data
@@ -281,13 +266,11 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-  genRandArray(reinterpret_cast<Real *>(pressure.data()), pressure.span(),
-               engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(pressure, engine, std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(pressure, elements.buffers.pressure);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
-  genRandArray(reinterpret_cast<Real *>(div_vdp.data()), div_vdp.span(), engine,
-               std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
   compute_subfunctor_test<preq_omega_ps_test> test_functor(elements);
@@ -348,19 +331,17 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarElements &elements = get_elements();
+  Elements &elements = get_elements();
   elements.random_init(num_elems, engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
       "host virtual temperature", num_elems);
-  genRandArray(reinterpret_cast<Real *>(temperature_virt.data()),
-               temperature_virt.span(), engine,
+  genRandArray(temperature_virt, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   sync_to_device(temperature_virt, elements.buffers.temperature_virt);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-  genRandArray(reinterpret_cast<Real *>(pressure.data()), pressure.span(),
-               engine, std::uniform_real_distribution<Real>(0.0125, 1.0));
+  genRandArray(pressure, engine, std::uniform_real_distribution<Real>(0.0125, 1.0));
   sync_to_device(pressure, elements.buffers.pressure);
 
   TestType test_functor(elements);
@@ -423,7 +404,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
-  genRandArray(reinterpret_cast<Real *>(div_vdp.data()), div_vdp.span(), engine,
+  genRandArray(div_vdp, engine,
                std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
@@ -601,8 +582,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   TestType test_functor(elements);
 
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
-  genRandArray(reinterpret_cast<Real *>(hybrid_a_mirror.data()),
-               hybrid_a_mirror.span(), engine,
+  genRandArray(hybrid_a_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
                                    TestType::n0, TestType::np1, TestType::qn0,
@@ -643,7 +623,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   }
 }
 
-class temperature_no_tracers_test {
+class virtual_temperature_no_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
@@ -655,7 +635,7 @@ public:
   }
 };
 
-TEST_CASE("temperature no tracers", "monolithic compute_and_apply_rhs") {
+TEST_CASE("virtual temperature no tracers", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
   constexpr const int num_elems = 10;
@@ -663,7 +643,7 @@ TEST_CASE("temperature no tracers", "monolithic compute_and_apply_rhs") {
   std::random_device rd;
   rngAlg engine(rd());
 
-  using TestType = compute_subfunctor_test<temperature_no_tracers_test>;
+  using TestType = compute_subfunctor_test<virtual_temperature_no_tracers_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
@@ -702,7 +682,7 @@ TEST_CASE("temperature no tracers", "monolithic compute_and_apply_rhs") {
   }
 }
 
-class temperature_with_tracers_test {
+class virtual_temperature_with_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
@@ -714,7 +694,7 @@ public:
   }
 };
 
-TEST_CASE("temperature with tracers", "monolithic compute_and_apply_rhs") {
+TEST_CASE("virtual temperature with tracers", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
   constexpr const int num_elems = 10;
@@ -722,7 +702,7 @@ TEST_CASE("temperature with tracers", "monolithic compute_and_apply_rhs") {
   std::random_device rd;
   rngAlg engine(rd());
 
-  using TestType = compute_subfunctor_test<temperature_with_tracers_test>;
+  using TestType = compute_subfunctor_test<virtual_temperature_with_tracers_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
@@ -791,28 +771,27 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
-  region.random_init(num_elems, engine);
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
       "source omega p", num_elems);
-  genRandArray(reinterpret_cast<Real *>(source_omega_p.data()),
-               source_omega_p.span(), engine,
+  genRandArray(source_omega_p, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(source_omega_p, region.buffers.omega_p);
+  sync_to_device(source_omega_p, elements.buffers.omega_p);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90("omega p f90",
                                                                  num_elems);
 
-  TestType test_functor(region);
-  sync_to_host(region.m_omega_p, omega_p_f90);
+  TestType test_functor(elements);
+  sync_to_host(elements.m_omega_p, omega_p_f90);
   test_functor.run_functor();
-  sync_to_host(region.m_omega_p, test_functor.omega_p);
+  sync_to_host(elements.m_omega_p, test_functor.omega_p);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
 
-  sync_to_host(region.buffers.temperature_virt, temperature_virt_cxx);
+  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
