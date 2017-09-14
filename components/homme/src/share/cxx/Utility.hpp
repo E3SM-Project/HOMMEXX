@@ -5,7 +5,7 @@
 
 #ifndef NDEBUG
 #define DEBUG_PRINT(...)                                                       \
-  { printf(__VA_ARGS__) }
+  { printf(__VA_ARGS__); }
 #else
 #define DEBUG_PRINT(...)                                                       \
   {}
@@ -389,6 +389,15 @@ template <typename rngAlg, typename PDF>
 void genRandArray(Real *const x, int length, rngAlg &engine, PDF &pdf) {
   for (int i = 0; i < length; ++i) {
     x[i] = pdf(engine);
+  }
+}
+
+template <typename rngAlg, typename PDF>
+void genRandArray(Scalar *const x, int length, rngAlg &engine, PDF &pdf) {
+  for (int i = 0; i < length; ++i) {
+    for(int j = 0; j < VECTOR_SIZE; ++j) {
+      x[i][j] = pdf(engine);
+    }
   }
 }
 
