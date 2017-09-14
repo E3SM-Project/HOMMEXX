@@ -3,6 +3,12 @@
 
 #include "Types.hpp"
 
+#ifndef NDEBUG
+#define DEBUG_PRINT(...) { printf(__VA_ARGS__) }
+#else
+#define DEBUG_PRINT(...) {}
+#endif
+
 namespace Homme {
 
 // ================ Subviews of 2d views ======================= //
