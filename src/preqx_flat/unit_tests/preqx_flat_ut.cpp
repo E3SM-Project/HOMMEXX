@@ -63,6 +63,14 @@ void caar_compute_temperature_tracers_c_int(const Real *qdp, const Real *dp,
 void caar_compute_omega_p_c_int(const Real eta_ave_w,
                                 const Real *omega_p_buffer, Real *omega_p);
 
+void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
+                                    const Real *dinv, const Real *dvv,
+                                    const Real *velocity, const Real *t_virt,
+                                    const Real * omega_p, const Real * t_vadv,
+                                    const Real *t_previous,
+                                    const Real *t_current,
+                                    Real *t_future);
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -190,13 +198,6 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-<<<<<<< HEAD
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
-  test_functor.run_functor();
-  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad("energy_grad",
-                                                             num_elems);
-  Kokkos::deep_copy(energy_grad, elements.buffers.energy_grad);
-=======
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_in(
       "energy_grad input", num_elems);
   genRandArray(energy_grad_in, engine,
@@ -205,7 +206,6 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
 
   compute_subfunctor_test<compute_energy_grad_test> test_functor(region);
   test_functor.run_functor();
->>>>>>> Fix caar_compute_energy_grad test. Also significantly lower the number of tolerable bits wrong
 
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
       "energy_grad output", num_elems);
@@ -285,15 +285,10 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-<<<<<<< HEAD
-  genRandArray(pressure, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(pressure, elements.buffers.pressure);
-=======
   genRandArray(pressure, engine,
                std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(pressure, region.buffers.pressure);
+  sync_to_device(pressure, elements.buffers.pressure);
 
->>>>>>> Fix caar_compute_energy_grad test. Also significantly lower the number of tolerable bits wrong
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
@@ -643,6 +638,98 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
             const Real rel_error = compare_answers(correct, computed);
             REQUIRE(rel_threshold >= rel_error);
           }
+        }
+      }
+    }
+  }
+}
+
+class temperature_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+      [&](const int &idx) {
+        kv.ilev = idx;
+        functor.compute_temperature_np1(kv);
+    });
+  }
+};
+
+TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 2.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<temperature_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  CaarRegion &region = get_region();
+  region.random_init(num_elems, engine);
+  get_derivative().random_init(engine);
+
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+    temperature_virt("Virtual temperature test", num_elems);
+  genRandArray(temperature_virt, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  sync_to_device(temperature_virt, region.buffers.temperature_virt);
+
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+    omega_p("Omega P test", num_elems);
+  genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
+  sync_to_device(omega_p, region.buffers.omega_p);
+
+  TestType test_functor(region);
+  test_functor.run_functor();
+
+  sync_to_host(region.m_t, test_functor.temperature);
+
+  HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
+  for(int i = 0; i < NP; ++i) {
+    for(int j = 0; j < NP; ++j) {
+      temperature_vadv(i, j) = 0.0;
+    }
+  }
+  HostViewManaged<Real [NP][NP]> temperature_f90("Temperature f90");
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+
+      caar_compute_temperature_c_int(test_functor.dt2,
+                                     Kokkos::subview(test_functor.spheremp, ie,
+                                                     Kokkos::ALL,
+                                                     Kokkos::ALL).data(),
+                                     Kokkos::subview(test_functor.dinv, ie,
+                                                     Kokkos::ALL, Kokkos::ALL,
+                                                     Kokkos::ALL, Kokkos::ALL).data(),
+                                     test_functor.dvv.data(),
+                                     Kokkos::subview(test_functor.velocity, ie,
+                                                     test_functor.n0, level,
+                                                     Kokkos::ALL, Kokkos::ALL,
+                                                     Kokkos::ALL).data(),
+                                     Kokkos::subview(temperature_virt, ie, level,
+                                                     Kokkos::ALL, Kokkos::ALL).data(),
+                                     Kokkos::subview(omega_p, ie, level,
+                                                     Kokkos::ALL, Kokkos::ALL).data(),
+                                     temperature_vadv.data(),
+                                     Kokkos::subview(test_functor.temperature, ie,
+                                                     test_functor.nm1, level, Kokkos::ALL,
+                                                     Kokkos::ALL).data(),
+                                     Kokkos::subview(test_functor.temperature, ie,
+                                                     test_functor.n0, level, Kokkos::ALL,
+                                                     Kokkos::ALL).data(),
+                                     temperature_f90.data());
+
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = temperature_f90(igp, jgp);
+          const Real computed = test_functor.temperature(ie, test_functor.np1, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
         }
       }
     }
