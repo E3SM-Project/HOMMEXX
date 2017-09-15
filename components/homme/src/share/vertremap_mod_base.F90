@@ -43,9 +43,8 @@ module vertremap_mod_base
   public remap1_nofilter         ! remap any field, splines, no filter
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
-
 !  public remap1_c_callable
-!  public remap_q_ppm_c_callable
+  public remap_q_ppm_c_callable
   public compute_ppm_grids_c_callable
   public compute_ppm_c_callable
 
