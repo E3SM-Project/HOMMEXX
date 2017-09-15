@@ -57,7 +57,7 @@ struct CaarFunctor {
         Kokkos::subview(m_elements.buffers.ephi, kv.ie, ALL, ALL, ALL),
         m_elements.buffers.grad_buf, Kokkos::subview(m_elements.buffers.energy_grad,
                                                    kv.ie, ALL, ALL, ALL, ALL));
-  }
+  } // TESTED 1
 
 #ifdef NDEBUG
   KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {}
@@ -80,7 +80,7 @@ struct CaarFunctor {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                          [&](const int &ilev) {
       kv.ilev = ilev;
-      compute_eta_dpdn(kv);
+      compute_eta_dpdn_rsplit(kv);
       compute_omega_p(kv);
       compute_temperature_np1(kv);
       compute_velocity_np1(kv);
@@ -89,7 +89,7 @@ struct CaarFunctor {
       compute_dp3d_np1(kv);
       check_dp3d(kv);
     });
-  }
+  } // TRIVIAL
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
@@ -157,23 +157,31 @@ struct CaarFunctor {
           m_elements.m_spheremp(kv.ie, igp, jgp) *
           m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, kv.ilev);
     });
-  }
+  } // UNTESTED 2
 
-  // Depends on ETA_DPDN
+  // TODO: Use partial template specialization to determine if we need this
+  // Make a templated subclass of an untemplated version of CaarFunctor
+  // Specialize the templated subclass to implement these based on rsplit
   KOKKOS_INLINE_FUNCTION
-  void compute_eta_dpdn(KernelVariables &kv) const {
+  void compute_eta_dpdn_rsplit(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-
-      // TODO: Compute the actual value for this if
-      // rsplit=0.
-      // m_elements.ETA_DPDN += eta_ave_w*eta_dot_dpdn
-
       m_elements.m_eta_dot_dpdn(kv.ie, jgp, igp, kv.ilev) = 0;
     });
-  }
+  } // TRIVIAL
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_eta_dpdn_no_rsplit(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      // TODO: Compute the actual value for this if rsplit=0.
+      // Note this will be unsafe to thread over levels,
+      // so thread over points instead
+      // m_elements.eta_dot_dpdn += eta_ave_w*eta_dot_dpdn
+    });
+  } // Unimplemented
 
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
@@ -206,7 +214,7 @@ struct CaarFunctor {
 
       }
     });
-  }
+  } // TESTED 3
 
   // Depends on pressure, U_current, V_current, div_vdp,
   // omega_p
@@ -256,7 +264,7 @@ struct CaarFunctor {
         }
       });
     }
-  }
+  } // TESTED 4
 
   // Depends on DP3D
   KOKKOS_INLINE_FUNCTION
@@ -285,7 +293,7 @@ struct CaarFunctor {
             0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, lev)[vec];
       }
     });
-  }
+  } // TESTED 5
 
   // Depends on DP3D, PHIS, DP3D, PHI, T_v
   // Modifies pressure, PHI
@@ -299,7 +307,7 @@ struct CaarFunctor {
       preq_hydrostatic(kv);
       preq_omega_ps(kv);
     }
-  }
+  } // TRIVIAL
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_no_tracers_helper(KernelVariables &kv) const {
@@ -310,7 +318,7 @@ struct CaarFunctor {
       m_elements.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) =
           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, kv.ilev);
     });
-  }
+  } // TESTED 6
 
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_tracers_helper(KernelVariables &kv) const {
@@ -326,7 +334,7 @@ struct CaarFunctor {
       m_elements.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) =
           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, kv.ilev) * Qt;
     });
-  }
+  } // TESTED 7
 
   // Depends on DERIVED_UN0, DERIVED_VN0, METDET, DINV
   // Initializes div_vdp, which is used 2 times afterwards
@@ -359,7 +367,7 @@ struct CaarFunctor {
         Kokkos::subview(m_elements.buffers.vdp, kv.ie, ALL, ALL, ALL, ALL),
         m_elements.buffers.div_buf,
         Kokkos::subview(m_elements.buffers.div_vdp, kv.ie, ALL, ALL, ALL));
-  }
+  } // TESTED 8
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
   // DINV
@@ -381,7 +389,7 @@ struct CaarFunctor {
         compute_div_vdp(kv);
       });
     }
-  }
+  } // TESTED 9
 
   KOKKOS_INLINE_FUNCTION
   void compute_omega_p(KernelVariables &kv) const {
@@ -392,7 +400,7 @@ struct CaarFunctor {
       m_elements.m_omega_p(kv.ie, jgp, igp, kv.ilev) +=
           m_data.eta_ave_w * m_elements.buffers.omega_p(kv.ie, jgp, igp, kv.ilev);
     });
-  }
+  } // TESTED 10
 
   // Depends on T (global), OMEGA_P (global), U (global), V
   // (global),
@@ -413,15 +421,14 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      Scalar vgrad_t =
+      const Scalar vgrad_t =
           m_elements.m_u(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
               m_elements.buffers.temperature_grad(kv.ie, 0, igp, jgp, kv.ilev) +
           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, kv.ilev) *
               m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, kv.ilev);
 
       // vgrad_t + kappa * T_v * omega_p
-      Scalar ttens;
-      ttens = -vgrad_t +
+      const Scalar ttens = -vgrad_t +
               PhysicalConstants::kappa *
                   m_elements.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev) *
                   m_elements.buffers.omega_p(kv.ie, igp, jgp, kv.ilev);
@@ -431,7 +438,7 @@ struct CaarFunctor {
       temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
       m_elements.m_t(kv.ie, m_data.np1, igp, jgp, kv.ilev) = temp_np1;
     });
-  }
+  } // TESTED 11
 
   // Depends on DERIVED_UN0, DERIVED_VN0, U, V,
   // Modifies DERIVED_UN0, DERIVED_VN0, OMEGA_P, T, and DP3D
@@ -455,7 +462,7 @@ struct CaarFunctor {
       m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
           m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
     });
-  }
+  } // TESTED 12
 
   // Computes the vertical advection of T and v
   // Not currently used
@@ -502,7 +509,7 @@ struct CaarFunctor {
         }
       }
     }
-  }
+  } // UNTESTED 13
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TeamMember team) const {

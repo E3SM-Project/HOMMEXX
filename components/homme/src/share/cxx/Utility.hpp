@@ -109,7 +109,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     for (int time = 0; time < NUM_TIME_LEVELS; ++time) {
       for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
            ++vector_level) {
-        for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV; ++vector, ++level) {
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
               dest(ie, time, level, igp, jgp) =

@@ -456,10 +456,10 @@ contains
     do j=1,np
       do i=1,np
         vgrad_t =  velocity(i, j, 1) * vtemp(i, j, 1) + &
-             velocity(i, j, 2) * vtemp(i,j,2)
-
+             velocity(i, j, 2) * vtemp(i, j, 2)
+        ! Note: This ignores the case where use_cpstar = 1
+        ! In this case, we need to use Rgas / VirtualSpecificHeat(Qt)
         ttens = -t_vadv(i, j) - vgrad_t + kappa * t_virt(i, j) * omega_p(i, j)
-
         t_future(i, j) = spheremp(i, j) * (t_previous(i, j) + dt * ttens)
       end do
     end do
