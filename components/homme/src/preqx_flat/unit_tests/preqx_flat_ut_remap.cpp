@@ -47,15 +47,15 @@ class remap_test {
 //it is thickness of the grid.
     genRandArray(
         r1_dx, r1_dx_dim, engine,
-        std::uniform_real_distribution<Real>(0.0,1000.0));
+        std::uniform_real_distribution<Real>(0.0,100.0));
 
 //in case of routine compute_ppm it is not clear what input is.
     genRandArray(
         r2_a, r2_a_dim, engine,
-        std::uniform_real_distribution<Real>(0.0,1000.0));
+        std::uniform_real_distribution<Real>(0.0,10.0));
     genRandArray(
         &(r2_dx[0][0]), r2_dx_dim1*r2_dx_dim2, engine,
-        std::uniform_real_distribution<Real>(0.0,1000.0));
+        std::uniform_real_distribution<Real>(0.0,10.0));
 
 
 //    genRandArray(
@@ -72,11 +72,11 @@ class remap_test {
 
 
 //for debugging, assign 1 to everything
-  for(int _i = 0; _i < r2_dx_dim1; ++_i)
+/*  for(int _i = 0; _i < r2_dx_dim1; ++_i)
     for(int _j = 0; _j < r2_dx_dim2; ++_j)
        r2_dx[_i][_j] = 1.0;
 
-/*  for(int _i = 0; _i < r2_a_dim; ++_i)
+    for(int _i = 0; _i < r2_a_dim; ++_i)
        r2_a[_i] = 1.0;
 */
 
@@ -115,64 +115,14 @@ class remap_test {
 
 };  // end of class def compute_sphere_op_test_ml
 
-TEST_CASE("Testing compute_ppm_grids() with alg=1","compute_ppm_grids, alg=1") {
+
+
+void testbody_compute_ppm_grids(const int _alg) {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int iterations = 10;
-
-  constexpr const int vertical_alg = 1;
-
-//put some iteration here?
+  const int vertical_alg = _alg;
   remap_test test(vertical_alg);
-
-  test.run_compute_ppm_grids();
-
-  // fortran output
-  const int out_len1 = test.r1_rslt_dim1,
-            out_len2 = test.r1_rslt_dim2,
-            dx_dim = test.r1_dx_dim;
-                      
-  Real fortran_output[out_len1][out_len2];
-  // F input
-  Real dxf[dx_dim];
-
-  for(int _i = 0; _i < dx_dim; _i++){
-    dxf[_i] = test.r1_dx[_i];
-  }
-
-  // running F version of operator
-  compute_ppm_grids_c_callable( &(dxf[0]), &(fortran_output[0][0]), test.alg );
-
-  // compare with the part from C run
-  for(int _i = 0; _i < out_len1; ++_i) {
-    for(int _j = 0; _j < out_len2; ++_j) {
-       Real coutput0 = test.r1_rslt[_i][_j];
-       
-//     std::cout << "F result = " << fortran_output[_i][_j] << ", C output = " << coutput0 << "\n";
-
-       REQUIRE(!std::isnan(fortran_output[_i][_j]));
-       REQUIRE(!std::isnan(coutput0));
-            // what is 128 here?
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        fortran_output[_i][_j],
-                        coutput0, 128.0));
-    }  // _j
-  }    // _i
-
-  std::cout << "test compute_ppm_grids (alg=1) finished. \n";
-};  // end fo test compute_ppm_grids, alg=1
-
-
-TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
-  constexpr const int iterations = 10;
-
-  constexpr const int vertical_alg = 2;
-
-  remap_test test(vertical_alg);
-
   test.run_compute_ppm_grids();
 
   const int out_len1 = test.r1_rslt_dim1,
@@ -180,7 +130,6 @@ TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
             dx_len = test.r1_dx_dim;
 
   Real fortran_output[out_len1][out_len2];
-
   Real dxf[dx_len];
 
   for(int _i = 0; _i < dx_len; _i++){
@@ -200,25 +149,17 @@ TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
                         coutput0, 128.0));
     }  // _j
   }    // _i
+  std::cout << "test compute_ppm_grids (alg=" << _alg << ") finished. \n";
+};  // end fo testbody_compute_ppm_grids
 
-  std::cout << "test compute_ppm_grids (alg=2) finished. \n";
-};  // end fo test compute_ppm_grids, alg=1
 
-
-TEST_CASE("Testing compute_ppm() with alg=1","compute_ppm, alg=1") {
+void testbody_compute_ppm(const int _alg){
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int iterations = 10;
-
-  constexpr const int vertical_alg = 1;
-
-std::cout << "here 1 \n";
-
+  const int vertical_alg = _alg;
   remap_test test(vertical_alg);
-
-std::cout << "here 2\n";
   test.run_compute_ppm();
-std::cout << "here 3 \n";
 
   const int out_dim1 = test.r2_coefs_dim1,
             out_dim2 = test.r2_coefs_dim2,
@@ -230,36 +171,22 @@ std::cout << "here 3 \n";
   Real dxf[dx_dim1][dx_dim2];
   Real af[a_dim];
 
-std::cout << "here 4 \n";
-std::cout << "dx dim 1, dx dim 1 " << dx_dim1 << " "<< dx_dim2 << "\n";
   for(int _i = 0; _i < dx_dim1; _i++)
   for(int _j = 0; _j < dx_dim2; _j++){
-
-std::cout << "i,j " << _i << " " << _j << "\n";
     dxf[_i][_j] = test.r2_dx[_i][_j];
   }
-
-
-std::cout << "here 5 \n";
 
   for(int _i = 0; _i < a_dim; _i++){
     af[_i] = test.r2_a[_i];
   }
 
-
-std::cout << "here 6 \n";
-
   compute_ppm_c_callable( &(af[0]),&(dxf[0][0]),&(fortran_output[0][0]), test.alg );
-
-
-std::cout << "here 7 \n";
 
   for(int _i = 0; _i < out_dim1; ++_i) {
     for(int _j = 0; _j < out_dim2; ++_j) {
        Real coutput0 = test.r2_coefs[_i][_j];
-     std::cout << std::setprecision(20)
-<<"F result = " << fortran_output[_i][_j] << ", C output = " << coutput0 << "\n";
-
+//     std::cout << std::setprecision(20)
+//<<"F result = " << fortran_output[_i][_j] << ", C output = " << coutput0 << "\n";
        REQUIRE(!std::isnan(fortran_output[_i][_j]));
        REQUIRE(!std::isnan(coutput0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
@@ -269,12 +196,29 @@ std::cout << "here 7 \n";
     }  // _j
   }    // _i
 
-  std::cout << "test compute_ppm (alg=2) finished. \n";
-};  // end fo test compute_ppm_grids, alg=1
+  std::cout << "test compute_ppm (alg=" << _alg << ") finished. \n";
+};  // end of testbody_compute_ppm
 
 
+TEST_CASE("Testing compute_ppm_grids() with alg=1","compute_ppm_grids, alg=1") {
+  const int _alg = 1;
+  testbody_compute_ppm_grids(_alg);
+}; // end fo test compute_ppm_grids, alg=1
 
+TEST_CASE("Testing compute_ppm_grids() with alg=2","compute_ppm_grids, alg=2") {
+  const int _alg = 2;
+  testbody_compute_ppm_grids(_alg);
+}; // end fo test compute_ppm_grids, alg=1
 
+TEST_CASE("Testing compute_ppm() with alg=1","compute_ppm, alg=1") {
+  const int _alg = 1;
+  testbody_compute_ppm(_alg);
+};  // end fo test compute_ppm, alg=1
+
+TEST_CASE("Testing compute_ppm() with alg=2","compute_ppm, alg=2") {
+  const int _alg = 2;
+  testbody_compute_ppm(_alg);
+};  // end fo test compute_ppm, alg=2
 
 
 

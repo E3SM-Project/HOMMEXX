@@ -131,7 +131,7 @@ if(alg == 2){
 }
 
 for(int j = indB; j <= indE; j++){
-ai[j] = a[j] + 
+ai[j] = a[j+1] + 
 dx[j][3] * ( a[j+2] - a[j+1] ) 
 + dx[j][4] * (  dx[j][5] * ( dx[j][6] - dx[j][7] ) * ( a[j+2] - a[j+1] ) 
               - dx[j][8] * dma[j+1] + dx[j][9] * dma[j] );
