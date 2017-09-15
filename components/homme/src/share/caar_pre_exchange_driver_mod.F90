@@ -390,6 +390,81 @@ contains
     end do
   end subroutine caar_compute_omega_p_c_int
 
+  subroutine caar_compute_temperature_c_int(dt, spheremp, dinv, dvv, velocity, t_virt, omega_p, &
+                                            t_vadv, t_previous, t_current, t_future) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
+    use derivative_mod, only : derivative_t
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: dt
+    real (kind=real_kind), intent(in) :: spheremp(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: dvv(np, np)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: t_virt(np, np)
+    real (kind=real_kind), intent(in) :: omega_p(np, np)
+    real (kind=real_kind), intent(in) :: t_vadv(np, np)
+    real (kind=real_kind), intent(in) :: t_previous(np, np)
+    real (kind=real_kind), intent(in) :: t_current(np, np)
+    real (kind=real_kind), intent(out) :: t_future(np, np)
+
+    ! locals
+
+    type (derivative_t) :: deriv
+
+    deriv%dvv = dvv
+
+    call caar_compute_temperature(dt, deriv, spheremp, dinv, velocity, t_virt, &
+                                  omega_p, t_vadv, t_previous, t_current, t_future)
+
+  end subroutine caar_compute_temperature_c_int
+
+  subroutine caar_compute_temperature(dt, deriv, spheremp, dinv, velocity, t_virt, omega_p, &
+                                      t_vadv, t_previous, t_current, t_future)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
+    use derivative_mod, only : derivative_t, gradient_sphere
+    use physical_constants, only : kappa
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: dt
+    type (derivative_t), intent(in) :: deriv
+    real (kind=real_kind), intent(in) :: spheremp(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: t_virt(np, np)
+    real (kind=real_kind), intent(in) :: omega_p(np, np)
+    real (kind=real_kind), intent(in) :: t_vadv(np, np)
+    real (kind=real_kind), intent(in) :: t_previous(np, np)
+    real (kind=real_kind), intent(in) :: t_current(np, np)
+    real (kind=real_kind), intent(out) :: t_future(np, np)
+
+    ! locals
+
+    real (kind=real_kind) :: vtemp(np, np, 2)
+    real (kind=real_kind) :: ttens, vgrad_t
+
+    integer :: i, j
+
+    ! ================================================
+    ! compute gradp term (ps/p)*(dp/dps)*T
+    ! ================================================
+    vtemp(:,:,:) = gradient_sphere(t_current, deriv, dinv)
+    do j=1,np
+      do i=1,np
+        vgrad_t =  velocity(i, j, 1) * vtemp(i, j, 1) + &
+             velocity(i, j, 2) * vtemp(i,j,2)
+
+        ttens = -t_vadv(i, j) - vgrad_t + kappa * t_virt(i, j) * omega_p(i, j)
+
+        t_future(i, j) = spheremp(i, j) * (t_previous(i, j) + dt * ttens)
+      end do
+    end do
+  end subroutine caar_compute_temperature
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -441,7 +516,6 @@ contains
     real (kind=real_kind), dimension(np,np,2)    :: vtemp     ! generic gradient storage
     real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !
     real (kind=real_kind), dimension(np,np,2     ):: v         !
-    real (kind=real_kind), dimension(np,np)      :: vgrad_T    ! v.grad(T)
     real (kind=real_kind), dimension(np,np,2)      :: grad_ps    ! lat-lon coord version
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p- p_met)
@@ -687,20 +761,15 @@ contains
       ! ==============================================
 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,j,v1,v2,E,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
+!$omp parallel do private(k,i,j,v1,v2,E,vtemp,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
 #endif
       vertloop: do k=1,nlev
-         ! ================================================
-         ! compute gradp term (ps/p)*(dp/dps)*T
-         ! ================================================
-         vtemp(:,:,:)   = gradient_sphere(elem(ie)%state%T(:,:,k,n0),deriv,elem(ie)%Dinv)
-         do j=1,np
-            do i=1,np
-               v1     = elem(ie)%state%v(i,j,1,k,n0)
-               v2     = elem(ie)%state%v(i,j,2,k,n0)
-               vgrad_T(i,j) =  v1*vtemp(i,j,1) + v2*vtemp(i,j,2)
-            end do
-         end do
+         call caar_compute_temperature(dt2, deriv, elem(ie)%spheremp, elem(ie)%Dinv, &
+                                       elem(ie)%state%v(:, :, :, k, n0), T_v(:, :, k), &
+                                       omega_p(:, :, k), T_vadv(:, :, k), &
+                                       elem(ie)%state%T(:, :, k, nm1), &
+                                       elem(ie)%state%T(:, :, k, n0), &
+                                       elem(ie)%state%T(:, :, k, np1))
          ! vtemp = grad ( E + PHI )
          call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
@@ -727,7 +796,6 @@ contains
                !
                ! phl: add forcing term to meridional wind v
                !
-               ttens(i,j,k)  = - T_vadv(i,j,k) - vgrad_T(i,j) + kappa_star(i,j,k)*T_v(i,j,k)*omega_p(i,j,k)
 !               !!
 !               !! phl: add forcing term to T
 !               !!
@@ -923,7 +991,6 @@ contains
       do k=1,nlev
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
-        elem(ie)%state%T(:,:,k,np1) = elem(ie)%spheremp(:,:)*(elem(ie)%state%T(:,:,k,nm1) + dt2*ttens(:,:,k))
         if (0<rsplit.and.0<ntrac.and.eta_ave_w.ne.0.) then
            v(:,:,1) =  elem(ie)%Dinv(:,:,1,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,1,2)*vdp(:,:,2,k)
            v(:,:,2) =  elem(ie)%Dinv(:,:,2,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,2,2)*vdp(:,:,2,k)
