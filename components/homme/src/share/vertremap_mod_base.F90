@@ -728,6 +728,12 @@ function compute_ppm( a , dx )    result(coefs)
   integer :: indB, indE
 
   ! Stage 1: Compute dma for each cell, allowing a 1-cell ghost stencil below and above the domain
+
+! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
+#ifdef PREQX_UT_ZERO_RSLT
+  coefs(:,:) = 0.0d0
+#endif
+
   if (vert_remap_q_alg == 2) then
     indB = 2
     indE = nlev-1

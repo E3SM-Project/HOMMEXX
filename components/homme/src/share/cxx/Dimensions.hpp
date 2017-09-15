@@ -57,6 +57,7 @@ constexpr const int NLEVP2 = NUM_PHYSICAL_LEV + 2,
                     DIM10 = 10,
                     NLEVP4 = NUM_PHYSICAL_LEV + 4,
                     NLEVP3 = NUM_PHYSICAL_LEV + 3,
+                    NLEVP1 = NUM_PHYSICAL_LEV + 1,
                     NLEV = NUM_PHYSICAL_LEV,
                     DIM3 = 3;
 
