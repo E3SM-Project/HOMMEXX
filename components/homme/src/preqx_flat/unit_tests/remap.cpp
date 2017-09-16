@@ -200,7 +200,7 @@ coefs[nlev-1][2] = 0.0;
 
 //Qdp, nx, qsize,dp1,dp2,alg, nx=NP
 void remap_Q_ppm(
-const Real * Qdp[NLEV][NP][NP], //[qsize] is the leading dim
+Real * Qdp[NLEV][NP][NP], //[qsize] is the leading dim
 const int qsize,
 const Real dp1[NLEV][NP][NP],
 const Real dp2[NLEV][NP][NP],
@@ -226,14 +226,14 @@ Real masso[NLEVP1];
 Real coefs[NLEV][DIM3];
 Real z1[NLEV], z2[NLEV];
 Real ppmdx[NLEVP2][DIM10];
-Real kid[NLEV];
+int kid[NLEV];
 
 //we will revert j and i order after debug
 for(int j=1; j <= NP; j++)
 for(int i=1; i <= NP; i++){
 pin[0] = 0.0;
 pio[0] = 0.0;
-for(int k=1; k <= NLEVP; k++){
+for(int k=1; k <= NLEV; k++){
 dpn[k+1] = dp2[k-1][j-1][i-1];
 dpo[k+1] = dp1[k-1][j-1][i-1];
 pin[k] = pin[k-1] + dpn[k+1];
@@ -285,17 +285,21 @@ ao[1-k+1] = ao[k+1];
 ao[NLEV+k+1] = ao[NLEV+1-k+1];
 }//k loop
 
-compute_ppm(ao, ppmdx, coefs, alg)
+compute_ppm(ao, ppmdx, coefs, alg);
 
-//convert this
-        massn1 = 0.
-        do k = 1 , nlev
-          kk = kid(k)
-          massn2 = masso(kk) + integrate_parabola( coefs(:,kk) , z1(k) , z2(k) ) * dpo(kk)
-          Qdp(i,j,k,q) = massn2 - massn1
-          massn1 = massn2
-        enddo
+Real massn1 = 0.0;
 
+for(int k=1; k <= NLEV; k++){
+  int kk = kid[k-1];
+  Real a0 = coefs[kk-1][0], a1 = coefs[kk-1][1], a2 = coefs[kk-1][2];
+  Real x1 = z1[k-1], x2 = z2[k-1];
+//to make this bfb with F,  divide by 2
+//change F 
+  Real integrate_par = a0*(x2-x1) + a1*(x2*x2-x1*x1)*0.5 + a2*(x2*x2*x2 - x1*x1*x1)/3.0;
+  Real massn2 = masso[kk-1] + integrate_par;
+  Qdp[q-1][k-1][j-1][i-1] = massn2 - massn1;
+  massn1 = massn2;
+}//k loop
 
 
 }//end q loop

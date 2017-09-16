@@ -32,6 +32,13 @@ const Real * dx,
 Real * coefs,
 const int &alg);
 
+void remap_Q_ppm_c_callable(
+Real * Qdp,
+const int &nx,
+const int &qsize,
+const Real * dp1,
+const Real * dp2,
+const int &alg);
 
 };  // extern C
 

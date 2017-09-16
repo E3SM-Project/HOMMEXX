@@ -499,6 +499,25 @@ end subroutine remap1_nofilter
 
 !=======================================================================================================!
 
+subroutine remap_Q_ppm_c_callable(Qdp,nx,qsize,dp1,dp2,alg) bind(c)
+  use control_mod, only        : vert_remap_q_alg
+  implicit none
+  integer,intent(in) :: nx,qsize,alg
+  real (kind=real_kind), intent(inout) :: Qdp(nx,nx,nlev,qsize)
+  real (kind=real_kind), intent(in) :: dp1(nx,nx,nlev),dp2(nx,nx,nlev)
+
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    call remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
+
+end subroutine remap_Q_ppm_c_callable
+
+
+!=======================================================================================================!
 
 !This uses the exact same model and reference grids and data as remap_Q, but it interpolates
 !using PPM instead of splines.
