@@ -255,8 +255,8 @@ pin[k] = pin[k-1] + dpn[k+1];
 pio[k] = pio[k-1] + dpo[k+1];
 }//k loop
 
-pio[NLEVP2-1] = pio[NLEVP2-2] + 1.0;
-pin[NLEV] = pio[NLEV] + 1.0;
+pio[NLEVP2-1] = pio[NLEV] + 1.0;
+pin[NLEV] = pio[NLEV];
 //F pio,pin,masso,z1,z2,kid (j) -->   C  (j-1)
 //
 //F ao,dpo,dpn (j) -->    C  (j+1)
