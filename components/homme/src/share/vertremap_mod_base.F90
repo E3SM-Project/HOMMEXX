@@ -44,7 +44,7 @@ module vertremap_mod_base
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
 !  public remap1_c_callable
-  public remap_q_ppm_c_callable
+  public remap_Q_ppm_c_callable
   public compute_ppm_grids_c_callable
   public compute_ppm_c_callable
 
@@ -500,9 +500,10 @@ end subroutine remap1_nofilter
 !=======================================================================================================!
 
 subroutine remap_Q_ppm_c_callable(Qdp,nx,qsize,dp1,dp2,alg) bind(c)
+  use iso_c_binding, only: c_int
   use control_mod, only        : vert_remap_q_alg
   implicit none
-  integer,intent(in) :: nx,qsize,alg
+  integer(c_int), intent(in) :: nx,qsize,alg
   real (kind=real_kind), intent(inout) :: Qdp(nx,nx,nlev,qsize)
   real (kind=real_kind), intent(in) :: dp1(nx,nx,nlev),dp2(nx,nx,nlev)
 

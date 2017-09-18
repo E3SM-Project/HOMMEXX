@@ -53,14 +53,16 @@ static constexpr const int Q_NUM_TIME_LEVELS = 2;
 #endif // CUDA_BUILD
 
 
-constexpr const int NLEVP2 = NUM_PHYSICAL_LEV + 2,
+//for unit tests
+constexpr const int DIM3 = 3,
                     DIM10 = 10,
-                    NLEVP4 = NUM_PHYSICAL_LEV + 4,
-                    NLEVP3 = NUM_PHYSICAL_LEV + 3,
-                    NLEVP1 = NUM_PHYSICAL_LEV + 1,
                     NLEV = NUM_PHYSICAL_LEV,
-                    DIM3 = 3;
+                    NLEVP1 = NUM_PHYSICAL_LEV + 1, 
+                    NLEVP2 = NUM_PHYSICAL_LEV + 2,
+                    NLEVP3 = NUM_PHYSICAL_LEV + 3, 
+                    NLEVP4 = NUM_PHYSICAL_LEV + 4;
 
+constexpr const int QSIZETEST=35;
 
 } // namespace TinMan
 

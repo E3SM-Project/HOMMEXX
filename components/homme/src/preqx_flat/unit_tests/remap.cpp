@@ -200,7 +200,7 @@ coefs[nlev-1][2] = 0.0;
 
 //Qdp, nx, qsize,dp1,dp2,alg, nx=NP
 void remap_Q_ppm(
-Real * Qdp[NLEV][NP][NP], //[qsize] is the leading dim
+Real Qdp[][NLEV][NP][NP], //[qsize] is the leading dim
 const int qsize,
 const Real dp1[NLEV][NP][NP],
 const Real dp2[NLEV][NP][NP],
