@@ -62,7 +62,7 @@ constexpr const int DIM3 = 3,
                     NLEVP3 = NUM_PHYSICAL_LEV + 3, 
                     NLEVP4 = NUM_PHYSICAL_LEV + 4;
 
-constexpr const int QSIZETEST=35;
+constexpr const int QSIZETEST=1;
 
 } // namespace TinMan
 

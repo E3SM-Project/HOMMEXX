@@ -82,7 +82,7 @@ class remap_test {
     for(int _j = 0; _j < r3_Qdp_dim2; _j++)
     for(int _k = 0; _k < r3_Qdp_dim3; _k++)
     for(int _l = 0; _l < r3_Qdp_dim4; _l++){
-      r3_Qdp[_i][_j][_k][_l] = r3_Qdp_copy2[_i][_j][_k][_l];
+      r3_Qdp_copy2[_i][_j][_k][_l] = r3_Qdp[_i][_j][_k][_l];
     };
 
 
@@ -98,15 +98,33 @@ class remap_test {
     for(int _j = 0; _j < r2_coefs_dim2; ++_j)
        r2_coefs[_i][_j] = 0.0;
 
-
 //for debugging, assign 1 to everything
-/*  for(int _i = 0; _i < r2_dx_dim1; ++_i)
-    for(int _j = 0; _j < r2_dx_dim2; ++_j)
-       r2_dx[_i][_j] = 1.0;
+//  for(int _i = 0; _i < r2_dx_dim1; ++_i)
+//    for(int _j = 0; _j < r2_dx_dim2; ++_j)
+//       r2_dx[_i][_j] = 1.0;
+//    for(int _i = 0; _i < r2_a_dim; ++_i)
+//       r2_a[_i] = 1.0;
 
-    for(int _i = 0; _i < r2_a_dim; ++_i)
-       r2_a[_i] = 1.0;
-*/
+
+    for(int _i = 0; _i < r3_Qdp_dim1; _i++)
+    for(int _j = 0; _j < r3_Qdp_dim2; _j++)
+    for(int _k = 0; _k < r3_Qdp_dim3; _k++)
+    for(int _l = 0; _l < r3_Qdp_dim4; _l++){
+      r3_Qdp[_i][_j][_k][_l] = 1.0;
+      r3_Qdp_copy2[_i][_j][_k][_l] = 1.0;
+    };
+    for(int _i = 0; _i < r3_dp1_dim1; _i++)
+    for(int _j = 0; _j < r3_dp1_dim2; _j++)
+    for(int _k = 0; _k < r3_dp1_dim3; _k++){
+      r3_dp2[_i][_j][_k] = 1.0;
+    };
+
+
+
+
+
+std::cout << r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
+" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
 
   }  // end of constructor
 
@@ -151,13 +169,31 @@ class remap_test {
   void run_compute_ppm_grids(){
     compute_ppm_grids(r1_dx,r1_rslt,alg);
   }
+  
   void run_compute_ppm(){
     compute_ppm(r2_a,r2_dx,r2_coefs,alg);
   }
 
   void run_remap_Q_ppm(){
+
+std::cout << "before functor " <<r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
+" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
+
+    for(int _i = 0; _i < QSIZETEST; _i++)
+    for(int _j = 0; _j < NLEV; _j++)
+    for(int _k = 0; _k < NP; _k++)
+    for(int _l = 0; _l < NP; _l++){
+      std::cout << _i << " " << _j << " " << _k << " "
+<<_l  << " Qdp"<< r3_Qdp[_i][_j][_k][_l] << "\n";
+    };
+std::cout << "ABIUT TO ENTER REMAP \n";
+
+
     remap_Q_ppm(r3_Qdp,QSIZETEST,r3_dp1,r3_dp2,alg);
-    //remap_Q_ppm(&(r3_Qdp[0][0][0][0]),QSIZETEST,r3_dp1,r3_dp2,alg);
+
+std::cout << "after functor " <<r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
+" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
+
   }
 
 
@@ -286,13 +322,19 @@ void testbody_remap_Q_ppm(const int _alg){
   remap_q_ppm_c_callable( &(fortran_output[0][0][0][0]), NP,
                          out_dim1, &(dp1f[0][0][0]), &(dp2f[0][0][0]), test.alg );
 
+std::cout << "end of F call\n";
+std::cout << out_dim1 << " " << out_dim2 << " " << out_dim3 << " " << out_dim4  ;
+
   for(int _i = 0; _i < out_dim1; _i++) 
     for(int _j = 0; _j < out_dim2; _j++) 
     for(int _k = 0; _k < out_dim3; _k++)
     for(int _l = 0; _l < out_dim4; _l++){
        Real coutput0 = test.r3_Qdp[_i][_j][_k][_l];
-//     std::cout << std::setprecision(20)
-//     //<<"F result = " << fortran_output[_i][_j] << ", C output = " << coutput0 << "\n";
+
+std::cout << std::setprecision(20)
+<<"F result = " << fortran_output[_i][_j][_k][_l] 
+<< ", C output = " << coutput0 << "\n";
+
        REQUIRE(!std::isnan(fortran_output[_i][_j][_k][_l]));
        REQUIRE(!std::isnan(coutput0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
@@ -332,11 +374,12 @@ TEST_CASE("Testing remap_Q_ppm() with alg=1","remap_Q_ppm, alg=1") {
   testbody_remap_Q_ppm(_alg);
 };  // end fo test compute_ppm, alg=1
 
-TEST_CASE("Testing remap_Q_ppm() with alg=2","remap_Q_ppm, alg=2") {
+/*
+ * TEST_CASE("Testing remap_Q_ppm() with alg=2","remap_Q_ppm, alg=2") {
   const int _alg = 2;
   testbody_remap_Q_ppm(_alg);
 };  // end fo test compute_ppm, alg=2
-
+*/
 
 
 

@@ -205,6 +205,21 @@ const int qsize,
 const Real dp1[NLEV][NP][NP],
 const Real dp2[NLEV][NP][NP],
 const int alg){
+
+std::cout << "in remap " << qsize << "\n";
+
+    for(int _i = 0; _i < qsize; _i++)
+    for(int _j = 0; _j < NLEV; _j++)
+    for(int _k = 0; _k < NP; _k++)
+    for(int _l = 0; _l < NP; _l++){
+      std::cout << _i << " " << _j << " " << _k << " "
+<<_l  << " Qdp"<< Qdp[_i][_j][_k][_l] << "\n";
+    };
+
+
+
+
+
 //coded only for gs=2
 
 //convert addressing:
@@ -272,7 +287,7 @@ z2[k-1] = ( pin[k] - ( pio[kk-1] + pio[kk] )*0.5 ) / dpo[kk+1];
 
 compute_ppm_grids( dpo, ppmdx, alg );
 
-for(int q = 0; q < qsize; q++){
+for(int q = 1; q <= qsize; q++){
 masso[0] = 0.0;
 for(int k=1; k <= NLEV; k++){
 ao[k+1] = Qdp[q-1][k-1][j-1][i-1];
