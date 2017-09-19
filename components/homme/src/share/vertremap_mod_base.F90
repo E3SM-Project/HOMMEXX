@@ -574,6 +574,16 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
         dpo(nlev+k) = dpo(nlev+1-k)
       enddo
 
+!mark 1
+
+if( (i==1) .and. (j==1)) then
+!print *, 'dpo', dpo
+!print *, 'dpn', dpn
+!print *, 'pio', pio
+!print *, 'pin', pin
+endif
+
+
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
       !interface location. In practice, the grid never deforms past one cell, so the search can be
@@ -584,9 +594,33 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       do k = 1 , nlev
         kk = k  !Keep from an order n^2 search operation by assuming the old cell index is close.
         !Find the index of the old grid cell in which this new cell's bottom interface resides.
+
+!if( (i==1) .and. (j==1)) then
+!print *, 'F before WHILE', k, kk
+!print *, pio(kk), pin(k+1)
+!endif
+
         do while ( pio(kk) <= pin(k+1) )
+
+!if( (i==1) .and. (j==1)) then
+!print *, '           in WHILE'
+!print *, '           k,kk=', k, kk
+!print *, '           ', pio(kk), pin(k+1)
+!endif
+
           kk = kk + 1
+
+!if( (i==1) .and. (j==1)) then
+!print *, '           in WHILE AFTER k++'
+!print *, '           k,kk=', k, kk
+!print *, '           ', pio(kk), pin(k+1)
+!endif
+
         enddo
+
+!if( (i==1) .and. (j==1)) then
+!print *, 'in LOOP k= ', k, kk
+!endif
         kk = kk - 1                   !kk is now the cell index we're integrating over.
         if (kk == nlev+1) kk = nlev   !This is to keep the indices in bounds.
                                       !Top bounds match anyway, so doesn't matter what coefficients are used
@@ -597,9 +631,16 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
                                                                         !coordinate domain [-0.5,0.5].
       enddo
 
+if( (i==1) .and. (j==1)) then
+print *, 'z1', z1
+print *, 'z2', z2
+print *, 'kid', kid
+endif
+
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
       !limiting. So anything that depends only on the grid is pre-computed outside the tracer loop.
       ppmdx(:,:) = compute_ppm_grids( dpo )
+
 
       !From here, we loop over tracers for only those portions which depend on tracer data, which includes PPM limiting and
       !mass accumulation
@@ -615,10 +656,23 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
+
+if( (i==1) .and. (j==1)) then
+print *, 'ao', ao
+print *, 'masso', masso
+endif
+
         do k = 1 , gs
           ao(1   -k) = ao(       k)
           ao(nlev+k) = ao(nlev+1-k)
         enddo
+
+
+if( (i==1) .and. (j==1)) then
+print *, 'ao', ao
+print *, 'masso', masso
+endif
+
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
         !Compute tracer values on the new grid by integrating from the old cell bottom to the new
@@ -630,6 +684,14 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           kk = kid(k)
           massn2 = masso(kk) + integrate_parabola( coefs(:,kk) , z1(k) , z2(k) ) * dpo(kk)
           Qdp(i,j,k,q) = massn2 - massn1
+
+if( (i==1) .and. (j==1)) then
+print *, 'coefs', coefs(:,kk)
+print*, 'z1,z2 ', z1(k), z2(k)
+print *, 'k, massn1, massn2', k, massn1, massn2
+print *, 'k, int_par', k, integrate_parabola( coefs(:,kk) , z1(k) , z2(k) )*dpo(kk)
+endif
+
           massn1 = massn2
         enddo
       enddo
@@ -825,6 +887,12 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x1      !lower domain bound for integration
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
+
+print *, 'a' , a
+print *, 'x1, x2' , x1,x2
+print *, 'terms: ', a(0) * (x2 - x1), a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1, &
+a(2)*(x2 ** 3 - x1 ** 3) / 0.3D1
+
   mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
 end function integrate_parabola
 
