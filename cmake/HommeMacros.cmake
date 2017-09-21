@@ -124,6 +124,10 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
     endif ()
   endif ()
 
+  if (${PERFORMANCE_PROFILE} STREQUAL "VTUNE")
+    TARGET_LINK_LIBRARIES(${execName} ittnotify)
+  endif ()
+
   # Add this executable to a list
   SET(EXEC_LIST ${EXEC_LIST} ${execName} CACHE INTERNAL "List of configured executables")
 

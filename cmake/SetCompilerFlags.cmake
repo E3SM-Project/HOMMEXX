@@ -62,6 +62,8 @@ ENDIF ()
 
 # C++ Flags
 
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+
 INCLUDE(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX11_SUPPORTED)
 IF (${CXX11_SUPPORTED})
@@ -71,6 +73,10 @@ ELSE ()
 ENDIF ()
 
 CHECK_CXX_COMPILER_FLAG("-cxxlib" CXXLIB_SUPPORTED)
+
+IF (${PERFORMANCE_PROFILE} STREQUAL "VTUNE")
+  ADD_DEFINITIONS(-DVTUNE_PROFILE)
+ENDIF ()
 
 ##############################################################################
 # Optimization flags

@@ -2,6 +2,12 @@
 
 #include <iostream>
 
+#ifdef VTUNE_PROFILE
+#include <ittnotify.h>
+#else
+void __itt_pause() {}
+#endif
+
 namespace Homme {
 
 extern "C" {
@@ -9,6 +15,8 @@ extern "C" {
 void init_kokkos(const bool print_configuration = true) {
   /* Set OpenMP Environment variables to control how many
    * threads/processors Kokkos uses */
+
+  __itt_pause();
 
   Kokkos::initialize();
 
