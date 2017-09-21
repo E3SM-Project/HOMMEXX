@@ -7,6 +7,10 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
 
   TARGET_LINK_LIBRARIES(${target_name} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 
+  IF(${PERFORMANCE_PROFILE} STREQUAL "VTUNE")
+    TARGET_LINK_LIBRARIES(${target_name} ittnotify)
+  ENDIF()
+
   IF(UNIX AND NOT APPLE)
     TARGET_LINK_LIBRARIES(${target_name} rt)
   ENDIF()

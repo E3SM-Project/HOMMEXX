@@ -37,6 +37,8 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
 
+SET (PERFORMANCE_PROFILE "" CACHE STRING "Whether to build and link with various profiler libraries")
+
 # Set up some directories to facilitate finding netcdf, pnetcdf
 INCLUDE(SetHostPaths)
 INCLUDE(HommeMacros)
