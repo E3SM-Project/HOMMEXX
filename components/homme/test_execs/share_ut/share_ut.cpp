@@ -35,7 +35,7 @@ void genRandArray(Real *const x, int length, rngAlg &engine, PDF &pdf) {
 template <typename ViewType, typename rngAlg, typename PDF>
 void genRandArray(ViewType view, rngAlg &engine, PDF &pdf) {
   Real *data = view.data();
-  for (int i = 0; i < view.size(); ++i) {
+  for (size_t i = 0; i < view.size(); ++i) {
     data[i] = pdf(engine);
   }
 }

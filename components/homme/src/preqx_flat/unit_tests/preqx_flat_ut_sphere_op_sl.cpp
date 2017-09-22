@@ -43,12 +43,13 @@ void divergence_sphere_wk_c_callable(const Real *input,
 class compute_sphere_operator_test {
  public:
   compute_sphere_operator_test(int num_elems)
-      : scalar_input_d("scalar input", num_elems),
+      : _num_elems(num_elems),
+        scalar_input_d("scalar input", num_elems),
         vector_input_d("vector input", num_elems),
         d_d("d", num_elems),
         dinv_d("dinv", num_elems),
-        metdet_d("metdet", num_elems),
         spheremp_d("spheremp", num_elems),
+        metdet_d("metdet", num_elems),
         dvv_d("dvv"),
         scalar_output_d("scalar output", num_elems),
         vector_output_d("vector output", num_elems),
@@ -71,8 +72,7 @@ class compute_sphere_operator_test {
             Kokkos::create_mirror_view(vector_output_d)),
         temp1_host(Kokkos::create_mirror_view(temp1_d)),
         temp2_host(Kokkos::create_mirror_view(temp2_d)),
-        temp3_host(Kokkos::create_mirror_view(temp3_d)),
-        _num_elems(num_elems) {
+        temp3_host(Kokkos::create_mirror_view(temp3_d)) {
     // constructor's body
     // init randonly
 

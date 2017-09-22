@@ -91,18 +91,18 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
   // Copy data from f90 pointers to cxx views
   r.pull_qdp(elem_state_Qdp_ptr);
 
-  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>             vstar_exec = r.buffers.vstar;
-  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror vstar_host = Kokkos::create_mirror_view(vstar_exec);
+  ExecViewUnmanaged<Scalar *[NUM_LEV][2][NP][NP]>             vstar_exec = r.buffers.vstar;
+  ExecViewUnmanaged<Scalar *[NUM_LEV][2][NP][NP]>::HostMirror vstar_host = Kokkos::create_mirror_view(vstar_exec);
 
   int iter=0;
   for (int ie=0; ie<data.num_elems; ++ie)
   {
-    for (int k=0; k<NUM_LEV; ++k) {
+    for (int ilev=0; ilev<NUM_LEV; ++ilev) {
       for (int iv=0; iv<VECTOR_SIZE; ++iv) {
         for (int idim=0; idim<2; ++idim) {
           for (int i=0; i<NP; ++i) {
             for (int j=0; j<NP; ++j, ++iter) {
-              vstar_host(ie,idim,i,j,k)[iv] = vstar_ptr[iter];
+              vstar_host(ie,idim,ilev,i,j)[iv] = vstar_ptr[iter];
             }
           }
         }
@@ -117,19 +117,19 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
   const Elements& r = get_elements();
   const Control& data = get_control();
 
-  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>             qtens_exec = r.buffers.qtens;
-  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror qtens_host = Kokkos::create_mirror_view(qtens_exec);
+  ExecViewUnmanaged<Scalar *[QSIZE_D][NUM_LEV][NP][NP]>             qtens_exec = r.buffers.qtens;
+  ExecViewUnmanaged<Scalar *[QSIZE_D][NUM_LEV][NP][NP]>::HostMirror qtens_host = Kokkos::create_mirror_view(qtens_exec);
   Kokkos::deep_copy(qtens_host, qtens_exec);
 
   int iter=0;
   for (int ie=0; ie<data.num_elems; ++ie)
   {
     for (int iq=0; iq<data.qsize; ++iq) {
-      for (int k=0; k<NUM_LEV; ++k) {
+      for (int ilev=0; ilev<NUM_LEV; ++ilev) {
         for (int iv=0; iv<VECTOR_SIZE; ++iv) {
           for (int i=0; i<NP; ++i) {
             for (int j=0; j<NP; ++j, ++iter) {
-               qtens_ptr[iter] = qtens_host(ie,iq,i,j,k)[iv];
+               qtens_ptr[iter] = qtens_host(ie,iq,ilev,i,j)[iv];
             }
           }
         }

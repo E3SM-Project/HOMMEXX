@@ -126,14 +126,17 @@ class compute_subfunctor_test {
   const int nets;
   const int nete;
 
-  static constexpr const int nm1 = 0;
-  static constexpr const int n0 = 1;
-  static constexpr const int np1 = 2;
-  static constexpr const int qn0 = -1;
-  static constexpr const int ps0 = 1;
-  static constexpr const Real dt2 = 1.0;
-  static constexpr const Real eta_ave_w = 1.0;
+  static constexpr int nm1 = 0;
+  static constexpr int n0 = 1;
+  static constexpr int np1 = 2;
+  static constexpr int qn0 = -1;
+  static constexpr int ps0 = 1;
+  static constexpr Real dt2 = 1.0;
+  static constexpr Real eta_ave_w = 1.0;
 };
+
+template <typename TestFunctor_T>
+constexpr int compute_subfunctor_test<TestFunctor_T>::n0;
 
 class compute_energy_grad_test {
  public:
@@ -175,7 +178,7 @@ TEST_CASE("monolithic compute_and_apply_rhs",
   compute_subfunctor_test<compute_energy_grad_test>
       test_functor(num_elems);
   test_functor.run_functor();
-  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
+  HostViewManaged<Scalar * [NUM_LEV][2][NP][NP]>
       energy_grad("energy_grad", num_elems);
   Kokkos::deep_copy(energy_grad,
                     elements.buffers.energy_grad);
@@ -186,50 +189,32 @@ TEST_CASE("monolithic compute_and_apply_rhs",
         Real vtemp[2][NP][NP];
 
         caar_compute_energy_grad_c_int(
-            reinterpret_cast<Real *>(
-                test_functor.dvv.data()),
-            reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.dinv, ie,
-                                Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
-            reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.pecnd, ie,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
-            reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.phi, ie,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL)
-                    .data()),
-            reinterpret_cast<Real *>(
-                Kokkos::subview(test_functor.velocity, ie,
-                                test_functor.n0,
-                                level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL)
-                    .data()),
-            &vtemp[0][0][0]);
+                test_functor.dvv.data(),
+                &test_functor.dinv(ie,0,0,0,0),
+                &test_functor.pecnd(ie, level * VECTOR_SIZE + v,0,0),
+                &test_functor.phi(ie, level * VECTOR_SIZE + v,0,0),
+                //Kokkos::subview(test_functor.velocity, ie, test_functor.n0, level*VECTOR_SIZE+v, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+                &test_functor.velocity(ie,test_functor.n0,level * VECTOR_SIZE + v,0,0,0),
+                &vtemp[0][0][0]);
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(vtemp[0][igp][jgp]));
             REQUIRE(!std::isnan(vtemp[1][igp][jgp]));
             REQUIRE(!std::isnan(
-                energy_grad(ie, 0, igp, jgp, level)[v]));
+                energy_grad(ie, level, 0, igp, jgp)[v]));
             REQUIRE(!std::isnan(
-                energy_grad(ie, 1, igp, jgp, level)[v]));
+                energy_grad(ie, level, 1, igp, jgp)[v]));
             REQUIRE(
                 std::numeric_limits<Real>::epsilon() >=
                 compare_answers(
                     vtemp[0][igp][jgp],
-                    energy_grad(ie, 0, igp, jgp, level)[v],
+                    energy_grad(ie, level, 0, igp, jgp)[v],
                     128.0));
             REQUIRE(
                 std::numeric_limits<Real>::epsilon() >=
                 compare_answers(
                     vtemp[1][igp][jgp],
-                    energy_grad(ie, 1, igp, jgp, level)[v],
+                    energy_grad(ie, level, 1, igp, jgp)[v],
                     128.0));
           }
         }
