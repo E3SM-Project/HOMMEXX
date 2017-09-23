@@ -377,8 +377,8 @@ vorticity_sphere(const KernelVariables &kv,
       dvdx += dvv(jgp, kgp) * vcov[1][igp][kgp];
       dudy += dvv(igp, kgp) * vcov[0][kgp][jgp];
     }
-    vort(igp, jgp, kv.ilev) = (dvdx - dudy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
-                                               PhysicalConstants::rrearth);
+    vort(kv.ilev, igp, jgp) = (dvdx - dudy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
+                                                PhysicalConstants::rrearth);
   });
 }
 
@@ -390,7 +390,7 @@ vorticity_sphere_vector(const KernelVariables &kv,
                  ExecViewUnmanaged<const Real * [NP][NP]> metdet,
                  ExecViewUnmanaged<const Real[NP][NP]> dvv,
                  ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
-                 ExecViewUnmanaged<      Scalar[NUM_LEV][NP][NP]> vort) {
+                 ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> vort) {
   constexpr int covar_iters = NP * NP;
   Scalar vcov[2][NP][NP];
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, covar_iters),
@@ -426,7 +426,7 @@ divergence_sphere_wk(const KernelVariables &kv,
                   ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
                   ExecViewUnmanaged<const Real[NP][NP]> dvv,
                   ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
-                  ExecViewUnmanaged<      Scalar[NUM_LEV][NP][NP]> div_v) {
+                  ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> div_v) {
 
   constexpr int contra_iters = NP * NP;
   Scalar gv[2][NP][NP];
@@ -555,8 +555,8 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
                 ExecViewUnmanaged<const Real * [2][2][NP][NP]> D,
                 ExecViewUnmanaged<const Real * [NP][NP]> mp,
                 ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> scalar,
-                ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> curls) {
+                ExecViewUnmanaged<const Scalar[NUM_LEV]   [NP][NP]> scalar,
+                ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> curls) {
 
   Scalar dscontra[2][NP][NP];
   constexpr int np_squared = NP * NP;
@@ -604,8 +604,8 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
                 ExecViewUnmanaged<const Real * [2][2][NP][NP]> metinv,
                 ExecViewUnmanaged<const Real * [NP][NP]> metdet,
                 ExecViewUnmanaged<const Real[NP][NP]> dvv,
-                ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> scalar,
-                ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> grads) {
+                ExecViewUnmanaged<const Scalar[NUM_LEV]   [NP][NP]> scalar,
+                ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> grads) {
 
   Scalar dscontra[2][NP][NP];
   constexpr int np_squared = NP * NP;
@@ -661,10 +661,10 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
     grads(kv.ilev,0,igp,jgp) = (D(kv.ie,0,0,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp])
+                              + D(kv.ie,1,0,igp,jgp)*dscontra[1][igp][jgp])
                              *PhysicalConstants::rrearth;
     grads(kv.ilev,1,igp,jgp) = (D(kv.ie,0,1,igp,jgp)*dscontra[0][igp][jgp]
-                             + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp])
+                              + D(kv.ie,1,1,igp,jgp)*dscontra[1][igp][jgp])
                              *PhysicalConstants::rrearth;
   });
 }
@@ -675,21 +675,21 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
 //NOT TESTED, not verified, MISSING LINES FOR RIGID ROTATION
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
-                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
-                const ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
-                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
+                ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+                ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
+                ExecViewUnmanaged<const Real[NP][NP]> dvv,
 //temps to store results
-                ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> grads,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> component0,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> component1,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> component2,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> laplace0,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> laplace1,
-                ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> laplace2,
+                ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> grads,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> component0,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> component1,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> component2,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> laplace0,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> laplace1,
+                ExecViewUnmanaged<      Scalar[NUM_LEV]   [NP][NP]> laplace2,
                 ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> vector,
-                ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> laplace) {
+                ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> laplace) {
 
 //  Scalar dum_cart[2][NP][NP];
   constexpr int np_squared = NP * NP;
@@ -743,11 +743,11 @@ vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
 
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
-                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
-                const ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
-                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> Dinv,
+                ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> tensorVisc,
+                ExecViewUnmanaged<const Real * [2][3][NP][NP]> vec_sph2cart,
+                ExecViewUnmanaged<const Real[NP][NP]> dvv,
 //temp vars
                 ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> grads,
                 ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> laplace0,
@@ -827,13 +827,13 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
 
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_contra(const KernelVariables &kv,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
-                const ExecViewUnmanaged<const Real * [NP][NP]> mp,
-                const ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
-                const ExecViewUnmanaged<const Real * [2][2][NP][NP]> metinv,
-                const ExecViewUnmanaged<const Real * [NP][NP]> metdet,
-                const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> d,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> dinv,
+                ExecViewUnmanaged<const Real * [NP][NP]> mp,
+                ExecViewUnmanaged<const Real * [NP][NP]> spheremp,
+                ExecViewUnmanaged<const Real * [2][2][NP][NP]> metinv,
+                ExecViewUnmanaged<const Real * [NP][NP]> metdet,
+                ExecViewUnmanaged<const Real[NP][NP]> dvv,
                 const Real nu_ratio,
 //temps
                 ExecViewUnmanaged<Scalar[NUM_LEV]   [NP][NP]> div,
@@ -841,7 +841,7 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
                 ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> gradcov,
                 ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> curlcov,
 //input, later write a version to replace input with output
-                const ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> vector,
+                ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> vector,
 //output
                 ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> laplace) {
 

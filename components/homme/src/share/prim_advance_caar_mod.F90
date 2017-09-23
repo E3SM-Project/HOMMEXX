@@ -70,10 +70,11 @@ module prim_advance_caar_mod
   use dimensions_mod, only : nlev, ntrac
   use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
   use edgetype_mod,   only : edgedescriptor_t
-  use element_mod,    only : element_t
+  use element_mod,    only : element_t, elem_state_temp, elem_state_v, elem_state_dp3d
   use hybvcoord_mod,  only : hvcoord_t
   use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic
 
+use utils_mod, only: FrobeniusNorm
   implicit none
 
   type (hvcoord_t)      , intent(in)    :: hvcoord

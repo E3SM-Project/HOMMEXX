@@ -83,11 +83,11 @@ struct CaarFunctor {
       const int igp = (idx / NP) % NP;
       const int jgp = idx % NP;
 
-      m_elements.buffers.energy_grad(kv.ie, hgp, kv.ilev, igp, jgp) =
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, hgp, igp, jgp) =
           PhysicalConstants::Rgas *
           (m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp) /
            m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp)) *
-          m_elements.buffers.pressure_grad(kv.ie, hgp, kv.ilev, igp, jgp);
+          m_elements.buffers.pressure_grad(kv.ie, kv.ilev, hgp, igp, jgp);
     });
 
     compute_energy_grad(kv);
@@ -107,31 +107,29 @@ struct CaarFunctor {
       m_elements.buffers.vorticity(kv.ie, kv.ilev, igp, jgp) +=
           m_elements.m_fcor(kv.ie, igp, jgp);
 
-      m_elements.buffers.energy_grad(kv.ie, 0, kv.ilev, igp, jgp) *= -1;
-      m_elements.buffers.energy_grad(kv.ie, 0, kv.ilev, igp, jgp) +=
-          /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, igp, jgp,
-                                                kv.ilev) *
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp) *= -1;
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp) +=
+          /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
           m_elements.buffers.vorticity(kv.ie, kv.ilev, igp, jgp);
-      m_elements.buffers.energy_grad(kv.ie, 1, kv.ilev, igp, jgp) *= -1;
-      m_elements.buffers.energy_grad(kv.ie, 1, kv.ilev, igp, jgp) +=
-          /* v_vadv(igp, jgp) + */ -m_elements.m_u(kv.ie, m_data.n0, igp, jgp,
-                                                 kv.ilev) *
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp) *= -1;
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp) +=
+          /* v_vadv(igp, jgp) + */ -m_elements.m_u(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
           m_elements.buffers.vorticity(kv.ie, kv.ilev, igp, jgp);
 
-      m_elements.buffers.energy_grad(kv.ie, 0, kv.ilev, igp, jgp) *= m_data.dt;
-      m_elements.buffers.energy_grad(kv.ie, 0, kv.ilev, igp, jgp) +=
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp) *= m_data.dt;
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp) +=
           m_elements.m_u(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
-      m_elements.buffers.energy_grad(kv.ie, 1, kv.ilev, igp, jgp) *= m_data.dt;
-      m_elements.buffers.energy_grad(kv.ie, 1, kv.ilev, igp, jgp) +=
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp) *= m_data.dt;
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp) +=
           m_elements.m_v(kv.ie, m_data.nm1, kv.ilev, igp, jgp);
 
       // Velocity at np1 = spheremp * buffer
       m_elements.m_u(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
           m_elements.m_spheremp(kv.ie, igp, jgp) *
-          m_elements.buffers.energy_grad(kv.ie, 0, kv.ilev, igp, jgp);
+          m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp);
       m_elements.m_v(kv.ie, m_data.np1, kv.ilev, igp, jgp) =
           m_elements.m_spheremp(kv.ie, igp, jgp) *
-          m_elements.buffers.energy_grad(kv.ie, 1, kv.ilev, igp, jgp);
+          m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp);
     });
   }
 
@@ -206,6 +204,7 @@ struct CaarFunctor {
           kv, m_elements.m_dinv, m_deriv.get_dvv(),
           Homme::subview(m_elements.buffers.pressure, kv.ie),
           Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
+//std::cout << "|grad_p| = " << frobenius_norm(m_elements.buffers.pressure_grad) << "\n";
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                            [&](const int loop_idx) {
@@ -213,9 +212,9 @@ struct CaarFunctor {
         const int jgp = loop_idx % NP;
         Scalar vgrad_p =
             m_elements.m_u(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                m_elements.buffers.pressure_grad(kv.ie, 0, kv.ilev, igp, jgp) +
+                m_elements.buffers.pressure_grad(kv.ie, kv.ilev, 0, igp, jgp) +
             m_elements.m_v(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-                m_elements.buffers.pressure_grad(kv.ie, 1, kv.ilev, igp, jgp);
+                m_elements.buffers.pressure_grad(kv.ie, kv.ilev, 1, igp, jgp);
 
         m_elements.buffers.omega_p(kv.ie, kv.ilev, igp, jgp) =
             vgrad_p / m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
@@ -240,9 +239,9 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      m_elements.buffers.pressure(kv.ie, igp, jgp, 0)[0] =
+      m_elements.buffers.pressure(kv.ie, 0, igp, jgp)[0] =
           m_data.hybrid_a(0) * m_data.ps0 +
-          0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, 0)[0];
+          0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, 0, igp, jgp)[0];
 
       // TODO: change the sum into p(k) = p(k-1) + 0.5*(
       // dp(k)+dp(k-1) ) to
@@ -253,11 +252,10 @@ struct CaarFunctor {
 
         const int lev_prev = (kv.ilev - 1) / VECTOR_SIZE;
         const int vec_prev = (kv.ilev - 1) % VECTOR_SIZE;
-        m_elements.buffers.pressure(kv.ie, igp, jgp, lev)[vec] =
-            m_elements.buffers.pressure(kv.ie, igp, jgp, lev_prev)[vec_prev] +
-            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp,
-                                  lev_prev)[vec_prev] +
-            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, lev)[vec];
+        m_elements.buffers.pressure(kv.ie, lev, igp, jgp)[vec] =
+            m_elements.buffers.pressure(kv.ie, lev_prev, igp, jgp)[vec_prev] +
+            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, lev_prev, igp, jgp)[vec_prev] +
+            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, lev, igp, jgp)[vec];
       }
     });
   }
@@ -311,21 +309,21 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      m_elements.buffers.vdp(kv.ie, 0, kv.ilev, igp, jgp) =
+      m_elements.buffers.vdp(kv.ie, kv.ilev, 0, igp, jgp) =
           m_elements.m_u(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
           m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
 
-      m_elements.buffers.vdp(kv.ie, 1, kv.ilev, igp, jgp) =
+      m_elements.buffers.vdp(kv.ie, kv.ilev, 1, igp, jgp) =
           m_elements.m_v(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
           m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
 
       m_elements.m_derived_un0(kv.ie, kv.ilev, igp, jgp) =
           m_elements.m_derived_un0(kv.ie, kv.ilev, igp, jgp) +
-          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 0, kv.ilev, igp, jgp);
+          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, kv.ilev, 0, igp, jgp);
 
       m_elements.m_derived_vn0(kv.ie, kv.ilev, igp, jgp) =
           m_elements.m_derived_vn0(kv.ie, kv.ilev, igp, jgp) +
-          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, kv.ilev, igp, jgp);
+          m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, kv.ilev, 1, igp, jgp);
     });
 
     divergence_sphere(
@@ -386,9 +384,9 @@ struct CaarFunctor {
 
       Scalar vgrad_t =
           m_elements.m_u(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-              m_elements.buffers.temperature_grad(kv.ie, 0, kv.ilev, igp, jgp) +
+              m_elements.buffers.temperature_grad(kv.ie, kv.ilev, 0, igp, jgp) +
           m_elements.m_v(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
-              m_elements.buffers.temperature_grad(kv.ie, 1, kv.ilev, igp, jgp);
+              m_elements.buffers.temperature_grad(kv.ie, kv.ilev, 1, igp, jgp);
 
       // vgrad_t + kappa * T_v * omega_p
       Scalar ttens;
