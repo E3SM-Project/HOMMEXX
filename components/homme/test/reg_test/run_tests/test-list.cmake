@@ -11,6 +11,8 @@ SET(HOMME_TESTS
 #  swtc6_flat_c.cmake
 #  swirl_flat.cmake
 #  swirl_flat_c.cmake
+  prtcA_flat.cmake
+  prtcA_flat_c.cmake
   prtcB_flat.cmake
   prtcB_flat_c.cmake
 #  baro2b.cmake
@@ -23,6 +25,8 @@ SET(HOMME_TESTS
 #  templates.cmake
 )
 
+
+#OG: what is this?
 SET (HOMMEXX_TESTS
   prtcB_flat
 )
