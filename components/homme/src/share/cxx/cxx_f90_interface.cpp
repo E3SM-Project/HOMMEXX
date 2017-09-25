@@ -56,6 +56,12 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   Elements& r = get_elements ();
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,spheremp,metdet,phis);
+
+  // Print the kokkos threads distribution
+  std::cout << "-- Kokkos threads distribution --\n"
+            << "   threads per team: " << DefaultThreadsDistribution<ExecSpace>::threads_per_team(num_elems) << "\n"
+            << "   vectors per thread: " << DefaultThreadsDistribution<ExecSpace>::vectors_per_thread() << "\n"
+            << "---------------------------------\n";
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
