@@ -8,7 +8,7 @@ u_perturb         = 1
 rotate_grid       = 0
 ne                = 4
 qsize             = 4
-ndays             = 9
+ndays             = 1
 statefreq         = 72
 restartfreq       = 43200
 restartfile       = "./R0001"
@@ -66,7 +66,7 @@ profile_single_file = .true.
 &analysis_nl
  interp_gridtype   = 2
  output_timeunits  = 1,1
- output_frequency  = 9,9
+ output_frequency  = 1,1
  output_start_time = 0,0
  output_end_time   = 30000,30000
  output_varnames1  = 'ps','zeta','U','V','T'
