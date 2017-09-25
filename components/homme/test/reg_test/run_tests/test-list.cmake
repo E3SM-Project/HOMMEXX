@@ -25,8 +25,9 @@ SET(HOMME_TESTS
 #  templates.cmake
 )
 
-
-#OG: what is this?
-SET (HOMMEXX_TESTS
+#This list (COMPARE_F_C_TEST) contains tests for which
+#F vc C comparison will be run.
+SET (COMPARE_F_C_TEST
+  prtcA_flat
   prtcB_flat
 )
