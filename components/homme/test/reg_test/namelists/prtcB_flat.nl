@@ -7,8 +7,8 @@ test_case         = "jw_baroclinic"
 u_perturb         = 1
 rotate_grid       = 0
 ne                = 4
-qsize             = 0
-ndays             = 1
+qsize             = 4
+ndays             = 9
 statefreq         = 72
 restartfreq       = 43200
 restartfile       = "./R0001"
@@ -61,14 +61,16 @@ profile_outpe_num   = 100
 profile_single_file = .true.
 /
 
+
+!  timunits: 0= steps, 1=days, 2=hours
 &analysis_nl
  interp_gridtype   = 2
  output_timeunits  = 1,1
- output_frequency  = 1,1
+ output_frequency  = 9,9
  output_start_time = 0,0
  output_end_time   = 30000,30000
- output_varnames1  = 'ps','zeta'
- output_varnames2  = 'Q'
+ output_varnames1  = 'ps','zeta','U','V','T'
+ output_varnames2  = 'Q','Q2','Q3','Q4'
  io_stride         = 8
  output_type       = 'netcdf'
 /
