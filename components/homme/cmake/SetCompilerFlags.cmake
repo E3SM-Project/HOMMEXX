@@ -243,13 +243,18 @@ IF (ENABLE_HORIZ_OPENMP OR ENABLE_COLUMN_OPENMP)
    # Set this as global so it can be picked up by all executables
 #   SET(COLUMN_OPENMP TRUE CACHE BOOL "Threading in the vertical direction")
    SET(COLUMN_OPENMP TRUE BOOL "Threading in the vertical direction")
-   IF (${NO_HORIZ_THREADS})
-     SET(KOKKOS_COLUMN_THREAD_ONLY "Threading in the vertical direction without horizontal threading in C++")
-   ELSE ()
-     SET(KOKKOS_PARALLELIZE_ON_ELEMENTS "Threading first in the horizontal direction, and then in the vertical with leftover threads in C++")
-   ENDIF ()
    MESSAGE(STATUS "  Using COLUMN_OPENMP")
  ENDIF ()
+ENDIF ()
+
+OPTION (KOKKOS_ENABLE_THREAD_ON_LEVELS "Enabling threading on the vertical levels in C++. If threading on elements is also enables, threading on elements takes precendece." ${ENABLE_COLUMN_OPENMP})
+OPTION (KOKKOS_ENABLE_THREAD_ON_ELEMENTS "Enabling threading on the horizontal direction in C++. If threading on levels is also enables, threading on elements takes precendece." ${ENABLE_HORIZ_OPENMP})
+
+IF (ENABLE_COLUMN_OPENMP AND KOKKOS_ENABLE_THREAD_ON_LEVELS)
+  SET(KOKKOS_THREAD_ON_LEVELS "Enabling threading on the vertical levels in C++. If threading on elements is also enables, threading on elements takes precendece.")
+ENDIF ()
+IF (ENABLE_HORIZ_OPENMP AND KOKKOS_ENABLE_THREAD_ON_ELEMENTS)
+  SET(KOKKOS_THREAD_ON_ELEMENTS "Enabling threading on the horizontal direction in C++. If threading on levels is also enables, threading on elements takes precendece.")
 ENDIF ()
 ##############################################################################
 

@@ -197,7 +197,7 @@ TEST_CASE("SphereOperators", "Testing spherical differential operators") {
 
   // Execution policy
   const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+      ThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team = 1;
   Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
                                        vectors_per_thread);

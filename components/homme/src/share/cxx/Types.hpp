@@ -29,13 +29,22 @@ using CF90Ptr = const Real *const; // Using this in a function signature
 template <typename ExecSpace> struct ThreadsDistribution {
 
   static int teams_per_league (const int num_elems) {
-    return ExecSpace::thread_pool_size() /
-            (threads_per_team(num_elems) * vectors_per_thread());
+    if (s_num_avail_threads==0) {
+      s_num_avail_threads = ExecSpace::thread_pool_size();
+    }
+    if (s_team_size==0) {
+      set_team_size(num_elems);
+    }
+    return s_num_avail_threads /
+            (s_team_size * vectors_per_thread());
   }
 
   static constexpr int vectors_per_thread() { return 1; }
 
   static int threads_per_team(const int num_elems) {
+    if (s_num_avail_threads=0) {
+      s_num_avail_threads = ExecSpace::thread_pool_size();
+    }
     if (s_team_size==0) {
       set_team_size(num_elems);
     }
@@ -44,12 +53,7 @@ template <typename ExecSpace> struct ThreadsDistribution {
 
 private:
 
-#ifdef KOKKOS_COLUMN_THREAD_ONLY
-  static void set_team_size(const int /*num_elems*/) {
-    s_team_size = s_num_avail_threads;
-  }
-#else
-#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
+#ifdef KOKKOS_THREAD_ON_ELEMENTS
   static void set_team_size(const int num_elems) {
 
     const char* var;
@@ -57,25 +61,30 @@ private:
     if (var!=0)
     {
       // The user requested a team size for homme. We accept it, provided
-      // that it is at least 1...
+      // that it is at least 1, and no larger than the thread pool size
       s_team_size = std::max(std::atoi(var),1);
+      s_team_size = std::min(s_team_size, s_num_avail_threads);
     } else {
       // The user did not request a team size. We parallelize as much as
       // possible over elements
-      int Max_Threads_Per_Team = s_num_avail_threads;
-      if (Max_Threads_Per_Team >= num_elems) {
-        s_team_size = Max_Threads_Per_Team / num_elems;
+      if (s_num_avail_threads >= num_elems) {
+        s_team_size = s_num_avail_threads / num_elems;
       } else {
         s_team_size = 1;
       }
     }
   }
 #else
+#ifdef KOKKOS_THREAD_ON_LEVELS
   static void set_team_size(const int /*num_elems*/) {
     s_team_size = s_num_avail_threads;
   }
-#endif // KOKKOS_PARALLELIZE_ON_ELEMENTS
-#endif // KOKKOS_COLUMN_THREAD_ONLY
+#else
+  static void set_team_size(const int /*num_elems*/) {
+    s_team_size = 1;
+  }
+#endif // KOKKOS_THREAD_ON_LEVELS
+#endif // KOKKOS_THREAD_ON_ELEMENTS
 
   static int s_team_size;
   static int s_num_avail_threads;
@@ -85,7 +94,7 @@ template<typename ExecSpace>
 int ThreadsDistribution<ExecSpace>::s_team_size = 0;
 
 template<typename ExecSpace>
-int ThreadsDistribution<ExecSpace>::s_num_avail_threads = ExecSpace::thread_pool_size();
+int ThreadsDistribution<ExecSpace>::s_num_avail_threads = 0;
 
 #ifdef KOKKOS_HAVE_CUDA
 template <> struct ThreadsDistribution<Kokkos::Cuda> {
