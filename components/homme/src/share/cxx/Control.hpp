@@ -12,15 +12,15 @@ struct Control {
   Control ()
   {
     // We start by setting
-    team_size         = 1;
-    default_team_size = 1;
+    team_size     = 1;
+    max_team_size = 1;
 
     const char* var;
     var = getenv("OMP_NUM_THREADS");
     if (var!=0)
     {
       // the team size canno exceed the value of OMP_NUM_THREADS, so se note it down
-      default_team_size = std::atoi(var);
+      max_team_size = std::atoi(var);
     }
 
     var = getenv("HOMMEXX_TEAM_SIZE");
@@ -29,7 +29,7 @@ struct Control {
       // The user requested a team size for homme. We accept it, provided that
       // it does not exceed the value of OMP_NUM_THREADS. If it does exceed that,
       // we simply set it to OMP_NUM_THREADS.
-      default_team_size = std::min(std::atoi(var),default_team_size);
+      max_team_size = std::min(std::atoi(var),max_team_size);
     }
   }
 
@@ -44,7 +44,7 @@ struct Control {
   void set_team_size ();
 
   // The desired team size for kokkos team policy
-  int default_team_size;
+  int max_team_size;
 
   // The desired team size for kokkos team policy
   int team_size;

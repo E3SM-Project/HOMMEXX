@@ -31,7 +31,7 @@ void Control::init(const int nets_in, const int nete_in,
 void Control::set_team_size()
 {
   // If the size requested at the beginning
-  team_size = std::max(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), default_team_size);
+  team_size = std::min(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), max_team_size);
 }
 
 Control &get_control() {
