@@ -57,10 +57,32 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,spheremp,metdet,phis);
 
+  int threads_per_team = DefaultThreadsDistribution<ExecSpace>::threads_per_team(num_elems);
+  const char* var;
+  var = getenv("OMP_NUM_THREADS");
+  if (var!=0)
+  {
+    // the team size cannot exceed the value of OMP_NUM_THREADS, so se note it down
+    threads_per_team = std::atoi(var);
+  }
+
+  var = getenv("HOMMEXX_TEAM_SIZE");
+  if (var!=0)
+  {
+    // The user requested a team size for homme. We accept it, provided that
+    // it does not exceed the value of OMP_NUM_THREADS. If it does exceed that,
+    // we simply set it to OMP_NUM_THREADS.
+    threads_per_team = std::min(std::atoi(var),threads_per_team);
+  }
+
+  int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+  int teams_per_league   = ExecSpace::thread_pool_size() / (threads_per_team*vectors_per_thread);
+
   // Print the kokkos threads distribution
   std::cout << "-- Kokkos threads distribution --\n"
-            << "   threads per team: " << DefaultThreadsDistribution<ExecSpace>::threads_per_team(num_elems) << "\n"
-            << "   vectors per thread: " << DefaultThreadsDistribution<ExecSpace>::vectors_per_thread() << "\n"
+            << "   teams per league: " << teams_per_league << "\n"
+            << "   threads per team: " << threads_per_team << "\n"
+            << "   vectors per thread: " << vectors_per_thread << "\n"
             << "---------------------------------\n";
 }
 
