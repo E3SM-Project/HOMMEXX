@@ -53,6 +53,7 @@
 /* Vertical OpenMP (within elements) */
 #cmakedefine COLUMN_OPENMP
 #cmakedefine KOKKOS_COLUMN_THREAD_ONLY
+/* Whether to let kokkos parallelize also on elements (not just vertical levels) */
 #cmakedefine KOKKOS_PARALLELIZE_ON_ELEMENTS
 
 /* Nested OpenMP (both horizontal and vertical) */
@@ -74,6 +75,3 @@
 
 /* Pointers in SW and PRIM */
 #cmakedefine HOMME_USE_FLAT_ARRAYS
-
-/* Whether to let kokkos parallelize also on elements (not just vertical levels) */
-#cmakedefine KOKKOS_PARALLELIZE_ON_ELEMENTS
