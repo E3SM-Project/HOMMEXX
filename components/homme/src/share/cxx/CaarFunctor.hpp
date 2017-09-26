@@ -10,6 +10,8 @@
 
 #include "Utility.hpp"
 
+#include "gptl.h"
+
 namespace Homme {
 
 struct CaarFunctor {

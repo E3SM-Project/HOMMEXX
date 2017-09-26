@@ -1,23 +1,18 @@
 #include <Types.hpp>
+#include "profiling.hpp"
 
 #include <iostream>
-
-#ifdef VTUNE_PROFILE
-#include <ittnotify.h>
-#else
-void __itt_pause() {}
-#endif
 
 namespace Homme {
 
 extern "C" {
 
 void init_kokkos(const bool print_configuration = true) {
+  /* Make certain profiling is only done for code we're working on */
+  profiling_pause();
+
   /* Set OpenMP Environment variables to control how many
    * threads/processors Kokkos uses */
-
-  __itt_pause();
-
   Kokkos::initialize();
 
   ExecSpace::print_configuration(std::cout, print_configuration);

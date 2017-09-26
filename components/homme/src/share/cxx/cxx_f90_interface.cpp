@@ -5,12 +5,7 @@
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 
-#ifdef VTUNE_PROFILE
-#include <ittnotify.h>
-#else
-void __itt_resume() {}
-void __itt_pause() {}
-#endif
+#include "profiling.hpp"
 
 namespace Homme
 {
@@ -184,13 +179,13 @@ void advance_qdp_c()
   // Create the functor
   EulerStepFunctor func(data);
 
-  __itt_resume();
+  profiling_resume();
   // Dispatch parallel for
   Kokkos::parallel_for(policy, func);
 
   // Finalize
   ExecSpace::fence();
-  __itt_pause();
+  profiling_pause();
 }
 
 } // extern "C"
