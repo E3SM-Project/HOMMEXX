@@ -154,13 +154,13 @@ void caar_pre_exchange_monolithic_c()
   // Create the functor
   CaarFunctor func(data);
 
-  __itt_resume();
+  profiling_resume();
   // Dispatch parallel for
   Kokkos::parallel_for("main caar loop", policy, func);
 
   // Finalize
   ExecSpace::fence();
-  __itt_pause();
+  profiling_pause();
 }
 
 void advance_qdp_c()
