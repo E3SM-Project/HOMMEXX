@@ -100,15 +100,14 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
   ExecViewUnmanaged<Scalar *[NUM_LEV][2][NP][NP]>::HostMirror vstar_host = Kokkos::create_mirror_view(vstar_exec);
 
   int iter=0;
-  for (int ie=0; ie<data.num_elems; ++ie)
-  {
-    for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-      for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-        for (int idim=0; idim<2; ++idim) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-              vstar_host(ie,idim,ilev,i,j)[iv] = vstar_ptr[iter];
-            }
+  for (int ie=0; ie<data.num_elems; ++ie) {
+    for (int ilevel=0; ilevel<NUM_PHYSICAL_LEV; ++ilevel) {
+      int ilev = ilevel / NUM_PHYSICAL_LEV;
+      int iv   = ilevel % NUM_PHYSICAL_LEV;
+      for (int idim=0; idim<2; ++idim) {
+        for (int i=0; i<NP; ++i) {
+          for (int j=0; j<NP; ++j, ++iter) {
+            vstar_host(ie,idim,ilev,i,j)[iv] = vstar_ptr[iter];
           }
         }
       }
@@ -127,15 +126,14 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
   Kokkos::deep_copy(qtens_host, qtens_exec);
 
   int iter=0;
-  for (int ie=0; ie<data.num_elems; ++ie)
-  {
+  for (int ie=0; ie<data.num_elems; ++ie) {
     for (int iq=0; iq<data.qsize; ++iq) {
-      for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-        for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-          for (int i=0; i<NP; ++i) {
-            for (int j=0; j<NP; ++j, ++iter) {
-               qtens_ptr[iter] = qtens_host(ie,iq,ilev,i,j)[iv];
-            }
+      for (int ilevel=0; ilevel<NUM_PHYSICAL_LEV; ++ilevel) {
+        int ilev = ilevel / NUM_PHYSICAL_LEV;
+        int iv   = ilevel % NUM_PHYSICAL_LEV;
+        for (int i=0; i<NP; ++i) {
+          for (int j=0; j<NP; ++j, ++iter) {
+             qtens_ptr[iter] = qtens_host(ie,iq,ilev,i,j)[iv];
           }
         }
       }
