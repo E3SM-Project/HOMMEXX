@@ -577,10 +577,12 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
 !mark 1
 
 if( (i==1) .and. (j==1)) then
-!print *, 'dpo', dpo
-!print *, 'dpn', dpn
-!print *, 'pio', pio
-!print *, 'pin', pin
+print *, '---------------------------------'
+print *, i, j
+print *, 'F dpo', dpo
+print *, 'F dpn', dpn
+print *, 'F pio', pio
+print *, 'F pin', pin
 endif
 
 
@@ -627,14 +629,22 @@ endif
         kid(k) = kk                   !Save for reuse
         z1(k) = -0.5D0                !This remapping assumes we're starting from the left interface of an old grid cell
                                       !In fact, we're usually integrating very little or almost all of the cell in question
+
+!print *, 'before z2 assignment'
+!print *, 'k=', k , ', kk=', kk
+!print *, pin(k+1), pio(kk), pio(kk+1)
+!print *, 'denom', dpo(kk) 
         z2(k) = ( pin(k+1) - ( pio(kk) + pio(kk+1) ) * 0.5 ) / dpo(kk)  !PPM interpolants are normalized to an independent
                                                                         !coordinate domain [-0.5,0.5].
       enddo
 
 if( (i==1) .and. (j==1)) then
-print *, 'z1', z1
-print *, 'z2', z2
-print *, 'kid', kid
+print *, 'F z1', z1
+!print *, i, j
+print *, 'F z2', z2
+print *, 'F pin', pin
+print *, 'F pio', pio
+print *, 'F kid', kid
 endif
 
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
@@ -657,10 +667,10 @@ endif
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
 
-if( (i==1) .and. (j==1)) then
-print *, 'ao', ao
-print *, 'masso', masso
-endif
+!if( (i==1) .and. (j==1)) then
+!print *, 'ao', ao
+!print *, 'masso', masso
+!endif
 
         do k = 1 , gs
           ao(1   -k) = ao(       k)
@@ -668,10 +678,10 @@ endif
         enddo
 
 
-if( (i==1) .and. (j==1)) then
-print *, 'ao', ao
-print *, 'masso', masso
-endif
+!if( (i==1) .and. (j==1)) then
+!print *, 'ao', ao
+!print *, 'masso', masso
+!endif
 
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
@@ -686,10 +696,11 @@ endif
           Qdp(i,j,k,q) = massn2 - massn1
 
 if( (i==1) .and. (j==1)) then
-print *, 'coefs', coefs(:,kk)
-print*, 'z1,z2 ', z1(k), z2(k)
-print *, 'k, massn1, massn2', k, massn1, massn2
-print *, 'k, int_par', k, integrate_parabola( coefs(:,kk) , z1(k) , z2(k) )*dpo(kk)
+!print *, 'coefs', coefs(:,kk)
+!print*, 'z1,z2 ', z1(k), z2(k)
+!print *, 'k, massn1, massn2', k, massn1, massn2
+!print *, 'k, int_par', k, integrate_parabola( coefs(:,kk) , z1(k) , z2(k) )*dpo(kk)
+print *, k,'F Qdp = ', Qdp(i,j,k,q)
 endif
 
           massn1 = massn2
@@ -888,10 +899,10 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
 
-print *, 'a' , a
-print *, 'x1, x2' , x1,x2
-print *, 'terms: ', a(0) * (x2 - x1), a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1, &
-a(2)*(x2 ** 3 - x1 ** 3) / 0.3D1
+!print *, 'a' , a
+!print *, 'x1, x2' , x1,x2
+!print *, 'terms: ', a(0) * (x2 - x1), a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1, &
+!a(2)*(x2 ** 3 - x1 ** 3) / 0.3D1
 
   mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
 end function integrate_parabola

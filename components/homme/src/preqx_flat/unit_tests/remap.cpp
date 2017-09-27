@@ -206,18 +206,26 @@ const Real dp1[NLEV][NP][NP],
 const Real dp2[NLEV][NP][NP],
 const int alg){
 
-std::cout << "in remap " << qsize << "\n";
+std::cout << "C in remap " << qsize << "\n";
 
     for(int _i = 0; _i < qsize; _i++)
     for(int _j = 0; _j < NLEV; _j++)
     for(int _k = 0; _k < NP; _k++)
     for(int _l = 0; _l < NP; _l++){
       std::cout << _i << " " << _j << " " << _k << " "
-<<_l  << " Qdp"<< Qdp[_i][_j][_k][_l] << "\n";
+<<_l  << "C Qdp "<< Qdp[_i][_j][_k][_l] << "\n";
     };
 
-
-
+    for(int _j = 0; _j < NLEV; _j++)
+    for(int _k = 0; _k < NP; _k++)
+    for(int _l = 0; _l < NP; _l++){
+      std::cout << "C  " << _j << " " << _k << " "<<_l  << "C dp1 "<< dp1[_j][_k][_l] << "\n";
+    };
+    for(int _j = 0; _j < NLEV; _j++)
+    for(int _k = 0; _k < NP; _k++)
+    for(int _l = 0; _l < NP; _l++){
+      std::cout << "C  " << _j << " " << _k << " "<<_l  << "C dp2 "<< dp2[_j][_k][_l] << "\n";
+    };
 
 
 //coded only for gs=2
@@ -274,18 +282,20 @@ dpo[NLEV+k+1] = dpo[NLEV+1-k+1];
 
 //mark1
 if((i==1)&&(j==1)){
-/*
+std::cout << "C out -----------------------------\n";
+std::cout << "i, j " << i << " " << j << "\n";
 for(int k=0; k< NLEVP4; k++)
-std::cout << "k= " << k << " dpo(k) = " << dpo[k] << "\n";
+std::cout << "k= " << k << " C dpo(k) = " << dpo[k] << "\n";
+
 for(int k=0; k< NLEVP4; k++)
-std::cout << "k= " << k << " dpn(k) = " << dpn[k] << "\n";
+std::cout << "k= " << k << " C dpn(k) = " << dpn[k] << "\n";
 
 
 for(int k=0; k< NLEVP2; k++)
-std::cout << "k= " << k << " pio(k) = " << pio[k] << "\n";
+std::cout << "k= " << k << " C pio(k) = " << pio[k] << "\n";
 for(int k=0; k< NLEVP1; k++)
-std::cout << "k= " << k << " pin(k) = " << pin[k] << "\n";
-*/
+std::cout << "k= " << k << " C pin(k) = " << pin[k] << "\n";
+
 }
 
 
@@ -333,20 +343,26 @@ if((i==1)&&(j==1)){
 
  for(int k=0; k< NLEV; k++)
  std::cout << "k= " << k << " z1(k) = " << z1[k] << "\n";
- for(int k=0; k< NLEV; k++)
- std::cout << "k= " << k << " z2(k) = " << z2[k] << "\n";
- for(int k=0; k< NLEV; k++)
- std::cout << "k= " << k << " kid(k) = " << kid[k] << "\n";
-
-/*
- * for(int k=0; k< NLEVP2; k++)
- * std::cout << "k= " << k << " pio(k) = " << pio[k] << "\n";
- * for(int k=0; k< NLEVP1; k++)
- * std::cout << "k= " << k << " pin(k) = " << pin[k] << "\n";
- * */
-}
 
 
+//std::cout << "i , j "<< i << " " << j << "\n";
+for(int k=0; k< NLEV; k++)
+std::cout << "k= " << k << " z2(k) = " << z2[k] << "\n";
+
+//
+//for(int k=0; k< NLEVP2; k++)
+//std::cout << "k= " << k << " pio(k) = " << pio[k] << "\n";
+//for(int k=0; k< NLEVP1; k++)
+//std::cout << "k= " << k << " pin(k) = " << pin[k] << "\n";
+// for(int k=0; k< NLEV; k++)
+// std::cout << "k= " << k << " kid(k) = " << kid[k] << "\n";
+
+// for(int k=0; k< NLEVP2; k++)
+// std::cout << "k= " << k << " pio(k) = " << pio[k] << "\n";
+// for(int k=0; k< NLEVP1; k++)
+// std::cout << "k= " << k << " pin(k) = " << pin[k] << "\n";
+ 
+};
 
 
 
@@ -366,12 +382,14 @@ ao[k+1] /= dpo[k+1];
 }//end k loop
 
 
+/*
+ * this is for masso, ao
 if((i==1)&&(j==1)){
  for(int k=0; k< NLEVP2+gs; k++)
- std::cout << "k= " << k << " ao(k) = " << z1[k] << "\n";
+ std::cout << "k= " << k << " C z1(k) = " << z1[k] << "\n";
  for(int k=0; k< NLEVP1; k++)
- std::cout << "k= " << k << " masso(k) = " << z2[k] << "\n";
-}
+ std::cout << "k= " << k << " C z2(k) = " << z2[k] << "\n";
+}*/
 
 
 for(int k=1; k <= gs; k++){
@@ -379,13 +397,13 @@ ao[1-k+1] = ao[k+1];
 ao[NLEV+k+1] = ao[NLEV+1-k+1];
 }//k loop
 
-
+/*
 if((i==1)&&(j==1)){
  for(int k=0; k< NLEVP2+gs; k++)
  std::cout << "k= " << k << " ao(k) = " << ao[k] << "\n";
  for(int k=0; k< NLEVP1; k++)
  std::cout << "k= " << k << " masso(k) = " << masso[k] << "\n";
-}
+}*/
 
 
 
@@ -401,18 +419,19 @@ for(int k=1; k <= NLEV; k++){
 //change F later
   Real integrate_par = a0*(x2-x1) + a1*(x2*x2-x1*x1)/2.0 + a2*(x2*x2*x2 - x1*x1*x1)/3.0;
 
-if((i==1)&&(j==1)){
-std::cout <<"terms " << a0*(x2-x1) <<" "<< a1*(x2*x2-x1*x1)/2.0 << 
-" " << a2*(x2*x2*x2 - x1*x1*x1)/3.0 << "\n";
-}
+//if((i==1)&&(j==1)){
+//std::cout <<"terms " << a0*(x2-x1) <<" "<< a1*(x2*x2-x1*x1)/2.0 << 
+//" " << a2*(x2*x2*x2 - x1*x1*x1)/3.0 << "\n";
+//}
   Real massn2 = masso[kk-1] + integrate_par * dpo[kk+1];
   Qdp[q-1][k-1][j-1][i-1] = massn2 - massn1;
 
 if((i==1)&&(j==1)){
-std::cout << "coefs" << a0 << " " << a1 << " " << a2 << "\n";
-std::cout << "z1 z2 " << x1 << " " << x2 <<"\n";
-std::cout << "k= " << k << " massn1=" << massn1 <<", massn2=" << massn2 << "\n";
-std::cout << "k= " << k << " int_par=" << integrate_par << "\n";
+//std::cout << "coefs" << a0 << " " << a1 << " " << a2 << "\n";
+//std::cout << "z1 z2 " << x1 << " " << x2 <<"\n";
+//std::cout << "k= " << k << " massn1=" << massn1 <<", massn2=" << massn2 << "\n";
+//std::cout << "k= " << k << " int_par=" << integrate_par << "\n";
+std::cout << "k= " << k << "C  Qdp=" << Qdp[q-1][k-1][j-1][i-1]  << "\n";
 }
 
   massn1 = massn2;
