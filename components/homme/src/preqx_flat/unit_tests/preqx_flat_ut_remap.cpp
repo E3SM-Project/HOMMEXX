@@ -69,21 +69,14 @@ class remap_test {
 //for routine 3
 //it is bug prone to multiply 3-4 dims together
 
-
 //we need to satisfy sum(dp1) = sum(dp2), so, we will first generate 
 //bounds for p, then p1 and p2 within bounds, then will compute dp1 and dp2
 //and place a check to make sure sum(dp1) = sum(dp2)
-
 
     genRandArray(
         &(r3_Qdp[0][0][0][0]), r3_Qdp_dim1*r3_Qdp_dim2*r3_Qdp_dim3*r3_Qdp_dim4,
         engine,
         std::uniform_real_distribution<Real>(0.0,10.0));
-/*
-    genRandArray(
-        &(r3_dp1[0][0][0]), r3_dp1_dim1*r3_dp1_dim2*r3_dp1_dim3, engine,
-        std::uniform_real_distribution<Real>(0.1,10.0));
-*/
 
 //what are the typical dp values?
    Real ptop, pbottom;
@@ -97,18 +90,10 @@ class remap_test {
     pend[0] = pbottom; 
     pend[NLEV] = ptop;
 
-std::cout <<"pbottom =" << pbottom << "\n";
-std::cout <<"ptop =" << ptop << "\n";
-
     for(int _k = 0; _k < (NLEV-1); _k++){ 
-//create intervals
        pend[_k+1] = pend[_k] + dp0; 
     } //k loop
     
-    for(int _k = 0; _k < (NLEV-2); _k++){
-std::cout << " Gen pend k=" << _k << " " << pend[_k+1] << "\n";
-    } //k loop
-
     for(int _i = 0; _i < r3_dp1_dim2; _i++)
     for(int _j = 0; _j < r3_dp1_dim3; _j++){
        Real pinner1[NLEV+1], pinner2[NLEV+1];
@@ -123,13 +108,6 @@ std::cout << " Gen pend k=" << _k << " " << pend[_k+1] << "\n";
          std::uniform_real_distribution<Real>(pend[_k],pend[_k+1]));       
        } //k loop, 
 
-if( (_i==0)&& (_j==0) ){
-       for(int _k = 0; _k < NLEV+1; _k++)
-std::cout << "k= " << _k << "pinner1 = " << pinner1[_k] << "\n";
-       for(int _k = 0; _k < NLEV+1; _k++)
-std::cout << "k= " << _k << "pinner2 = " << pinner2[_k] << "\n";
-}
-
        //now pinner is generated
        for(int _k = 0; _k < NLEV; _k++){
          r3_dp1[_k][_i][_j] = pinner1[_k+1] - pinner1[_k];
@@ -137,21 +115,12 @@ std::cout << "k= " << _k << "pinner2 = " << pinner2[_k] << "\n";
        } 
     } //i,j
 
-//    genRandArray(
-//        &(r3_dp2[0][0][0]), r3_dp1_dim1*r3_dp1_dim2*r3_dp1_dim3, engine,
-//        std::uniform_real_distribution<Real>(0.1,10.0));
-
     for(int _i = 0; _i < r3_Qdp_dim1; _i++)
     for(int _j = 0; _j < r3_Qdp_dim2; _j++)
     for(int _k = 0; _k < r3_Qdp_dim3; _k++)
     for(int _l = 0; _l < r3_Qdp_dim4; _l++){
       r3_Qdp_copy2[_i][_j][_k][_l] = r3_Qdp[_i][_j][_k][_l];
     };
-
-
-//    genRandArray(
-//        &(rslt[0][0]), ( RSLT_DIM1*RSLT_DIM2 ), engine,
-//        std::uniform_real_distribution<Real>(-1000.0,1000.0));
 
   for(int _i = 0; _i < r1_rslt_dim1; ++_i) 
     for(int _j = 0; _j < r1_rslt_dim2; ++_j) 
@@ -182,12 +151,6 @@ std::cout << "k= " << _k << "pinner2 = " << pinner2[_k] << "\n";
       r3_dp2[_i][_j][_k] = 1.0;
     };
 */
-
-
-
-
-std::cout << r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
-" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
 
   }  // end of constructor
 
@@ -238,27 +201,8 @@ std::cout << r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
   }
 
   void run_remap_Q_ppm(){
-
-std::cout << "before functor " <<r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
-" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
-
-    for(int _i = 0; _i < QSIZETEST; _i++)
-    for(int _j = 0; _j < NLEV; _j++)
-    for(int _k = 0; _k < NP; _k++)
-    for(int _l = 0; _l < NP; _l++){
-      std::cout << _i << " " << _j << " " << _k << " "
-<<_l  << " Qdp"<< r3_Qdp[_i][_j][_k][_l] << "\n";
-    };
-std::cout << "ABIUT TO ENTER REMAP \n";
-
-
     remap_Q_ppm(r3_Qdp,QSIZETEST,r3_dp1,r3_dp2,alg);
-
-std::cout << "after functor " <<r3_Qdp_dim1 <<" "<< r3_Qdp_dim2<<
-" " << r3_Qdp_dim3 << " " << r3_Qdp_dim4 << " \n";
-
   }
-
 
 };  // end of class def compute_sphere_op_test_ml
 
@@ -385,19 +329,16 @@ void testbody_remap_Q_ppm(const int _alg){
   remap_q_ppm_c_callable( &(fortran_output[0][0][0][0]), NP,
                          out_dim1, &(dp1f[0][0][0]), &(dp2f[0][0][0]), test.alg );
 
-std::cout << "end of F call\n";
-std::cout << out_dim1 << " " << out_dim2 << " " << out_dim3 << " " << out_dim4  ;
-
   for(int _i = 0; _i < out_dim1; _i++) 
     for(int _j = 0; _j < out_dim2; _j++) 
     for(int _k = 0; _k < out_dim3; _k++)
     for(int _l = 0; _l < out_dim4; _l++){
        Real coutput0 = test.r3_Qdp[_i][_j][_k][_l];
 
-std::cout <<" indices " << _i << " " << _j << " " << _k << " " << _l << "\n";
-std::cout << std::setprecision(20)
-<<"F result = " << fortran_output[_i][_j][_k][_l] 
-<< ", C output = " << coutput0 << "\n";
+//std::cout <<" indices " << _i << " " << _j << " " << _k << " " << _l << "\n";
+//std::cout << std::setprecision(20)
+//<<"F result = " << fortran_output[_i][_j][_k][_l] 
+//<< ", C output = " << coutput0 << "\n";
 
        REQUIRE(!std::isnan(fortran_output[_i][_j][_k][_l]));
        REQUIRE(!std::isnan(coutput0));

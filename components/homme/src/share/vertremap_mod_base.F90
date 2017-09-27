@@ -574,18 +574,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
         dpo(nlev+k) = dpo(nlev+1-k)
       enddo
 
-!mark 1
-
-if( (i==1) .and. (j==1)) then
-print *, '---------------------------------'
-print *, i, j
-print *, 'F dpo', dpo
-print *, 'F dpn', dpn
-print *, 'F pio', pio
-print *, 'F pin', pin
-endif
-
-
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
       !interface location. In practice, the grid never deforms past one cell, so the search can be
@@ -597,32 +585,10 @@ endif
         kk = k  !Keep from an order n^2 search operation by assuming the old cell index is close.
         !Find the index of the old grid cell in which this new cell's bottom interface resides.
 
-!if( (i==1) .and. (j==1)) then
-!print *, 'F before WHILE', k, kk
-!print *, pio(kk), pin(k+1)
-!endif
-
         do while ( pio(kk) <= pin(k+1) )
-
-!if( (i==1) .and. (j==1)) then
-!print *, '           in WHILE'
-!print *, '           k,kk=', k, kk
-!print *, '           ', pio(kk), pin(k+1)
-!endif
-
           kk = kk + 1
-
-!if( (i==1) .and. (j==1)) then
-!print *, '           in WHILE AFTER k++'
-!print *, '           k,kk=', k, kk
-!print *, '           ', pio(kk), pin(k+1)
-!endif
-
         enddo
 
-!if( (i==1) .and. (j==1)) then
-!print *, 'in LOOP k= ', k, kk
-!endif
         kk = kk - 1                   !kk is now the cell index we're integrating over.
         if (kk == nlev+1) kk = nlev   !This is to keep the indices in bounds.
                                       !Top bounds match anyway, so doesn't matter what coefficients are used
@@ -630,22 +596,9 @@ endif
         z1(k) = -0.5D0                !This remapping assumes we're starting from the left interface of an old grid cell
                                       !In fact, we're usually integrating very little or almost all of the cell in question
 
-!print *, 'before z2 assignment'
-!print *, 'k=', k , ', kk=', kk
-!print *, pin(k+1), pio(kk), pio(kk+1)
-!print *, 'denom', dpo(kk) 
         z2(k) = ( pin(k+1) - ( pio(kk) + pio(kk+1) ) * 0.5 ) / dpo(kk)  !PPM interpolants are normalized to an independent
                                                                         !coordinate domain [-0.5,0.5].
       enddo
-
-if( (i==1) .and. (j==1)) then
-print *, 'F z1', z1
-!print *, i, j
-print *, 'F z2', z2
-print *, 'F pin', pin
-print *, 'F pio', pio
-print *, 'F kid', kid
-endif
 
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
       !limiting. So anything that depends only on the grid is pre-computed outside the tracer loop.
@@ -667,21 +620,10 @@ endif
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
 
-!if( (i==1) .and. (j==1)) then
-!print *, 'ao', ao
-!print *, 'masso', masso
-!endif
-
         do k = 1 , gs
           ao(1   -k) = ao(       k)
           ao(nlev+k) = ao(nlev+1-k)
         enddo
-
-
-!if( (i==1) .and. (j==1)) then
-!print *, 'ao', ao
-!print *, 'masso', masso
-!endif
 
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
@@ -694,15 +636,6 @@ endif
           kk = kid(k)
           massn2 = masso(kk) + integrate_parabola( coefs(:,kk) , z1(k) , z2(k) ) * dpo(kk)
           Qdp(i,j,k,q) = massn2 - massn1
-
-if( (i==1) .and. (j==1)) then
-!print *, 'coefs', coefs(:,kk)
-!print*, 'z1,z2 ', z1(k), z2(k)
-!print *, 'k, massn1, massn2', k, massn1, massn2
-!print *, 'k, int_par', k, integrate_parabola( coefs(:,kk) , z1(k) , z2(k) )*dpo(kk)
-print *, k,'F Qdp = ', Qdp(i,j,k,q)
-endif
-
           massn1 = massn2
         enddo
       enddo
