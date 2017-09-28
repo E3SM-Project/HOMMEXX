@@ -52,8 +52,8 @@ kcut_fm       = 2
 /
 &vert_nl
 vform         = "ccm"
-vfile_mid     = "./camm-26.ascii"
-vfile_int     = "./cami-26.ascii"
+vfile_mid     = "./acme-72m.ascii"
+vfile_int     = "./acme-72i.ascii"
 /
 
 &prof_inparm
@@ -66,7 +66,7 @@ profile_single_file		= .true.
 ! interp_nlat = 512
 ! interp_nlon = 1024
  interp_gridtype=2
- output_prefix='homme-r3-'
+ output_prefix='homme72-r3-'
  output_timeunits=1,1
  output_frequency=3,3
  output_start_time=0,0
