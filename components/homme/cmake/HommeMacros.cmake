@@ -524,7 +524,8 @@ macro(createTests testList)
 endmacro(createTests)
 
 MACRO(CREATE_CXX_VS_F90_TESTS TESTS_LIST)
-  FOREACH (TEST ${TESTS_LIST})
+
+  FOREACH (TEST ${${TESTS_LIST}})
     MESSAGE ("-- Creating cxx-f90 comparison test for test ${TEST}")
 
     SET (TEST_FILE_F90 "${TEST}.cmake")

@@ -208,9 +208,10 @@ INCLUDE(${HOMME_SOURCE_DIR}/test/reg_test/run_tests/test-list.cmake)
 # Need a properly scoped variable to store the test directories for the
 #  replaceBaselineResults target
 SET(TEST_DIR_LIST "")
+
 createTests(HOMME_TESTS)
 
-CREATE_CXX_VS_F90_TESTS(${COMPARE_F_C_TEST})
+CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST)
 
 IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
   # add a test dependency here:
