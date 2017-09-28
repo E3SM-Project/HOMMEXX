@@ -151,7 +151,6 @@ class compute_energy_grad_test {
   }
 };
 
-#if 0
 TEST_CASE("monolithic compute_and_apply_rhs",
           "compute_energy_grad") {
   printf(
@@ -243,6 +242,5 @@ TEST_CASE("monolithic compute_and_apply_rhs",
                "finished.\n";
 };  // end of TEST_CASE(...,"compute_energy_grad")
 
-#endif
 
 

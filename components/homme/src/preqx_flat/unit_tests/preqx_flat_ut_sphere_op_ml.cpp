@@ -797,7 +797,6 @@ dvv_host(i2,i3)=1.0;
 };  // end of class def compute_sphere_op_test_ml
 
 // SHMEM ????
-#if 0
 TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -1617,9 +1616,6 @@ TEST_CASE("Testing vorticity_sphere_vector()",
 }  // end of test div_sphere_wk_ml
 
 
-
-
-#endif
 
 
 
