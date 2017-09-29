@@ -2255,7 +2255,7 @@ end do
     real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
-    logical, intent(in) :: var_coef
+    logical, value, intent(in) :: var_coef
     real(kind=real_kind), intent(in) :: hvpower, hvscaling 
     real(kind=real_kind),intent(out)     :: laplace(np,np)
 !local
@@ -2450,7 +2450,7 @@ end do
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: vec_sph2cart(np, np, 3, 2)
-    logical, intent(in) :: var_coef
+    logical, value, intent(in) :: var_coef
     real(kind=real_kind), intent(in) :: hvpower, hvscaling
     real(kind=real_kind), intent(out)     :: laplace(np,np,2)
 !local

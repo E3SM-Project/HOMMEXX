@@ -15,9 +15,6 @@
 #include "Types.hpp"
 #include "Utility.hpp"
 
-#include "preqx_flat_ut_sphere_op_ml.cpp"
-#include "preqx_flat_ut_sphere_op_sl.cpp"
-
 #include <assert.h>
 #include <stdio.h>
 
@@ -41,7 +38,7 @@ void preq_hydrostatic_c_int(Real *phi, const Real *phis,
                             const Real *virt_temperature, const Real *pressure,
                             const Real *delta_pressure);
 
-void caar_compute_dp3d_np1_c_int(int np1, int nm1, const Real &dt2,
+void caar_compute_dp3d_np1_c_int(int np1, int nm1, const Real &dt,
                                  const Real *spheremp, const Real *divdp,
                                  const Real *eta_dot_dpdn, Real *dp3d);
 
@@ -99,7 +96,7 @@ public:
         nete(elements.num_elems()) {
     Real hybrid_a[NUM_LEV_P] = { 0 };
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
-                        qn0, ps0, dt2, false, eta_ave_w, hybrid_a);
+                        qn0, ps0, dt, false, eta_ave_w, hybrid_a);
 
     get_derivative().dvv(dvv.data());
 
@@ -168,7 +165,7 @@ public:
   static constexpr int np1_f90 = np1 + 1;
   static constexpr int qn0 = 0;
   static constexpr Real ps0 = 1.0;
-  static constexpr Real dt2 = 1.0;
+  static constexpr Real dt = 1.0;
   static constexpr Real eta_ave_w = 1.0;
 };
 
@@ -202,14 +199,14 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
       "energy_grad input", num_elems);
   genRandArray(energy_grad_in, engine,
                std::uniform_real_distribution<Real>(0, 100.0));
-  Kokkos::deep_copy(region.buffers.energy_grad, energy_grad_in);
+  Kokkos::deep_copy(elements.buffers.energy_grad, energy_grad_in);
 
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(region);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
   test_functor.run_functor();
 
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
       "energy_grad output", num_elems);
-  Kokkos::deep_copy(energy_grad_out, region.buffers.energy_grad);
+  Kokkos::deep_copy(energy_grad_out, elements.buffers.energy_grad);
 
   HostViewManaged<Real[2][NP][NP]> vtemp("vtemp");
   for (int ie = 0; ie < num_elems; ++ie) {
@@ -443,7 +440,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_dp3d_np1_c_int(
         test_functor.np1_f90, test_functor.nm1_f90,
-        test_functor.functor.m_data.dt2,
+        test_functor.functor.m_data.dt,
         Kokkos::subview(test_functor.spheremp, ie, Kokkos::ALL, Kokkos::ALL)
             .data(),
         Kokkos::subview(div_vdp, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
@@ -502,6 +499,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
       "vn0 f90 results", num_elems);
   sync_to_host(elements.m_derived_un0, elements.m_derived_vn0, vn0_f90);
 
+  compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
   test_functor.run_functor();
 
   sync_to_host(elements.m_derived_un0, elements.m_derived_vn0,
@@ -607,7 +605,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
                                    TestType::n0, TestType::np1, TestType::qn0,
-                                   TestType::dt2, TestType::ps0, false,
+                                   TestType::dt, TestType::ps0, false,
                                    TestType::eta_ave_w, hybrid_a_mirror.data());
 
   test_functor.run_functor();
@@ -668,24 +666,24 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  CaarRegion &region = get_region();
-  region.random_init(num_elems, engine);
+  Elements &elements = get_elements();
+  elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
   genRandArray(temperature_virt, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(temperature_virt, region.buffers.temperature_virt);
+  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     omega_p("Omega P test", num_elems);
   genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(omega_p, region.buffers.omega_p);
+  sync_to_device(omega_p, elements.buffers.omega_p);
 
-  TestType test_functor(region);
+  TestType test_functor(elements);
   test_functor.run_functor();
 
-  sync_to_host(region.m_t, test_functor.temperature);
+  sync_to_host(elements.m_t, test_functor.temperature);
 
   HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
   for(int i = 0; i < NP; ++i) {
@@ -697,7 +695,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
 
-      caar_compute_temperature_c_int(test_functor.dt2,
+      caar_compute_temperature_c_int(test_functor.dt,
                                      Kokkos::subview(test_functor.spheremp, ie,
                                                      Kokkos::ALL,
                                                      Kokkos::ALL).data(),

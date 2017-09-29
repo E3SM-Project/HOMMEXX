@@ -17,6 +17,7 @@ namespace Homme {
 // Note: we still template on ScalarType (should always be Homme::Real here)
 //       to allow const/non-const version
 template<typename MemSpace, typename MemManagement, typename ScalarType>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[NP][NP],MemSpace>
 subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
@@ -25,6 +26,7 @@ subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
 
 // Here, usually, DIM1=DIM2=2 (D and DInv)
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
@@ -36,6 +38,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
 //       to allow const/non-const version
 
 template<typename MemSpace, typename MemManagement, typename ScalarType>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
@@ -43,6 +46,7 @@ subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int 
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
@@ -50,6 +54,7 @@ subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in,
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim)
 {
@@ -57,6 +62,7 @@ subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in,
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
@@ -64,6 +70,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1)
 {
@@ -71,6 +78,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
 {
@@ -386,14 +394,14 @@ frobenius_norm(const ViewType view) {
 }
 
 template <typename rngAlg, typename PDF>
-void genRandArray(Real *const x, int length, rngAlg &engine, PDF &pdf) {
+void genRandArray(Real *const x, int length, rngAlg &engine, PDF &&pdf) {
   for (int i = 0; i < length; ++i) {
     x[i] = pdf(engine);
   }
 }
 
 template <typename rngAlg, typename PDF>
-void genRandArray(Scalar *const x, int length, rngAlg &engine, PDF &pdf) {
+void genRandArray(Scalar *const x, int length, rngAlg &engine, PDF &&pdf) {
   for (int i = 0; i < length; ++i) {
     for(int j = 0; j < VECTOR_SIZE; ++j) {
       x[i][j] = pdf(engine);
