@@ -42,7 +42,7 @@ template <typename ExecSpace> struct ThreadsDistribution {
   static constexpr int vectors_per_thread() { return 1; }
 
   static int threads_per_team(const int num_elems) {
-    if (s_num_avail_threads=0) {
+    if (s_num_avail_threads==0) {
       s_num_avail_threads = ExecSpace::thread_pool_size();
     }
     if (s_team_size==0) {

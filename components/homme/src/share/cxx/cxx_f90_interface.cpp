@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "Derivative.hpp"
 #include "Elements.hpp"
 #include "Control.hpp"
@@ -146,6 +148,9 @@ void caar_pre_exchange_monolithic_c()
   // Get control structure
   Control& data  = get_control();
 
+  // Create the functor
+  CaarFunctor func(data);
+
   // Retrieve the team size
   const int vectors_per_thread = ThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team   = ThreadsDistribution<ExecSpace>::threads_per_team(data.num_elems);
@@ -154,11 +159,51 @@ void caar_pre_exchange_monolithic_c()
   Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
   policy.set_chunk_size(1);
 
-  // Create the functor
-  CaarFunctor func(data);
-
   // Dispatch parallel for
-  Kokkos::parallel_for("main caar loop", policy, func);
+  {
+#if 1
+    //amb For some reason, the string costs a measurable amount. In
+    // any case, it should be placed at the end to avoid an extra
+    // function call layer. With it removed, there's still a
+    // measurable amount of overhead compared with the next block. But
+    // the next block shows that a substantial part of overhead still
+    // remains, I speculate from entering and exiting the parallel
+    // region. Would be nice to bring that up a level when we're able.
+    Kokkos::parallel_for(policy, func /*, "main caar loop"*/);
+#else
+    //amb This trims the time a little. I've isolated just what's
+    // needed from parallel_for with a TeamPolicy. This works only
+    // when there's 1 element/rank and is just intended to show that
+    // there is overhead in the dispatch.
+    Kokkos::Impl::shared_allocation_tracking_disable();
+    static Kokkos::Impl::OpenMPExec* instance = nullptr;
+    bool first = false;
+    if ( ! instance) {
+      first = true;
+      instance = Kokkos::Impl::t_openmp_instance;
+      const size_t shmem_size = policy.scratch_size(0) + policy.scratch_size(1);
+      const size_t pool_reduce_size = 0;
+      const size_t team_reduce_size = 512 * policy.team_size();
+      const size_t team_shared_size = shmem_size + policy.scratch_size(1);
+      const size_t thread_local_size = 0;
+      instance->resize_thread_data(
+        pool_reduce_size, team_reduce_size, team_shared_size, thread_local_size);
+    }
+    const int pool_size = Kokkos::OpenMP::thread_pool_size();
+#   pragma omp parallel num_threads(pool_size)
+    {
+      auto& data = *instance->get_thread_data();
+      const int active = data.organize_team(threads_per_team);
+      data.set_work_partition(
+        policy.league_size(),
+        (0 < policy.chunk_size() ? policy.chunk_size() : policy.team_iter()));
+      typename Kokkos::TeamPolicy<ExecSpace>::member_type team(data, 0, 1);
+      func(team);
+      data.disband_team();
+    }
+    Kokkos::Impl::shared_allocation_tracking_enable();
+#endif
+  }
 
   // Finalize
   ExecSpace::fence();
