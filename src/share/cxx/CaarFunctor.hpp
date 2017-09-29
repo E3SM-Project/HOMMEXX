@@ -95,11 +95,6 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    // gradient_sphere(
-    //     kv, m_elements.m_dinv, m_deriv.get_dvv(),
-    //     Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
-    //     Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
-    //                     ALL));
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP),
                          [&](const int idx) {
       const int hgp = (idx / NP) / NP;
