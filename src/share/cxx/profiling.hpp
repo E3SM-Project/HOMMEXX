@@ -25,12 +25,11 @@
 #define profiling_pause cuProfilerStop
 
 #elif defined(GPROF_PROFILE) // CUDA_PROFILE
-// Not implemented in CMake currently; needs correct library
 
 /* Use undocumented GProf methods */
 #pragma message "GProf support for this is undocumented and subject to change, this may fail as a result"
 
-extern void moncontrol(int);
+extern "C" void moncontrol(int);
 
 #define profiling_resume() moncontrol(1)
 #define profiling_pause() moncontrol(0)
