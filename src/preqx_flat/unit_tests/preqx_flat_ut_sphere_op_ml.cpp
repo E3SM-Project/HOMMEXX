@@ -8,8 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-
-#include "utils_flat_ut.cpp"
+#include "Utility.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -60,7 +59,7 @@ void laplace_sphere_wk_c_callable(
     const Real &hvpower,    // should be set to 0 always
     const Real &hvscaling,  // should be set to !=0 value
     const bool
-        &var_coef,  // should be set to 1 for tensor HV
+        var_coef,  // should be set to 1 for tensor HV
     Real *output);
 
 void curl_sphere_wk_testcov_c_callable(
@@ -83,7 +82,7 @@ void vlaplace_sphere_wk_cartesian_c_callable(
     const Real *input, const Real *dvv, const Real *dinv,
     const Real *spheremp, const Real *tensorVisc,
     const Real *vec_sph2cart, const Real &hvpower,
-    const Real &hvscaling, const bool &var_coef,
+    const Real &hvscaling, const bool var_coef,
     Real *output);
 
 void vlaplace_sphere_wk_contra_c_callable(
@@ -123,6 +122,7 @@ class compute_sphere_operator_test_ml {
         temp4_d("temp4", num_elems),
         temp5_d("temp5", num_elems),
         temp6_d("temp6", num_elems),
+        sphere_buf("Spherical buffer", num_elems),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
         scalar_input_COPY2_host(Kokkos::create_mirror_view(
@@ -158,8 +158,7 @@ class compute_sphere_operator_test_ml {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(
-        reinterpret_cast<Real *>(scalar_input_host.data()),
-        scalar_input_len * _num_elems, engine,
+        scalar_input_host, engine,
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
     // now copy 1st scalar input into the second
@@ -172,42 +171,36 @@ class compute_sphere_operator_test_ml {
                 scalar_input_host(ie, i, j, k);
 
     genRandArray(
-        reinterpret_cast<Real *>(vector_input_host.data()),
-        vector_input_len * _num_elems, engine,
+        vector_input_host, engine,
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
-    genRandArray(d_host.data(), d_len * _num_elems, engine,
+    genRandArray(d_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(dinv_host.data(), dinv_len * _num_elems,
+    genRandArray(dinv_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(metinv_host.data(),
-                 metinv_len * _num_elems, engine,
+    genRandArray(metinv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(metdet_host.data(),
-                 metdet_len * _num_elems, engine,
+    genRandArray(metdet_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(spheremp_host.data(),
-                 spheremp_len * _num_elems, engine,
+    genRandArray(spheremp_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(mp_host.data(), mp_len * _num_elems,
+    genRandArray(mp_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(dvv_host.data(), dvv_len, engine,
+    genRandArray(dvv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(tensor_host.data(),
-                 tensor_len * _num_elems, engine,
+    genRandArray(tensor_host, engine,
                  std::uniform_real_distribution<Real>(
                      -1000, 1000.0));
-    genRandArray(vec_sph2cart_host.data(),
-                 vec_sph2cart_len * _num_elems, engine,
+    genRandArray(vec_sph2cart_host, engine,
                  std::uniform_real_distribution<Real>(
                      -1000, 1000.0));
 
@@ -277,6 +270,8 @@ dvv_host(i2,i3)=1.0;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temp4_d,
       temp5_d, temp6_d;
+
+  ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> sphere_buf;
 
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
@@ -391,6 +386,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           gradient_sphere(kv, dinv_d, dvv_d,
                           local_scalar_input_d,
+                          sphere_buf,
                           local_vector_output_d);
         });  // end parallel_for for level
 
@@ -418,6 +414,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           divergence_sphere_wk(kv, dinv_d, spheremp_d,
                                dvv_d, local_vector_input_d,
+                               sphere_buf,
                                local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -450,7 +447,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           laplace_simple(
               kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-              local_scalar_input_d, local_scalar_output_d);
+              local_scalar_input_d, sphere_buf, local_scalar_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for laplace_wk_ml
@@ -483,6 +480,7 @@ dvv_host(i2,i3)=1.0;
           laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
                          tensor_d, local_temp1_d,
                          local_scalar_input_d,
+                         sphere_buf,
                          local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -522,7 +520,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           laplace_tensor_replace(
               kv, dinv_d, spheremp_d, dvv_d, tensor_d,
-              local_temp1_d, local_scalar_input_d);
+              local_temp1_d, sphere_buf, local_scalar_input_d);
 
           // if team rank == 0? only 1 thread is allowed to
           // overwrite?
@@ -558,6 +556,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
                                  local_scalar_input_d,
+                                 sphere_buf,
                                  local_vector_output_d);
         });  // end parallel_for for level
 
@@ -584,7 +583,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           grad_sphere_wk_testcov(
               kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
-              local_scalar_input_d, local_vector_output_d);
+              local_scalar_input_d, sphere_buf, local_vector_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for grad_sphere_wk_testcov
@@ -630,11 +629,13 @@ dvv_host(i2,i3)=1.0;
               kv, dinv_d, spheremp_d, tensor_d,
               vec_sph2cart_d, dvv_d, local_temp1_d,
               local_temp4_d, local_temp5_d, local_temp6_d,
+              sphere_buf,
               local_vector_input_d, local_vector_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for laplace_tensor multil
 
+  KOKKOS_INLINE_FUNCTION
   void operator()(const TagVLaplaceContraML &,
                   TeamMember team) const {
     KernelVariables kv(team);
@@ -677,6 +678,7 @@ dvv_host(i2,i3)=1.0;
               kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
               metdet_d, dvv_d, nu_ratio, local_temp4_d,
               local_temp5_d, local_temp1_d, local_temp2_d,
+              sphere_buf,
               local_vector_input_d, local_vector_output_d);
         });  // end parallel_for for level
 
@@ -705,6 +707,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           vorticity_sphere_vector(kv, d_d, metdet_d,
                                dvv_d, local_vector_input_d,
+                               sphere_buf,
                                local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -1049,7 +1052,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
         laplace_sphere_wk_c_callable(
             &(sf[0][0]), &(dvvf[0][0]),
             &(dinvf[0][0][0][0]), &(sphf[0][0]),
-            &(tensorf[0][0][0][0]), _hp, _hs, &_vc,
+            &(tensorf[0][0][0][0]), _hp, _hs, _vc,
             &(local_fortran_output[0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {
@@ -1131,7 +1134,7 @@ TEST_CASE("Testing laplace_tensor_replace() multilevel",
         laplace_sphere_wk_c_callable(
             &(sf[0][0]), &(dvvf[0][0]),
             &(dinvf[0][0][0][0]), &(sphf[0][0]),
-            &(tensorf[0][0][0][0]), _hp, _hs, &_vc,
+            &(tensorf[0][0][0][0]), _hp, _hs, _vc,
             &(local_fortran_output[0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {
@@ -1415,7 +1418,7 @@ TEST_CASE(
             &(vf[0][0][0]), &(dvvf[0][0]),
             &(dinvf[0][0][0][0]), &(sphf[0][0]),
             &(tensorf[0][0][0][0]),
-            &(vec_sph2cartf[0][0][0][0]), _hp, _hs, &_vc,
+            &(vec_sph2cartf[0][0][0][0]), _hp, _hs, _vc,
             &(local_fortran_output[0][0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {

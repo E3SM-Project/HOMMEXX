@@ -457,7 +457,7 @@ struct CaarFunctor {
       tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, kv.ilev);
       tmp -= m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, kv.ilev);
       tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, kv.ilev) -
-            tmp * m_data.dt2;
+            tmp * m_data.dt;
 
       m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, kv.ilev) =
           m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;

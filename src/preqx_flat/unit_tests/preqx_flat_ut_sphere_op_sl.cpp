@@ -8,8 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-
-#include "utils_flat_ut.cpp"
+#include "Utility.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -72,6 +71,7 @@ class compute_sphere_operator_test {
         temp1_host(Kokkos::create_mirror_view(temp1_d)),
         temp2_host(Kokkos::create_mirror_view(temp2_d)),
         temp3_host(Kokkos::create_mirror_view(temp3_d)),
+        sphere_buf("Spherical buffer"),
         _num_elems(num_elems) {
     // constructor's body
     // init randonly
@@ -83,28 +83,28 @@ class compute_sphere_operator_test {
     // Dinv, does it matter if ther are  not inverses of
     // each other?
     genRandArray(
-        scalar_input_host.data(),
-        scalar_input_len * _num_elems, engine,
+        scalar_input_host,
+        engine,
         std::uniform_real_distribution<Real>(0, 100.0));
-    genRandArray(vector_input_host.data(),
-                 vector_input_len * _num_elems, engine,
+    genRandArray(vector_input_host,
+                 engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     genRandArray(
-        d_host.data(), d_len * _num_elems, engine,
+        d_host, engine,
         std::uniform_real_distribution<Real>(0, 1.0));
     genRandArray(
-        dinv_host.data(), dinv_len * _num_elems, engine,
+        dinv_host, engine,
         std::uniform_real_distribution<Real>(0, 1.0));
     genRandArray(
-        metdet_host.data(), metdet_len * _num_elems, engine,
+        metdet_host, engine,
         std::uniform_real_distribution<Real>(0, 1.0));
     genRandArray(
-        spheremp_host.data(), spheremp_len * _num_elems,
+        spheremp_host,
         engine,
         std::uniform_real_distribution<Real>(0, 1.0));
     genRandArray(
-        dvv_host.data(), dvv_len, engine,
+        dvv_host, engine,
         std::uniform_real_distribution<Real>(0, 1.0));
   }
   int _num_elems;  // league size, serves as ie index
@@ -155,6 +155,8 @@ class compute_sphere_operator_test {
   ExecViewManaged<Real * [2][NP][NP]>::HostMirror
       temp1_host,
       temp2_host, temp3_host;
+
+  ExecViewManaged<Real[2][NP][NP]> sphere_buf;
 
   // tag for laplace_simple()
   struct TagSimpleLaplace {};
@@ -234,6 +236,7 @@ class compute_sphere_operator_test {
 
     divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
                             local_vector_input_d,
+                            sphere_buf,
                             local_scalar_output_d);
   };  // end of op() for divergence_sphere_wk
 
@@ -253,6 +256,7 @@ class compute_sphere_operator_test {
 
     gradient_sphere_sl(kv, dinv_d, dvv_d,
                        local_scalar_input_d,
+                       sphere_buf,
                        local_vector_output_d);
   };
 
