@@ -8,7 +8,7 @@ module caar_pre_exchange_driver_mod
   implicit none
 
   interface
-    subroutine init_control_c (nets,nete,nelemd,nm1,n0,np1,qn0,dt2,ps0, &
+    subroutine init_control_caar_c (nets,nete,nelemd,nm1,n0,np1,qn0,dt2,ps0, &
                                compute_diagnostics,eta_ave_w,hybrid_a_ptr) bind(c)
       use kinds         , only : real_kind
       use iso_c_binding , only : c_ptr, c_int, c_bool
@@ -19,8 +19,8 @@ module caar_pre_exchange_driver_mod
       logical,               intent(in) :: compute_diagnostics
       real (kind=real_kind), intent(in) :: dt2, ps0, eta_ave_w
       type (c_ptr),          intent(in) :: hybrid_a_ptr
-    end subroutine init_control_c
-    subroutine caar_copy_f90_data_to_region_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+    end subroutine init_control_caar_c
+    subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                                elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                                elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                                elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
@@ -32,8 +32,8 @@ module caar_pre_exchange_driver_mod
       type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
       type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-    end subroutine caar_copy_f90_data_to_region_c
-    subroutine caar_copy_region_data_to_f90_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+    end subroutine caar_pull_data_c
+    subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                                elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                                elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                                elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
@@ -45,7 +45,7 @@ module caar_pre_exchange_driver_mod
       type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
       type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-    end subroutine caar_copy_region_data_to_f90_c
+    end subroutine caar_push_results_c
     subroutine caar_pre_exchange_monolithic_c () bind(c)
     end subroutine caar_pre_exchange_monolithic_c
   end interface
@@ -99,7 +99,7 @@ contains
     call t_startf("caar_overhead")
 
     hvcoord_a_ptr             = c_loc(hvcoord%hyai)
-    call init_control_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,hvcoord_a_ptr)
+    call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,hvcoord_a_ptr)
 
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
@@ -110,7 +110,7 @@ contains
     elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
     elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
     elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
-    call caar_copy_f90_data_to_region_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                          elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
@@ -129,7 +129,7 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
     call t_startf("caar_overhead")
-    call caar_copy_region_data_to_f90_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                          elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)

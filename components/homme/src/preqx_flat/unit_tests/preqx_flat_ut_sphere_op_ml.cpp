@@ -2,9 +2,9 @@
 
 #include <limits>
 
-#include "CaarControl.hpp"
+#include "Control.hpp"
 #include "CaarFunctor.hpp"
-#include "CaarRegion.hpp"
+#include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"

@@ -1,6 +1,5 @@
-
-#ifndef KERNELVARIABLES_HPP
-#define KERNELVARIABLES_HPP
+#ifndef KERNEL_VARIABLES_HPP
+#define KERNEL_VARIABLES_HPP
 
 #include "Types.hpp"
 
@@ -37,6 +36,7 @@ struct KernelVariables {
 
   int ie, ilev;
 }; // KernelVariables
+
 } // Homme
 
-#endif
+#endif // KERNEL_VARIABLES_HPP

@@ -17,7 +17,7 @@ IF(USE_TRILINOS)
     SET(EXECUTION_SPACES -DTPL_ENABLE_MPI=ON
                          -DKokkos_ENABLE_MPI=ON)
   
-    SET(Kokkos_LIBRARIES "kokkosalgorithms kokkoscore kokkoscontainers")
+    SET(Kokkos_LIBRARIES "kokkosalgorithms;kokkoscore;kokkoscontainers")
     SET(Kokkos_TPL_LIBRARIES "dl")
   
     IF(${OPENMP_FOUND})

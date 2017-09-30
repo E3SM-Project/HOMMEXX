@@ -2,7 +2,7 @@
 #define HOMMEXX_SPHERE_OPERATORS_HPP
 
 #include "Types.hpp"
-#include "CaarRegion.hpp"
+#include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "PhysicalConstants.hpp"
@@ -135,7 +135,7 @@ divergence_sphere_wk_sl(const KernelVariables &kv,
 
 //in strong div
 //kgp = i in strong code, jgp=j, igp=l
-//in weak div, n is like j in strong div, 
+//in weak div, n is like j in strong div,
 //n(weak)=j(strong)=jgp
 //m(weak)=l(strong)=igp
 //j(weak)=i(strong)=kgp
@@ -310,6 +310,42 @@ divergence_sphere(const KernelVariables &kv,
       dvdy += dvv(igp, kgp) * gv[1][kgp][jgp];
     }
     div_v(igp, jgp, kv.ilev) = (dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) * PhysicalConstants::rrearth);
+  });
+}
+
+// Note: this updates the field div_v as follows:
+//     div_v = beta*div_v + alpha*div(v)
+KOKKOS_INLINE_FUNCTION void
+divergence_sphere_update(const KernelVariables &kv,
+                         const Real alpha, const Real beta,
+                         const ExecViewUnmanaged<const Real [2][2][NP][NP]> dinv,
+                         const ExecViewUnmanaged<const Real [NP][NP]> metdet,
+                         const ExecViewUnmanaged<const Real[NP][NP]> dvv,
+                         const ExecViewUnmanaged<const Scalar[2][NP][NP][NUM_LEV]> v,
+                         const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> div_v) {
+  constexpr int contra_iters = NP * NP;
+  Scalar gv[2][NP][NP];
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, contra_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    gv[0][igp][jgp] = (dinv(0, 0, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 0, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
+    gv[1][igp][jgp] = (dinv(0, 1, igp, jgp) * v(0, igp, jgp, kv.ilev) + dinv(1, 1, igp, jgp) * v(1, igp, jgp, kv.ilev)) * metdet(igp, jgp);
+  });
+
+  constexpr int div_iters = NP * NP;
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, div_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    Scalar dudx = 0.0, dvdy = 0.0;
+    for (int kgp = 0; kgp < NP; ++kgp) {
+      dudx += dvv(jgp, kgp) * gv[0][igp][kgp];
+      dvdy += dvv(igp, kgp) * gv[1][kgp][jgp];
+    }
+
+    div_v(igp,jgp,kv.ilev) *= beta;
+    div_v(igp,jgp,kv.ilev) += alpha*((dudx + dvdy) * ((1.0 / metdet(igp, jgp)) * PhysicalConstants::rrearth));
   });
 }
 
