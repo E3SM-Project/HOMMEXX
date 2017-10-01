@@ -6,9 +6,11 @@
 namespace Homme {
 
 struct KernelVariables {
+  //amb Don't use scratch memory unless definitely needed. Little
+  // stack-allocated arrays are usually the way to go, even on GPU.
   KOKKOS_INLINE_FUNCTION
   KernelVariables(const TeamMember &team_in)
-      : team(team_in), scratch_mem(allocate_thread<Real, Real[NP][NP]>()),
+    : team(team_in), /*scratch_mem(allocate_thread<Real, Real[NP][NP]>()),*/
         ie(team.league_rank()), ilev(-1) {} //, igp(-1), jgp(-1) {}
 
   template <typename Primitive, typename Data>
@@ -29,10 +31,26 @@ struct KernelVariables {
     return mem_size;
   }
 
-  const TeamMember &team;
+
+  KOKKOS_INLINE_FUNCTION
+  void team_barrier() const {
+    team.team_barrier();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  int team_rank() const {
+    return team.team_rank();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  int team_size() const {
+    return team.team_size();
+  }
+
+  const TeamMember& team;
 
   // Fast memory for the kernel
-  ExecViewUnmanaged<Real[NP][NP]> scratch_mem;
+  //ExecViewUnmanaged<Real[NP][NP]> scratch_mem;
 
   int ie, ilev;
 }; // KernelVariables

@@ -48,8 +48,12 @@ struct Control {
   // apply remap every rsplit tracer timesteps
   int rsplit;
 
+  //amb Do we need this? Seems we need only a single scalar. We don't
+  // want to have to construct or copy-construct views unless
+  // necessary.
   // hybryd a
-  ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
+  //ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
+  Real hybrid_a0;
 };
 
 Control& get_control ();

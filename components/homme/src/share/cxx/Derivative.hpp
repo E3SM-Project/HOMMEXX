@@ -18,10 +18,11 @@ public:
   void dvv(Real *dvv);
 
   KOKKOS_INLINE_FUNCTION
-  ExecViewUnmanaged<const Real[NP][NP]> get_dvv() const { return m_dvv_exec; }
+  const ExecViewUnmanaged<const Real[NP][NP]>& get_dvv() const { return m_dvv_exec_cu; }
 
 private:
   ExecViewManaged<Real[NP][NP]> m_dvv_exec;
+  ExecViewUnmanaged<const Real[NP][NP]> m_dvv_exec_cu;
 };
 
 Derivative &get_derivative();

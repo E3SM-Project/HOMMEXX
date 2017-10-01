@@ -20,6 +20,7 @@ void Derivative::init(CF90Ptr &dvv_ptr) {
   }
 
   Kokkos::deep_copy(m_dvv_exec, dvv_host);
+  m_dvv_exec_cu = m_dvv_exec;
 }
 
 void Derivative::random_init(std::mt19937_64 &engine) {
@@ -32,6 +33,7 @@ void Derivative::random_init(std::mt19937_64 &engine) {
     }
   }
   Kokkos::deep_copy(m_dvv_exec, dvv_host);
+  m_dvv_exec_cu = m_dvv_exec;
 }
 
 void Derivative::dvv(Real *dvv_ptr) {

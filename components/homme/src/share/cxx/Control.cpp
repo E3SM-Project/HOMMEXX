@@ -19,11 +19,15 @@ void Control::init(const int nets_in, const int nete_in,
   ps0 = ps0_in;
   compute_diagonstics = compute_diagonstics_in;
   eta_ave_w = eta_ave_w_in;
+#if 0
   hybrid_a = ExecViewManaged<Real[NUM_LEV_P]>(
       "Hybrid coordinates; translates between pressure and velocity");
 
   HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
   Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+#else
+  hybrid_a0 = hybrid_a_ptr[0];
+#endif
 }
 
 Control &get_control() {
