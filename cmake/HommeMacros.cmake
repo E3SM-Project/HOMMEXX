@@ -117,16 +117,17 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
   ADD_EXECUTABLE(${execName} ${EXEC_SOURCES})
   SET_TARGET_PROPERTIES(${execName} PROPERTIES LINKER_LANGUAGE ${linkLang})
 
-  if (${linkLang} STREQUAL "Fortran")
-    if (${CXXLIB_SUPPORTED})
+  IF (${linkLang} STREQUAL "Fortran")
+    IF (${CXXLIB_SUPPORTED})
       MESSAGE(STATUS "   Linking Fortran with -cxxlib")
       TARGET_LINK_LIBRARIES(${execName} -cxxlib)
-    endif ()
-  endif ()
+    ENDIF ()
+  ENDIF ()
 
-  if (${PERFORMANCE_PROFILE} STREQUAL "VTUNE")
+  STRING(TOUPPER "${PERFORMANCE_PROFILE}" PERF_PROF_UPPER)
+  IF ("${PERF_PROF_UPPER}" STREQUAL "VTUNE")
     TARGET_LINK_LIBRARIES(${execName} ittnotify)
-  endif ()
+  ENDIF ()
 
   # Add this executable to a list
   SET(EXEC_LIST ${EXEC_LIST} ${execName} CACHE INTERNAL "List of configured executables")
