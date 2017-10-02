@@ -7,7 +7,8 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
 
   TARGET_LINK_LIBRARIES(${target_name} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 
-  IF(${PERFORMANCE_PROFILE} STREQUAL "VTUNE")
+  STRING(TOUPPER "${PERFORMANCE_PROFILE}" PERF_PROF_UPPER)
+  IF ("${PERF_PROF_UPPER}" STREQUAL "VTUNE")
     TARGET_LINK_LIBRARIES(${target_name} ittnotify)
   ENDIF()
 
