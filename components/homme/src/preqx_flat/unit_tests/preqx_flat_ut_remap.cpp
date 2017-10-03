@@ -15,6 +15,47 @@
 #include <stdio.h>
 #include <random>
 
+//Documenting failures with opt. flags.
+
+/*test compute_ppm_grids (alg=1) finished. 
+ * test compute_ppm_grids (alg=2) finished. 
+ * -------------------------------------------------------------------------------
+ *  Testing compute_ppm() with alg=1
+ *  -------------------------------------------------------------------------------
+ /home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:382
+...............................................................................
+
+/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
+  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
+with expansion:
+  0.0 >= 0.015625
+
+-------------------------------------------------------------------------------
+Testing compute_ppm() with alg=2
+-------------------------------------------------------------------------------
+/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:388
+...............................................................................
+
+/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
+  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
+with expansion:
+  0.0 >= 0.015625
+
+test remap_Q_ppm (alg=1) finished. 
+-------------------------------------------------------------------------------
+Testing remap_Q_ppm() with alg=2
+-------------------------------------------------------------------------------
+/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:400
+...............................................................................
+
+/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:361: FAILED:
+  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers( fortran_output[_i][_j][_k][_l], coutput0, 128.0) )
+with expansion:
+  0.0 >= 0.0
+*/
+
+
+
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
