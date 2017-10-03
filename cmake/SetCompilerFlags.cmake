@@ -60,13 +60,15 @@ ELSE ()
 ENDIF ()
 
 function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
-  string(TOLOWER ${fpmodel_string} fpmodel_string_lower)
-  if ((fpmodel_string_lower STREQUAL "precise") OR
-      (fpmodel_string_lower STREQUAL "strict") OR
-      (fpmodel_string_lower STREQUAL "fast") OR
-      (fpmodel_string_lower STREQUAL "fast=1") OR
-      (fpmodel_string_lower STREQUAL "fast=2"))
+  string(TOLOWER "${fpmodel_string}" fpmodel_string_lower)
+  if (("${fpmodel_string_lower}" STREQUAL "precise") OR
+      ("${fpmodel_string_lower}" STREQUAL "strict") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast=1") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast=2"))
     set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
+  elseif ("${fpmodel_string_lower}" STREQUAL "")
+    set (${flags} "" PARENT_SCOPE)
   else()
     message(FATAL_ERROR "FPMODEL string '${fpmodel_string}' is not recognized.")
   endif()  
@@ -74,12 +76,11 @@ endfunction()
 
 IF (DEFINED BASE_CPPFLAGS)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BASE_CPPFLAGS}")
-  prc(CMAKE_CXX_FLAGS)
 ELSE ()
   IF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
     IF (DEFINED HOMMEXX_FPMODEL)
-      HOMMEXX_set_fpmodel_flags(${HOMMEXX_FPMODEL} CPP_FPMODEL)
-      HOMMEXX_set_fpmodel_flags(${HOMMEXX_FPMODEL_UT} CPP_UT_FPMODEL)
+      HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" CPP_FPMODEL)
+      HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" CPP_UT_FPMODEL)
       SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_FPMODEL}")
     ELSE ()
       SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fp-model precise")
