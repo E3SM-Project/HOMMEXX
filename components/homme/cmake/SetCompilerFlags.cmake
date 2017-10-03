@@ -63,7 +63,9 @@ function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
   string(TOLOWER ${fpmodel_string} fpmodel_string_lower)
   if ((fpmodel_string_lower STREQUAL "precise") OR
       (fpmodel_string_lower STREQUAL "strict") OR
-      (fpmodel_string_lower STREQUAL "fast"))
+      (fpmodel_string_lower STREQUAL "fast") OR
+      (fpmodel_string_lower STREQUAL "fast=1") OR
+      (fpmodel_string_lower STREQUAL "fast=2"))
     set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
   else()
     message(FATAL_ERROR "FPMODEL string '${fpmodel_string}' is not recognized.")
