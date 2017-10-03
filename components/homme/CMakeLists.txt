@@ -37,6 +37,8 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
 
+SET (PERFORMANCE_PROFILE "" CACHE STRING "Whether to build and link with various profiler libraries")
+
 # Set up some directories to facilitate finding netcdf, pnetcdf
 INCLUDE(SetHostPaths)
 INCLUDE(HommeMacros)
@@ -102,8 +104,16 @@ ELSE()
 ENDIF()
 
 ##############################################################################
+# Options for floating point model.
+##############################################################################
+
+SET (HOMMEXX_FPMODEL "precise" CACHE STRING "Floating point model for HOMMEXX")
+SET (HOMMEXX_FPMODEL_UT "strict" CACHE STRING "Floating point model for HOMMEXX unit tests; overrides HOMMEXX_FPMODEL")
+
+##############################################################################
 # Compiler options set in cmake/SetCompiler.cmake
 ##############################################################################
+
 INCLUDE(SetCompilerFlags)
 
 # Print the compiler flags to be used

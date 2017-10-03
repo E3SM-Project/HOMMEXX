@@ -5,6 +5,8 @@
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 
+#include "profiling.hpp"
+
 namespace Homme
 {
 
@@ -157,20 +159,19 @@ void caar_pre_exchange_monolithic_c()
   // Create the functor
   CaarFunctor func(data);
 
+  profiling_resume();
   // Dispatch parallel for
   Kokkos::parallel_for("main caar loop", policy, func);
 
   // Finalize
   ExecSpace::fence();
+  profiling_pause();
 }
 
 void advance_qdp_c()
 {
   // Get control structure
   Control& data = get_control();
-
-  // Create the functor
-  EulerStepFunctor func(data);
 
   // Retrieve the team size
   const int vectors_per_thread = ThreadsDistribution<ExecSpace>::vectors_per_thread();
@@ -180,11 +181,16 @@ void advance_qdp_c()
   Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
   policy.set_chunk_size(1);
 
+  // Create the functor
+  EulerStepFunctor func(data);
+
+  profiling_resume();
   // Dispatch parallel for
   Kokkos::parallel_for(policy, func);
 
   // Finalize
   ExecSpace::fence();
+  profiling_pause();
 }
 
 } // extern "C"

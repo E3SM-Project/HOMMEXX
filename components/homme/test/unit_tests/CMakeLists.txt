@@ -7,6 +7,11 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
 
   TARGET_LINK_LIBRARIES(${target_name} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 
+  STRING(TOUPPER "${PERFORMANCE_PROFILE}" PERF_PROF_UPPER)
+  IF ("${PERF_PROF_UPPER}" STREQUAL "VTUNE")
+    TARGET_LINK_LIBRARIES(${target_name} ittnotify)
+  ENDIF()
+
   IF(UNIX AND NOT APPLE)
     TARGET_LINK_LIBRARIES(${target_name} rt)
   ENDIF()
@@ -19,7 +24,7 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
 
   # Compile definitions and flags
   SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_DEFINITIONS "${config_defines}")
-  SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_FLAGS "-O0 -g")
+  SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_FLAGS "${CPP_UT_FPMODEL}")
 
   TARGET_INCLUDE_DIRECTORIES(${target_name} PUBLIC "${include_dirs}")
   TARGET_INCLUDE_DIRECTORIES(${target_name} PUBLIC "${SRC_SHARE};${SRC_BASE};${UNITTESTER_DIR}")
