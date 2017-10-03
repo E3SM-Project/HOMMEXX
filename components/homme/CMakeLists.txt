@@ -104,8 +104,16 @@ ELSE()
 ENDIF()
 
 ##############################################################################
+# Options for floating point model.
+##############################################################################
+
+SET (HOMMEXX_FPMODEL "precise" CACHE STRING "Floating point model for HOMMEXX")
+SET (HOMMEXX_FPMODEL_UT "strict" CACHE STRING "Floating point model for HOMMEXX unit tests; overrides HOMMEXX_FPMODEL")
+
+##############################################################################
 # Compiler options set in cmake/SetCompiler.cmake
 ##############################################################################
+
 INCLUDE(SetCompilerFlags)
 
 # Print the compiler flags to be used
