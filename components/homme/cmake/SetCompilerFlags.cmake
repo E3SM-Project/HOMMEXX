@@ -36,7 +36,6 @@ ELSE ()
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -diag-disable 8291")
 
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fp-model precise")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fp-model precise")
 
     # remark #8291: Recommended relationship between field width 'W' and the number of fractional digits 'D' in this edit descriptor is 'W>=D+7'.
 
@@ -60,7 +59,37 @@ ELSE ()
  ENDIF ()
 ENDIF ()
 
+function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
+  string(TOLOWER ${fpmodel_string} fpmodel_string_lower)
+  if ((fpmodel_string_lower STREQUAL "precise") OR
+      (fpmodel_string_lower STREQUAL "strict") OR
+      (fpmodel_string_lower STREQUAL "fast") OR
+      (fpmodel_string_lower STREQUAL "fast=1") OR
+      (fpmodel_string_lower STREQUAL "fast=2"))
+    set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
+  else()
+    message(FATAL_ERROR "FPMODEL string '${fpmodel_string}' is not recognized.")
+  endif()  
+endfunction()
+
+IF (DEFINED BASE_CPPFLAGS)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BASE_CPPFLAGS}")
+  prc(CMAKE_CXX_FLAGS)
+ELSE ()
+  IF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
+    IF (DEFINED HOMMEXX_FPMODEL)
+      HOMMEXX_set_fpmodel_flags(${HOMMEXX_FPMODEL} CPP_FPMODEL)
+      HOMMEXX_set_fpmodel_flags(${HOMMEXX_FPMODEL_UT} CPP_UT_FPMODEL)
+      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_FPMODEL}")
+    ELSE ()
+      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fp-model precise")
+    ENDIF ()
+  ENDIF ()
+ENDIF ()
+
 # C++ Flags
+
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 INCLUDE(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX11_SUPPORTED)
@@ -71,6 +100,16 @@ ELSE ()
 ENDIF ()
 
 CHECK_CXX_COMPILER_FLAG("-cxxlib" CXXLIB_SUPPORTED)
+
+STRING(TOUPPER "${PERFORMANCE_PROFILE}" PERF_PROF_UPPER)
+IF ("${PERF_PROF_UPPER}" STREQUAL "VTUNE")
+  ADD_DEFINITIONS(-DVTUNE_PROFILE)
+ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "CUDA")
+  ADD_DEFINITIONS(-DCUDA_PROFILE)
+ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "GPROF")
+  ADD_DEFINITIONS(-DGPROF_PROFILE -pg)
+  SET (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
+ENDIF ()
 
 ##############################################################################
 # Optimization flags
