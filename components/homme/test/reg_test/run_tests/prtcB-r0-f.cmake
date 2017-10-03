@@ -1,18 +1,11 @@
 ###############################################################
 # RK + PIO_INTERP
 ###############################################################
-#
-# Spectral Element -- 9 days of ASP baroclinic test
-# (Jablonowski and Williamson test + 4 tracers)
-# NE=15, dt=150, nu=1e16, filter_freq=0, NV=4, PLEV=26
-# (explicit RK with subcycling)
-#
-###############################################################
 
 # The name of this test (should be the basename of this file)
-SET(TEST_NAME prtcB_flat)
+SET(TEST_NAME prtcB-r0-f)
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME prtcB_flat)
+SET(EXEC_NAME prtcB)
 
 SET(NUM_CPUS 16)
 
