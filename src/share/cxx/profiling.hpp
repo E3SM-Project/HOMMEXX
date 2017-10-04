@@ -2,9 +2,12 @@
 #ifndef _PROFILING_HPP_
 #define _PROFILING_HPP_
 
+#include <Types.hpp>
+
 #include "gptl.h"
 
-#ifdef HOMMEXX_CUDA_SPACE // Can't use GPTL timers on CUDA
+#if defined(HOMMEXX_CUDA_SPACE) || \
+  (defined(HOMMEXX_DEFAULT_SPACE) && defined(KOKKOS_ENABLE_CUDA)) // Can't use GPTL timers on CUDA
 #define start_timer(name) {}
 #define stop_timer(name) {}
 #else
