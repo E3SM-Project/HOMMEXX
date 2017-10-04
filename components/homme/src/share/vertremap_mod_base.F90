@@ -832,11 +832,6 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
 
-!print *, 'a' , a
-!print *, 'x1, x2' , x1,x2
-!print *, 'terms: ', a(0) * (x2 - x1), a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1, &
-!a(2)*(x2 ** 3 - x1 ** 3) / 0.3D1
-
   mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
 end function integrate_parabola
 
