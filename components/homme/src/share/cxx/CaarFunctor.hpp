@@ -188,7 +188,7 @@ struct CaarFunctor {
         auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
         auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
         auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
-        auto tv_dp_over_p = t_v * (dp3d * 0.5 / p);
+        auto tv_dp_over_p = t_v * dp3d * 0.5 / p;
 
         for (int iv=vec_start; iv>=0; --iv) {
           // compute phi
@@ -251,7 +251,7 @@ struct CaarFunctor {
         auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, kv.ilev, igp, jgp);
 
         omega_p = vgrad_p / p;
-        for (int iv=0; iv<vector_end; ++iv) {
+        for (int iv=0; iv<=vector_end; ++iv) {
           Real ckk = 0.5 / p[iv];
           omega_p[iv] -= 2.0*ckk*integration(igp, jgp) + ckk*div_vdp[iv];
           integration(igp, jgp) += div_vdp[iv];
@@ -300,7 +300,7 @@ struct CaarFunctor {
         auto&  p = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
         auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
 
-        for (int iv=0; iv<vector_end; ++iv) {
+        for (int iv=0; iv<=vector_end; ++iv) {
           // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
           p[iv] = p_prev(igp,jgp) + 0.5*dp_prev(igp,jgp) + 0.5*dp[iv];
           // Update p[k-1] and dp[k-1]
