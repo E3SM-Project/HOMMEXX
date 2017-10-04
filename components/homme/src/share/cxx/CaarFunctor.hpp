@@ -180,24 +180,23 @@ struct CaarFunctor {
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, count),
                            [&](const int loop_idx) {
-        //Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-          const int igp = (work_set.start + loop_idx*work_set.increment) / NP;
-          const int jgp = (work_set.start + loop_idx*work_set.increment) % NP;
+        const int igp = (work_set.start + loop_idx*work_set.increment) / NP;
+        const int jgp = (work_set.start + loop_idx*work_set.increment) % NP;
 
-          auto& phi  = m_elements.m_phi(kv.ie, kv.ilev, igp, jgp);
-          auto& phis = m_elements.m_phis(kv.ie, igp, jgp);
-          auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
-          auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
-          auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
-          for (int iv=vec_start; iv>=0; --iv) {
-            // compute phi
-            phi[iv] = phis + integration(igp,jgp)+
-                        PhysicalConstants::Rgas * t_v[iv] * (dp3d[iv] * 0.5 / p[iv]);
+        Real  phis = m_elements.m_phis(kv.ie, igp, jgp);
+        auto& phi  = m_elements.m_phi(kv.ie, kv.ilev, igp, jgp);
+        auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
+        auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+        auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
+        auto tv_dp_over_p = t_v * (dp3d * 0.5 / p);
 
-            // update integral
-            integration(igp, jgp) += PhysicalConstants::Rgas * t_v[iv] * 2.0 * ( dp3d[iv] * 0.5 / p[iv]);
-          }
-        //});
+        for (int iv=vec_start; iv>=0; --iv) {
+          // compute phi
+          phi[iv] = phis + integration(igp,jgp) + PhysicalConstants::Rgas * tv_dp_over_p[iv];
+
+          // update integral
+          integration(igp, jgp) += PhysicalConstants::Rgas * 2.0 * tv_dp_over_p[iv];
+        }
       });
     }
   }

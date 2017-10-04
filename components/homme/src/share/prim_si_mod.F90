@@ -330,26 +330,26 @@ contains
        do j=1,np   !   Loop inversion (AAM)
 
           do i=1,np
-             hkk = dp(i,j,nlev)*0.5d0/p(i,j,nlev)
+             hkk = T_v(i,j,nlev)*dp(i,j,nlev)*0.5d0/p(i,j,nlev)
              hkl = 2*hkk
-             phii(i,j,nlev)  = Rgas*T_v(i,j,nlev)*hkl
-             phi(i,j,nlev) = phis(i,j) + Rgas*T_v(i,j,nlev)*hkk
+             phii(i,j,nlev)  = Rgas*hkl
+             phi(i,j,nlev) = phis(i,j) + Rgas*hkk
           end do
 
           do k=nlev-1,2,-1
              do i=1,np
                 ! hkk = dp*ckk
-                hkk = dp(i,j,k)*0.5d0/p(i,j,k)
+                hkk = T_v(i,j,k)*dp(i,j,k)*0.5d0/p(i,j,k)
                 hkl = 2*hkk
-                phii(i,j,k) = phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkl
-                phi(i,j,k) = phis(i,j) + phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkk
+                phii(i,j,k) = phii(i,j,k+1) + Rgas*hkl
+                phi(i,j,k) = phis(i,j) + phii(i,j,k+1) + Rgas*hkk
              end do
           end do
 
           do i=1,np
              ! hkk = dp*ckk
-             hkk = 0.5d0*dp(i,j,1)/p(i,j,1)
-             phi(i,j,1) = phis(i,j) + phii(i,j,2) + Rgas*T_v(i,j,1)*hkk
+             hkk = T_v(i,j,1)*dp(i,j,1)*0.5d0/p(i,j,1)
+             phi(i,j,1) = phis(i,j) + phii(i,j,2) + Rgas*hkk
           end do
 
        end do
