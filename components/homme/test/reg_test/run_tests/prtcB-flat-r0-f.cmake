@@ -1,8 +1,7 @@
 
-# The name of this test (should be the basename of this file)
-SET(TEST_NAME prtcB-r0-f)
+SET(TEST_NAME prtcB-flat-r0-f)
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME prtcB)
+SET(EXEC_NAME prtcB_flat)
 
 SET(NUM_CPUS 16)
 
@@ -13,4 +12,3 @@ SET(VCOORD_FILES ${HOMME_ROOT}/test/vcoord/acme-72*)
 SET(NC_OUTPUT_FILES
   jw_baroclinic1.nc
   jw_baroclinic2.nc)
-

@@ -1,6 +1,3 @@
-###############################################################
-# RK + PIO_INTERP
-###############################################################
 
 # The name of this test (should be the basename of this file)
 SET(TEST_NAME prtcA-r0-f)
