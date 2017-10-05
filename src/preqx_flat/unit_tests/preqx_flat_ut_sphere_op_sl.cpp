@@ -183,23 +183,26 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-        Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
-        Kokkos::subview(temp1_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-        Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-        Kokkos::subview(scalar_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                  local_temp1_d, local_scalar_input_d,
-                  local_sphere_buf, local_scalar_output_d);
-
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
+          Kokkos::subview(temp1_d, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+          Kokkos::subview(scalar_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL);
+  
+      laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                    local_temp1_d, local_scalar_input_d,
+                    local_sphere_buf, local_scalar_output_d);
+    });
   };  // end of op() for laplace_simple
 
   /*
@@ -234,20 +237,24 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
-        Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-        Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-        Kokkos::subview(scalar_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                            local_vector_input_d,
-                            local_sphere_buf,
-                            local_scalar_output_d);
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
+          Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+          Kokkos::subview(scalar_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL);
+  
+      divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                              local_vector_input_d,
+                              local_sphere_buf,
+                              local_scalar_output_d);
+    });
   };  // end of op() for divergence_sphere_wk
 
   KOKKOS_INLINE_FUNCTION
@@ -256,21 +263,25 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-        Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-        Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
-        Kokkos::subview(vector_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL);
-
-    gradient_sphere_sl(kv, dinv_d, dvv_d,
-                       local_scalar_input_d,
-                       local_sphere_buf,
-                       local_vector_output_d);
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
+          Kokkos::subview(vector_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL,
+                          Kokkos::ALL);
+  
+      gradient_sphere_sl(kv, dinv_d, dvv_d,
+                         local_scalar_input_d,
+                         local_sphere_buf,
+                         local_vector_output_d);
+    });
   };
 
   // this could be even nicer,
@@ -311,8 +322,6 @@ class compute_sphere_operator_test {
 
 TEST_CASE("testing_laplace_simple_sl",
           "laplace_simple_sl") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test testing_laplace(elements);
@@ -350,6 +359,10 @@ TEST_CASE("testing_laplace_simple_sl",
         REQUIRE(
             !std::isnan(testing_laplace.scalar_output_host(
                 _index, igp, jgp)));
+        Real rel_error = compare_answers(
+                    local_fortran_output(igp, jgp),
+                    testing_laplace.scalar_output_host(
+                        _index, igp, jgp));
         REQUIRE(std::numeric_limits<Real>::epsilon() >=
                 compare_answers(
                     local_fortran_output(igp, jgp),
@@ -365,8 +378,6 @@ TEST_CASE("testing_laplace_simple_sl",
 };  // end of TEST_CASE(..., "simple laplace")
 
 TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 1;
 
   compute_sphere_operator_test testing_divwk(elements);
@@ -437,8 +448,6 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
 
 TEST_CASE("Testing gradient_sphere_sl()",
           "gradient_sphere") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test testing_grad(elements);
