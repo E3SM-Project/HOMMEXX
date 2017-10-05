@@ -546,25 +546,25 @@ KOKKOS_INLINE_FUNCTION void laplace_tensor_replace(
   const int buf_lev = (kv.ilev < 0 || kv.ilev >= NUM_LEV) ? 0 : kv.ilev;
   gradient_sphere(kv, DInv, dvv, laplace, sphere_buf, grad_s);
   constexpr int num_iters = NP * NP;
-       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
-                          [&](const int loop_idx) {
-          const int igp = loop_idx / NP;
-          const int jgp = loop_idx % NP;
-          sphere_buf(kv.ie, buf_lev, 0, igp, jgp) = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
-                            tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
-          sphere_buf(kv.ie, buf_lev, 1, igp, jgp) = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
-                            tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
-       });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                     [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    sphere_buf(kv.ie, buf_lev, 0, igp, jgp) = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                      tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+    sphere_buf(kv.ie, buf_lev, 1, igp, jgp) = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp, kv.ilev) +
+                      tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp, kv.ilev);
+  });
 
-       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
-                          [&](const int loop_idx) {
-          const int igp = loop_idx / NP;
-          const int jgp = loop_idx % NP;
-          grad_s(0,igp,jgp, kv.ilev) = sphere_buf(kv.ie, buf_lev, 0, igp, jgp);
-          grad_s(1,igp,jgp, kv.ilev) = sphere_buf(kv.ie, buf_lev, 1, igp, jgp);
-       });
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_iters),
+                       [&](const int loop_idx) {
+    const int igp = loop_idx / NP;
+    const int jgp = loop_idx % NP;
+    grad_s(0,igp,jgp, kv.ilev) = sphere_buf(kv.ie, buf_lev, 0, igp, jgp);
+    grad_s(1,igp,jgp, kv.ilev) = sphere_buf(kv.ie, buf_lev, 1, igp, jgp);
+  });
 
-       divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
+  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
 }//end of laplace_tensor_replace
 
 //check mp, why is it an ie quantity?
