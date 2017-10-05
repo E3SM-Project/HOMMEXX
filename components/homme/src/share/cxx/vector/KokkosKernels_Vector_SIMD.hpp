@@ -3,6 +3,8 @@
 
 /// \author Kyungjoo Kim (kyukim@sandia.gov)
 
+#include <assert.h>
+
 namespace KokkosKernels {
 namespace Batched {
 namespace Experimental {
@@ -15,10 +17,11 @@ public:
   using type = Vector<tag_type>;
   using value_type = typename tag_type::value_type;
   using member_type = typename tag_type::member_type;
+  using data_type = value_type[l];
 
-  enum : int { vector_length = tag_type::length };
-
-  typedef value_type data_type[vector_length];
+  enum : int {
+    vector_length = tag_type::length
+  };
 
   KOKKOS_INLINE_FUNCTION
   static const char *label() { return "SIMD"; }
@@ -28,40 +31,40 @@ private:
 
 public:
   KOKKOS_INLINE_FUNCTION Vector() {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = 0; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = 0;
+    }
   }
   template <typename ArgValueType>
   KOKKOS_INLINE_FUNCTION Vector(const ArgValueType val) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = val; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = val;
+    }
   }
   KOKKOS_INLINE_FUNCTION Vector(const type &b) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = b._data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = b._data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
   type &loadAligned(value_type const *p) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = p[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = p[i];
+    }
     return *this;
   }
 
   KOKKOS_INLINE_FUNCTION
   type &loadUnaligned(value_type const *p) {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { _data[i] = p[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      _data[i] = p[i];
+    }
     return *this;
   }
 
@@ -71,22 +74,53 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void storeAligned(value_type *p) const {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { p[i] = _data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      p[i] = _data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
   void storeUnaligned(value_type *p) const {
-    Kokkos::parallel_for(
-        Kokkos::Impl::ThreadVectorRangeBoundariesStruct<int, member_type>(
-            vector_length),
-        [&](const int &i) { p[i] = _data[i]; });
+#pragma ivdep
+    for (int i = 0; i < vector_length; i++) {
+      p[i] = _data[i];
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
   value_type &operator[](const int i) const { return _data[i]; }
+
+#ifdef NDEBUG
+  // left, right specify the closed range of indices to set to quiet NaNs
+  KOKKOS_INLINE_FUNCTION
+  void debug_set_invalid(int left, int right) {}
+#else
+  KOKKOS_INLINE_FUNCTION
+  void debug_set_invalid(int left, int right) {
+    for(int i = left; i <= right; i++) {
+      _data[i] = 0.0 / 0.0;
+    }
+  }
+#endif
+
+  KOKKOS_INLINE_FUNCTION
+  void shift_left(int num_values) {
+    assert(num_values > 0);
+    for(int i = 0; i < vector_length - num_values; i++) {
+      _data[i] = _data[i + num_values];
+    }
+    debug_set_invalid(vector_length - num_values, vector_length - 1);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void shift_right(int num_values) {
+    assert(num_values > 0);
+    for(int i = vector_length - 1; i >= num_values; i--) {
+      _data[i] = _data[i - num_values];
+    }
+    debug_set_invalid(0, num_values - 1);
+  }
 };
 
 template <typename T, typename SpT, int l>
@@ -94,11 +128,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator+(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] + b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] + b[i];
+  }
   return r_val;
 }
 
@@ -152,11 +185,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator-(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] - b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] - b[i];
+  }
   return r_val;
 }
 
@@ -176,12 +208,11 @@ operator-(const typename VectorTag<SIMD<T, SpT>, l>::value_type a,
 
 template <typename T, typename SpT, int l>
 KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
-operator-(Vector<VectorTag<SIMD<T, SpT>, l> > const &a) {
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { a[i] = -a[i]; });
+operator-(Vector<VectorTag<SIMD<T, SpT>, l> > a) {
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    a[i] = -a[i];
+  }
   return a;
 }
 
@@ -221,12 +252,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator*(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] * b[i]; });
-
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] * b[i];
+  }
   return r_val;
 }
 
@@ -265,11 +294,10 @@ KOKKOS_INLINE_FUNCTION static Vector<VectorTag<SIMD<T, SpT>, l> >
 operator/(Vector<VectorTag<SIMD<T, SpT>, l> > const &a,
           Vector<VectorTag<SIMD<T, SpT>, l> > const &b) {
   Vector<VectorTag<SIMD<T, SpT>, l> > r_val;
-  Kokkos::parallel_for(
-      Kokkos::Impl::ThreadVectorRangeBoundariesStruct<
-          int, typename VectorTag<SIMD<T, SpT>, l>::member_type>(
-          VectorTag<SIMD<T, SpT>, l>::length),
-      [&](const int &i) { r_val[i] = a[i] / b[i]; });
+#pragma ivdep
+  for (int i = 0; i < Vector<VectorTag<SIMD<T, SpT>, l> >::vector_length; i++) {
+    r_val[i] = a[i] / b[i];
+  }
   return r_val;
 }
 

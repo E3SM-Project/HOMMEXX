@@ -8,8 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-
-#include "utils_flat_ut.cpp"
+#include "Utility.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -60,7 +59,7 @@ void laplace_sphere_wk_c_callable(
     const Real &hvpower,    // should be set to 0 always
     const Real &hvscaling,  // should be set to !=0 value
     const bool
-        &var_coef,  // should be set to 1 for tensor HV
+        var_coef,  // should be set to 1 for tensor HV
     Real *output);
 
 void curl_sphere_wk_testcov_c_callable(
@@ -83,7 +82,7 @@ void vlaplace_sphere_wk_cartesian_c_callable(
     const Real *input, const Real *dvv, const Real *dinv,
     const Real *spheremp, const Real *tensorVisc,
     const Real *vec_sph2cart, const Real &hvpower,
-    const Real &hvscaling, const bool &var_coef,
+    const Real &hvscaling, const bool var_coef,
     Real *output);
 
 void vlaplace_sphere_wk_contra_c_callable(
@@ -123,12 +122,13 @@ class compute_sphere_operator_test_ml {
         temp4_d("temp4", num_elems),
         temp5_d("temp5", num_elems),
         temp6_d("temp6", num_elems),
-        scalar_input_host(
-            Kokkos::create_mirror_view(scalar_input_d)),
-        scalar_input_COPY2_host(Kokkos::create_mirror_view(
-            scalar_input_COPY2_d)),
-        vector_input_host(
-            Kokkos::create_mirror_view(vector_input_d)),
+        sphere_buf("Spherical buffer", num_elems),
+
+        // Make certain Kokkos doesn't use the same arrays
+        // as used on the device when they are mutable
+        scalar_input_host("scalar input host", num_elems),
+        scalar_input_COPY2_host("scalar input host copy", num_elems),
+        vector_input_host("vector input host", num_elems),
         d_host(Kokkos::create_mirror_view(d_d)),
         dinv_host(Kokkos::create_mirror_view(dinv_d)),
         metinv_host(Kokkos::create_mirror_view(metinv_d)),
@@ -144,106 +144,105 @@ class compute_sphere_operator_test_ml {
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
             Kokkos::create_mirror_view(vector_output_d)),
-        // are these lines needed?
-        // apparently if mirrors are not here, multithread
-        // tests fail. Why???
-        temp1_host(Kokkos::create_mirror_view(temp1_d)),
-        temp2_host(Kokkos::create_mirror_view(temp2_d)),
-        temp3_host(Kokkos::create_mirror_view(temp3_d)),
-        // are these lines needed?
-        temp4_host(Kokkos::create_mirror_view(temp4_d)),
-        temp5_host(Kokkos::create_mirror_view(temp5_d)),
-        temp6_host(Kokkos::create_mirror_view(temp6_d)),
         _num_elems(num_elems) {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(
-        reinterpret_cast<Real *>(scalar_input_host.data()),
-        scalar_input_len * _num_elems, engine,
+        scalar_input_host, engine,
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
-    // now copy 1st scalar input into the second
-    // num_elems, np, np, num_lev
-    for(int ie = 0; ie < num_elems; ie++)
-      for(int i = 0; i < NP; i++)
-        for(int j = 0; j < NP; j++)
-          for(int k = 0; k < NUM_LEV; k++)
-            scalar_input_COPY2_host(ie, i, j, k) =
-                scalar_input_host(ie, i, j, k);
+    Kokkos::deep_copy(scalar_input_d, scalar_input_host);
+    Kokkos::deep_copy(scalar_input_COPY2_d, scalar_input_host);
+    Kokkos::deep_copy(scalar_input_COPY2_host, scalar_input_host);
 
     genRandArray(
-        reinterpret_cast<Real *>(vector_input_host.data()),
-        vector_input_len * _num_elems, engine,
+        vector_input_host, engine,
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
-    genRandArray(d_host.data(), d_len * _num_elems, engine,
+    Kokkos::deep_copy(vector_input_d, vector_input_host);
+
+    genRandArray(d_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(dinv_host.data(), dinv_len * _num_elems,
+    Kokkos::deep_copy(d_d, d_host);
+
+    genRandArray(dinv_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(metinv_host.data(),
-                 metinv_len * _num_elems, engine,
+    Kokkos::deep_copy(dinv_d, dinv_host);
+
+    genRandArray(metinv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(metdet_host.data(),
-                 metdet_len * _num_elems, engine,
+    Kokkos::deep_copy(metinv_d, metinv_host);
+
+    genRandArray(metdet_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(spheremp_host.data(),
-                 spheremp_len * _num_elems, engine,
+    Kokkos::deep_copy(metdet_d, metdet_host);
+
+    genRandArray(spheremp_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(mp_host.data(), mp_len * _num_elems,
+    Kokkos::deep_copy(spheremp_d, spheremp_host);
+
+    genRandArray(mp_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(dvv_host.data(), dvv_len, engine,
+    Kokkos::deep_copy(mp_d, mp_host);
+
+    genRandArray(dvv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(tensor_host.data(),
-                 tensor_len * _num_elems, engine,
+    Kokkos::deep_copy(dvv_d, dvv_host);
+
+    genRandArray(tensor_host, engine,
                  std::uniform_real_distribution<Real>(
                      -1000, 1000.0));
-    genRandArray(vec_sph2cart_host.data(),
-                 vec_sph2cart_len * _num_elems, engine,
+    Kokkos::deep_copy(tensor_d, tensor_host);
+
+    genRandArray(vec_sph2cart_host, engine,
                  std::uniform_real_distribution<Real>(
                      -1000, 1000.0));
+    Kokkos::deep_copy(vec_sph2cart_d, vec_sph2cart_host);
 
     genRandArray(&nu_ratio, 1, engine,
                  std::uniform_real_distribution<Real>(
                      -1000, 1000.0));
 // setting everything to 1 is good for debugging
 #if 0
-for(int i1=0; i1<_num_elems; i1++)
-for(int i2=0; i2<NP; i2++)
-for(int i3=0; i3<NP; i3++){
-dinv_host(i1,0,0,i2,i3)=1.0;
-dinv_host(i1,1,1,i2,i3)=1.0;
-dinv_host(i1,1,0,i2,i3)=1.0;
-dinv_host(i1,0,1,i2,i3)=1.0;
-tensor_host(i1,0,0,i2,i3)=1.0;
-tensor_host(i1,1,1,i2,i3)=1.0;
-tensor_host(i1,1,0,i2,i3)=1.0;
-tensor_host(i1,0,1,i2,i3)=1.0;
+    for(int i1=0; i1<_num_elems; i1++) {
+      for(int i2=0; i2<NP; i2++) {
+        for(int i3=0; i3<NP; i3++) {
+          dinv_host(i1,0,0,i2,i3)=1.0;
+          dinv_host(i1,1,1,i2,i3)=1.0;
+          dinv_host(i1,1,0,i2,i3)=1.0;
+          dinv_host(i1,0,1,i2,i3)=1.0;
+          tensor_host(i1,0,0,i2,i3)=1.0;
+          tensor_host(i1,1,1,i2,i3)=1.0;
+          tensor_host(i1,1,0,i2,i3)=1.0;
+          tensor_host(i1,0,1,i2,i3)=1.0;
 
-vec_sph2cart_host(i1,0,0,i2,i3)=1.0;
-vec_sph2cart_host(i1,1,0,i2,i3)=1.0;
-vec_sph2cart_host(i1,0,1,i2,i3)=1.0;
-vec_sph2cart_host(i1,1,1,i2,i3)=1.0;
-vec_sph2cart_host(i1,0,2,i2,i3)=1.0;
-vec_sph2cart_host(i1,1,2,i2,i3)=1.0;
-//metdet_host(i1,i2,i3)=1.0;
-spheremp_host(i1,i2,i3)=1.0;
-dvv_host(i2,i3)=1.0;
-//mp_host(i1,i2,i3)=1.0;
-//           -//Real aa = i2+i3;
-//            -//scalar_input_host(i1,i2,i3) = aa;
-//
-//vector_input_host(i1,0,i2,i3)[...] = 1;//aa;
-//vector_input_host(i1,1,i2,i3)[...] = 1;//aa;
-}
+          vec_sph2cart_host(i1,0,0,i2,i3)=1.0;
+          vec_sph2cart_host(i1,1,0,i2,i3)=1.0;
+          vec_sph2cart_host(i1,0,1,i2,i3)=1.0;
+          vec_sph2cart_host(i1,1,1,i2,i3)=1.0;
+          vec_sph2cart_host(i1,0,2,i2,i3)=1.0;
+          vec_sph2cart_host(i1,1,2,i2,i3)=1.0;
+          //metdet_host(i1,i2,i3)=1.0;
+          spheremp_host(i1,i2,i3)=1.0;
+          dvv_host(i2,i3)=1.0;
+          //mp_host(i1,i2,i3)=1.0;
+          //           -//Real aa = i2+i3;
+          //            -//scalar_input_host(i1,i2,i3) = aa;
+          //
+          //vector_input_host(i1,0,i2,i3)[...] = 1;//aa;
+          //vector_input_host(i1,1,i2,i3)[...] = 1;//aa;
+        }
+      }
+    }
 #endif
 
   }  // end of constructor
@@ -277,6 +276,8 @@ dvv_host(i2,i3)=1.0;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temp4_d,
       temp5_d, temp6_d;
+
+  ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> sphere_buf;
 
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
@@ -328,16 +329,6 @@ dvv_host(i2,i3)=1.0;
       scalar_output_host;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
       vector_output_host;
-
-  // do we need host views of temps???
-  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
-      temp1_host,
-      temp2_host, temp3_host;
-
-  // same here -- is this needed?
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
-      temp4_host,
-      temp5_host, temp6_host;
 
   Real nu_ratio;
 
@@ -391,6 +382,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           gradient_sphere(kv, dinv_d, dvv_d,
                           local_scalar_input_d,
+                          sphere_buf,
                           local_vector_output_d);
         });  // end parallel_for for level
 
@@ -418,6 +410,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           divergence_sphere_wk(kv, dinv_d, spheremp_d,
                                dvv_d, local_vector_input_d,
+                               sphere_buf,
                                local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -450,7 +443,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           laplace_simple(
               kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-              local_scalar_input_d, local_scalar_output_d);
+              local_scalar_input_d, sphere_buf, local_scalar_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for laplace_wk_ml
@@ -483,6 +476,7 @@ dvv_host(i2,i3)=1.0;
           laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
                          tensor_d, local_temp1_d,
                          local_scalar_input_d,
+                         sphere_buf,
                          local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -509,32 +503,24 @@ dvv_host(i2,i3)=1.0;
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    //    for(int i=0; i< NP; i++)
-    //    for(int j=0; j< NP; j++)
-    //    for(int k = 0; k< NUM_LEV; k++){
-    //       temp4_d(_index,i,j,k) =
-    //       local_scalar_input_d(i,j,k);
-    //    }
-
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(kv.team, NUM_LEV),
         [&](const int &level) {
           kv.ilev = level;
           laplace_tensor_replace(
               kv, dinv_d, spheremp_d, dvv_d, tensor_d,
-              local_temp1_d, local_scalar_input_d);
+              local_temp1_d, sphere_buf, local_scalar_input_d);
 
           // if team rank == 0? only 1 thread is allowed to
           // overwrite?
-          for(int i = 0; i < NP; i++)
-            for(int j = 0; j < NP; j++) {
-              local_scalar_output_d(i, j, level) =
-                  local_scalar_input_d(i, j, level);
-              //       local_scalar_input_d(i,j,level) =
-              //       temp4_d(_index,i,j,level);
-            }
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
+                [&](const int idx) {
+                  const int igp = idx / NP;
+                  const int jgp = idx % NP;
+                local_scalar_output_d(igp, jgp, level) =
+                    local_scalar_input_d(igp, jgp, level);
+              });
         });  // end of par_for for level
-
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -558,6 +544,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
                                  local_scalar_input_d,
+                                 sphere_buf,
                                  local_vector_output_d);
         });  // end parallel_for for level
 
@@ -584,7 +571,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           grad_sphere_wk_testcov(
               kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
-              local_scalar_input_d, local_vector_output_d);
+              local_scalar_input_d, sphere_buf, local_vector_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for grad_sphere_wk_testcov
@@ -630,11 +617,13 @@ dvv_host(i2,i3)=1.0;
               kv, dinv_d, spheremp_d, tensor_d,
               vec_sph2cart_d, dvv_d, local_temp1_d,
               local_temp4_d, local_temp5_d, local_temp6_d,
+              sphere_buf,
               local_vector_input_d, local_vector_output_d);
         });  // end parallel_for for level
 
   }  // end of op() for laplace_tensor multil
 
+  KOKKOS_INLINE_FUNCTION
   void operator()(const TagVLaplaceContraML &,
                   TeamMember team) const {
     KernelVariables kv(team);
@@ -677,6 +666,7 @@ dvv_host(i2,i3)=1.0;
               kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
               metdet_d, dvv_d, nu_ratio, local_temp4_d,
               local_temp5_d, local_temp1_d, local_temp2_d,
+              sphere_buf,
               local_vector_input_d, local_vector_output_d);
         });  // end parallel_for for level
 
@@ -705,6 +695,7 @@ dvv_host(i2,i3)=1.0;
           kv.ilev = level;
           vorticity_sphere_vector(kv, d_d, metdet_d,
                                dvv_d, local_vector_input_d,
+                               sphere_buf,
                                local_scalar_output_d);
         });  // end parallel_for for level
 
@@ -798,7 +789,7 @@ dvv_host(i2,i3)=1.0;
 
 // SHMEM ????
 
-TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
+TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
@@ -813,44 +804,39 @@ TEST_CASE("Testing gradient_sphere()", "gradient_sphere") {
         Real local_fortran_output[2][NP][NP];
         // F input
         Real sf[NP][NP];
-        Real dvvf[NP][NP];
-        Real dinvf[2][2][NP][NP];
 
         // since i don't need flipping arrays, maybe, it is
         // enough to pass data() pointer?
-        for(int _i = 0; _i < NP; _i++)
+        for(int _i = 0; _i < NP; _i++) {
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] = testing_grad_ml.scalar_input_host(
                 _index, _i, _j, level)[v];
-            dvvf[_i][_j] = testing_grad_ml.dvv_host(_i, _j);
-            for(int _d1 = 0; _d1 < 2; _d1++)
-              for(int _d2 = 0; _d2 < 2; _d2++)
-                dinvf[_d1][_d2][_i][_j] =
-                    testing_grad_ml.dinv_host(_index, _d1,
-                                              _d2, _i, _j);
           }
+        }
 
         // running F version of operator
         gradient_sphere_c_callable(
-            &(sf[0][0]), &(dvvf[0][0]),
-            &(dinvf[0][0][0][0]),
+            &(sf[0][0]), testing_grad_ml.dvv_host.data(),
+            &testing_grad_ml.dinv_host(_index, 0, 0, 0, 0),
             &(local_fortran_output[0][0][0]));
 
         // compare with the part from C run
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
-            Real coutput0 =
+            const Real coutput0 =
                 testing_grad_ml.vector_output_host(
                     _index, 0, igp, jgp, level)[v];
-            Real coutput1 =
+            const Real coutput1 =
                 testing_grad_ml.vector_output_host(
                     _index, 1, igp, jgp, level)[v];
+            REQUIRE(!std::isnan(coutput0));
+            REQUIRE(!std::isnan(coutput1));
+
             REQUIRE(!std::isnan(
                 local_fortran_output[0][igp][jgp]));
             REQUIRE(!std::isnan(
                 local_fortran_output[1][igp][jgp]));
-            REQUIRE(!std::isnan(coutput0));
-            REQUIRE(!std::isnan(coutput1));
+
             // what is 128 here?
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
@@ -1049,7 +1035,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
         laplace_sphere_wk_c_callable(
             &(sf[0][0]), &(dvvf[0][0]),
             &(dinvf[0][0][0][0]), &(sphf[0][0]),
-            &(tensorf[0][0][0][0]), _hp, _hs, &_vc,
+            &(tensorf[0][0][0][0]), _hp, _hs, _vc,
             &(local_fortran_output[0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {
@@ -1080,7 +1066,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
 
 }  // end of test laplace_tensor multilevel
 
-TEST_CASE("Testing laplace_tensor_replace() multilevel",
+TEST_CASE("Testing_laplace_tensor_replace_multilevel",
           "laplace_tensor_replace") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -1097,32 +1083,24 @@ TEST_CASE("Testing laplace_tensor_replace() multilevel",
         Real local_fortran_output[NP][NP];
         Real sf[NP][NP];
         Real dvvf[NP][NP];
-        Real dinvf[2][2][NP][NP];
-        Real tensorf[2][2][NP][NP];
         Real sphf[NP][NP];
 
-        for(int _i = 0; _i < NP; _i++)
+        for(int _i = 0; _i < NP; _i++) {
           for(int _j = 0; _j < NP; _j++) {
+
             sf[_i][_j] =
                 testing_tensor_laplace.scalar_input_host(
                     _index, _i, _j, level)[v];
+
             sphf[_i][_j] =
                 testing_tensor_laplace.spheremp_host(
                     _index, _i, _j);
             dvvf[_i][_j] =
                 testing_tensor_laplace.dvv_host(_i, _j);
-            for(int _d1 = 0; _d1 < 2; _d1++)
-              for(int _d2 = 0; _d2 < 2; _d2++) {
-                dinvf[_d1][_d2][_i][_j] =
-                    testing_tensor_laplace.dinv_host(
-                        _index, _d1, _d2, _i, _j);
-
-                tensorf[_d1][_d2][_i][_j] =
-                    testing_tensor_laplace.tensor_host(
-                        _index, _d1, _d2, _i, _j);
-
-              }  // end of d2 loop
           }
+        }
+        Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
+                          testing_tensor_laplace.scalar_input_d);
 
         Real _hp = 0.0;
         Real _hs = 1.0;
@@ -1130,8 +1108,10 @@ TEST_CASE("Testing laplace_tensor_replace() multilevel",
 
         laplace_sphere_wk_c_callable(
             &(sf[0][0]), &(dvvf[0][0]),
-            &(dinvf[0][0][0][0]), &(sphf[0][0]),
-            &(tensorf[0][0][0][0]), _hp, _hs, &_vc,
+            &testing_tensor_laplace.dinv_host(_index, 0, 0, 0, 0),
+            &(sphf[0][0]),
+            &testing_tensor_laplace.tensor_host(_index, 0, 0, 0, 0),
+            _hp, _hs, _vc,
             &(local_fortran_output[0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {
@@ -1167,10 +1147,10 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
   compute_sphere_operator_test_ml testing_curl(elements);
   testing_curl.run_functor_curl_sphere_wk_testcov();
 
+  HostViewManaged<Real[2][NP][NP]> local_fortran_output("curl_sphere_wk_testcov fortran results");
   for(int _index = 0; _index < elements; _index++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
-        Real local_fortran_output[2][NP][NP];
         Real sf[NP][NP];
         Real dvvf[NP][NP];
         Real df[2][2][NP][NP];
@@ -1193,7 +1173,7 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
           }
         curl_sphere_wk_testcov_c_callable(
             &(sf[0][0]), &(dvvf[0][0]), &(df[0][0][0][0]),
-            &(mpf[0][0]), &(local_fortran_output[0][0][0]));
+            &(mpf[0][0]), local_fortran_output.data());
 
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
@@ -1224,21 +1204,21 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             */
 
             REQUIRE(!std::isnan(
-                local_fortran_output[0][igp][jgp]));
-
+                    local_fortran_output(0, igp, jgp)));
             REQUIRE(!std::isnan(
-                local_fortran_output[1][igp][jgp]));
+                    local_fortran_output(1, igp, jgp)));
 
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
+
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
+                        local_fortran_output(0, igp, jgp),
+                        coutput0, 512.0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+                        local_fortran_output(1, igp, jgp),
+                        coutput1, 512.0));
 
           }  // jgp
         }    // igp
@@ -1415,7 +1395,7 @@ TEST_CASE(
             &(vf[0][0][0]), &(dvvf[0][0]),
             &(dinvf[0][0][0][0]), &(sphf[0][0]),
             &(tensorf[0][0][0][0]),
-            &(vec_sph2cartf[0][0][0][0]), _hp, _hs, &_vc,
+            &(vec_sph2cartf[0][0][0][0]), _hp, _hs, _vc,
             &(local_fortran_output[0][0][0]));
 
         for(int igp = 0; igp < NP; ++igp) {

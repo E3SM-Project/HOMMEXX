@@ -152,32 +152,36 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
         h_phis(ie, igp, jgp) = random_dist(engine);
 
         for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          // 3d scalars
-          h_omega_p(ie, igp, jgp, ilev) = random_dist(engine);
-          h_pecnd(ie, igp, jgp, ilev) = random_dist(engine);
-          h_phi(ie, igp, jgp, ilev) = random_dist(engine);
-          h_derived_un0(ie, igp, jgp, ilev) = random_dist(engine);
-          h_derived_vn0(ie, igp, jgp, ilev) = random_dist(engine);
-
-          // 4d scalars
-          for (int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
-            h_u(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
-            h_v(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
-            h_t(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
-            h_dp3d(ie, timelevel, igp, jgp, ilev) = random_dist(engine);
-          }
-
-          for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
-               ++q_timelevel) {
-            for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
-              h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev) = random_dist(engine);
+          for(int vec = 0; vec < VECTOR_SIZE; ++vec) {
+            // 3d scalars
+            h_omega_p(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+            h_pecnd(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+            h_phi(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+            h_derived_un0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+            h_derived_vn0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+            
+            // 4d scalars
+            for (int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
+              h_u(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
+              h_v(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
+              h_t(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
+              h_dp3d(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
+            }
+            
+            for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
+                 ++q_timelevel) {
+              for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
+                h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev)[vec] = random_dist(engine);
+              }
             }
           }
         }
 
         for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
-          // 3d scalar at the interfaces of the levels
-          h_eta_dot_dpdn(ie, igp, jgp, ilev) = random_dist(engine);
+          for(int vec = 0; vec < VECTOR_SIZE; ++vec) {
+            // 3d scalar at the interfaces of the levels
+            h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = random_dist(engine);
+          }
         }
 
         Real determinant = 0.0;
@@ -550,6 +554,12 @@ void Elements::BufferViews::init(int num_elems) {
   qtens     = ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]> ("buffer for tracers", num_elems);
   vstar     = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>          ("buffer for v/dp", num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]> ("buffer for vstar*qdp", num_elems);
+
+  preq_buf = ExecViewManaged<Real *[NP][NP]>("Preq Buffer", num_elems);
+
+  div_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Divergence Buffer", num_elems);
+  grad_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Gradient Buffer", num_elems);
+  vort_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Vorticity Buffer", num_elems);
 }
 
 Elements &get_elements() {

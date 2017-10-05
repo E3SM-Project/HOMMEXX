@@ -8,8 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-
-#include "utils_flat_ut.cpp"
+#include "Utility.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -55,6 +54,7 @@ class compute_sphere_operator_test {
         temp1_d("temp1", num_elems),
         temp2_d("temp2", num_elems),
         temp3_d("temp3", num_elems),
+        sphere_buf("Spherical buffer", num_elems),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
         vector_input_host(
@@ -69,9 +69,6 @@ class compute_sphere_operator_test {
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
             Kokkos::create_mirror_view(vector_output_d)),
-        temp1_host(Kokkos::create_mirror_view(temp1_d)),
-        temp2_host(Kokkos::create_mirror_view(temp2_d)),
-        temp3_host(Kokkos::create_mirror_view(temp3_d)),
         _num_elems(num_elems) {
     // constructor's body
     // init randonly
@@ -80,34 +77,45 @@ class compute_sphere_operator_test {
     rngAlg engine(rd());
 
     // check singularities? divergence_wk uses both D and
-    // Dinv, does it matter if ther are  not inverses of
+    // Dinv, does it matter if they are not inverses of
     // each other?
-    genRandArray(
-        scalar_input_host.data(),
-        scalar_input_len * _num_elems, engine,
-        std::uniform_real_distribution<Real>(0, 100.0));
-    genRandArray(vector_input_host.data(),
-                 vector_input_len * _num_elems, engine,
+    genRandArray(scalar_input_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 100.0));
+    Kokkos::deep_copy(scalar_input_d, scalar_input_host);
+
+    genRandArray(vector_input_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
-    genRandArray(
-        d_host.data(), d_len * _num_elems, engine,
-        std::uniform_real_distribution<Real>(0, 1.0));
-    genRandArray(
-        dinv_host.data(), dinv_len * _num_elems, engine,
-        std::uniform_real_distribution<Real>(0, 1.0));
-    genRandArray(
-        metdet_host.data(), metdet_len * _num_elems, engine,
-        std::uniform_real_distribution<Real>(0, 1.0));
-    genRandArray(
-        spheremp_host.data(), spheremp_len * _num_elems,
-        engine,
-        std::uniform_real_distribution<Real>(0, 1.0));
-    genRandArray(
-        dvv_host.data(), dvv_len, engine,
-        std::uniform_real_distribution<Real>(0, 1.0));
+    Kokkos::deep_copy(vector_input_d, vector_input_host);
+
+    genRandArray(d_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 1.0));
+    Kokkos::deep_copy(d_d, d_host);
+
+    genRandArray(dinv_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 1.0));
+    Kokkos::deep_copy(dinv_d, dinv_host);
+
+    genRandArray(metdet_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 1.0));
+    Kokkos::deep_copy(metdet_d, metdet_host);
+
+    genRandArray(spheremp_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 1.0));
+    Kokkos::deep_copy(spheremp_d, spheremp_host);
+
+    genRandArray(dvv_host, engine,
+                 std::uniform_real_distribution<Real>(
+                     0, 1.0));
+    Kokkos::deep_copy(dvv_d, dvv_host);
   }
-  int _num_elems;  // league size, serves as ie index
+
+  const int _num_elems;  // league size, serves as ie index
 
   // device views
   ExecViewManaged<Real * [NP][NP]> scalar_input_d;
@@ -121,6 +129,7 @@ class compute_sphere_operator_test {
   ExecViewManaged<Real * [2][NP][NP]> vector_output_d;
   ExecViewManaged<Real * [2][NP][NP]> temp1_d, temp2_d,
       temp3_d;
+  ExecViewManaged<Real* [2][NP][NP]> sphere_buf;
 
   // host views, one dim is num_elems. Spherical operators
   // do not take ie or nlev fields,  but to make it a more
@@ -152,9 +161,6 @@ class compute_sphere_operator_test {
       scalar_output_host;
   ExecViewManaged<Real * [2][NP][NP]>::HostMirror
       vector_output_host;
-  ExecViewManaged<Real * [2][NP][NP]>::HostMirror
-      temp1_host,
-      temp2_host, temp3_host;
 
   // tag for laplace_simple()
   struct TagSimpleLaplace {};
@@ -177,20 +183,26 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-        Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
-        Kokkos::subview(temp1_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-        Kokkos::subview(scalar_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                  local_temp1_d, local_scalar_input_d,
-                  local_scalar_output_d);
-
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
+          Kokkos::subview(temp1_d, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+          Kokkos::subview(scalar_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL);
+  
+      laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                    local_temp1_d, local_scalar_input_d,
+                    local_sphere_buf, local_scalar_output_d);
+    });
   };  // end of op() for laplace_simple
 
   /*
@@ -225,16 +237,24 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
-        Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-        Kokkos::subview(scalar_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                            local_vector_input_d,
-                            local_scalar_output_d);
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
+          Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+          Kokkos::subview(scalar_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL);
+  
+      divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                              local_vector_input_d,
+                              local_sphere_buf,
+                              local_scalar_output_d);
+    });
   };  // end of op() for divergence_sphere_wk
 
   KOKKOS_INLINE_FUNCTION
@@ -243,17 +263,25 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-        Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                        Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
-        Kokkos::subview(vector_output_d, _index,
-                        Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL);
-
-    gradient_sphere_sl(kv, dinv_d, dvv_d,
-                       local_scalar_input_d,
-                       local_vector_output_d);
+    // TODO: Support running more than one thread at a time
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
+                         [&](const int idx) {
+      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                          Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                          Kokkos::ALL, Kokkos::ALL);
+      ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
+          Kokkos::subview(vector_output_d, _index,
+                          Kokkos::ALL, Kokkos::ALL,
+                          Kokkos::ALL);
+  
+      gradient_sphere_sl(kv, dinv_d, dvv_d,
+                         local_scalar_input_d,
+                         local_sphere_buf,
+                         local_vector_output_d);
+    });
   };
 
   // this could be even nicer,
@@ -292,19 +320,17 @@ class compute_sphere_operator_test {
 
 };  // end of definition of compute_sphere_operator_test()
 
-TEST_CASE("Testing laplace_simple_sl()",
+TEST_CASE("testing_laplace_simple_sl",
           "laplace_simple_sl") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test testing_laplace(elements);
 
   testing_laplace.run_functor_simple_laplace();
 
-  for(int _index = 0; _index < elements; _index++) {
-    Real local_fortran_output[NP][NP];
+  HostViewManaged<Real[NP][NP]> local_fortran_output("fortran results");
 
+  for(int _index = 0; _index < elements; _index++) {
     HostViewManaged<Real[NP][NP]> local_scalar_input =
         Kokkos::subview(testing_laplace.scalar_input_host,
                         _index, Kokkos::ALL, Kokkos::ALL);
@@ -318,40 +344,28 @@ TEST_CASE("Testing laplace_simple_sl()",
         Kokkos::subview(testing_laplace.spheremp_host,
                         _index, Kokkos::ALL, Kokkos::ALL);
 
-    // F input declared
-    Real sf[NP][NP];
-    Real dvvf[NP][NP];
-    Real dinvf[2][2][NP][NP];
-    Real sphf[NP][NP];
-
-    // flip arrays for F
-    for(int _i = 0; _i < NP; _i++)
-      for(int _j = 0; _j < NP; _j++) {
-        sf[_i][_j] = local_scalar_input(_i, _j);
-        dvvf[_i][_j] = testing_laplace.dvv_host(_i, _j);
-        sphf[_i][_j] = local_spheremp(_i, _j);
-        for(int _d1 = 0; _d1 < 2; _d1++)
-          for(int _d2 = 0; _d2 < 2; _d2++)
-            dinvf[_d1][_d2][_i][_j] =
-                local_dinv(_d1, _d2, _i, _j);
-      }
-
     // run F code
     laplace_simple_c_callable(
-        &(sf[0][0]), &(dvvf[0][0]), &(dinvf[0][0][0][0]),
-        &(sphf[0][0]), &(local_fortran_output[0][0]));
+        local_scalar_input.data(),
+        testing_laplace.dvv_host.data(),
+        local_dinv.data(), local_spheremp.data(),
+        local_fortran_output.data());
 
     // compare answers
     for(int igp = 0; igp < NP; ++igp) {
       for(int jgp = 0; jgp < NP; ++jgp) {
         REQUIRE(
-            !std::isnan(local_fortran_output[igp][jgp]));
+            !std::isnan(local_fortran_output(igp, jgp)));
         REQUIRE(
             !std::isnan(testing_laplace.scalar_output_host(
                 _index, igp, jgp)));
+        Real rel_error = compare_answers(
+                    local_fortran_output(igp, jgp),
+                    testing_laplace.scalar_output_host(
+                        _index, igp, jgp));
         REQUIRE(std::numeric_limits<Real>::epsilon() >=
                 compare_answers(
-                    local_fortran_output[igp][jgp],
+                    local_fortran_output(igp, jgp),
                     testing_laplace.scalar_output_host(
                         _index, igp, jgp)));
       }  // jgp
@@ -364,8 +378,6 @@ TEST_CASE("Testing laplace_simple_sl()",
 };  // end of TEST_CASE(..., "simple laplace")
 
 TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 1;
 
   compute_sphere_operator_test testing_divwk(elements);
@@ -436,8 +448,6 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
 
 TEST_CASE("Testing gradient_sphere_sl()",
           "gradient_sphere") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test testing_grad(elements);

@@ -164,12 +164,48 @@ contains
   end subroutine preq_omegap
 
 
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 !
 !  compute omega/p using ps, modeled after CCM3 formulas
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  subroutine preq_omega_ps_c_int(omega_p, pressure, velocity, divdp, dinv, dvv) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    use derivative_mod, only : derivative_t, gradient_sphere
+    use hybvcoord_mod, only : hvcoord_t
+    implicit none
+
+    real (kind=real_kind), intent(out) :: omega_p(np, np, nlev)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2, nlev)
+    real (kind=real_kind), intent(in) :: pressure(np, np, nlev)
+    real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: dvv(np, np)
+
+    ! locals
+    type (derivative_t) :: deriv
+    real (kind=real_kind) :: pressure_grad(np, np, 2)
+    real (kind=real_kind) :: vgrad_p(np, np, nlev)
+    integer i, j, level
+    ! hvcoord is unused, so pass it as a dummy value
+    type (hvcoord_t) :: hvcoord
+
+    deriv%Dvv = dvv
+
+    do level = 1, nlev
+      pressure_grad = gradient_sphere(pressure(:, :, level), deriv, dinv)
+      do j = 1, np
+        do i = 1, np
+           vgrad_p(i, j, level) = velocity(i, j, 1, level) * pressure_grad(i, j, 1) + &
+                velocity(i, j, 2, level) * pressure_grad(i, j, 2)
+        end do
+      end do
+   end do
+
+    call preq_omega_ps(omega_p, hvcoord, pressure, vgrad_p, divdp)
+  end subroutine preq_omega_ps_c_int
+
   subroutine preq_omega_ps(omega_p,hvcoord,p,vgrad_p,divdp)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
@@ -210,7 +246,6 @@ contains
                 omega_p(i,j,k) = vgrad_p(i,j,k)/p(i,j,k)
                 omega_p(i,j,k) = omega_p(i,j,k) - (2*ckk*suml(i,j) + ckk*divdp(i,j,k))
                 suml(i,j) = suml(i,j) + divdp(i,j,k)
-
              end do
           end do
 
@@ -301,6 +336,20 @@ contains
 !  CCM3 hydrostatic integral
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  subroutine preq_hydrostatic_c_int(phi, phis, T_v, pressure, dp) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    implicit none
+
+    real(kind=real_kind), intent(out) :: phi(np,np,nlev)
+    real(kind=real_kind), intent(in) :: phis(np,np)
+    real(kind=real_kind), intent(in) :: T_v(np,np,nlev)
+    real(kind=real_kind), intent(in) :: pressure(np,np,nlev)
+    real(kind=real_kind), intent(in) :: dp(np,np,nlev)
+
+    call preq_hydrostatic(phi, phis, T_v, pressure, dp)
+  end subroutine preq_hydrostatic_c_int
+
   subroutine preq_hydrostatic(phi,phis,T_v,p,dp)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
