@@ -188,15 +188,25 @@ struct CaarFunctor {
         auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
         auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
         auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
-        auto tv_dp_over_p = t_v * dp3d * 0.5 / p;
 
-        for (int iv=vec_start; iv>=0; --iv) {
+        // Precompute this product as a SIMD operation
+        auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * dp3d * 0.5 / p;
+
+        // Add the terms that are not integrated now, as a SIMD operation
+        phi = phis + rgas_tv_dp_over_p;
+        rgas_tv_dp_over_p *= 2.0;
+
+        // Integrate
+        Scalar integration_ij;
+        integration_ij[vec_start] = integration(igp,jgp) + rgas_tv_dp_over_p[vec_start];
+        for (int iv=vec_start-1; iv>=0; --iv) {
           // compute phi
-          phi[iv] = phis + integration(igp,jgp) + PhysicalConstants::Rgas * tv_dp_over_p[iv];
 
           // update integral
-          integration(igp, jgp) += PhysicalConstants::Rgas * 2.0 * tv_dp_over_p[iv];
+          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv];
         }
+        phi += integration_ij;
+        integration(igp,jgp) = integration_ij[0];
       });
     }
   }
@@ -297,16 +307,20 @@ struct CaarFunctor {
         const int igp = (work_set.start + loop_idx*work_set.increment) / NP;
         const int jgp = (work_set.start + loop_idx*work_set.increment) % NP;
 
-        auto&  p = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
+        auto  p  = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
         auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+
+        Real dp_prev_ij = dp_prev(igp,jgp);
+        Real  p_prev_ij =  p_prev(igp,jgp);
 
         for (int iv=0; iv<=vector_end; ++iv) {
           // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
-          p[iv] = p_prev(igp,jgp) + 0.5*dp_prev(igp,jgp) + 0.5*dp[iv];
+          p[iv] = p_prev_ij + 0.5*dp_prev_ij+ 0.5*dp[iv];
           // Update p[k-1] and dp[k-1]
-          p_prev (igp,jgp) = p [iv];
-          dp_prev(igp,jgp) = dp[iv];
+          p_prev_ij = p [iv];
+          dp_prev_ij = dp[iv];
         }
+        m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp) = p;
       });
     }
   }
