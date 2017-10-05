@@ -152,6 +152,7 @@ class compute_sphere_operator_test_ml {
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
     Kokkos::deep_copy(scalar_input_d, scalar_input_host);
+    Kokkos::deep_copy(scalar_input_COPY2_d, scalar_input_host);
     Kokkos::deep_copy(scalar_input_COPY2_host, scalar_input_host);
 
     genRandArray(
@@ -502,19 +503,6 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    if(kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-          [&]() {
-            for(int igp = 0; igp < NP; ++igp) {
-              for(int jgp = 0; jgp < NP; ++jgp) {
-                printf("scalar input %d %d c % .17e\n",
-                       igp, jgp,
-                       local_scalar_input_d(igp, jgp, 0)[0]);
-              }
-            }
-          });
-    }
-
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(kv.team, NUM_LEV),
         [&](const int &level) {
@@ -533,20 +521,6 @@ class compute_sphere_operator_test_ml {
                     local_scalar_input_d(igp, jgp, level);
               });
         });  // end of par_for for level
-
-    if(kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-          [&]() {
-            for(int igp = 0; igp < NP; ++igp) {
-              for(int jgp = 0; jgp < NP; ++jgp) {
-                printf("scalar output %d %d c % .17e\n",
-                       igp, jgp,
-                       local_scalar_input_d(igp, jgp, 0)[0]);
-              }
-            }
-          });
-    }
-
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -1092,7 +1066,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
 
 }  // end of test laplace_tensor multilevel
 
-TEST_CASE("Testing laplace_tensor_replace() multilevel",
+TEST_CASE("Testing_laplace_tensor_replace_multilevel",
           "laplace_tensor_replace") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -1123,32 +1097,10 @@ TEST_CASE("Testing laplace_tensor_replace() multilevel",
                     _index, _i, _j);
             dvvf[_i][_j] =
                 testing_tensor_laplace.dvv_host(_i, _j);
-            for(int _d1 = 0; _d1 < 2; _d1++) {
-              for(int _d2 = 0; _d2 < 2; _d2++) {
-                printf("tensor %d %d %d %d f % .17e\n",
-                       _d1, _d2, _i, _j,
-                       testing_tensor_laplace.tensor_host(_index, _d1, _d2, _i, _j));
-              }  // end of d2 loop
-            }
           }
         }
-        for(int _i = 0; _i < NP; _i++) {
-          for(int _j = 0; _j < NP; _j++) {
-            printf("scalar input %d %d f % .17e\n",
-                   _i, _j,
-                   testing_tensor_laplace.scalar_input_host(_index, _i, _j, level)[v]);
-          }
-        }
-
         Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
                           testing_tensor_laplace.scalar_input_d);
-        for(int _i = 0; _i < NP; _i++) {
-          for(int _j = 0; _j < NP; _j++) {
-            printf("scalar input %d %d f % .17e\n",
-                   _i, _j,
-                   testing_tensor_laplace.scalar_input_host(_index, _i, _j, level)[v]);
-          }
-        }
 
         Real _hp = 0.0;
         Real _hs = 1.0;
