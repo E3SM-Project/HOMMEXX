@@ -1147,10 +1147,10 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
   compute_sphere_operator_test_ml testing_curl(elements);
   testing_curl.run_functor_curl_sphere_wk_testcov();
 
+  HostViewManaged<Real[2][NP][NP]> local_fortran_output("curl_sphere_wk_testcov fortran results");
   for(int _index = 0; _index < elements; _index++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
-        Real local_fortran_output[2][NP][NP];
         Real sf[NP][NP];
         Real dvvf[NP][NP];
         Real df[2][2][NP][NP];
@@ -1173,7 +1173,7 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
           }
         curl_sphere_wk_testcov_c_callable(
             &(sf[0][0]), &(dvvf[0][0]), &(df[0][0][0][0]),
-            &(mpf[0][0]), &(local_fortran_output[0][0][0]));
+            &(mpf[0][0]), local_fortran_output.data());
 
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
@@ -1204,21 +1204,21 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             */
 
             REQUIRE(!std::isnan(
-                local_fortran_output[0][igp][jgp]));
-
+                    local_fortran_output(0, igp, jgp)));
             REQUIRE(!std::isnan(
-                local_fortran_output[1][igp][jgp]));
+                    local_fortran_output(1, igp, jgp)));
 
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
+
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
+                        local_fortran_output(0, igp, jgp),
+                        coutput0, 512.0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+                        local_fortran_output(1, igp, jgp),
+                        coutput1, 512.0));
 
           }  // jgp
         }    // igp
