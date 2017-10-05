@@ -452,9 +452,6 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
-          REQUIRE(dp3d_f90(ie, test_functor.functor.m_data.nm1, k, igp, jgp) ==
-                  test_functor.dp3d(ie, test_functor.functor.m_data.nm1, k, igp,
-                                    jgp));
           Real correct =
               dp3d_f90(ie, test_functor.functor.m_data.np1, k, igp, jgp);
           REQUIRE(!std::isnan(correct));
