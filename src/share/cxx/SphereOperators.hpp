@@ -205,12 +205,12 @@ KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
     ////does not work. is creating kokkos temorary in a kernel the correct way?
     ExecViewUnmanaged<Real[2][NP][NP]> grad_s,         // temp to store grad
     const ExecViewUnmanaged<const Real[NP][NP]> field, // input
+    ExecViewUnmanaged<Real[2][NP][NP]> sphere_buf, // spherical operator buffer
     // output
     ExecViewUnmanaged<Real[NP][NP]> laplace) {
-  // Real grad_s[2][NP][NP];
   // let's ignore var coef and tensor hv
-  // gradient_sphere_sl(kv, DInv, dvv, field, grad_s);
-  // divergence_sphere_wk_sl(kv, DInv, spheremp, dvv, grad_s, laplace);
+  gradient_sphere_sl(kv, DInv, dvv, field, sphere_buf, grad_s);
+  divergence_sphere_wk_sl(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
 } // end of laplace_wk_sl
 
 // ================ MULTI-LEVEL IMPLEMENTATION =========================== //
