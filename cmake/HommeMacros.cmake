@@ -70,6 +70,12 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
   MESSAGE(STATUS "  QSIZE_D = ${macroQSIZE_D}")
   MESSAGE(STATUS "  PIO = ${macroUSE_PIO}")
   MESSAGE(STATUS "  ENERGY = ${macroWITH_ENERGY}")
+  IF (DEFINED extra_compile_definitions)
+    MESSAGE(STATUS "  extra_compile_definitions: ${extra_compile_definitions}")
+  ENDIF()
+  IF (DEFINED extra_compile_options)
+    MESSAGE(STATUS "  extra_compile_options: ${extra_compile_options}")
+  ENDIF()
 
   # Set the variable to the macro variables
   SET(NUM_POINTS ${macroNP})
@@ -116,6 +122,12 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
 
   ADD_EXECUTABLE(${execName} ${EXEC_SOURCES})
   SET_TARGET_PROPERTIES(${execName} PROPERTIES LINKER_LANGUAGE ${linkLang})
+  IF (DEFINED extra_compile_options)
+    SET_TARGET_PROPERTIES(${execName} PROPERTIES COMPILE_OPTIONS     "${extra_compile_options}")
+  ENDIF()
+  IF (DEFINED extra_compile_definitions)
+    SET_TARGET_PROPERTIES(${execName} PROPERTIES COMPILE_DEFINITIONS "${extra_compile_definitions}")
+  ENDIF()
 
   IF (${linkLang} STREQUAL "Fortran")
     IF (${CXXLIB_SUPPORTED})
