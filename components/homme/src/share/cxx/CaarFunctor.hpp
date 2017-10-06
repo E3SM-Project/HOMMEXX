@@ -21,13 +21,20 @@ struct CaarFunctor {
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
 
-  CaarFunctor() : m_data(), m_elements(get_elements()), m_deriv(get_derivative()) {
+  CaarFunctor()
+    : m_data()
+    , m_elements(get_elements())
+    , m_deriv(get_derivative())
+  {
     // Nothing to be done here
   }
 
   KOKKOS_INLINE_FUNCTION
   CaarFunctor(const Control &data)
-      : m_data(data), m_elements(get_elements()), m_deriv(get_derivative()) {
+    : m_data(data)
+    , m_elements(get_elements())
+    , m_deriv(get_derivative())
+  {
     // Nothing to be done here
   }
 
@@ -75,10 +82,6 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP),
                          [&](const int idx) {
       const int hgp = (idx / NP) / NP;
@@ -144,7 +147,7 @@ struct CaarFunctor {
       const int jgp = idx % NP;
 
       // TODO: Compute the actual value for this if
-      // rsplit=0.
+      // rsplit=0, and recall that size eta_dot_dpdn = NUM_PHYSICAL_LEV+1!
       // m_elements.ETA_DPDN += eta_ave_w*eta_dot_dpdn
 
       m_elements.m_eta_dot_dpdn(kv.ie, kv.ilev, igp, jgp) = 0;
@@ -155,7 +158,6 @@ struct CaarFunctor {
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
   void preq_hydrostatic(KernelVariables &kv) const {
-
     // auto makes it easy with template parameters
     auto work_set = TeamThreadRange(kv.team, NP*NP);
     int count = (work_set.end - work_set.start) / work_set.increment;
@@ -185,28 +187,24 @@ struct CaarFunctor {
 
         Real  phis = m_elements.m_phis(kv.ie, igp, jgp);
         auto& phi  = m_elements.m_phi(kv.ie, kv.ilev, igp, jgp);
-        auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
-        auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
-        auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
+        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp);
+        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+        const auto& p    = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
 
         // Precompute this product as a SIMD operation
         auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * dp3d * 0.5 / p;
 
-        // Add the terms that are not integrated now, as a SIMD operation
-        phi = phis + rgas_tv_dp_over_p;
-        rgas_tv_dp_over_p *= 2.0;
-
         // Integrate
         Scalar integration_ij;
-        integration_ij[vec_start] = integration(igp,jgp) + rgas_tv_dp_over_p[vec_start];
+        integration_ij[vec_start] = integration(igp,jgp);
         for (int iv=vec_start-1; iv>=0; --iv) {
-          // compute phi
-
           // update integral
-          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv];
+          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv+1];
         }
-        phi += integration_ij;
-        integration(igp,jgp) = integration_ij[0];
+
+        // Add integral and constant terms to phi
+        phi = phis + rgas_tv_dp_over_p + 2.0*integration_ij;
+        integration(igp,jgp) = integration_ij[0] + rgas_tv_dp_over_p[0];;
       });
     }
   }
@@ -215,12 +213,6 @@ struct CaarFunctor {
   // omega_p
   KOKKOS_INLINE_FUNCTION
   void preq_omega_ps(KernelVariables &kv) const {
-    // NOTE: we can't use a single TeamThreadRange loop,
-    // since gradient_sphere requires a 'consistent'
-    // pressure, meaning that we cannot update the different
-    // pressure points within a level before the gradient is
-    // complete!
-
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                          [&](const int ilev) {
       kv.ilev = ilev;
@@ -247,6 +239,8 @@ struct CaarFunctor {
     for (kv.ilev=0; kv.ilev<NUM_LEV; ++kv.ilev) {
       const int vector_end = kv.ilev==NUM_LEV ? NUM_PHYSICAL_LEV % VECTOR_SIZE : VECTOR_SIZE-1;
 
+
+
       Kokkos::parallel_for(ThreadVectorRange(kv.team,work_count),
                            [&](const int loop_idx) {
         const int igp = (work_set.start + loop_idx*work_set.increment) / NP;
@@ -257,15 +251,16 @@ struct CaarFunctor {
                          m_elements.m_v(kv.ie, m_data.n0, kv.ilev, igp, jgp) *
                            m_elements.buffers.pressure_grad(kv.ie, kv.ilev, 1, igp, jgp);
         auto& omega_p = m_elements.buffers.omega_p(kv.ie, kv.ilev, igp, jgp);
-        auto& p       = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
-        auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, kv.ilev, igp, jgp);
+        const auto& p       = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
+        const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, kv.ilev, igp, jgp);
 
-        omega_p = vgrad_p / p;
-        for (int iv=0; iv<=vector_end; ++iv) {
-          Real ckk = 0.5 / p[iv];
-          omega_p[iv] -= 2.0*ckk*integration(igp, jgp) + ckk*div_vdp[iv];
-          integration(igp, jgp) += div_vdp[iv];
+        Scalar integration_ij;
+        integration_ij[0] = integration(igp,jgp);
+        for (int iv=0; iv<vector_end; ++iv) {
+          integration_ij[iv+1] = integration_ij[iv] + div_vdp[iv];
         }
+        omega_p = (vgrad_p - (integration_ij + 0.5*div_vdp))/p;
+        integration(igp, jgp) = integration_ij[vector_end] + div_vdp[vector_end];
       });
     }
   }
@@ -308,7 +303,7 @@ struct CaarFunctor {
         const int jgp = (work_set.start + loop_idx*work_set.increment) % NP;
 
         auto  p  = m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp);
-        auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
+        const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, kv.ilev, igp, jgp);
 
         Real dp_prev_ij = dp_prev(igp,jgp);
         Real  p_prev_ij =  p_prev(igp,jgp);
@@ -321,6 +316,9 @@ struct CaarFunctor {
           dp_prev_ij = dp[iv];
         }
         m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp) = p;
+
+        dp_prev(igp,jgp) = dp_prev_ij;
+         p_prev(igp,jgp) =  p_prev_ij;
       });
     }
   }
