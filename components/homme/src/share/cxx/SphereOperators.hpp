@@ -231,7 +231,7 @@ gradient_sphere(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dsdx(0.0), dsdy(0.0);
+    Scalar dsdx, dsdy;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dsdx += dvv(jgp, kgp) * scalar(kv.ilev, igp, kgp);
       dsdy += dvv(jgp, kgp) * scalar(kv.ilev, kgp, igp);
@@ -262,7 +262,7 @@ KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dsdx(0.0), dsdy(0.0);
+    Scalar dsdx, dsdy;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dsdx += dvv(jgp, kgp) * scalar(kv.ilev, igp, kgp);
       dsdy += dvv(igp, kgp) * scalar(kv.ilev, kgp, jgp);
@@ -303,12 +303,12 @@ divergence_sphere(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dudx = 0.0, dvdy = 0.0;
+    Scalar dudx, dvdy;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dudx += dvv(jgp, kgp) * gv[0][igp][kgp];
       dvdy += dvv(igp, kgp) * gv[1][kgp][jgp];
     }
-    div_v(kv.ilev, igp, jgp) = (dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) * PhysicalConstants::rrearth);
+    div_v(kv.ilev, igp, jgp) = (dudx + dvdy) * (1.0 / metdet(kv.ie, igp, jgp) * PhysicalConstants::rrearth);
   });
 }
 
@@ -337,7 +337,7 @@ divergence_sphere_update(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dudx = 0.0, dvdy = 0.0;
+    Scalar dudx, dvdy;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dudx += dvv(jgp, kgp) * gv[0][igp][kgp];
       dvdy += dvv(igp, kgp) * gv[1][kgp][jgp];
@@ -371,8 +371,7 @@ vorticity_sphere(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dudy = 0.0;
-    Scalar dvdx = 0.0;
+    Scalar dudy, dvdx;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dvdx += dvv(jgp, kgp) * vcov[1][igp][kgp];
       dudy += dvv(igp, kgp) * vcov[0][kgp][jgp];
@@ -408,8 +407,7 @@ vorticity_sphere_vector(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
-    Scalar dudy = 0.0;
-    Scalar dvdx = 0.0;
+    Scalar dudy, dvdx;
     for (int kgp = 0; kgp < NP; ++kgp) {
       dvdx += dvv(jgp, kgp) * vcov[1][igp][kgp];
       dudy += dvv(igp, kgp) * vcov[0][kgp][jgp];
@@ -445,7 +443,7 @@ divergence_sphere_wk(const KernelVariables &kv,
                        [&](const int loop_idx) {
     const int mgp = loop_idx / NP;
     const int ngp = loop_idx % NP;
-    Scalar dd = 0.0;
+    Scalar dd;
     for (int jgp = 0; jgp < NP; ++jgp) {
       dd -= (  spheremp(kv.ie,ngp,jgp)*gv[0][ngp][jgp]*dvv(jgp,mgp)
              + spheremp(kv.ie,jgp,mgp)*gv[1][jgp][mgp]*dvv(jgp,ngp) )
@@ -558,16 +556,10 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
                 ExecViewUnmanaged<const Scalar[NUM_LEV]   [NP][NP]> scalar,
                 ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> curls) {
 
+  // Note: each element of the array is default initialized,
+  // and Scalar's default constructor inizializes to 0 already.
   Scalar dscontra[2][NP][NP];
   constexpr int np_squared = NP * NP;
-  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-    dscontra[0][igp][jgp] = 0.0;
-    dscontra[1][igp][jgp] = 0.0;
-
-  });
 //in here, which array should be addressed fastest?
   constexpr int np_cubed = NP * NP * NP;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_cubed),
@@ -607,16 +599,10 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
                 ExecViewUnmanaged<const Scalar[NUM_LEV]   [NP][NP]> scalar,
                 ExecViewUnmanaged<      Scalar[NUM_LEV][2][NP][NP]> grads) {
 
+  // Note: each element of the array is default initialized,
+  // and Scalar's default constructor inizializes to 0 already.
   Scalar dscontra[2][NP][NP];
   constexpr int np_squared = NP * NP;
-  Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-    dscontra[0][igp][jgp] = 0.0;
-    dscontra[1][igp][jgp] = 0.0;
-
-  });
 
   constexpr int np_cubed = NP * NP * NP;
   Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, np_cubed),
