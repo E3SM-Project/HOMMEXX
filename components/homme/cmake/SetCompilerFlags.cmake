@@ -21,7 +21,7 @@ endfunction()
 
 IF (DEFINED HOMMEXX_FPMODEL)
   HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" FP_MODEL_FLAG)
-  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FPMODEL)
+  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FP_MODEL_FLAG)
 ELSE ()
   SET(${FP_MODEL_FLAG} "-fp-model precise")
   SET(${UT_FPMODEL} "-fp-model precise")
