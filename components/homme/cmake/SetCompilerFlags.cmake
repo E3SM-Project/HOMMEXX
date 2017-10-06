@@ -2,6 +2,31 @@
 # Compiler specific options
 ##############################################################################
 
+# Small function to set the compiler flag '-fp model' given the name of the model
+# Note: this is an Intel-only flag
+function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
+  string(TOLOWER "${fpmodel_string}" fpmodel_string_lower)
+  if (("${fpmodel_string_lower}" STREQUAL "precise") OR
+      ("${fpmodel_string_lower}" STREQUAL "strict") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast=1") OR
+      ("${fpmodel_string_lower}" STREQUAL "fast=2"))
+    set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
+  elseif ("${fpmodel_string_lower}" STREQUAL "")
+    set (${flags} "" PARENT_SCOPE)
+  else()
+    message(FATAL_ERROR "FP_MODEL_FLAG string '${fpmodel_string}' is not recognized.")
+  endif()
+endfunction()
+
+IF (DEFINED HOMMEXX_FPMODEL)
+  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" FP_MODEL_FLAG)
+  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FP_MODEL_FLAG)
+ELSE ()
+  SET(${FP_MODEL_FLAG} "-fp-model precise")
+  SET(${UT_FPMODEL} "-fp-model precise")
+ENDIF ()
+
 # Need this for a fix in repro_sum_mod
 IF (${CMAKE_Fortran_COMPILER_ID} STREQUAL XL)
   ADD_DEFINITIONS(-DnoI8)
@@ -29,13 +54,14 @@ ELSE ()
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -extend-source")
   ELSEIF (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -assume byterecl")
-    SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fp-model precise -ftz")
+    SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${FP_MODEL_FLAG}")
+    SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ftz")
     #SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fp-model fast -qopt-report=5 -ftz")
     #SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -mP2OPT_hpo_matrix_opt_framework=0 -fp-model fast -qopt-report=5 -ftz")
 
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -diag-disable 8291")
 
-    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fp-model precise")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FP_MODEL_FLAG}")
 
     # remark #8291: Recommended relationship between field width 'W' and the number of fractional digits 'D' in this edit descriptor is 'W>=D+7'.
 
@@ -59,32 +85,11 @@ ELSE ()
  ENDIF ()
 ENDIF ()
 
-function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
-  string(TOLOWER "${fpmodel_string}" fpmodel_string_lower)
-  if (("${fpmodel_string_lower}" STREQUAL "precise") OR
-      ("${fpmodel_string_lower}" STREQUAL "strict") OR
-      ("${fpmodel_string_lower}" STREQUAL "fast") OR
-      ("${fpmodel_string_lower}" STREQUAL "fast=1") OR
-      ("${fpmodel_string_lower}" STREQUAL "fast=2"))
-    set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
-  elseif ("${fpmodel_string_lower}" STREQUAL "")
-    set (${flags} "" PARENT_SCOPE)
-  else()
-    message(FATAL_ERROR "FPMODEL string '${fpmodel_string}' is not recognized.")
-  endif()  
-endfunction()
-
 IF (DEFINED BASE_CPPFLAGS)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BASE_CPPFLAGS}")
 ELSE ()
   IF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
-    IF (DEFINED HOMMEXX_FPMODEL)
-      HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" CPP_FPMODEL)
-      HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" CPP_UT_FPMODEL)
-      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_FPMODEL}")
-    ELSE ()
-      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fp-model precise")
-    ENDIF ()
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FP_MODEL_FLAG}")
   ENDIF ()
 ENDIF ()
 
