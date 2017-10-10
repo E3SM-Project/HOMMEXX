@@ -229,19 +229,25 @@ runTestsStd() {
     #echo "subJobName=$subJobName"
 
     # setup file for stdout and stderr redirection
-    THIS_STDOUT=${subJobName}.out
-    THIS_STDERR=${subJobName}.err
+    THIS_STDOUT=${subJobName}-cmd.out
+    THIS_STDERR=${subJobName}-cmd.err
 
     # Run the command
     # For some reason bsub must not be part of a string
+    echo ""
     echo -n "Running test ${subJobName} ... "
+    echo ""
+    # remove suffix '-run' to refer to output files that mpiexec uses in *run.sh
+    subJobName2=${subJobName::-4}
     #echo "${subFile} > $THIS_STDOUT 2> $THIS_STDERR"
     chmod u+x ${subFile}
+
     cmd="${subFile} > $THIS_STDOUT 2> $THIS_STDERR"
     echo "$cmd"
     $cmd
     # Get the status of the run
     RUN_STAT=$?
+
     # Do some error checking
     if [ $RUN_STAT = 0 ]; then
       # the command was succesful
@@ -249,9 +255,13 @@ runTestsStd() {
       SUBMIT_TEST+=( "${subJobName}" )
       SUBMIT_JOB_ID+=( "${RUN_PID}" )
     else 
-      echo "failed with message:"
+      echo "failed with message from CMD output (if any):"
       cat $THIS_STDERR
-      exit -7
+      echo "failed with message from ${subJobName2}_1.err (if any):"
+      tail -n 10  ${subJobName2}/${subJobName2}_1.err
+      echo "failed with message from ${subJobName2}_1.out (if any):"
+      tail -n 10  ${subJobName2}/${subJobName2}_1.out
+      #removed exit
     fi
   done
 }
@@ -359,7 +369,7 @@ createAllRunScripts() {
 
         echo "# Running cprnc to difference ${baseFilename} against baseline " >> $thisRunScript
         #echo "$cmd > $diffStdout 2> $diffStderr" >> $thisRunScript
-        cmd="${CPRNC_BINARY} ${newFile} ${repoFile} > $diffStdout 2> $diffStderr"
+        cmd="${CPRNC_BINARY} -m ${newFile} ${repoFile} > $diffStdout 2> $diffStderr"
         #echo "  $cmd"
         serExecLine $thisRunScript "$cmd"
         echo "" >> $thisRunScript # blank line
@@ -564,12 +574,12 @@ diffCprnc() {
     #repoFile=${HOMME_NC_RESULTS_DIR}/${TEST_NAME}/${baseFilename}
     repoFile=${HOMME_BASELINE_DIR}/${TEST_NAME}/movies/${baseFilename}
 
-    if [ ! -f "${newFile}" ] ; then
+    if [ ! -f "${repoFile}" ] ; then
       echo "ERROR: The repo file ${repoFile} does not exist exiting" 
       exit -10
     fi
 
-    cmd="${CPRNC_BINARY} ${newFile} ${repoFile}"
+    cmd="${CPRNC_BINARY} ${repoFile} ${newFile}"
 
     diffStdout=${TEST_NAME}.${baseFilename}.out
     diffStderr=${TEST_NAME}.${baseFilename}.err
