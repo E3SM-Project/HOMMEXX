@@ -65,8 +65,8 @@ ENDIF ()
 
 # Some options for conditional builds
 OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" OFF)
-OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" ON)
-OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" OFF)
+OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" OFF)
+OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
 OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
 OPTION(BUILD_HOMME_PREQX_ACC "Primitive equations FEM with OpenACC" OFF)
 OPTION(BUILD_HOMME_SWIM  "Shallow water equations implicit" OFF)
