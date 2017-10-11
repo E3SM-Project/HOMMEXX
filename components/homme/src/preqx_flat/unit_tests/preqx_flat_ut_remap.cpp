@@ -128,9 +128,9 @@ class remap_test {
     Real dp0 = (ptop - pbottom) / (NLEV - 1);
     Real pend[NLEV];
     pend[0] = pbottom;
-    pend[NLEV] = ptop;
+    pend[NLEV-1] = ptop;
 
-    for(int _k = 0; _k < (NLEV - 1); _k++) {
+    for(int _k = 0; _k < (NLEV - 2); _k++) {
       pend[_k + 1] = pend[_k] + dp0;
     }  // k loop
 
