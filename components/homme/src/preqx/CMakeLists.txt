@@ -39,6 +39,8 @@ SET(PREQX_SRCS_F90
   ${SRC_DIR}/surfaces_mod.F90
   ${SRC_DIR}/vertical_mod.F90
   ${SRC_DIR}/test_mod.F90
+  ${SRC_DIR}/utils_mod.F90
+  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/derivative_mod_base.F90
   ${SRC_SHARE_DIR}/edge_mod_base.F90
