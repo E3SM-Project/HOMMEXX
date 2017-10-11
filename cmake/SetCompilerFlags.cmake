@@ -27,7 +27,7 @@ IF (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
     HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FP_MODEL_FLAG)
   ELSE ()
     SET(${FP_MODEL_FLAG} "-fp-model precise")
-    SET(${UT_FPMODEL} "-fp-model precise")
+    SET(${UT_FP_MODEL} "-fp-model precise")
   ENDIF ()
 ENDIF ()
 
