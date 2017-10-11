@@ -5,7 +5,7 @@ topology      = "cube"
 test_case     = "jw_baroclinic"
 u_perturb      = 1
 rotate_grid = 0
-ne=30
+ne=4
 qsize         = 4
 ndays          = 9
 statefreq     = 144
@@ -52,8 +52,8 @@ kcut_fm       = 2
 /
 &vert_nl
 vform         = "ccm"
-vfile_mid     = "./camm-26.ascii"
-vfile_int     = "./cami-26.ascii"
+vfile_mid     = "./acme-72m.ascii"
+vfile_int     = "./acme-72i.ascii"
 /
 
 &prof_inparm
@@ -66,13 +66,13 @@ profile_single_file		= .true.
 ! interp_nlat = 512
 ! interp_nlon = 1024
  interp_gridtype=2
- output_prefix='homme-r3-'
+ output_prefix='cxx-r3-'
  output_timeunits=1,1
  output_frequency=3,3
  output_start_time=0,0
  output_end_time=30000,30000
- output_varnames1='ps','zeta','dp3d','T','u','v'
- output_varnames2='Q','Q2','Q3','Q4'
+ output_varnames1='ps','zeta','dp3d','T','U','V'
+ output_varnames2='Q','Q2','Q3','Q4','Q5'
  io_stride=8
  output_type = 'netcdf' 
 /
