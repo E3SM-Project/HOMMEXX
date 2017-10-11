@@ -24,7 +24,8 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
 
   # Compile definitions and flags
   SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_DEFINITIONS "${config_defines}")
-  SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_OPTIONS     "${UT_FP_MODEL_FLAG}")
+  separate_arguments(safestr UNIX_COMMAND ${UT_FP_MODEL_FLAG})
+  SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_OPTIONS "${safestr}")
 
   TARGET_INCLUDE_DIRECTORIES(${target_name} PUBLIC "${include_dirs}")
   TARGET_INCLUDE_DIRECTORIES(${target_name} PUBLIC "${SRC_SHARE};${SRC_BASE};${UNITTESTER_DIR}")
