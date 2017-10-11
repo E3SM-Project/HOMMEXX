@@ -1,0 +1,28 @@
+#!/bin/bash -f
+#SBATCH --job-name baro
+#SBATCH -p ec
+#SBATCH --time=00:15:00 #30
+#SBATCH --nodes=4  #4
+#SBATCH --output=sout%j
+#SBATCH --error=serr%j
+#SBATCH --account=FY150001
+
+
+dirHomme=hommebuild/bld
+cpexec=/projects/ccsm/cprnc/build.toss3/cprnc
+#RUNNING HOMME
+#run jw test with rsplit=3
+#mpiexec -n 64 ${dirHomme}/src/preqx/preqx < input-baro-rsplit3-homme72.nl > baro-r3-homme72-out
+#run jw test with rsplit=0
+mpiexec -n 64 ${dirHomme}/src/preqx/preqx < input-baro-rsplit0-homme72.nl > baro-r0-homme72-out
+
+#mpiexec -n 1 ${cpexec} movies/homme72-r3-jw_baroclinic1.nc movies/cxx72-r3-jw_baroclinic1.nc &> compare72-baro-homme-r3-file1
+#mpiexec -n 1 ${cpexec} movies/homme72-r3-jw_baroclinic2.nc movies/cxx72-r3-jw_baroclinic2.nc &> compare72-baro-homme-r3-file2
+mpiexec -n 1 ${cpexec} movies/homme72-r0-jw_baroclinic1.nc movies/f72-r0-jw_baroclinic1.nc &> compare72-baro-homme-r0-file1
+mpiexec -n 1 ${cpexec} movies/homme72-r0-jw_baroclinic2.nc movies/f72-r0-jw_baroclinic2.nc &> compare72-baro-homme-r0-file2
+
+
+
+
+
+

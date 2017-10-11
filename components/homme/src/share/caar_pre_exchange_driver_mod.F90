@@ -138,32 +138,28 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv_ptr, Dinv_ptr, pecnd_ptr, phi_ptr, v_ptr, vtemp_ptr) bind(c)
-    use iso_c_binding, only : c_int, c_double, c_ptr, c_f_pointer
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, vtemp) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use derivative_mod, only : derivative_t
-    type (c_ptr), intent(in) :: pecnd_ptr, phi_ptr, v_ptr, Dinv_ptr, dvv_ptr, vtemp_ptr
 
-    real (kind=c_double), pointer :: pecnd(:,:) ! (np,np)
-    real (kind=c_double), pointer :: phi(:,:) ! (np,np)
-    real (kind=c_double), pointer :: v(:,:,:) ! (np,np,2)
-    real (kind=c_double), pointer :: Dinv(:,:,:,:)
-    real (kind=c_double), pointer :: dvv(:,:)
-    real (kind=c_double), pointer :: vtemp(:,:,:)
+    real (kind=real_kind), intent(in) :: dvv(np, np) ! (np, np)
+    real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2) ! (np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: pecnd(np, np) ! (np, np)
+    real (kind=real_kind), intent(in) :: phi(np, np) ! (np, np)
+    real (kind=real_kind), intent(in) :: v(np, np, 2) ! (np, np, 2)
+    real (kind=real_kind), intent(inout) :: vtemp(np, np, 2) ! (np, np, 2)
+
+    ! locals
+
+    real (kind=real_kind) :: energy_grad(np, np, 2)
 
     type (derivative_t) :: deriv
 
-    call c_f_pointer(pecnd_ptr, pecnd, [np,np])
-    call c_f_pointer(phi_ptr, phi, [np,np])
-    call c_f_pointer(v_ptr, v, [np,np,2])
-    call c_f_pointer(Dinv_ptr, Dinv, [np,np,2,2])
-    call c_f_pointer(dvv_ptr, dvv, [np,np])
-    call c_f_pointer(vtemp_ptr, vtemp, [np,np,2])
-
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, energy_grad)
+    vtemp = vtemp + energy_grad
   end subroutine caar_compute_energy_grad_c_int
 
   subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
@@ -172,11 +168,11 @@ contains
     use derivative_mod, only : derivative_t, gradient_sphere
     use physical_constants, only : Rgas
     type (derivative_t), intent(in) :: deriv
-    real (kind=real_kind), intent(in) :: Dinv(:,:,:,:) ! (np,np,2,2)
-    real (kind=real_kind), intent(in) :: pecnd(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: phi(:,:) ! (np,np)
-    real (kind=real_kind), intent(in) :: v(:,:,:) ! (np,np,2)
-    real (kind=real_kind), intent(out) :: vtemp(:,:,:) ! (np,np,2)
+    real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: pecnd(np, np)
+    real (kind=real_kind), intent(in) :: phi(np, np)
+    real (kind=real_kind), intent(in) :: v(np, np, 2)
+    real (kind=real_kind), intent(out) :: vtemp(np, np, 2)
 
     integer :: h, i, j
     real (kind=real_kind), dimension(np,np) :: Ephi, gpterm
@@ -191,6 +187,282 @@ contains
     end do
     vtemp = gradient_sphere(Ephi, deriv, Dinv)
   end subroutine caar_compute_energy_grad
+
+  subroutine caar_compute_dp3d_np1_c_int(np1, nm1, dt2, spheremp, divdp, eta_dot_dpdn, dp3d) bind(c)
+    use kinds, only : real_kind
+    use element_mod, only : timelevels
+    use dimensions_mod, only : np, nlev
+
+    integer, value, intent(in) :: np1, nm1
+    real (kind=real_kind), intent(in) :: dt2
+    ! Note: These array dims are explicitly specified so they can be passed directly from C
+    real (kind=real_kind), intent(in) :: spheremp(np, np)
+    real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlev)
+    real (kind=real_kind), intent(out) :: dp3d(np, np, nlev, timelevels)
+
+    ! locals
+    integer :: i, j, k
+
+    do k = 1, nlev
+      do j = 1, np
+        do i = 1, np
+          dp3d(i, j, k, np1) = &
+               spheremp(i, j) * (dp3d(i, j, k, nm1) - &
+               dt2 * (divdp(i, j, k) + eta_dot_dpdn(i, j, k + 1) - eta_dot_dpdn(i, j, k)))
+        end do
+      end do
+    end do
+  end subroutine caar_compute_dp3d_np1_c_int
+
+  ! computes derived_vn0, vdp and divdp
+  subroutine caar_compute_divdp_c_int(eta_ave_w, velocity, dp3d, dinv, metdet, &
+                                      dvv, derived_vn0, vdp, divdp) bind(c)
+    use kinds, only : real_kind
+    use element_mod, only : element_t
+    use derivative_mod, only : derivative_t
+    use dimensions_mod, only : np, nlev
+
+    real (kind=real_kind), value, intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: dp3d(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: metdet(np, np)
+    real (kind=real_kind), intent(in) :: dvv(np, np)
+
+    real (kind=real_kind), intent(out) :: derived_vn0(np, np, 2)
+    real (kind=real_kind), intent(out) :: vdp(np, np, 2)
+    real (kind=real_kind), intent(out) :: divdp(np, np)
+
+    type(element_t) :: elem
+    type(derivative_t) :: deriv
+
+    deriv%dvv = dvv
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    ! This code is only used for unit testing, so allocates are okay
+    allocate(elem%Dinv(np, np, 2, 2))
+    allocate(elem%metdet(np, np))
+#endif
+
+    elem%Dinv = dinv
+    elem%metdet = metdet
+
+    call caar_compute_divdp(elem, deriv, eta_ave_w, dp3d, &
+                            velocity, derived_vn0, vdp, divdp)
+
+#ifdef HOMME_USE_FLAT_ARRAYS
+    deallocate(elem%Dinv)
+    deallocate(elem%metdet)
+#endif
+  end subroutine caar_compute_divdp_c_int
+
+  subroutine caar_compute_pressure_c_int(hyai, ps0, dp, pressure) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: hyai
+    real (kind=real_kind), intent(in) :: ps0
+    real (kind=real_kind), intent(in) :: dp(np, np, nlev)
+    real (kind=real_kind), intent(out) :: pressure(np, np, nlev)
+
+    integer :: i, j, k
+    do j = 1, np
+      do i = 1, np
+        pressure(i, j, 1) = hyai * ps0 + dp(i, j, 1) / 2
+      end do
+    end do
+    do k = 2, nlev
+      do j = 1, np
+        do i = 1, np
+          pressure(i, j, k) = pressure(i, j, k - 1) + &
+               dp(i, j, k - 1) / 2 + dp(i, j, k) / 2
+        end do
+      end do
+    end do
+  end subroutine caar_compute_pressure_c_int
+
+  ! computes derived_vn0, vdp and divdp
+  subroutine caar_compute_divdp(elem, deriv, eta_ave_w, dp3d, &
+                                velocity, derived_vn0, vdp, divdp)
+    use kinds, only : real_kind
+    use element_mod, only : element_t
+    use derivative_mod, only : derivative_t, divergence_sphere
+    use dimensions_mod, only : np, nlev
+
+    type(element_t), intent(in) :: elem
+    type(derivative_t), intent(in) :: deriv
+
+    real (kind=real_kind), intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: dp3d(np, np)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+
+    real (kind=real_kind), intent(inout) :: derived_vn0(np, np, 2)
+    real (kind=real_kind), intent(out) :: vdp(np, np, 2)
+    real (kind=real_kind), intent(out) :: divdp(np, np)
+
+    ! locals
+    integer :: i, j, k
+    do k = 1, 2
+      do j = 1, np
+        do i = 1, np
+           vdp(i, j, k) = velocity(i, j, k) * dp3d(i, j)
+           ! ================================
+           ! Accumulate mean Vel_rho flux in vn0
+           ! ================================
+           derived_vn0(i, j, k) = derived_vn0(i, j, k) + eta_ave_w * vdp(i, j, k)
+        end do
+      end do
+    end do
+    divdp = divergence_sphere(vdp, deriv, elem)
+  end subroutine caar_compute_divdp
+
+  subroutine caar_compute_temperature_no_tracers_c_int(T, T_v) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: T(np, np, nlev)
+    real (kind=real_kind), intent(out) :: T_v(np, np, nlev)
+
+    ! locals
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          T_v(i, j, k) = T(i, j, k)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_temperature_no_tracers_c_int
+
+  subroutine caar_compute_temperature_tracers_c_int(Qdp, dp, T, T_v) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    use physics_mod, only : virtual_temperature
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: Qdp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: dp(np, np, nlev)
+    real (kind=real_kind), intent(in) :: T(np, np, nlev)
+    real (kind=real_kind), intent(out) :: T_v(np, np, nlev)
+
+    ! locals
+    real (kind=real_kind) :: Qt
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          Qt = Qdp(i, j, k) / dp(i, j, k)
+          T_v(i, j, k) = Virtual_Temperature(T(i, j, k), Qt)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_temperature_tracers_c_int
+
+  subroutine caar_compute_omega_p_c_int(eta_ave_w, omega_p_source, omega_p_dest) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: eta_ave_w
+    real (kind=real_kind), intent(in) :: omega_p_source(np, np, nlev)
+    real (kind=real_kind), intent(inout) :: omega_p_dest(np, np, nlev)
+
+    ! locals
+    integer :: i, j, k
+
+    do k=1,nlev
+      do j=1,np
+        do i=1,np
+          omega_p_dest(i, j, k) = &
+               omega_p_dest(i, j, k) + eta_ave_w * omega_p_source(i, j, k)
+        end do
+      end do
+    end do
+  end subroutine caar_compute_omega_p_c_int
+
+  subroutine caar_compute_temperature_c_int(dt, spheremp, dinv, dvv, velocity, t_virt, omega_p, &
+                                            t_vadv, t_previous, t_current, t_future) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
+    use derivative_mod, only : derivative_t
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: dt
+    real (kind=real_kind), intent(in) :: spheremp(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: dvv(np, np)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: t_virt(np, np)
+    real (kind=real_kind), intent(in) :: omega_p(np, np)
+    real (kind=real_kind), intent(in) :: t_vadv(np, np)
+    real (kind=real_kind), intent(in) :: t_previous(np, np)
+    real (kind=real_kind), intent(in) :: t_current(np, np)
+    real (kind=real_kind), intent(out) :: t_future(np, np)
+
+    ! locals
+
+    type (derivative_t) :: deriv
+
+    deriv%dvv = dvv
+
+    call caar_compute_temperature(dt, deriv, spheremp, dinv, velocity, t_virt, &
+                                  omega_p, t_vadv, t_previous, t_current, t_future)
+
+  end subroutine caar_compute_temperature_c_int
+
+  subroutine caar_compute_temperature(dt, deriv, spheremp, dinv, velocity, t_virt, omega_p, &
+                                      t_vadv, t_previous, t_current, t_future)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np
+    use derivative_mod, only : derivative_t, gradient_sphere
+    use physical_constants, only : kappa
+
+    implicit none
+
+    real (kind=real_kind), value, intent(in) :: dt
+    type (derivative_t), intent(in) :: deriv
+    real (kind=real_kind), intent(in) :: spheremp(np, np)
+    real (kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
+    real (kind=real_kind), intent(in) :: velocity(np, np, 2)
+    real (kind=real_kind), intent(in) :: t_virt(np, np)
+    real (kind=real_kind), intent(in) :: omega_p(np, np)
+    real (kind=real_kind), intent(in) :: t_vadv(np, np)
+    real (kind=real_kind), intent(in) :: t_previous(np, np)
+    real (kind=real_kind), intent(in) :: t_current(np, np)
+    real (kind=real_kind), intent(out) :: t_future(np, np)
+
+    ! locals
+
+    real (kind=real_kind) :: vtemp(np, np, 2)
+    real (kind=real_kind) :: ttens, vgrad_t
+
+    integer :: i, j
+
+    ! ================================================
+    ! compute gradp term (ps/p)*(dp/dps)*T
+    ! ================================================
+    vtemp(:,:,:) = gradient_sphere(t_current, deriv, dinv)
+    do j=1,np
+      do i=1,np
+        vgrad_t =  velocity(i, j, 1) * vtemp(i, j, 1) + &
+             velocity(i, j, 2) * vtemp(i, j, 2)
+        ! Note: This ignores the case where use_cpstar = 1
+        ! In this case, we need to use Rgas / VirtualSpecificHeat(Qt)
+        ttens = -t_vadv(i, j) - vgrad_t + kappa * t_virt(i, j) * omega_p(i, j)
+        t_future(i, j) = spheremp(i, j) * (t_previous(i, j) + dt * ttens)
+      end do
+    end do
+  end subroutine caar_compute_temperature
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
@@ -207,7 +479,7 @@ contains
     use hybrid_mod,     only: hybrid_t
 
     use physical_constants, only : cp, cpwater_vapor, Rgas, kappa
-    use physics_mod, only : virtual_specific_heat, virtual_temperature
+    use physics_mod, only : virtual_specific_heat
     use prim_si_mod, only : preq_vertadv, preq_omega_ps, preq_hydrostatic
 #if ( defined CAM )
     use control_mod, only: se_met_nudge_u, se_met_nudge_p, se_met_nudge_t, se_met_tevolve
@@ -243,7 +515,6 @@ contains
     real (kind=real_kind), dimension(np,np,2)    :: vtemp     ! generic gradient storage
     real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !
     real (kind=real_kind), dimension(np,np,2     ):: v         !
-    real (kind=real_kind), dimension(np,np)      :: vgrad_T    ! v.grad(T)
     real (kind=real_kind), dimension(np,np,2)      :: grad_ps    ! lat-lon coord version
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p- p_met)
@@ -308,7 +579,9 @@ contains
         do k=1,nlev
           dp(:,:,k) = (hvcoord%hyai(k+1)*hvcoord%ps0 + hvcoord%hybi(k+1)*elem(ie)%state%ps_v(:,:,n0)) &
                - (hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0))
+
           p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,n0)
+
           grad_p(:,:,:,k) = hvcoord%hybm(k)*grad_ps(:,:,:)
         enddo
       else
@@ -321,24 +594,28 @@ contains
         ! p(k+1)-p(k) = ph(k+1)-ph(k) + (dp(k+1)-dp(k))/2
         !             = dp(k) + (dp(k+1)-dp(k))/2 = (dp(k+1)+dp(k))/2
         dp(:,:,1) = elem(ie)%state%dp3d(:,:,1,n0)
-        p(:,:,1)=hvcoord%hyai(1)*hvcoord%ps0 + dp(:,:,1)/2
         do k=2,nlev
           dp(:,:,k) = elem(ie)%state%dp3d(:,:,k,n0)
-          p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
         enddo
+        call caar_compute_pressure_c_int(hvcoord%hyai(1), hvcoord%ps0, dp, p)
       endif
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,v1,v2,vtemp)
 #endif
       do k=1,nlev
         ! if rsplit=0, then we computed grad_p by hand from grad_ps
-        if (rsplit>0) grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+         if (rsplit>0) then
+           grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+         end if
 
         rdp(:,:,k) = 1.0D0/dp(:,:,k)
 
         ! ============================
         ! compute vgrad_lnps
         ! ============================
+        call caar_compute_divdp(elem(ie), deriv, eta_ave_w, elem(ie)%state%dp3d(:, :, k, n0), &
+                                elem(ie)%state%v(:, :, :, k, n0), elem(ie)%derived%vn0(:, :, :, k), &
+                                vdp(:, :, :, k), divdp(:, :, k))
         do j=1,np
           do i=1,np
             v1 = elem(ie)%state%v(i,j,1,k,n0)
@@ -346,8 +623,6 @@ contains
   !          vgrad_p(i,j,k) = &
   !               hvcoord%hybm(k)*(v1*grad_ps(i,j,1) + v2*grad_ps(i,j,2))
             vgrad_p(i,j,k) = (v1*grad_p(i,j,1,k) + v2*grad_p(i,j,2,k))
-            vdp(i,j,1,k) = v1*dp(i,j,k)
-            vdp(i,j,2,k) = v2*dp(i,j,k)
           end do
         end do
 
@@ -364,49 +639,36 @@ contains
         endif
 #endif
 
-        ! ================================
-        ! Accumulate mean Vel_rho flux in vn0
-        ! ================================
-        elem(ie)%derived%vn0(:,:,:,k)=elem(ie)%derived%vn0(:,:,:,k)+eta_ave_w*vdp(:,:,:,k)
-
-
         ! =========================================
         !
         ! Compute relative vorticity and divergence
         !
         ! =========================================
-        divdp(:,:,k)=divergence_sphere(vdp(:,:,:,k),deriv,elem(ie))
         vort(:,:,k)=vorticity_sphere(elem(ie)%state%v(:,:,:,k,n0),deriv,elem(ie))
       enddo
 
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
       if (qn0 == -1 ) then
+        call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j)
 #endif
-        do k=1,nlev
-          do j=1,np
-            do i=1,np
-              T_v(i,j,k) = elem(ie)%state%T(i,j,k,n0)
+        do k = 1, nlev
+          do i = 1, np
+            do j = 1, np
               kappa_star(i,j,k) = kappa
             end do
           end do
         end do
       else
+        call caar_compute_temperature_tracers_c_int(elem(ie)%state%Qdp(:, :, :, 1, qn0), dp, elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,Qt)
 #endif
-
         do k=1,nlev
           do j=1,np
             do i=1,np
-              ! Qt = elem(ie)%state%Q(i,j,k,1)
-              Qt = elem(ie)%state%Qdp(i,j,k,1,qn0)/dp(i,j,k)
-!!XXgoldyXX
-!Qt=0._real_kind
-!!XXgoldyXX
-              T_v(i,j,k) = Virtual_Temperature(elem(ie)%state%T(i,j,k,n0),Qt)
               if (use_cpstar==1) then
                  kappa_star(i,j,k) =  Rgas/Virtual_Specific_Heat(Qt)
               else
@@ -478,14 +740,13 @@ contains
       ! ================================
       ! accumulate mean vertical flux:
       ! ================================
+      call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
 #if (defined COLUMN_OPENMP)
        !$omp parallel do private(k)
 #endif
       do k=1,nlev  !  Loop index added (AAM)
          elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
               elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
-         elem(ie)%derived%omega_p(:,:,k) = &
-              elem(ie)%derived%omega_p(:,:,k) + eta_ave_w*omega_p(:,:,k)
       enddo
       elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
            elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
@@ -499,20 +760,15 @@ contains
       ! ==============================================
 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,j,v1,v2,E,vtemp,vgrad_T,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
+!$omp parallel do private(k,i,j,v1,v2,E,vtemp,gpterm,glnps1,glnps2,u_m_umet,v_m_vmet,t_m_tmet)
 #endif
       vertloop: do k=1,nlev
-         ! ================================================
-         ! compute gradp term (ps/p)*(dp/dps)*T
-         ! ================================================
-         vtemp(:,:,:)   = gradient_sphere(elem(ie)%state%T(:,:,k,n0),deriv,elem(ie)%Dinv)
-         do j=1,np
-            do i=1,np
-               v1     = elem(ie)%state%v(i,j,1,k,n0)
-               v2     = elem(ie)%state%v(i,j,2,k,n0)
-               vgrad_T(i,j) =  v1*vtemp(i,j,1) + v2*vtemp(i,j,2)
-            end do
-         end do
+         call caar_compute_temperature(dt2, deriv, elem(ie)%spheremp, elem(ie)%Dinv, &
+                                       elem(ie)%state%v(:, :, :, k, n0), T_v(:, :, k), &
+                                       omega_p(:, :, k), T_vadv(:, :, k), &
+                                       elem(ie)%state%T(:, :, k, nm1), &
+                                       elem(ie)%state%T(:, :, k, n0), &
+                                       elem(ie)%state%T(:, :, k, np1))
          ! vtemp = grad ( E + PHI )
          call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
@@ -539,7 +795,6 @@ contains
                !
                ! phl: add forcing term to meridional wind v
                !
-               ttens(i,j,k)  = - T_vadv(i,j,k) - vgrad_T(i,j) + kappa_star(i,j,k)*T_v(i,j,k)*omega_p(i,j,k)
 !               !!
 !               !! phl: add forcing term to T
 !               !!
@@ -727,17 +982,14 @@ contains
 !        elem(ie)%state%ps_v(:,:,np1) = -elem(ie)%spheremp(:,:)*sdot_sum
 !      else
 
+      call caar_compute_dp3d_np1_c_int(np1, nm1, dt2, elem(ie)%spheremp, &
+           divdp, eta_dot_dpdn, elem(ie)%state%dp3d)
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,tempflux)
 #endif
       do k=1,nlev
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
-        elem(ie)%state%T(:,:,k,np1) = elem(ie)%spheremp(:,:)*(elem(ie)%state%T(:,:,k,nm1) + dt2*ttens(:,:,k))
-        if (rsplit>0) &
-             elem(ie)%state%dp3d(:,:,k,np1) = &
-               elem(ie)%spheremp(:,:) * (elem(ie)%state%dp3d(:,:,k,nm1) - &
-               dt2 * (divdp(:,:,k) + eta_dot_dpdn(:,:,k+1)-eta_dot_dpdn(:,:,k)))
         if (0<rsplit.and.0<ntrac.and.eta_ave_w.ne.0.) then
            v(:,:,1) =  elem(ie)%Dinv(:,:,1,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,1,2)*vdp(:,:,2,k)
            v(:,:,2) =  elem(ie)%Dinv(:,:,2,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,2,2)*vdp(:,:,2,k)

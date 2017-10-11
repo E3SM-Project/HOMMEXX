@@ -3,6 +3,9 @@
 #include <dimensions.hpp>
 #include <kinds.hpp>
 
+#ifndef _SHALLOW_WATER_TYPES_HPP_
+#define _SHALLOW_WATER_TYPES_HPP_
+
 namespace Homme {
 
 // Selecting the execution space. If no specific request, use Kokkos default exec space
@@ -127,3 +130,5 @@ using HommeScratchView6D =
     HommeView6D<ScratchMemSpace, MemoryUnmanaged>;
 
 }  // namespace Homme
+
+#endif //_SHALLOW_WATER_TYPES_HPP_

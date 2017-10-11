@@ -75,6 +75,10 @@ public:
     ExecViewManaged<Scalar * [QSIZE_D][NUM_LEV]   [NP][NP]>   qtens;
     ExecViewManaged<Scalar * [QSIZE_D][NUM_LEV][2][NP][NP]>   vstar_qdp;
 
+    // Buffers for spherical operators
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> div_buf;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> grad_buf;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> vort_buf;
   } buffers;
 
   Elements() = default;

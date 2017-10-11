@@ -143,6 +143,9 @@ using VectorType =
 
 using Scalar = KokkosKernels::Batched::Experimental::Vector<VectorType>;
 
+static_assert(sizeof(Scalar) > 0, "Vector type has 0 size");
+static_assert(sizeof(Scalar) == sizeof(Real[VECTOR_SIZE]), "Vector type is not correctly defined");
+
 using MemoryManaged   = Kokkos::MemoryTraits<Kokkos::Restrict>;
 using MemoryUnmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict>;
 
