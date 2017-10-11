@@ -369,7 +369,7 @@ createAllRunScripts() {
 
         echo "# Running cprnc to difference ${baseFilename} against baseline " >> $thisRunScript
         #echo "$cmd > $diffStdout 2> $diffStderr" >> $thisRunScript
-        cmd="${CPRNC_BINARY} -m ${newFile} ${repoFile} > $diffStdout 2> $diffStderr"
+        cmd="${CPRNC_BINARY} ${repoFile} ${newFile} > $diffStdout 2> $diffStderr"
         #echo "  $cmd"
         serExecLine $thisRunScript "$cmd"
         echo "" >> $thisRunScript # blank line
@@ -406,7 +406,7 @@ createAllRunScripts() {
         diffStderr=${TEST_NAME}.ref.${baseFilename}.err
 
         echo "# Running cprnc to difference ${baseFilename} against reference " >> $thisRunScript
-        cmd="${CPRNC_BINARY} ${newFile} ${refFile} > $diffStdout 2> $diffStderr"
+        cmd="${CPRNC_BINARY} ${repoFile} ${newFile} > $diffStdout 2> $diffStderr"
         serExecLine $thisRunScript "$cmd"
         echo "" >> $thisRunScript # blank line
         let COUNT+=1
