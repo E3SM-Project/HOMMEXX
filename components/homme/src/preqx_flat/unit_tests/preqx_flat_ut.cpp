@@ -11,7 +11,8 @@
 
 #include "preqx_flat_ut_sphere_op_ml.cpp"
 #include "preqx_flat_ut_sphere_op_sl.cpp"
-#include "preqx_flat_ut_remap.cpp"
+
+#include "utils_flat_ut.hpp"
 
 #include <assert.h>
 #include <stdio.h>

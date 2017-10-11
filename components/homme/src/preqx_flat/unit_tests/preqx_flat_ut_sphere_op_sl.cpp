@@ -9,7 +9,7 @@
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 
-#include "utils_flat_ut.cpp"
+#include "utils_flat_ut.hpp"
 
 #include <assert.h>
 #include <stdio.h>

@@ -1,20 +1,11 @@
 #ifndef REMAP_CPP
 #define REMAP_CPP
 
-#include <catch/catch.hpp>
-
-#include <limits>
-
-#include "Dimensions.hpp"
 #include "Types.hpp"
-
-#include <assert.h>
-#include <stdio.h>
-#include <random>
+#include "dimensions_remap_tests.hpp"
 
 using namespace Homme;
 
-// save dims for all these intermediate arrays somewhere?
 void compute_ppm_grids(const Real dx[NLEVP4],
                        Real rslt[NLEVP2][DIM10],
                        const int alg) {

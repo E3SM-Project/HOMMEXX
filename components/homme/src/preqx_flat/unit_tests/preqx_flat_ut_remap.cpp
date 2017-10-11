@@ -2,14 +2,13 @@
 //?
 #include <limits>
 
-#include "Dimensions.hpp"
-//#include "RemapDimensions.hpp"
+#include "dimensions_remap_tests.hpp"
+
+#include "remap.hpp"
+#include "utils_flat_ut.hpp"
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-
-#include "remap.cpp"
-#include "utils_flat_ut.cpp"
 
 #include <assert.h>
 #include <stdio.h>
