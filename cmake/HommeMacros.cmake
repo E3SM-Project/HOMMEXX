@@ -541,24 +541,25 @@ macro(createTests testList)
 endmacro(createTests)
 
 MACRO(CREATE_CXX_VS_F90_TESTS TESTS_LIST)
-  FOREACH (TEST ${TESTS_LIST})
+
+  FOREACH (TEST ${${TESTS_LIST}})
     MESSAGE ("-- Creating cxx-f90 comparison test for test ${TEST}")
 
-    SET (TEST_FILE_F90 "${TEST}.cmake")
+    SET (TEST_FILE_F90 "${TEST}-f.cmake")
 
     INCLUDE (${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${TEST_FILE_F90})
 
-    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${TEST}/movies)
-    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${TEST}_c/movies)
+    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${TEST}-f/movies)
+    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${TEST}-c/movies)
 
     CONFIGURE_FILE (${HOMME_SOURCE_DIR}/cmake/CprncCxxVsF90.cmake.in
-                    ${HOMME_BINARY_DIR}/tests/${TEST}_c/CprncCxxVsF90.cmake @ONLY)
+                    ${HOMME_BINARY_DIR}/tests/${TEST}-c/CprncCxxVsF90.cmake @ONLY)
 
     ADD_TEST (NAME ${TEST}_cxx_vs_f90
               COMMAND ${CMAKE_COMMAND} -P CprncCxxVsF90.cmake
-              WORKING_DIRECTORY ${HOMME_BINARY_DIR}/tests/${TEST}_c)
+              WORKING_DIRECTORY ${HOMME_BINARY_DIR}/tests/${TEST}-c)
 
-    SET_TESTS_PROPERTIES(${TEST}_cxx_vs_f90 PROPERTIES DEPENDS "${TEST};${TEST}_c")
+    SET_TESTS_PROPERTIES(${TEST}_cxx_vs_f90 PROPERTIES DEPENDS "${TEST}-f;${TEST}-c")
   ENDFOREACH ()
 ENDMACRO(CREATE_CXX_VS_F90_TESTS)
 
