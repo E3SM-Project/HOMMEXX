@@ -102,17 +102,22 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
   void compute_velocity_np1(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, 2 * NP * NP),
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
                          [&](const int idx) {
-      const int hgp = (idx / NP) / NP;
-      const int igp = (idx / NP) % NP;
+      const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      m_elements.buffers.energy_grad(kv.ie, kv.ilev, hgp, igp, jgp) =
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 0, igp, jgp) =
           PhysicalConstants::Rgas *
           (m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp) /
            m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp)) *
-          m_elements.buffers.pressure_grad(kv.ie, kv.ilev, hgp, igp, jgp);
+          m_elements.buffers.pressure_grad(kv.ie, kv.ilev, 0, igp, jgp);
+
+      m_elements.buffers.energy_grad(kv.ie, kv.ilev, 1, igp, jgp) =
+          PhysicalConstants::Rgas *
+          (m_elements.buffers.temperature_virt(kv.ie, kv.ilev, igp, jgp) /
+           m_elements.buffers.pressure(kv.ie, kv.ilev, igp, jgp)) *
+          m_elements.buffers.pressure_grad(kv.ie, kv.ilev, 1, igp, jgp);
     });
 
     compute_energy_grad(kv);
@@ -168,7 +173,7 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      m_elements.m_eta_dot_dpdn(kv.ie, kv.ilev, jgp, igp) = 0;
+      m_elements.m_eta_dot_dpdn(kv.ie, kv.ilev, igp, jgp) = 0;
     });
   } // TRIVIAL
 
