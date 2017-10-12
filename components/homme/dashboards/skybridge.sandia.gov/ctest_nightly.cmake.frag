@@ -134,6 +134,7 @@ if (BUILD_TRILINOS_SERIAL)
   set (CONFIGURE_OPTIONS
     "-DCMAKE_INSTALL_PREFIX:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     "-DCMAKE_BUILD_TYPE:STRING=RELEASE"
+    "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     #
     "-DTrilinos_ENABLE_Kokkos=ON"
     "-DTrilinos_ENABLE_KokkosAlgorithms=ON"
@@ -220,6 +221,7 @@ if (BUILD_HOMMEXX_SERIAL)
   
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
+    "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
     "-DBUILD_HOMME_SWEQX_FLAT=OFF"
     "-DBUILD_HOMME_PREQX_FLAT=ON"
@@ -320,6 +322,7 @@ if (BUILD_TRILINOS_OPENMP)
   set (CONFIGURE_OPTIONS
     "-DCMAKE_INSTALL_PREFIX:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstallOpenMP"
     "-DCMAKE_BUILD_TYPE:STRING=RELEASE"
+    "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     #
     "-DTrilinos_ENABLE_Kokkos=ON"
     "-DTrilinos_ENABLE_KokkosAlgorithms=ON"
@@ -410,6 +413,7 @@ if (BUILD_HOMMEXX_OPENMP)
   
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
+    "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
     "-DBUILD_HOMME_SWEQX_FLAT=OFF"
     "-DBUILD_HOMME_PREQX_FLAT=ON"
