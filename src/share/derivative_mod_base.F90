@@ -1292,7 +1292,6 @@ end do
   end function gradient_sphere
 
   subroutine gradient_sphere_c_callable(s, dvv, dinv, grad) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     real(kind=real_kind), intent(in) :: s(np, np)
     real(kind=real_kind), intent(in) :: dvv(np, np)
@@ -1374,7 +1373,6 @@ end do
 
   subroutine curl_sphere_wk_testcov_c_callable(s,dvv,D,mp,ds) bind(c)
 !needs dvv, mp, D
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: s(np,np)
@@ -1472,7 +1470,6 @@ end do
 
  subroutine gradient_sphere_wk_testcov_c_callable(s,dvv,metinv,metdet,D,mp,ds) bind(c)
 !needs dvv, metinv, metdet, D, mp (what is it?)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
 
@@ -1710,7 +1707,6 @@ end do
 !--------------------------------------------------------------------------
 
   subroutine divergence_sphere_wk_c_callable(v, dvv, spheremp, Dinv, div) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
 
@@ -2022,7 +2018,6 @@ end do
   end function vorticity_sphere
 
   subroutine vorticity_sphere_c_callable(v, dvv, metdet, d, vort) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np, np, 2)
@@ -2155,8 +2150,8 @@ end do
 
   end function divergence_sphere
 
+
   subroutine divergence_sphere_c_callable(v, dvv, metdet, dinv, div) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np, np, 2)
@@ -2244,9 +2239,18 @@ end do
 !used)
 
 !  subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,hvpower,hvscaling,var_coef,laplace) bind(c)
+
+! I have to check for this:
+! For logical types, please note that the Fortran standard only guarantees
+! interoperability between C99’s _Bool and Fortran’s C_Bool-kind logicals and
+! C99 defines that true has the value 1 and false the value 0. Using any other
+! integer value with GNU Fortran’s LOGICAL (with any kind parameter) gives an
+! undefined result. (Passing other integer values than 0 and 1 to GCC’s _Bool is
+! also undefined, unless the integer is explicitly or implicitly casted to
+! _Bool.)
+
   subroutine laplace_sphere_wk_c_callable(s,dvv,dinv,spheremp,tensorVisc,&
              hvpower, hvscaling, var_coef,laplace) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     use control_mod, only: hypervis_power, hypervis_scaling
@@ -2440,7 +2444,6 @@ end do
   subroutine vlaplace_sphere_wk_cartesian_c_callable(v, dvv, dinv, spheremp, &
              tensorVisc, vec_sph2cart, hvpower, hvscaling, var_coef, laplace) bind(c)
 
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     use control_mod, only: hypervis_power, hypervis_scaling
@@ -2543,7 +2546,6 @@ end do
 !for var_coef hyperviscosity.
   subroutine vlaplace_sphere_wk_contra_c_callable(v, dvv, d, dinv, mp, spheremp, metinv,&
                                                   metdet, rmetdet, nu_ratio, laplace) bind(c)
-    use iso_c_binding, only: c_int
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np,np,2)

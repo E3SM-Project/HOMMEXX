@@ -788,7 +788,6 @@ class compute_sphere_operator_test_ml {
 };  // end of class def compute_sphere_op_test_ml
 
 // SHMEM ????
-
 TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
   constexpr const Real rel_threshold =
       1E-15;  // let's move this somewhere in *hpp?
@@ -1595,9 +1594,6 @@ TEST_CASE("Testing vorticity_sphere_vector()",
   std::cout << "test vorticity_sphere_vector multilevel finished. \n";
 
 }  // end of test div_sphere_wk_ml
-
-
-
 
 
 

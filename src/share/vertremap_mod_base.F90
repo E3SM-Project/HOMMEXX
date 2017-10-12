@@ -37,10 +37,16 @@ module vertremap_mod_base
   use parallel_mod, only           : abortmp, parallel_t
   use control_mod, only : vert_remap_q_alg
 
+  implicit none
+
   public remap1                  ! remap any field, splines, monotone
   public remap1_nofilter         ! remap any field, splines, no filter
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
+!  public remap1_c_callable
+  public remap_Q_ppm_c_callable
+  public compute_ppm_grids_c_callable
+  public compute_ppm_c_callable
 
   contains
 
@@ -493,6 +499,26 @@ end subroutine remap1_nofilter
 
 !=======================================================================================================!
 
+subroutine remap_Q_ppm_c_callable(Qdp,nx,qsize,dp1,dp2,alg) bind(c)
+  use iso_c_binding, only: c_int
+  use control_mod, only        : vert_remap_q_alg
+  implicit none
+  integer(c_int), intent(in) :: nx,qsize,alg
+  real (kind=real_kind), intent(inout) :: Qdp(nx,nx,nlev,qsize)
+  real (kind=real_kind), intent(in) :: dp1(nx,nx,nlev),dp2(nx,nx,nlev)
+
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    call remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
+
+end subroutine remap_Q_ppm_c_callable
+
+
+!=======================================================================================================!
 
 !This uses the exact same model and reference grids and data as remap_Q, but it interpolates
 !using PPM instead of splines.
@@ -558,15 +584,18 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       do k = 1 , nlev
         kk = k  !Keep from an order n^2 search operation by assuming the old cell index is close.
         !Find the index of the old grid cell in which this new cell's bottom interface resides.
+
         do while ( pio(kk) <= pin(k+1) )
           kk = kk + 1
         enddo
+
         kk = kk - 1                   !kk is now the cell index we're integrating over.
         if (kk == nlev+1) kk = nlev   !This is to keep the indices in bounds.
                                       !Top bounds match anyway, so doesn't matter what coefficients are used
         kid(k) = kk                   !Save for reuse
         z1(k) = -0.5D0                !This remapping assumes we're starting from the left interface of an old grid cell
                                       !In fact, we're usually integrating very little or almost all of the cell in question
+
         z2(k) = ( pin(k+1) - ( pio(kk) + pio(kk+1) ) * 0.5 ) / dpo(kk)  !PPM interpolants are normalized to an independent
                                                                         !coordinate domain [-0.5,0.5].
       enddo
@@ -574,6 +603,7 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
       !limiting. So anything that depends only on the grid is pre-computed outside the tracer loop.
       ppmdx(:,:) = compute_ppm_grids( dpo )
+
 
       !From here, we loop over tracers for only those portions which depend on tracer data, which includes PPM limiting and
       !mass accumulation
@@ -589,10 +619,12 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
+
         do k = 1 , gs
           ao(1   -k) = ao(       k)
           ao(nlev+k) = ao(nlev+1-k)
         enddo
+
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
         !Compute tracer values on the new grid by integrating from the old cell bottom to the new
@@ -626,6 +658,12 @@ function compute_ppm_grids( dx )   result(rslt)
   integer :: indB, indE
 
   !Calculate grid-based coefficients for stage 1 of compute_ppm
+
+! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
+#ifdef PREQX_UT_ZERO_RSLT
+  rslt(:,:) = 0.0d0
+#endif
+
   if (vert_remap_q_alg == 2) then
     indB = 2
     indE = nlev-1
@@ -633,6 +671,7 @@ function compute_ppm_grids( dx )   result(rslt)
     indB = 0
     indE = nlev+1
   endif
+
   do j = indB , indE
     rslt( 1,j) = dx(j) / ( dx(j-1) + dx(j) + dx(j+1) )
     rslt( 2,j) = ( 2.*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
@@ -660,7 +699,42 @@ end function compute_ppm_grids
 
 !=======================================================================================================!
 
+subroutine compute_ppm_grids_c_callable(dx,rslt,alg) bind(c)
+  use iso_c_binding, only: c_int
+  use control_mod, only: vert_remap_q_alg
+  integer(c_int), intent(in) :: alg
+  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
+  real(kind=real_kind), intent(out):: rslt(10,0:nlev+1)  !grid spacings
 
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    rslt = compute_ppm_grids(dx)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
+end subroutine compute_ppm_grids_c_callable
+
+!=======================================================================================================!
+
+subroutine compute_ppm_c_callable(a,dx,coefs,alg) bind(c)
+  use iso_c_binding, only: c_int
+  use control_mod, only: vert_remap_q_alg
+  integer(c_int), intent(in) :: alg
+  real(kind=real_kind), intent(in) :: a    (    -1:nlev+2)  !Cell-mean values
+  real(kind=real_kind), intent(in) :: dx   (10,  0:nlev+1)  !grid spacings
+  real(kind=real_kind), intent(out):: coefs(0:2,   nlev  )  !PPM coefficients (for parabola)
+
+  !aim for alg=1 or alg=2 only
+  if((alg == 1).OR.(alg == 2)) then
+    vert_remap_q_alg = alg
+    coefs = compute_ppm(a,dx)
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+  endif
+end subroutine compute_ppm_c_callable
+
+!=======================================================================================================!
 
 !This computes a limited parabolic interpolant using a net 5-cell stencil, but the stages of computation are broken up into 3 stages
 function compute_ppm( a , dx )    result(coefs)
@@ -679,6 +753,12 @@ function compute_ppm( a , dx )    result(coefs)
   integer :: indB, indE
 
   ! Stage 1: Compute dma for each cell, allowing a 1-cell ghost stencil below and above the domain
+
+! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
+#ifdef PREQX_UT_ZERO_RSLT
+  coefs(:,:) = 0.0d0
+#endif
+
   if (vert_remap_q_alg == 2) then
     indB = 2
     indE = nlev-1
@@ -751,6 +831,7 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x1      !lower domain bound for integration
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
+
   mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
 end function integrate_parabola
 
