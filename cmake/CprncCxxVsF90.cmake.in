@@ -1,7 +1,3 @@
-function (prc var)
-  message("${var} ${${var}}")
-endfunction ()
-
 # Run cprnc on each of the output files against the target
 # Note: we mix @ and $ notation, since at configure time we only
 #       resolve @ variables. The remaning ones will be resolve by
