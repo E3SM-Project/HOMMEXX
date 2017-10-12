@@ -121,6 +121,12 @@ ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "GPROF")
   SET (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 ENDIF ()
 
+# Handle Cuda.
+find_package(CUDA QUIET)
+if (${CUDA_FOUND})
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda -expt-relaxed-constexpr -DCUDA_BUILD")
+endif ()
+
 ##############################################################################
 # Optimization flags
 # 1) OPT_FLAGS if specified sets the Fortran,C, and CXX optimization flags
