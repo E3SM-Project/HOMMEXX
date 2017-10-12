@@ -38,6 +38,7 @@ subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
 
 // ------------------- 3D views -------------------//
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
@@ -45,6 +46,7 @@ subview(ViewType<ScalarType*[DIM][NP][NP],MemSpace,MemManagement> v_in, int ie)
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim)
 {
@@ -53,6 +55,7 @@ subview(ViewType<ScalarType*[DIM][NP][NP],MemSpace,MemManagement> v_in, int ie, 
 
 // ------------------- 4D views -------------------//
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
@@ -60,6 +63,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM2][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim)
 {
@@ -67,6 +71,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
 {
@@ -75,6 +80,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, i
 
 // ------------------- 5D views -------------------//
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][DIM3][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
@@ -82,6 +88,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM2][DIM3][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim1)
 {
@@ -89,6 +96,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM3][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
 {
@@ -96,6 +104,7 @@ subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][NP][NP],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2, int idim3)
 {
