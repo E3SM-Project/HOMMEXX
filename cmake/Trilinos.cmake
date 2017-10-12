@@ -119,10 +119,6 @@ macro(link_to_trilinos targetName)
   TARGET_INCLUDE_DIRECTORIES(${targetName} PUBLIC "${TRILINOS_INSTALL_DIR}/include")
   TARGET_LINK_LIBRARIES(${targetName} ${Kokkos_TPL_LIBRARIES} ${Kokkos_LIBRARIES} -L${TRILINOS_INSTALL_DIR}/lib)
 
-  IF("${ENABLE_CUDA}")
-    TARGET_COMPILE_OPTIONS(${targetName} PUBLIC -expt-extended-lambda -DCUDA_BUILD)
-  ENDIF()
-
   IF(TARGET Trilinos)
     # In case we are building Trilinos with ExternalProject, we need to compile this after the fact
     ADD_DEPENDENCIES(${targetName} Trilinos)
