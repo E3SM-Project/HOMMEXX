@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
