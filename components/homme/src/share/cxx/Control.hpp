@@ -75,7 +75,7 @@ struct Control {
 
   int compute_diagonstics;
 
-  int ps0;
+  Real ps0;
 
   // For vertically lagrangian dynamics,
   // apply remap every rsplit tracer timesteps

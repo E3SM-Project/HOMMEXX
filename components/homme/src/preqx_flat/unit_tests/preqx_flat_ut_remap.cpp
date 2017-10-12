@@ -5,7 +5,7 @@
 #include "dimensions_remap_tests.hpp"
 
 #include "remap.hpp"
-#include "utils_flat_ut.hpp"
+#include "Utility.hpp"
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"

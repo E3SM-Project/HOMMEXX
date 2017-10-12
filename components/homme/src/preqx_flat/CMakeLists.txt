@@ -168,7 +168,8 @@ SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 SET(PREQX_FLAT_UT_SRCS
   ${UNIT_TEST_DIR}/preqx_flat_ut.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_remap.cpp
-  ${UNIT_TEST_DIR}/utils_flat_ut.cpp
+  ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_sl.cpp
+  ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_ml.cpp
   ${UNIT_TEST_DIR}/remap.cpp
   ${PREQX_FLAT_DEPS}
 )

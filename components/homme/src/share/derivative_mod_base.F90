@@ -1277,8 +1277,6 @@ end do
           end do
           v1(l  ,j  ) = dsdx00*rrearth
           v2(j  ,l  ) = dsdy00*rrearth
-
-
        end do
     end do
 
@@ -1301,8 +1299,6 @@ end do
     real(kind=real_kind), intent(out) :: grad(np, np, 2)
 
     type(derivative_t) :: deriv
-
-    integer i,j
 
     deriv%dvv = dvv
 
@@ -2154,13 +2150,13 @@ end do
 
   end function divergence_sphere
 
-  subroutine divergence_sphere_c_callable(v, dvv, metdet, rmetdet, dinv, div) bind(c)
+
+  subroutine divergence_sphere_c_callable(v, dvv, metdet, dinv, div) bind(c)
     use dimensions_mod, only: np
     use element_mod, only: element_t
     real(kind=real_kind), intent(in) :: v(np, np, 2)
     real(kind=real_kind), intent(in) :: dvv(np, np)
     real(kind=real_kind), intent(in) :: metdet(np, np)
-    real(kind=real_kind), intent(in) :: rmetdet(np, np)
     real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
     real(kind=real_kind), intent(out) :: div(np, np)
 
@@ -2172,18 +2168,15 @@ end do
 #ifdef HOMME_USE_FLAT_ARRAYS
     allocate(elem%Dinv(np, np, 2, 2))
     allocate(elem%metdet(np, np))
-    allocate(elem%rmetdet(np, np))
 #endif
     elem%Dinv = dinv
     elem%metdet = metdet
-    elem%rmetdet = rmetdet
 
     div = divergence_sphere(v, deriv, elem)
 
 #ifdef HOMME_USE_FLAT_ARRAYS
     deallocate(elem%Dinv)
     deallocate(elem%metdet)
-    deallocate(elem%rmetdet)
 #endif
   end subroutine divergence_sphere_c_callable
 
@@ -2266,7 +2259,7 @@ end do
     real(kind=real_kind), intent(in) :: dinv(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
-    logical, intent(in) :: var_coef
+    logical, value, intent(in) :: var_coef
     real(kind=real_kind), intent(in) :: hvpower, hvscaling 
     real(kind=real_kind),intent(out)     :: laplace(np,np)
 !local
@@ -2460,7 +2453,7 @@ end do
     real(kind=real_kind), intent(in) :: spheremp(np, np)
     real(kind=real_kind), intent(in) :: tensorVisc(np, np, 2, 2)
     real(kind=real_kind), intent(in) :: vec_sph2cart(np, np, 3, 2)
-    logical, intent(in) :: var_coef
+    logical, value, intent(in) :: var_coef
     real(kind=real_kind), intent(in) :: hvpower, hvscaling
     real(kind=real_kind), intent(out)     :: laplace(np,np,2)
 !local
