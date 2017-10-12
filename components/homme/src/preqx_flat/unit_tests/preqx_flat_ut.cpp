@@ -126,7 +126,11 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 16, 4);
+    // Retrieve the team size
+    const int vectors_per_thread = ThreadsDistribution<ExecSpace>::vectors_per_thread();
+    const int threads_per_team   = ThreadsDistribution<ExecSpace>::threads_per_team(functor.m_data.num_elems);
+
+    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, threads_per_team, vectors_per_thread);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
   }
