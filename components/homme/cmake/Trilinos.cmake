@@ -51,7 +51,6 @@ IF(USE_TRILINOS)
             -DKokkos_ENABLE_CUDA_UVM=ON
             -DCUDA_TOOLKIT_ROOT_DIR=${CUDA_TOOLKIT_ROOT_DIR}
             -DCMAKE_CXX_COMPILER=${NVCC_WRAPPER})
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda -expt-relaxed-constexpr")
         MESSAGE("CUDA Enabled")
         SET(Kokkos_TPL_LIBRARIES "${Kokkos_TPL_LIBRARIES};cudart;cublas;cufft")
       ENDIF()
@@ -97,11 +96,6 @@ IF(USE_TRILINOS)
     MESSAGE("   Trilinos_EXTRA_LD_FLAGS = ${Trilinos_EXTRA_LD_FLAGS}")
     MESSAGE("   Trilinos_AR = ${Trilinos_AR}")
     MESSAGE("End of Trilinos details\n")
-  
-    IF(";${Trilinos_TPL_LIST};" MATCHES ";CUDA;")
-      MESSAGE("CUDA Enabled")
-      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda")
-    ENDIF()
   ENDIF()
 
 ELSE(USE_TRILINOS)
