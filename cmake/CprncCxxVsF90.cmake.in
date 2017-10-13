@@ -3,7 +3,7 @@
 #       resolve @ variables. The remaning ones will be resolve by
 #       cmake when the script is run with 'cmake -P CprncCxxVsF90.cmake'
 FOREACH (NC_FILE_NAME @NC_OUTPUT_FILES@)
-  EXECUTE_PROCESS (COMMAND  @CPRNC_BINARY@ @CXX_DIR@/${NC_FILE_NAME} @F90_DIR@/${NC_FILE_NAME}
+  EXECUTE_PROCESS (COMMAND  @CPRNC_BINARY@ @F90_DIR@/${NC_FILE_NAME} @CXX_DIR@/${NC_FILE_NAME}
                    RESULT_VARIABLE ERROR_CODE
                    OUTPUT_VARIABLE cprnc_stdout
                    ERROR_VARIABLE cprnc_stderr)
