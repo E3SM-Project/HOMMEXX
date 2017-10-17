@@ -31,6 +31,10 @@ struct KernelVariables {
 
   const TeamMember &team;
 
+  KOKKOS_FORCEINLINE_FUNCTION void team_barrier() const {
+    team.team_barrier();
+  }
+
   int ie, ilev;
 }; // KernelVariables
 
