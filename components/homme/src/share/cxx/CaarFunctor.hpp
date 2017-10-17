@@ -17,7 +17,7 @@ namespace Homme {
 
 struct CaarFunctor {
   Control           m_data;
-  const Elements      m_elements;
+  const Elements    m_elements;
   const Derivative  m_deriv;
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
