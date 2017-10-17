@@ -376,15 +376,10 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          gradient_sphere(kv, dinv_d, dvv_d,
-                          local_scalar_input_d,
-                          sphere_buf,
-                          local_vector_output_d);
-        });  // end parallel_for for level
+    gradient_sphere(kv, dinv_d, dvv_d,
+                    local_scalar_input_d,
+                    sphere_buf,
+                    local_vector_output_d);
 
   }  // end of op() for grad_sphere_ml
 
@@ -404,16 +399,10 @@ class compute_sphere_operator_test_ml {
             scalar_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          divergence_sphere_wk(kv, dinv_d, spheremp_d,
-                               dvv_d, local_vector_input_d,
-                               sphere_buf,
-                               local_scalar_output_d);
-        });  // end parallel_for for level
-
+    divergence_sphere_wk(kv, dinv_d, spheremp_d,
+                         dvv_d, local_vector_input_d,
+                         sphere_buf,
+                         local_scalar_output_d);
   }  // end of op() for divergence_sphere_wk_ml
 
   KOKKOS_INLINE_FUNCTION
@@ -437,15 +426,9 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          laplace_simple(
-              kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-              local_scalar_input_d, sphere_buf, local_scalar_output_d);
-        });  // end parallel_for for level
-
+    laplace_simple(
+        kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
+        local_scalar_input_d, sphere_buf, local_scalar_output_d);
   }  // end of op() for laplace_wk_ml
 
   KOKKOS_INLINE_FUNCTION
@@ -469,17 +452,11 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
-                         tensor_d, local_temp1_d,
-                         local_scalar_input_d,
-                         sphere_buf,
-                         local_scalar_output_d);
-        });  // end parallel_for for level
-
+    laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
+                   tensor_d, local_temp1_d,
+                   local_scalar_input_d,
+                   sphere_buf,
+                   local_scalar_output_d);
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -503,24 +480,19 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
           laplace_tensor_replace(
               kv, dinv_d, spheremp_d, dvv_d, tensor_d,
               local_temp1_d, sphere_buf, local_scalar_input_d);
 
-          // if team rank == 0? only 1 thread is allowed to
-          // overwrite?
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
-                [&](const int idx) {
-                  const int igp = idx / NP;
-                  const int jgp = idx % NP;
-                local_scalar_output_d(igp, jgp, level) =
-                    local_scalar_input_d(igp, jgp, level);
-              });
-        });  // end of par_for for level
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
+          [&](const int idx) {
+            const int igp = idx / NP;
+            const int jgp = idx % NP;
+            for (int ilev=0; ilev<NUM_LEV; ++ilev) {
+              local_scalar_output_d(igp, jgp, ilev) =
+                local_scalar_input_d(igp, jgp, ilev);
+            }
+    });
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -538,16 +510,10 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
-                                 local_scalar_input_d,
-                                 sphere_buf,
-                                 local_vector_output_d);
-        });  // end parallel_for for level
-
+    curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
+                           local_scalar_input_d,
+                           sphere_buf,
+                           local_vector_output_d);
   }  // end of op() for curl_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
@@ -565,15 +531,9 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          grad_sphere_wk_testcov(
-              kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
-              local_scalar_input_d, sphere_buf, local_vector_output_d);
-        });  // end parallel_for for level
-
+    grad_sphere_wk_testcov(
+        kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
+        local_scalar_input_d, sphere_buf, local_vector_output_d);
   }  // end of op() for grad_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
@@ -609,18 +569,12 @@ class compute_sphere_operator_test_ml {
         Kokkos::subview(temp6_d, _index, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          vlaplace_sphere_wk_cartesian_reduced(
-              kv, dinv_d, spheremp_d, tensor_d,
-              vec_sph2cart_d, dvv_d, local_temp1_d,
-              local_temp4_d, local_temp5_d, local_temp6_d,
-              sphere_buf,
-              local_vector_input_d, local_vector_output_d);
-        });  // end parallel_for for level
-
+    vlaplace_sphere_wk_cartesian_reduced(
+        kv, dinv_d, spheremp_d, tensor_d,
+        vec_sph2cart_d, dvv_d, local_temp1_d,
+        local_temp4_d, local_temp5_d, local_temp6_d,
+        sphere_buf,
+        local_vector_input_d, local_vector_output_d);
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -658,18 +612,12 @@ class compute_sphere_operator_test_ml {
                         Kokkos::ALL, Kokkos::ALL);
 
     // don't forget to introduce nu_ratio
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          vlaplace_sphere_wk_contra(
-              kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
-              metdet_d, dvv_d, nu_ratio, local_temp4_d,
-              local_temp5_d, local_temp1_d, local_temp2_d,
-              sphere_buf,
-              local_vector_input_d, local_vector_output_d);
-        });  // end parallel_for for level
-
+    vlaplace_sphere_wk_contra(
+        kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
+        metdet_d, dvv_d, nu_ratio, local_temp4_d,
+        local_temp5_d, local_temp1_d, local_temp2_d,
+        sphere_buf,
+        local_vector_input_d, local_vector_output_d);
   }  // end of op() for laplace_tensor multil
 
 
@@ -689,16 +637,10 @@ class compute_sphere_operator_test_ml {
             scalar_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-        [&](const int &level) {
-          kv.ilev = level;
-          vorticity_sphere_vector(kv, d_d, metdet_d,
-                               dvv_d, local_vector_input_d,
-                               sphere_buf,
-                               local_scalar_output_d);
-        });  // end parallel_for for level
-
+    vorticity_sphere_vector(kv, d_d, metdet_d,
+                         dvv_d, local_vector_input_d,
+                         sphere_buf,
+                         local_scalar_output_d);
   }  // end of op() for vorticity_sphere_vector multilevel
 
 
