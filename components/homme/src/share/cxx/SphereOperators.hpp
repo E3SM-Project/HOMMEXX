@@ -108,10 +108,10 @@ divergence_sphere_sl(const KernelVariables &kv,
     const int jgp = loop_idx % NP;
     Real dudx = 0.0, dvdy = 0.0;
     for (int kgp = 0; kgp < NP; ++kgp) {
-      dudx += dvv(igp, kgp) * gv_buf(0, jgp, kgp);
-      dvdy += dvv(jgp, kgp) * gv_buf(1, kgp, igp);
+      dudx += dvv(jgp, kgp) * gv_buf(0, igp, kgp);
+      dvdy += dvv(igp, kgp) * gv_buf(1, kgp, jgp);
     }
-    div_v(igp, jgp) = (dudx + dvdy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
+    div_v(igp, jgp) = (dudx + dvdy) * (1.0 / metdet(kv.ie, igp, jgp) *
                                        PhysicalConstants::rrearth);
   });
 }
@@ -191,11 +191,11 @@ vorticity_sphere_sl(const KernelVariables &kv,
     Real dudy = 0.0;
     Real dvdx = 0.0;
     for (int kgp = 0; kgp < NP; ++kgp) {
-      dvdx += dvv(igp, kgp) * vcov_buf(1, jgp, kgp);
-      dudy += dvv(jgp, kgp) * vcov_buf(0, kgp, igp);
+      dvdx += dvv(jgp, kgp) * vcov_buf(1, igp, kgp);
+      dudy += dvv(igp, kgp) * vcov_buf(0, kgp, jgp);
     }
 
-    vort(igp, jgp) = (dvdx - dudy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
+    vort(igp, jgp) = (dvdx - dudy) * (1.0 / metdet(kv.ie, igp, jgp) *
                                       PhysicalConstants::rrearth);
   });
 }
@@ -408,7 +408,7 @@ vorticity_sphere(const KernelVariables &kv,
       dvdx += dvv(jgp, kgp) * vcov_buf(kv.ie, buf_lev, 1, igp, kgp);
       dudy += dvv(igp, kgp) * vcov_buf(kv.ie, buf_lev, 0, kgp, jgp);
     }
-    vort(kv.ilev, igp, jgp) = (dvdx - dudy) * ((1.0 / metdet(kv.ie, igp, jgp)) *
+    vort(kv.ilev, igp, jgp) = (dvdx - dudy) * (1.0 / metdet(kv.ie, igp, jgp) *
                                                PhysicalConstants::rrearth);
   });
 }
