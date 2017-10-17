@@ -56,28 +56,28 @@ public:
 
     BufferViews() = default;
     void init(const int num_elems);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temperature_grad;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> pressure;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> pressure_grad;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> temperature_virt;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> temperature_grad;
     // TODO: Remove omega_p from the buffers
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> vorticity;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> omega_p;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vdp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> div_vdp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
 
     // Buffers for EulerStepFunctor
-    ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]>   qtens;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>            vstar;
-    ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>   vstar_qdp;
+    ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
+    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
+    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
 
-    ExecViewManaged<Real *[NP][NP]> preq_buf;
+    ExecViewManaged<Real* [NP][NP]> preq_buf;
     // Buffers for spherical operators
-    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> div_buf;
-    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> grad_buf;
-    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> vort_buf;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
   } buffers;
 
   Elements() = default;

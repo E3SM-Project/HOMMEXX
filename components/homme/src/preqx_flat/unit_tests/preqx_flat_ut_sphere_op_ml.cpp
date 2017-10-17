@@ -277,7 +277,7 @@ class compute_sphere_operator_test_ml {
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temp4_d,
       temp5_d, temp6_d;
 
-  ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> sphere_buf;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> sphere_buf;
 
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
