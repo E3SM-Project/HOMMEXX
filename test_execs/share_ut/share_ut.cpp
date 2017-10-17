@@ -159,7 +159,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   Kokkos::deep_copy(D_exec, D_h);
 
   // Buffer View
-  ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> buffer("buffer_cxx", nelems);
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> buffer("buffer_cxx", nelems);
 
   // Initialize derivative
   HostViewManaged<Real[NP][NP]> dvv_h("dvv_host");

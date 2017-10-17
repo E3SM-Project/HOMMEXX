@@ -159,7 +159,7 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
             h_phi(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_derived_un0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_derived_vn0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            
+
             // 4d scalars
             for (int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
               h_u(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
@@ -167,7 +167,7 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
               h_t(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
               h_dp3d(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
             }
-            
+
             for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
                  ++q_timelevel) {
               for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
@@ -557,9 +557,9 @@ void Elements::BufferViews::init(int num_elems) {
 
   preq_buf = ExecViewManaged<Real *[NP][NP]>("Preq Buffer", num_elems);
 
-  div_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Divergence Buffer", num_elems);
-  grad_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Gradient Buffer", num_elems);
-  vort_buf = ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>("Vorticity Buffer", num_elems);
+  div_buf  = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer", num_elems);
+  grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer", num_elems);
+  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer", num_elems);
 }
 
 Elements &get_elements() {
