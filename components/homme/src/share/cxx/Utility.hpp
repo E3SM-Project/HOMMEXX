@@ -141,14 +141,13 @@ sync_to_host(Source_T source, Dest_T dest) {
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
     for (int time = 0; time < NUM_TIME_LEVELS; ++time) {
-      for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-           ++vector_level) {
-        for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV; ++vector, ++level) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest(ie, time, level, igp, jgp) =
-                  source_mirror(ie, time, vector_level, igp, jgp)[vector];
-            }
+      for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+        int ilev = level / VECTOR_SIZE;
+        int ivec = level % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, time, level, igp, jgp) =
+                source_mirror(ie, time, ilev, igp, jgp)[ivec];
           }
         }
       }
@@ -166,14 +165,13 @@ sync_to_host(Source_T source, Dest_T dest) {
       Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            dest(ie, level, igp, jgp) =
-                source_mirror(ie, vector_level, igp, jgp)[vector];
-          }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          dest(ie, level, igp, jgp) =
+              source_mirror(ie, ilev, igp, jgp)[ivec];
         }
       }
     }
@@ -190,15 +188,14 @@ sync_to_host(Source_T source, Dest_T dest) {
       Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int dim = 0; dim < 2; ++dim) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest(ie, level, dim, igp, jgp) =
-                  source_mirror(ie, dim, vector_level, igp, jgp)[vector];
-            }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int dim = 0; dim < 2; ++dim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, level, dim, igp, jgp) =
+                source_mirror(ie, ilev, dim, igp, jgp)[ivec];
           }
         }
       }
@@ -221,14 +218,13 @@ sync_to_host(Source_T source, Dest_T dest) {
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
     for (int time = 0; time < Q_NUM_TIME_LEVELS; ++time) {
       for (int tracer = 0; tracer < QSIZE_D; ++tracer) {
-        for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-             ++vector_level) {
-          for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-            for (int igp = 0; igp < NP; ++igp) {
-              for (int jgp = 0; jgp < NP; ++jgp) {
-                dest(ie, time, tracer, level, igp, jgp) = source_mirror(
-                    ie, time, tracer, vector_level, igp, jgp)[vector];
-              }
+        for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+          int ilev = level / VECTOR_SIZE;
+          int ivec = level % VECTOR_SIZE;
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp) {
+              dest(ie, time, tracer, level, igp, jgp) = source_mirror(
+                  ie, time, tracer, ilev, igp, jgp)[ivec];
             }
           }
         }
@@ -251,19 +247,19 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   Kokkos::deep_copy(source_2_mirror, source_2);
   for (int ie = 0; ie < source_1.extent_int(0); ++ie) {
     for (int time = 0; time < NUM_TIME_LEVELS; ++time) {
-      for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-           ++vector_level) {
-        for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest(ie, time, level, 0, igp, jgp) =
-                  source_1_mirror(ie, time, vector_level, igp, jgp)[vector];
-              dest(ie, time, level, 1, igp, jgp) =
-                  source_2_mirror(ie, time, vector_level, igp, jgp)[vector];
-            }
+      for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+        int ilev = level / VECTOR_SIZE;
+        int ivec = level % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, time, level, 0, igp, jgp) =
+                source_1_mirror(ie, time, ilev, igp, jgp)[ivec];
+            dest(ie, time, level, 1, igp, jgp) =
+                source_2_mirror(ie, time, ilev, igp, jgp)[ivec];
           }
         }
       }
+
     }
   }
 }
@@ -280,16 +276,15 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   Kokkos::deep_copy(source_1_mirror, source_1);
   Kokkos::deep_copy(source_2_mirror, source_2);
   for (int ie = 0; ie < source_1.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            dest(ie, level, 0, igp, jgp) =
-                source_1_mirror(ie, vector_level, igp, jgp)[vector];
-            dest(ie, level, 1, igp, jgp) =
-                source_2_mirror(ie, vector_level, igp, jgp)[vector];
-          }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          dest(ie, level, 0, igp, jgp) =
+              source_1_mirror(ie, ilev, igp, jgp)[ivec];
+          dest(ie, level, 1, igp, jgp) =
+              source_2_mirror(ie, ilev, igp, jgp)[ivec];
         }
       }
     }
@@ -304,14 +299,13 @@ typename std::enable_if<
 sync_to_device(Source_T source, Dest_T dest) {
   typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            dest_mirror(ie, vector_level, igp, jgp)[vector] =
-                source(ie, level, igp, jgp);
-          }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          dest_mirror(ie, ilev, igp, jgp)[ivec] =
+              source(ie, level, igp, jgp);
         }
       }
     }
@@ -330,16 +324,15 @@ sync_to_device(Source_T source, Dest_T dest_1, Dest_T dest_2) {
   typename Dest_T::HostMirror dest_2_mirror =
       Kokkos::create_mirror_view(dest_2);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            dest_1_mirror(ie, vector_level, igp, jgp)[vector] =
-                source(ie, level, 0, igp, jgp);
-            dest_2_mirror(ie, vector_level, igp, jgp)[vector] =
-                source(ie, level, 1, igp, jgp);
-          }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          dest_1_mirror(ie, ilev, igp, jgp)[ivec] =
+              source(ie, level, 0, igp, jgp);
+          dest_2_mirror(ie, ilev, igp, jgp)[ivec] =
+              source(ie, level, 1, igp, jgp);
         }
       }
     }
@@ -356,15 +349,14 @@ typename std::enable_if<
 sync_to_device(Source_T source, Dest_T dest) {
   typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int dim = 0; dim < 2; ++dim) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest_mirror(ie, dim, vector_level, igp, jgp)[vector] =
-                  source(ie, level, dim, igp, jgp);
-            }
+    for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+      int ilev = level / VECTOR_SIZE;
+      int ivec = level % VECTOR_SIZE;
+      for (int dim = 0; dim < 2; ++dim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest_mirror(ie, ilev, dim, igp, jgp)[ivec] =
+                source(ie, level, dim, igp, jgp);
           }
         }
       }
