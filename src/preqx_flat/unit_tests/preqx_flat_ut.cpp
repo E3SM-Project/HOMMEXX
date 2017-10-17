@@ -721,7 +721,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           const Real correct = temperature_f90(igp, jgp);
-          const Real computed = test_functor.temperature(ie, test_functor.np1, level, igp, jgp);
+          const Real computed = test_functor.temperature(ie, int(test_functor.np1), level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
