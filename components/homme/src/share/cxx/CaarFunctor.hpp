@@ -84,8 +84,8 @@ struct CaarFunctor {
                          [&](const int &idx) {
       const int igp = (idx / NUM_PHYSICAL_LEV) / NP;
       const int jgp = (idx / NUM_PHYSICAL_LEV) % NP;
-      const int ilev = idx / VECTOR_SIZE;
-      const int ivec = idx % VECTOR_SIZE;
+      const int ilev = (idx % NUM_PHYSICAL_LEV) / VECTOR_SIZE;
+      const int ivec = (idx % NUM_PHYSICAL_LEV) % VECTOR_SIZE;
       assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[ivec] > 0.0);
     });
     kv.team_barrier();
