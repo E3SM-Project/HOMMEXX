@@ -42,7 +42,8 @@ void divergence_sphere_wk_c_callable(const Real *input,
 class compute_sphere_operator_test {
  public:
   compute_sphere_operator_test(int num_elems)
-      : scalar_input_d("scalar input", num_elems),
+      : _num_elems(num_elems),
+        scalar_input_d("scalar input", num_elems),
         vector_input_d("vector input", num_elems),
         d_d("d", num_elems),
         dinv_d("dinv", num_elems),
@@ -68,8 +69,8 @@ class compute_sphere_operator_test {
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d)),
-        _num_elems(num_elems) {
+            Kokkos::create_mirror_view(vector_output_d))
+  {
     // constructor's body
     // init randonly
 
@@ -183,26 +184,22 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    // TODO: Support running more than one thread at a time
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
-                         [&](const int idx) {
-      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                          Kokkos::ALL);
-      ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
-          Kokkos::subview(temp1_d, _index, Kokkos::ALL,
-                          Kokkos::ALL, Kokkos::ALL);
-      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                          Kokkos::ALL, Kokkos::ALL);
-      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-          Kokkos::subview(scalar_output_d, _index,
-                          Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+      Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                      Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
+      Kokkos::subview(temp1_d, _index, Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+      Kokkos::subview(scalar_output_d, _index,
+                      Kokkos::ALL, Kokkos::ALL);
   
-      laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                    local_temp1_d, local_scalar_input_d,
-                    local_sphere_buf, local_scalar_output_d);
-    });
+    laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                  local_temp1_d, local_scalar_input_d,
+                  local_sphere_buf, local_scalar_output_d);
   };  // end of op() for laplace_simple
 
   /*
@@ -237,24 +234,20 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    // TODO: Support running more than one thread at a time
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
-                         [&](const int idx) {
-      ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
-          Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
-                          Kokkos::ALL, Kokkos::ALL);
-      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                          Kokkos::ALL, Kokkos::ALL);
-      ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-          Kokkos::subview(scalar_output_d, _index,
-                          Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
+      Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
+      Kokkos::subview(scalar_output_d, _index,
+                      Kokkos::ALL, Kokkos::ALL);
   
-      divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
-                              local_vector_input_d,
-                              local_sphere_buf,
-                              local_scalar_output_d);
-    });
+    divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+                            local_vector_input_d,
+                            local_sphere_buf,
+                            local_scalar_output_d);
   };  // end of op() for divergence_sphere_wk
 
   KOKKOS_INLINE_FUNCTION
@@ -263,25 +256,21 @@ class compute_sphere_operator_test {
     KernelVariables kv(team);
     int _index = team.league_rank();
 
-    // TODO: Support running more than one thread at a time
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, 1),
-                         [&](const int idx) {
-      ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-          Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                          Kokkos::ALL);
-      ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-          Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                          Kokkos::ALL, Kokkos::ALL);
-      ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
-          Kokkos::subview(vector_output_d, _index,
-                          Kokkos::ALL, Kokkos::ALL,
-                          Kokkos::ALL);
+    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
+      Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
+                      Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
+      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL);
+    ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
+      Kokkos::subview(vector_output_d, _index,
+                      Kokkos::ALL, Kokkos::ALL,
+                      Kokkos::ALL);
   
-      gradient_sphere_sl(kv, dinv_d, dvv_d,
-                         local_scalar_input_d,
-                         local_sphere_buf,
-                         local_vector_output_d);
-    });
+    gradient_sphere_sl(kv, dinv_d, dvv_d,
+                       local_scalar_input_d,
+                       local_sphere_buf,
+                       local_vector_output_d);
   };
 
   // this could be even nicer,
