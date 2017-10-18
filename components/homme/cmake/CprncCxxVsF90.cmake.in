@@ -7,6 +7,7 @@ FOREACH (NC_FILE_NAME @NC_OUTPUT_FILES@)
                    RESULT_VARIABLE ERROR_CODE
                    OUTPUT_VARIABLE cprnc_stdout
                    ERROR_VARIABLE cprnc_stderr)
+  MESSAGE (${cprnc_stdout})
 
   # Search stdout for "IDENTICAL". -1 means it does not exist. Use REVERSE on
   # the off chance that makes it faster, since "IDENTICAL", if it exists, is
