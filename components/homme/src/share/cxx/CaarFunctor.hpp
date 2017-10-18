@@ -194,27 +194,38 @@ struct CaarFunctor {
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      Real integration = 0.0;
-      for (int ilevel = NUM_PHYSICAL_LEV - 1; ilevel >= 0; --ilevel) {
-        int ilev = ilevel / VECTOR_SIZE;
-        int v   = ilevel % VECTOR_SIZE;
-        // compute phi
-        m_elements.m_phi(kv.ie, jgp, igp, ilev)[v] =
-            m_elements.m_phis(kv.ie, jgp, igp) + integration +
-            PhysicalConstants::Rgas * m_elements.buffers.temperature_virt(
-                                          kv.ie, jgp, igp, ilev)[v] *
-                (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, ilev)[v] *
-                 0.5 /
-                 m_elements.buffers.pressure(kv.ie, jgp, igp, ilev)[v]);
 
-        // update phii
-        integration +=
-            PhysicalConstants::Rgas *
-            m_elements.buffers.temperature_virt(kv.ie, jgp, igp, ilev)[v] *
-            2.0 *
-            (m_elements.m_dp3d(kv.ie, m_data.n0, jgp, igp, ilev)[v] * 0.5 /
-             m_elements.buffers.pressure(kv.ie, jgp, igp, ilev)[v]);
+      // Note: we add VECTOR_SIZE-1 rather than subtracting 1 since (0-1)%N=-1
+      // while (0+N-1)%N=N-1.
+      constexpr int last_lvl_last_vector_idx =
+        (NUM_PHYSICAL_LEV % VECTOR_SIZE + VECTOR_SIZE - 1) % VECTOR_SIZE;
 
+      Real integration = 0;
+      for (kv.ilev = NUM_LEV-1; kv.ilev >= 0; --kv.ilev) {
+        const int vec_start = (kv.ilev == (NUM_LEV-1) ?
+                               last_lvl_last_vector_idx :
+                               VECTOR_SIZE-1);
+
+        const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
+        auto& phi = m_elements.m_phi(kv.ie, igp, jgp, kv.ilev);
+        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev);
+        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, kv.ilev);
+        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, kv.ilev);
+
+        // Precompute this product as a SIMD operation
+        const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * dp3d * 0.5 / p;
+
+        // Integrate
+        Scalar integration_ij;
+        integration_ij[vec_start] = integration;
+        for (int iv = vec_start-1; iv >= 0; --iv) {
+          // update integral
+          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv+1];
+        }
+
+        // Add integral and constant terms to phi
+        phi = phis + rgas_tv_dp_over_p + 2.0*integration_ij;
+        integration = integration_ij[0] + rgas_tv_dp_over_p[0];
       }
     });
     kv.team_barrier();
