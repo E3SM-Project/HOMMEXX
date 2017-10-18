@@ -271,9 +271,7 @@ class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.preq_omega_ps(kv);
-    }
+    functor.preq_omega_ps(kv);
   }
 };
 
@@ -342,9 +340,7 @@ class preq_hydrostatic_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.preq_hydrostatic(kv);
-    }
+    functor.preq_hydrostatic(kv);
   }
 };
 
@@ -410,11 +406,7 @@ class dp3d_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int &ilev) {
-      kv.ilev = ilev;
-      functor.compute_dp3d_np1(kv);
-    });
+    functor.compute_dp3d_np1(kv);
   }
 };
 
@@ -580,9 +572,7 @@ class pressure_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.compute_pressure(kv);
-    }
+    functor.compute_pressure(kv);
   }
 };
 
@@ -650,11 +640,7 @@ class temperature_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-      [&](const int &idx) {
-        kv.ilev = idx;
-        functor.compute_temperature_np1(kv);
-    });
+    functor.compute_temperature_np1(kv);
   }
 };
 
@@ -742,11 +728,7 @@ class virtual_temperature_no_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int ilev) {
-      kv.ilev = ilev;
-      functor.compute_temperature_no_tracers_helper(kv);
-    });
+    functor.compute_temperature_no_tracers_helper(kv);
   }
 };
 
@@ -802,11 +784,7 @@ class virtual_temperature_with_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int ilev) {
-      kv.ilev = ilev;
-      functor.compute_temperature_tracers_helper(kv);
-    });
+    functor.compute_temperature_tracers_helper(kv);
   }
 };
 
