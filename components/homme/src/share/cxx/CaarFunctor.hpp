@@ -167,7 +167,7 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       for (int ilev=0; ilev<NUM_LEV_P; ++ilev) {
-        m_elements.m_eta_dot_dpdn(kv.ie, jgp, igp, ilev) = 0;
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
       }
     });
     kv.team_barrier();
@@ -400,8 +400,8 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-        m_elements.m_omega_p(kv.ie, jgp, igp, ilev) +=
-            m_data.eta_ave_w * m_elements.buffers.omega_p(kv.ie, jgp, igp, ilev);
+        m_elements.m_omega_p(kv.ie, igp, jgp, ilev) +=
+            m_data.eta_ave_w * m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
       }
     });
     kv.team_barrier();
