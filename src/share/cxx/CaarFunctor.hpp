@@ -277,27 +277,28 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void compute_pressure(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      m_elements.buffers.pressure(kv.ie, igp, jgp, 0)[0] =
-          m_data.hybrid_a(0) * m_data.ps0 +
-          0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, 0)[0];
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
 
-      // TODO: change the sum into
-      // p(k) = p(k-1) + 0.5*(dp(k)+dp(k-1))
-      // to increase accuracy
-      for (int ilev = 1; ilev < NUM_PHYSICAL_LEV; ++ilev) {
-        const int lev = ilev / VECTOR_SIZE;
-        const int vec = ilev % VECTOR_SIZE;
+      Real dp_prev = 0;
+      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
+      for (int ilev=0; ilev<NUM_LEV; ++ilev) {
+        const int vector_end = (ilev == NUM_LEV-1 ?
+                                ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
+                                VECTOR_SIZE-1);
 
-        const int lev_prev = (ilev - 1) / VECTOR_SIZE;
-        const int vec_prev = (ilev - 1) % VECTOR_SIZE;
-        m_elements.buffers.pressure(kv.ie, igp, jgp, lev)[vec] =
-            m_elements.buffers.pressure(kv.ie, igp, jgp, lev_prev)[vec_prev] +
-            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp,
-                                    lev_prev)[vec_prev] +
-            0.5 * m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, lev)[vec];
+        auto p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
+
+        for (int iv=0; iv<=vector_end; ++iv) {
+          // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
+          p[iv] = p_prev + 0.5*dp_prev+ 0.5*dp[iv];
+          // Update p[k-1] and dp[k-1]
+          p_prev = p[iv];
+          dp_prev = dp[iv];
+        }
+        m_elements.buffers.pressure(kv.ie, igp, jgp, ilev) = p;
       }
     });
     kv.team_barrier();
