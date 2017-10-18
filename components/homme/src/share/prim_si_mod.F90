@@ -234,26 +234,22 @@ contains
 
           do i=1,np
 !             omega_p(i,j,1) = hvcoord%hybm(1)*vgrad_ps(i,j,1)/p(i,j,1)
-             omega_p(i,j,1) = vgrad_p(i,j,1)/p(i,j,1)
-             omega_p(i,j,1) = omega_p(i,j,1) - 0.5/p(i,j,1)*divdp(i,j,1)
+             omega_p(i,j,1) = (vgrad_p(i,j,1) - 0.5*divdp(i,j,1)) / p(i,j,1)
              suml(i,j) = divdp(i,j,1)
           end do
 
           do k=2,nlev-1
              do i=1,np
-                ckk = 0.5d0/p(i,j,k)
 !                omega_p(i,j,k) = hvcoord%hybm(k)*vgrad_ps(i,j,k)/p(i,j,k)
-                omega_p(i,j,k) = vgrad_p(i,j,k)/p(i,j,k)
-                omega_p(i,j,k) = omega_p(i,j,k) - (2*ckk*suml(i,j) + ckk*divdp(i,j,k))
+                omega_p(i,j,k) = (vgrad_p(i,j,k) - (suml(i,j) + 0.5*divdp(i,j,k))) / p(i,j,k)
                 suml(i,j) = suml(i,j) + divdp(i,j,k)
+
              end do
           end do
 
           do i=1,np
-             ckk = 0.5d0/p(i,j,nlev)
 !             omega_p(i,j,nlev) = hvcoord%hybm(nlev)*vgrad_ps(i,j,nlev)/p(i,j,nlev)
-             omega_p(i,j,nlev) = vgrad_p(i,j,nlev)/p(i,j,nlev)
-             omega_p(i,j,nlev) = omega_p(i,j,nlev) - (2*ckk*suml(i,j) + ckk*divdp(i,j,nlev))
+             omega_p(i,j,nlev) = (vgrad_p(i,j,nlev) - (suml(i,j) + 0.5*divdp(i,j,nlev))) / p(i,j,nlev)
           end do
 
        end do

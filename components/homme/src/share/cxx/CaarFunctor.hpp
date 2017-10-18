@@ -213,18 +213,16 @@ struct CaarFunctor {
         const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
 
         // Precompute this product as a SIMD operation
-        const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * dp3d * 0.5 / p;
+        const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
 
         // Integrate
         Scalar integration_ij;
         integration_ij[vec_start] = integration;
-        for (int iv = vec_start-1; iv >= 0; --iv) {
-          // update integral
+        for (int iv = vec_start-1; iv >= 0; --iv)
           integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv+1];
-        }
 
         // Add integral and constant terms to phi
-        phi = phis + rgas_tv_dp_over_p + 2.0*integration_ij;
+        phi = phis + 2.0*integration_ij + rgas_tv_dp_over_p;
         integration = integration_ij[0] + rgas_tv_dp_over_p[0];
       }
     });
@@ -263,9 +261,8 @@ struct CaarFunctor {
 
         Scalar integration_ij;
         integration_ij[0] = integration;
-        for (int iv = 0; iv < vector_end; ++iv) {
+        for (int iv = 0; iv < vector_end; ++iv)
           integration_ij[iv+1] = integration_ij[iv] + div_vdp[iv];
-        }
         omega_p = (vgrad_p - (integration_ij + 0.5*div_vdp))/p;
         integration = integration_ij[vector_end] + div_vdp[vector_end];
       }
