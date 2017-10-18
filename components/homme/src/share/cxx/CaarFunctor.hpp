@@ -166,7 +166,7 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for (int ilev=0; ilev<NUM_INTERFACE_LEV; ++ilev) {
+      for (int ilev=0; ilev<NUM_LEV_P; ++ilev) {
         m_elements.m_eta_dot_dpdn(kv.ie, jgp, igp, ilev) = 0;
       }
     });
