@@ -198,19 +198,19 @@ struct CaarFunctor {
       // Note: we add VECTOR_SIZE-1 rather than subtracting 1 since (0-1)%N=-1
       // while (0+N-1)%N=N-1.
       constexpr int last_lvl_last_vector_idx =
-        (NUM_PHYSICAL_LEV % VECTOR_SIZE + VECTOR_SIZE - 1) % VECTOR_SIZE;
+        (NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE;
 
       Real integration = 0;
-      for (kv.ilev = NUM_LEV-1; kv.ilev >= 0; --kv.ilev) {
-        const int vec_start = (kv.ilev == (NUM_LEV-1) ?
+      for (int ilev = NUM_LEV-1; ilev >= 0; --ilev) {
+        const int vec_start = (ilev == (NUM_LEV-1) ?
                                last_lvl_last_vector_idx :
                                VECTOR_SIZE-1);
 
         const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
-        auto& phi = m_elements.m_phi(kv.ie, igp, jgp, kv.ilev);
-        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, kv.ilev);
-        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, kv.ilev);
-        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, kv.ilev);
+        auto& phi = m_elements.m_phi(kv.ie, igp, jgp, ilev);
+        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
+        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
+        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
 
         // Precompute this product as a SIMD operation
         const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * dp3d * 0.5 / p;
@@ -235,51 +235,42 @@ struct CaarFunctor {
   // omega_p
   KOKKOS_INLINE_FUNCTION
   void preq_omega_ps(KernelVariables &kv) const {
-    // NOTE: we can't use a single TeamThreadRange loop,
-    // since gradient_sphere requires a 'consistent'
-    // pressure, meaning that we cannot update the different
-    // pressure points within a level before the gradient is
-    // complete!
-    ExecViewUnmanaged<Real *[NP][NP]> integration = m_elements.buffers.preq_buf;
+    gradient_sphere(
+        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        m_elements.buffers.grad_buf,
+        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      integration(kv.ie, igp, jgp) = 0.0;
-    });
 
-    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      gradient_sphere(
-          kv, m_elements.m_dinv, m_deriv.get_dvv(),
-          Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
-          m_elements.buffers.grad_buf,
-          Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL,
-                          ALL));
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                           [&](const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Scalar vgrad_p =
-            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
-                m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
-                m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+      Real integration = 0;
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        const int vector_end = (ilev == NUM_LEV-1 ?
+                                ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
+                                VECTOR_SIZE-1);
 
-        m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
-            vgrad_p / m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        const Scalar vgrad_p =
+          m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+          m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
+          m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+          m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+        auto& omega_p = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+        const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
 
-        for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
-          Real div_vdp =
-              m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[vec];
-          Real ckk =
-              0.5 / m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)[vec];
-          m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev)[vec] -=
-              (2.0 * ckk * integration(kv.ie, igp, jgp) + ckk * div_vdp);
-          integration(kv.ie, igp, jgp) += div_vdp;
+        Scalar integration_ij;
+        integration_ij[0] = integration;
+        for (int iv = 0; iv < vector_end; ++iv) {
+          integration_ij[iv+1] = integration_ij[iv] + div_vdp[iv];
         }
-      });
-      kv.team_barrier();
-    }
+        omega_p = (vgrad_p - (integration_ij + 0.5*div_vdp))/p;
+        integration = integration_ij[vector_end] + div_vdp[vector_end];
+      }
+    });
+    kv.team_barrier();
   } // TESTED 4
 
   // Depends on DP3D
