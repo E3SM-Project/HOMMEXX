@@ -4,7 +4,6 @@
 #include <iostream>
 
 #include "Types.hpp"
-#include "FortranArrayUtils.hpp"
 #include "Derivative.hpp"
 #include "SphereOperators.hpp"
 #include "KernelVariables.hpp"
@@ -29,118 +28,10 @@ void vorticity_sphere_c_callable(const Real *vector, const Real *dvv,
 
 } // extern "C"
 
-// ================================= TESTS ============================ //
-
-TEST_CASE("flip_arrays", "flip arrays routines") {
-  constexpr int N1 = 2;
-  constexpr int N2 = 3;
-  constexpr int N3 = 4;
-  constexpr int N4 = 5;
-
-  Real *A = new Real[N1 * N2];
-  Real *B = new Real[N1 * N2 * N3];
-  Real *C = new Real[N1 * N2 * N3 * N4];
-
-  std::random_device rd;
-  using rngAlg = std::mt19937_64;
-  rngAlg engine(rd());
-  std::uniform_real_distribution<Real> dreal(0, 1);
-
-  constexpr int num_rand_test = 10;
-
-  SECTION("f90->cxx") {
-    // Same 'mathematical' shape. Simply change f90->cxx ordering
-
-    genRandArray(A, N1 * N2, engine, dreal);
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-
-    HostViewManaged<Real[N1][N2]> A_cxx("A");
-    HostViewManaged<Real[N1][N2][N3]> B_cxx("B");
-
-    flip_f90_array_2d_12<N1, N2>(A, A_cxx);
-    flip_f90_array_3d_123<N1, N2, N3>(B, B_cxx);
-
-    int iter2d = 0;
-    int iter3d = 0;
-    for (int j = 0; j < N2; ++j) {
-      for (int i = 0; i < N1; ++i, ++iter2d) {
-        REQUIRE(compare_answers(A_cxx(i, j), A[iter2d]) == 0);
-      }
-    }
-
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter3d) {
-          REQUIRE(compare_answers(B_cxx(i, j, k), B[iter3d]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_213") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N2][N1][N3]> B_cxx("B");
-    flip_f90_array_3d_213<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(j, i, k), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_312") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N3][N1][N2]> B_cxx("B");
-    flip_f90_array_3d_312<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(k, i, j), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_4d_3412") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(C, N1 * N2 * N3 * N4, engine, dreal);
-
-    HostViewManaged<Real[N3][N4][N1][N2]> C_cxx("C");
-    flip_f90_array_4d_3412<N1, N2, N3, N4>(C, C_cxx);
-
-    int iter = 0;
-    for (int l = 0; l < N4; ++l) {
-      for (int k = 0; k < N3; ++k) {
-        for (int j = 0; j < N2; ++j) {
-          for (int i = 0; i < N1; ++i, ++iter) {
-            REQUIRE(compare_answers(C_cxx(k, l, i, j), C[iter]) == 0);
-          }
-        }
-      }
-    }
-  }
-
-  // Cleanup
-  delete[] A;
-  delete[] B;
-  delete[] C;
-}
-
 // ====================== SPHERE OPERATORS =========================== //
 
 TEST_CASE("Multi_Level_Sphere_Operators",
           "Testing spherical differential operators") {
-  // Short names
-  using Kokkos::subview;
-  using Kokkos::ALL;
 
   constexpr Real rel_threshold = std::numeric_limits<Real>::epsilon() * 1024.0;
 
@@ -162,16 +53,16 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> buffer("buffer_cxx", nelems);
 
   // Initialize derivative
-  HostViewManaged<Real * [NP][NP]> dvv_h("dvv_host", nelems);
+  HostViewManaged<Real [NP][NP]> dvv_h("dvv_host");
   init_deriv_f90(dvv_h.data());
-  ExecViewManaged<Real * [NP][NP]> dvv_exec("dvv_exec", nelems);
+  ExecViewManaged<Real [NP][NP]> dvv_exec("dvv_exec");
   Kokkos::deep_copy(dvv_exec, dvv_h);
 
   // Execution policy
   const int threads_per_team =
-      DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
+      ThreadsDistribution<ExecSpace>::threads_per_team(nelems);
   const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+      ThreadsDistribution<ExecSpace>::vectors_per_thread();
   Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
                                        vectors_per_thread);
 
@@ -180,11 +71,11 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> input_h("input host",
                                                                nelems);
     genRandArray(input_h, engine, dreal);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> input_exec("input exec",
+    ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> input_exec("input exec",
                                                            nelems);
     sync_to_device(input_h, input_exec);
 
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> output_exec("output exec",
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> output_exec("output exec",
                                                                nelems);
 
     // Compute cxx
@@ -193,9 +84,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
       Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                            [&](const int level) {
         kv.ilev = level;
-        gradient_sphere(kv, D_exec, subview(dvv_exec, kv.ie, ALL, ALL),
-                        subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
-                        subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
+        gradient_sphere(kv, D_exec, dvv_exec,
+                        Homme::subview(input_exec, kv.ie), buffer,
+                        Homme::subview(output_exec, kv.ie));
       });
     });
 
@@ -208,9 +99,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     for (int ie = 0; ie < nelems; ++ie) {
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         // Compute f90
-        gradient_sphere_c_callable(subview(input_h, ie, level, ALL, ALL).data(),
-                                   subview(dvv_h, ie, ALL, ALL).data(),
-                                   subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
+        gradient_sphere_c_callable(Homme::subview(input_h, ie, level).data(),
+                                   dvv_h.data(),
+                                   Homme::subview(D_h, ie).data(),
                                    output_f90.data());
 
         // Check the answer
@@ -238,11 +129,11 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> input_h("input host",
                                                                   nelems);
     genRandArray(input_h, engine, dreal);
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> input_exec("input exec",
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> input_exec("input exec",
                                                               nelems);
     sync_to_device(input_h, input_exec);
 
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> output_exec("output exec",
+    ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> output_exec("output exec",
                                                             nelems);
 
     // Compute cxx
@@ -252,9 +143,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
                            [&](const int level) {
         kv.ilev = level;
         divergence_sphere(kv, D_exec, metdet_exec,
-                          subview(dvv_exec, kv.ie, ALL, ALL),
-                          subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
-                          buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
+                          dvv_exec,
+                          Homme::subview(input_exec, kv.ie),
+                          buffer,
+                          Homme::subview(output_exec, kv.ie));
       });
     });
 
@@ -268,10 +160,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         // Compute f90
         divergence_sphere_c_callable(
-            subview(input_h, ie, level, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
-            subview(metdet_h, ie, ALL, ALL).data(),
-            subview(D_h, ie, ALL, ALL, ALL, ALL).data(), output_f90.data());
+            Homme::subview(input_h, ie, level).data(),
+            dvv_h.data(),
+            Homme::subview(metdet_h, ie).data(),
+            Homme::subview(D_h, ie).data(), output_f90.data());
 
         // Check the answer
         for (int j = 0; j < NP; ++j) {
@@ -291,13 +183,13 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> input_h("input host",
                                                                   nelems);
     genRandArray(input_h, engine, dreal);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> input_1_exec("input 1 exec",
+    ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> input_1_exec("input 1 exec",
                                                              nelems);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> input_2_exec("input 2 exec",
+    ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> input_2_exec("input 2 exec",
                                                              nelems);
     sync_to_device(input_h, input_1_exec, input_2_exec);
 
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> output_exec("output exec",
+    ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> output_exec("output exec",
                                                             nelems);
 
     // Compute cxx
@@ -307,10 +199,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
                            [&](const int level) {
         kv.ilev = level;
         vorticity_sphere(kv, D_exec, metdet_exec,
-                          subview(dvv_exec, kv.ie, ALL, ALL),
-                          subview(input_1_exec, kv.ie, ALL, ALL, ALL),
-                          subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
-                          subview(output_exec, kv.ie, ALL, ALL, ALL));
+                          dvv_exec,
+                          Homme::subview(input_1_exec, kv.ie),
+                          Homme::subview(input_2_exec, kv.ie), buffer,
+                          Homme::subview(output_exec, kv.ie));
       });
     });
 
@@ -324,10 +216,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         // Compute f90
         vorticity_sphere_c_callable(
-            subview(input_h, ie, level, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
-            subview(metdet_h, ie, ALL, ALL).data(),
-            subview(D_h, ie, ALL, ALL, ALL, ALL).data(), output_f90.data());
+            Homme::subview(input_h, ie, level).data(),
+            dvv_h.data(),
+            Homme::subview(metdet_h, ie).data(),
+            Homme::subview(D_h, ie).data(), output_f90.data());
 
         // Check the answer
         for (int j = 0; j < NP; ++j) {
@@ -345,9 +237,6 @@ TEST_CASE("Multi_Level_Sphere_Operators",
 
 TEST_CASE("Single_Level_Sphere_Operators",
           "Testing spherical differential operators") {
-  // Short names
-  using Kokkos::subview;
-  using Kokkos::ALL;
 
   constexpr Real rel_threshold = std::numeric_limits<Real>::epsilon() * 32768.0;
 
@@ -357,7 +246,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
   // Fortran host views
   HostViewManaged<Real * [NP][NP]> scalar_h("scalar_host", nelems);
   HostViewManaged<Real * [2][NP][NP]> vector_h("vector_host", nelems);
-  HostViewManaged<Real * [NP][NP]> dvv_h("dvv_host", nelems);
+  HostViewManaged<Real [NP][NP]> dvv_h("dvv_host");
   HostViewManaged<Real * [2][2][NP][NP]> D_h("d_host", nelems);
   HostViewManaged<Real * [2][2][NP][NP]> DInv_h("dinv_host", nelems);
   HostViewManaged<Real * [NP][NP]> metdet_h("metdet_host", nelems);
@@ -389,7 +278,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
 
   // Execution policy
   const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+      ThreadsDistribution<ExecSpace>::vectors_per_thread();
   const int threads_per_team = 1;
   Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
                                        vectors_per_thread);
@@ -410,8 +299,8 @@ TEST_CASE("Single_Level_Sphere_Operators",
         KernelVariables kv(team_member);
 
         gradient_sphere_sl(kv, DInv_exec, deriv.get_dvv(),
-                           subview(scalar_exec, kv.ie, ALL, ALL), buffer,
-                           subview(vector_exec, kv.ie, ALL, ALL, ALL));
+                           Homme::subview(scalar_exec, kv.ie), buffer,
+                           Homme::subview(vector_exec, kv.ie));
       });
 
       // Deep copy back to host
@@ -420,10 +309,10 @@ TEST_CASE("Single_Level_Sphere_Operators",
       for (int ie = 0; ie < nelems; ++ie) {
         // Compute f90
         gradient_sphere_c_callable(
-            subview(scalar_h, ie, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
-            subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
-            subview(vector_h, ie, ALL, ALL, ALL).data());
+            Homme::subview(scalar_h, ie).data(),
+            dvv_h.data(),
+            Homme::subview(DInv_h, ie).data(),
+            Homme::subview(vector_h, ie).data());
 
         // Check the answer
         for (int dim = 0; dim < 2; ++dim) {
@@ -456,10 +345,10 @@ TEST_CASE("Single_Level_Sphere_Operators",
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         KernelVariables kv(team_member);
 
-        ExecViewUnmanaged<Real[2][NP][NP]> vector_ie =
-            subview(vector_exec, kv.ie, ALL, ALL, ALL);
+        ExecViewUnmanaged<const Real[2][NP][NP]> vector_ie =
+            Homme::subview(vector_exec, kv.ie);
         ExecViewUnmanaged<Real[NP][NP]> div_ie =
-            subview(scalar_exec, kv.ie, ALL, ALL);
+            Homme::subview(scalar_exec, kv.ie);
 
         divergence_sphere_sl(kv, DInv_exec, metdet_exec, deriv.get_dvv(),
                              vector_ie, buffer, div_ie);
@@ -471,17 +360,20 @@ TEST_CASE("Single_Level_Sphere_Operators",
       for (int ie = 0; ie < nelems; ++ie) {
         // Compute f90
         divergence_sphere_c_callable(
-            subview(vector_h, ie, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
-            subview(metdet_h, ie, ALL, ALL).data(),
-            subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
-            subview(scalar_h, ie, ALL, ALL).data());
+            Homme::subview(vector_h, ie).data(),
+            dvv_h.data(),
+            Homme::subview(metdet_h, ie).data(),
+            Homme::subview(DInv_h, ie).data(),
+            Homme::subview(scalar_h, ie).data());
         // Check the answer
-        for (int j = 0; j < NP; ++j) {
-          for (int i = 0; i < NP; ++i) {
+        for (int i = 0; i < NP; ++i) {
+          for (int j = 0; j < NP; ++j) {
             const Real correct = scalar_h(ie, i, j);
             const Real computed = scalar_output(ie, i, j);
             const Real rel_error = compare_answers(correct, computed);
+            if (rel_threshold<rel_error) {
+              printf("i,j,correct,computed: %d, %d, %1.10f, %1.10f\n",i,j,correct,computed);
+            }
             REQUIRE(rel_threshold >= rel_error);
           }
         }
@@ -505,11 +397,11 @@ TEST_CASE("Single_Level_Sphere_Operators",
         KernelVariables kv(team_member);
 
         ExecViewUnmanaged<Real[NP][NP]> vector_x_ie =
-            subview(vector_exec, kv.ie, 0, ALL, ALL);
+            Homme::subview(vector_exec, kv.ie, 0);
         ExecViewUnmanaged<Real[NP][NP]> vector_y_ie =
-            subview(vector_exec, kv.ie, 1, ALL, ALL);
+            Homme::subview(vector_exec, kv.ie, 1);
         ExecViewUnmanaged<Real[NP][NP]> vort_ie =
-            subview(scalar_exec, kv.ie, ALL, ALL);
+            Homme::subview(scalar_exec, kv.ie);
 
         vorticity_sphere_sl(kv, D_exec, metdet_exec, deriv.get_dvv(),
                             vector_x_ie, vector_y_ie, buffer, vort_ie);
@@ -520,11 +412,12 @@ TEST_CASE("Single_Level_Sphere_Operators",
 
       for (int ie = 0; ie < nelems; ++ie) {
         // Compute f90
-        vorticity_sphere_c_callable(subview(vector_h, ie, ALL, ALL, ALL).data(),
-                                    subview(dvv_h, ie, ALL, ALL).data(),
-                                    subview(metdet_h, ie, ALL, ALL).data(),
-                                    subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
-                                    subview(scalar_h, ie, ALL, ALL).data());
+        vorticity_sphere_c_callable(
+            Homme::subview(vector_h, ie).data(),
+            dvv_h.data(),
+            Homme::subview(metdet_h, ie).data(),
+            Homme::subview(D_h, ie).data(),
+            Homme::subview(scalar_h, ie).data());
         // Check the answer
         for (int i = 0; i < NP; ++i) {
           for (int j = 0; j < NP; ++j) {

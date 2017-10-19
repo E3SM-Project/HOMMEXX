@@ -44,9 +44,9 @@ struct EulerStepFunctor
         const int iq   = lev_q / NUM_LEV;
         kv.ilev = lev_q % NUM_LEV;
 
-        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> qdp   = Homme::subview(m_elements.m_qdp,kv.ie,m_data.qn0,iq);
-        ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>       q_buf = Homme::subview(m_elements.buffers.qtens,kv.ie,iq);
-        ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>    v_buf = Homme::subview(m_elements.buffers.vstar_qdp,kv.ie,iq);
+        ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> qdp   = Homme::subview(m_elements.m_qdp,kv.ie,m_data.qn0,iq);
+        ExecViewUnmanaged<Scalar[NUM_LEV][NP][NP]>       q_buf = Homme::subview(m_elements.buffers.qtens,kv.ie,iq);
+        ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]>    v_buf = Homme::subview(m_elements.buffers.vstar_qdp,kv.ie,iq);
 
         Kokkos::parallel_for (
           Kokkos::ThreadVectorRange (team, NP*NP),
@@ -55,9 +55,9 @@ struct EulerStepFunctor
             const int igp = idx / NP;
             const int jgp = idx % NP;
 
-            v_buf(0,igp,jgp,kv.ilev) = m_elements.buffers.vstar(kv.ie,0,igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
-            v_buf(1,igp,jgp,kv.ilev) = m_elements.buffers.vstar(kv.ie,1,igp,jgp,kv.ilev) * qdp(igp,jgp,kv.ilev);
-            q_buf(igp,jgp,kv.ilev) = qdp(igp,jgp,kv.ilev);
+            v_buf(0,kv.ilev,igp,jgp) = m_elements.buffers.vstar(kv.ie,kv.ilev,0,igp,jgp) * qdp(kv.ilev,igp,jgp);
+            v_buf(1,kv.ilev,igp,jgp) = m_elements.buffers.vstar(kv.ie,kv.ilev,1,igp,jgp) * qdp(kv.ilev,igp,jgp);
+            q_buf(kv.ilev,igp,jgp) = qdp(kv.ilev,igp,jgp);
           }
         );
 

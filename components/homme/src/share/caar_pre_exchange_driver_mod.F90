@@ -3,7 +3,6 @@
 #endif
 
 module caar_pre_exchange_driver_mod
-  use utils_mod, only : FrobeniusNorm
 
   implicit none
 

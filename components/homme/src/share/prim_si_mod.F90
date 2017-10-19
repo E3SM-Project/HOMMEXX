@@ -234,30 +234,24 @@ contains
 
           do i=1,np
 !             omega_p(i,j,1) = hvcoord%hybm(1)*vgrad_ps(i,j,1)/p(i,j,1)
-             omega_p(i,j,1) = vgrad_p(i,j,1)/p(i,j,1)
-             omega_p(i,j,1) = omega_p(i,j,1) - 0.5/p(i,j,1)*divdp(i,j,1)
+             omega_p(i,j,1) = (vgrad_p(i,j,1) - 0.5*divdp(i,j,1)) / p(i,j,1)
              suml(i,j) = divdp(i,j,1)
           end do
 
           do k=2,nlev-1
              do i=1,np
-                ckk = 0.5d0/p(i,j,k)
 !                omega_p(i,j,k) = hvcoord%hybm(k)*vgrad_ps(i,j,k)/p(i,j,k)
-                omega_p(i,j,k) = vgrad_p(i,j,k)/p(i,j,k)
-                omega_p(i,j,k) = omega_p(i,j,k) - (2*ckk*suml(i,j) + ckk*divdp(i,j,k))
+                omega_p(i,j,k) = (vgrad_p(i,j,k) - (suml(i,j) + 0.5*divdp(i,j,k))) / p(i,j,k)
                 suml(i,j) = suml(i,j) + divdp(i,j,k)
              end do
           end do
 
           do i=1,np
-             ckk = 0.5d0/p(i,j,nlev)
 !             omega_p(i,j,nlev) = hvcoord%hybm(nlev)*vgrad_ps(i,j,nlev)/p(i,j,nlev)
-             omega_p(i,j,nlev) = vgrad_p(i,j,nlev)/p(i,j,nlev)
-             omega_p(i,j,nlev) = omega_p(i,j,nlev) - (2*ckk*suml(i,j) + ckk*divdp(i,j,nlev))
+             omega_p(i,j,nlev) = (vgrad_p(i,j,nlev) - (suml(i,j) + 0.5*divdp(i,j,nlev))) / p(i,j,nlev)
           end do
 
        end do
-
   end subroutine preq_omega_ps
 
 
@@ -379,26 +373,22 @@ contains
        do j=1,np   !   Loop inversion (AAM)
 
           do i=1,np
-             hkk = dp(i,j,nlev)*0.5d0/p(i,j,nlev)
-             hkl = 2*hkk
-             phii(i,j,nlev)  = Rgas*T_v(i,j,nlev)*hkl
-             phi(i,j,nlev) = phis(i,j) + Rgas*T_v(i,j,nlev)*hkk
+             hkk = Rgas*T_v(i,j,nlev)*dp(i,j,nlev)*0.5d0/p(i,j,nlev)
+             phii(i,j,nlev)  = hkk
+             phi(i,j,nlev) = phis(i,j) + hkk
           end do
 
           do k=nlev-1,2,-1
              do i=1,np
-                ! hkk = dp*ckk
-                hkk = dp(i,j,k)*0.5d0/p(i,j,k)
-                hkl = 2*hkk
-                phii(i,j,k) = phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkl
-                phi(i,j,k) = phis(i,j) + phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkk
+                hkk = Rgas*T_v(i,j,k)*dp(i,j,k)*0.5d0/p(i,j,k)
+                phii(i,j,k) = phii(i,j,k+1) + hkk
+                phi(i,j,k) = phis(i,j) + hkk + 2.0*phii(i,j,k+1)
              end do
           end do
 
           do i=1,np
-             ! hkk = dp*ckk
-             hkk = 0.5d0*dp(i,j,1)/p(i,j,1)
-             phi(i,j,1) = phis(i,j) + phii(i,j,2) + Rgas*T_v(i,j,1)*hkk
+             hkk = Rgas*T_v(i,j,1)*dp(i,j,1)*0.5d0/p(i,j,1)
+             phi(i,j,1) = phis(i,j) + hkk + 2.0*phii(i,j,2)
           end do
 
        end do

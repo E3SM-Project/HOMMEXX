@@ -26,54 +26,55 @@ public:
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
   // Omega is the pressure vertical velocity
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
+  ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> m_omega_p;
   // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_pecnd;
+  ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> m_pecnd;
   // Geopotential height field
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
+  ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> m_phi;
   // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
+  ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> m_derived_un0;
   // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
+  ExecViewManaged<Scalar * [NUM_LEV][NP][NP]> m_derived_vn0;
 
   // Lateral Velocity
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> m_u;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> m_v;
   // Temperature
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> m_t;
   // ???
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NUM_LEV][NP][NP]> m_dp3d;
 
   // q is the specific humidity
-  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
+  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_LEV][NP][NP]> m_qdp;
   // eta is the vertical coordinate
   // eta dot is the flux through the vertical level interface
   //    (note there are NUM_LEV_P of them)
   // dpdn is the derivative of pressure with respect to eta
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NUM_LEV_P][NP][NP]> m_eta_dot_dpdn;
 
   struct BufferViews {
 
     BufferViews() = default;
     void init(const int num_elems);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temperature_grad;
-    // TODO: Remove omega_p from the buffers
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> vorticity;
+
+    // Buffers for CaarFunctor
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       pressure;
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       temperature_virt;
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       omega_p;
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       div_vdp;
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       ephi;
+    ExecViewManaged<Scalar *    [NUM_LEV][NP][NP]>       vorticity;
+
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>       pressure_grad;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>       temperature_grad;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>       energy_grad;
+    ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]>       vdp;
 
     // Buffers for EulerStepFunctor
-    ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]>   qtens;
-    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>            vstar;
-    ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>   vstar_qdp;
+    ExecViewManaged<Scalar *          [NUM_LEV][2][NP][NP]>   vstar;
+    ExecViewManaged<Scalar * [QSIZE_D][NUM_LEV]   [NP][NP]>   qtens;
+    ExecViewManaged<Scalar * [QSIZE_D][NUM_LEV][2][NP][NP]>   vstar_qdp;
 
-    ExecViewManaged<Real *[NP][NP]> preq_buf;
     // Buffers for spherical operators
     ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> div_buf;
     ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> grad_buf;

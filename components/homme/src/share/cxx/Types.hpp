@@ -26,31 +26,83 @@ using F90Ptr = Real *const; // Using this in a function signature emphasizes
 using CF90Ptr = const Real *const; // Using this in a function signature
                                    // emphasizes that the ordering is Fortran
 
-template <typename ExecSpace> struct DefaultThreadsDistribution {
+template <typename ExecSpace> struct ThreadsDistribution {
+
+  static int teams_per_league (const int num_elems) {
+    if (s_num_avail_threads==0) {
+      s_num_avail_threads = ExecSpace::thread_pool_size();
+    }
+    if (s_team_size==0) {
+      set_team_size(num_elems);
+    }
+    return s_num_avail_threads /
+            (s_team_size * vectors_per_thread());
+  }
+
   static constexpr int vectors_per_thread() { return 1; }
 
-#ifdef KOKKOS_COLUMN_THREAD_ONLY
   static int threads_per_team(const int num_elems) {
-    return ExecSpace::thread_pool_size();
+    if (s_num_avail_threads==0) {
+      s_num_avail_threads = ExecSpace::thread_pool_size();
+    }
+    if (s_team_size==0) {
+      set_team_size(num_elems);
+    }
+    return s_team_size;
   }
-#else
-#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-  static int threads_per_team(const int num_elems) {
-    int Max_Threads_Per_Team = ExecSpace::thread_pool_size();
-    if (Max_Threads_Per_Team >= num_elems) {
-      return Max_Threads_Per_Team / num_elems;
+
+private:
+
+#ifdef KOKKOS_THREAD_ON_ELEMENTS
+  static void set_team_size(const int num_elems) {
+
+    const char* var;
+    var = getenv("HOMMEXX_TEAM_SIZE");
+    if (var!=0)
+    {
+      // The user requested a team size for homme. We accept it, provided
+      // that it is at least 1, and no larger than the thread pool size
+      s_team_size = std::max(std::atoi(var),1);
+      s_team_size = std::min(s_team_size, s_num_avail_threads);
     } else {
-      return 1;
+      // The user did not request a team size. We parallelize as much as
+      // possible over elements
+      if (s_num_avail_threads >= num_elems) {
+        s_team_size = s_num_avail_threads / num_elems;
+      } else {
+        s_team_size = 1;
+      }
     }
   }
 #else
-  static int threads_per_team(const int num_elems) { return 1; }
-#endif // KOKKOS_PARALLELIZE_ON_ELEMENTS
-#endif // KOKKOS_COLUMN_THREAD_ONLY
+#ifdef KOKKOS_THREAD_ON_LEVELS
+  static void set_team_size(const int /*num_elems*/) {
+    s_team_size = s_num_avail_threads;
+  }
+#else
+  static void set_team_size(const int /*num_elems*/) {
+    s_team_size = 1;
+  }
+#endif // KOKKOS_THREAD_ON_LEVELS
+#endif // KOKKOS_THREAD_ON_ELEMENTS
+
+  static int s_team_size;
+  static int s_num_avail_threads;
 };
 
+template<typename ExecSpace>
+int ThreadsDistribution<ExecSpace>::s_team_size = 0;
+
+template<typename ExecSpace>
+int ThreadsDistribution<ExecSpace>::s_num_avail_threads = 0;
+
 #ifdef KOKKOS_HAVE_CUDA
-template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
+template <> struct ThreadsDistribution<Kokkos::Cuda> {
+
+  static int teams_per_league(const int /*num_elems*/) {
+    return Kokkos::Cuda::threds_pool_size() / (16*8);
+  }
+
   static constexpr int vectors_per_thread() { return 16; }
 
   static int threads_per_team(const int /*num_elems*/) {
