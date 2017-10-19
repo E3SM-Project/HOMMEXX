@@ -488,7 +488,7 @@ void Elements::push_qdp(F90Ptr &state_qdp) const {
   ExecViewManaged<
       Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
       Kokkos::create_mirror_view(m_qdp);
-  Kokkos::deep_copy(m_qdp, h_qdp);
+  Kokkos::deep_copy(h_qdp, m_qdp);
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
