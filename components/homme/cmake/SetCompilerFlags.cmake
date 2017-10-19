@@ -124,7 +124,7 @@ ENDIF ()
 # Handle Cuda.
 find_package(CUDA QUIET)
 if (${CUDA_FOUND})
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -expt-extended-lambda -expt-relaxed-constexpr -DCUDA_BUILD")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr -DCUDA_BUILD")
 endif ()
 
 ##############################################################################
