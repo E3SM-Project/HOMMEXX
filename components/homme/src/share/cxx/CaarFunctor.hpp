@@ -523,7 +523,7 @@ struct CaarFunctor {
   } // UNTESTED 13
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TeamMember team) const {
+  void operator()(const TeamMember& team) const {
     start_timer("caar compute");
     KernelVariables kv(team);
 
