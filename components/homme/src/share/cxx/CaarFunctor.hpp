@@ -12,6 +12,7 @@
 #include "profiling.hpp"
 
 #include <assert.h>
+#include <type_traits>
 
 namespace Homme {
 
@@ -275,33 +276,7 @@ struct CaarFunctor {
   // Depends on DP3D
   KOKKOS_INLINE_FUNCTION
   void compute_pressure(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int loop_idx) {
-    Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-
-      Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-        const int vector_end = (ilev == NUM_LEV-1 ?
-                                ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
-                                VECTOR_SIZE-1);
-
-        auto p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-        const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
-
-        for (int iv=0; iv<=vector_end; ++iv) {
-          // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
-          p[iv] = p_prev + 0.5*dp_prev+ 0.5*dp[iv];
-          // Update p[k-1] and dp[k-1]
-          p_prev = p[iv];
-          dp_prev = dp[iv];
-        }
-        m_elements.buffers.pressure(kv.ie, igp, jgp, ilev) = p;
-      };
-    });});
-    kv.team_barrier();
+    compute_pressure_impl<ExecSpace>(kv);
   } // TESTED 5
 
   // Depends on DP3D, PHIS, DP3D, PHI, T_v
@@ -544,6 +519,69 @@ struct CaarFunctor {
   size_t shmem_size(const int team_size) const {
     return KernelVariables::shmem_size(team_size);
   }
+
+private:
+
+  template<typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<!std::is_same<ExecSpaceType,Hommexx_Cuda>::value,void>::type
+  compute_pressure_impl(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+
+      Real dp_prev = 0;
+      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        const int vector_end = (ilev == NUM_LEV-1 ?
+                                ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
+                                VECTOR_SIZE-1);
+
+        auto p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
+
+        for (int iv=0; iv<=vector_end; ++iv) {
+          // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
+          p[iv] = p_prev + 0.5*dp_prev+ 0.5*dp[iv];
+          // Update p[k-1] and dp[k-1]
+          p_prev = p[iv];
+          dp_prev = dp[iv];
+        }
+        m_elements.buffers.pressure(kv.ie, igp, jgp, ilev) = p;
+      };
+    });
+    kv.team_barrier();
+  }
+
+  template<typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<std::is_same<ExecSpaceType,Hommexx_Cuda>::value,void>::type
+  compute_pressure_impl(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+
+      Real dp_prev = 0;
+      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
+      for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int ivec = level % VECTOR_SIZE;
+
+        Real& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)[ivec];
+        const Real dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec];
+
+        // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
+        p = p_prev + 0.5*dp_prev+ 0.5*dp;
+        // Update p[k-1] and dp[k-1]
+        p_prev = p;
+        dp_prev = dp;
+      };
+    });
+    kv.team_barrier();
+  }
+
 };
 
 } // Namespace Homme
