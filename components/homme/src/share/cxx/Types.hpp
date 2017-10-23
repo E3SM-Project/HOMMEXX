@@ -51,14 +51,14 @@ template <typename ExecSpace> struct DefaultThreadsDistribution {
 
 #ifdef KOKKOS_HAVE_CUDA
 template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
-  static constexpr int vectors_per_thread() { return 16; }
+  static constexpr int vectors_per_thread() { return 8; }
 
   static int threads_per_team(const int /*num_elems*/) {
     return Max_Threads_Per_Team;
   }
 
 private:
-  static constexpr int Max_Threads_Per_Team = 8;
+  static constexpr int Max_Threads_Per_Team = 16;
 };
 #endif // KOKKOS_HAVE_CUDA
 
