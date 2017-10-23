@@ -190,13 +190,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        gradient_sphere(kv, D_exec, dvv_exec,
-                        subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
-                        subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
-      });
+      gradient_sphere(kv, D_exec, dvv_exec,
+                      subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
+                      subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
@@ -248,14 +244,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        divergence_sphere(kv, D_exec, metdet_exec,
-                          dvv_exec,
-                          subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
-                          buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
-      });
+      divergence_sphere(kv, D_exec, metdet_exec,
+                        dvv_exec,
+                        subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
+                        buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
@@ -303,15 +295,11 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        vorticity_sphere(kv, D_exec, metdet_exec,
-                         dvv_exec,
-                         subview(input_1_exec, kv.ie, ALL, ALL, ALL),
-                         subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
-                         subview(output_exec, kv.ie, ALL, ALL, ALL));
-      });
+      vorticity_sphere(kv, D_exec, metdet_exec,
+                       dvv_exec,
+                       subview(input_1_exec, kv.ie, ALL, ALL, ALL),
+                       subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
+                       subview(output_exec, kv.ie, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
