@@ -190,8 +190,8 @@ struct CaarFunctor {
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
   void preq_hydrostatic(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int loop_idx) {
+    Kokkos::parallel_for(
+      Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int loop_idx) {
     Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -322,10 +322,10 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
             m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev);
-      }
+      });
     });
     kv.team_barrier();
   } // TESTED 6
@@ -336,14 +336,14 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         Scalar Qt = m_elements.m_qdp(kv.ie, m_data.qn0, 0, igp, jgp, ilev) /
                     m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
         Qt *= (PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0);
         Qt += 1.0;
         m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
             m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev) * Qt;
-      }
+      });
     });
     kv.team_barrier();
   } // TESTED 7
@@ -358,7 +358,7 @@ struct CaarFunctor {
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.vdp(kv.ie, 0, igp, jgp, ilev) =
             m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
@@ -372,7 +372,7 @@ struct CaarFunctor {
 
         m_elements.m_derived_vn0(kv.ie, igp, jgp, ilev) +=
             m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, igp, jgp, ilev);
-      }
+      });
     });
     kv.team_barrier();
 
