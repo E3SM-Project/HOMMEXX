@@ -21,7 +21,7 @@ module prim_advance_exp_mod
   use parallel_mod,   only: abortmp, parallel_t, iam
   use time_mod,       only: Timelevel_t
   use prim_advance_caar_mod, only: compute_and_apply_rhs, edge3p1
-  use prim_advance_hypervis_mod, only: advance_hypervis, advance_hypervis_dp, advance_hypervis_lf
+  use prim_advance_hypervis_mod, only: advance_hypervis_dp, advance_hypervis_lf
 
   implicit none
   private
