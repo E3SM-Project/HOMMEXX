@@ -191,44 +191,7 @@ struct CaarFunctor {
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
   void preq_hydrostatic(KernelVariables &kv) const {
-    Kokkos::parallel_for(
-      Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int loop_idx) {
-    Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-
-      // Note: we add VECTOR_SIZE-1 rather than subtracting 1 since (0-1)%N=-1
-      // while (0+N-1)%N=N-1.
-      constexpr int last_lvl_last_vector_idx =
-        (NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE;
-
-      Real integration = 0;
-      for (int ilev = NUM_LEV-1; ilev >= 0; --ilev) {
-        const int vec_start = (ilev == (NUM_LEV-1) ?
-                               last_lvl_last_vector_idx :
-                               VECTOR_SIZE-1);
-
-        const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
-        auto& phi = m_elements.m_phi(kv.ie, igp, jgp, ilev);
-        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
-        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
-        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-
-        // Precompute this product as a SIMD operation
-        const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
-
-        // Integrate
-        Scalar integration_ij;
-        integration_ij[vec_start] = integration;
-        for (int iv = vec_start-1; iv >= 0; --iv)
-          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv+1];
-
-        // Add integral and constant terms to phi
-        phi = phis + 2.0*integration_ij + rgas_tv_dp_over_p;
-        integration = integration_ij[0] + rgas_tv_dp_over_p[0];
-      }
-    });});
-    kv.team_barrier();
+    preq_hydrostatic_impl<ExecSpace>(kv);
   } // TESTED 3
 
   // Depends on pressure, U_current, V_current, div_vdp,
@@ -283,9 +246,6 @@ struct CaarFunctor {
   // Modifies pressure, PHI
   KOKKOS_INLINE_FUNCTION
   void compute_scan_properties(KernelVariables &kv) const {
-    // Use this instead of Kokkos::single(Kokkos::PerTeam
-    // due to Kokkos failing to execute the TeamThreadRange parallel for
-    // on CUDA
     compute_pressure(kv);
     preq_hydrostatic(kv);
     preq_omega_ps(kv);
@@ -580,6 +540,93 @@ private:
         dp_prev = dp;
       };
     });});
+    kv.team_barrier();
+  }
+
+  template<typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<!std::is_same<ExecSpaceType,Hommexx_Cuda>::value,void>::type
+  preq_hydrostatic_impl(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+
+      // Note: we add VECTOR_SIZE-1 rather than subtracting 1 since (0-1)%N=-1
+      // while (0+N-1)%N=N-1.
+      constexpr int last_lvl_last_vector_idx =
+        (NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE;
+
+      Real integration = 0;
+      for (int ilev = NUM_LEV-1; ilev >= 0; --ilev) {
+        const int vec_start = (ilev == (NUM_LEV-1) ?
+                               last_lvl_last_vector_idx :
+                               VECTOR_SIZE-1);
+
+        const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
+        auto& phi = m_elements.m_phi(kv.ie, igp, jgp, ilev);
+        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
+        const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
+        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+
+        // Precompute this product as a SIMD operation
+        const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
+
+        // Integrate
+        Scalar integration_ij;
+        integration_ij[vec_start] = integration;
+        for (int iv = vec_start-1; iv >= 0; --iv)
+          integration_ij[iv] = integration_ij[iv+1] + rgas_tv_dp_over_p[iv+1];
+
+        // Add integral and constant terms to phi
+        phi = phis + 2.0*integration_ij + rgas_tv_dp_over_p;
+        integration = integration_ij[0] + rgas_tv_dp_over_p[0];
+      }
+    });
+    kv.team_barrier();
+  }
+
+  template<typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<std::is_same<ExecSpaceType,Hommexx_Cuda>::value,void>::type
+  preq_hydrostatic_impl(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+
+      // Use a currently unused buffer to store one column of data.
+      const auto rgas_tv_dp_over_p = Kokkos::subview(
+        m_elements.buffers.vstar, kv.ie, 0, igp, jgp, Kokkos::ALL());
+
+      // Precompute this product as a SIMD-like operation.
+      Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+          const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
+          const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
+          const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+
+          rgas_tv_dp_over_p(ilev) = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
+        });
+
+      // Integrate using 1 thread per vector pack. We can use phi itself to
+      // hold the integral.
+      const auto integration = Kokkos::subview(m_elements.m_phi,
+                                               kv.ie, igp, jgp, Kokkos::ALL());
+      Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
+          integration(NUM_LEV-1) = 0;
+          for (int ilev = NUM_LEV-2; ilev >= 0; --ilev)
+            integration(ilev) = integration(ilev+1) + rgas_tv_dp_over_p(ilev+1);
+        });
+
+      // Add integral and constant terms to phi as a SIMD-like operation.
+      const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
+      Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+          m_elements.m_phi(kv.ie, igp, jgp, ilev) =
+            phis + 2.0*integration(ilev) + rgas_tv_dp_over_p(ilev);
+        });
+    });
     kv.team_barrier();
   }
 
