@@ -147,7 +147,7 @@ void compute_ppm(const Real a[NLEVP4],
     // xi=(x-x0)/dx
     coefs[j - 1][0] = 1.5 * a[j + 1] - (al + ar) / 4.0;
     coefs[j - 1][1] = ar - al;
-    coefs[j - 1][2] = -6.0 * a[j + 1] + 3.0 * (al + ar);
+    coefs[j - 1][2] = 3.0 * (-2.0 * a[j + 1] + (al + ar));
 
   }  // end of j loop
 
