@@ -560,6 +560,7 @@ private:
   compute_pressure_impl(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
+    Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
 
@@ -578,7 +579,7 @@ private:
         p_prev = p;
         dp_prev = dp;
       };
-    });
+    });});
     kv.team_barrier();
   }
 
