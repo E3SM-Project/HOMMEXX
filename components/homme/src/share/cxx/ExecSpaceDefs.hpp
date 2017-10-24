@@ -95,7 +95,7 @@ private:
   static
   typename std::enable_if<std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
   threads_per_team_impl(const int /*num_elems*/) {
-    return Max_Threads_Per_Team;
+    return max_threads_per_team<ExecSpaceType>();
   }
 
   template <typename ArgExecSpace>
@@ -107,8 +107,6 @@ private:
   static
   typename std::enable_if<!std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
   max_threads_per_team () { return ArgExecSpace::thread_pool_size(); }
-
-  static const int Max_Threads_Per_Team = max_threads_per_team();
 };
 
 } // namespace Homme
