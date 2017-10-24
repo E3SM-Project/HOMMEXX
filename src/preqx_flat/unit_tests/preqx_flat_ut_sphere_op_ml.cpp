@@ -1146,11 +1146,11 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         local_fortran_output(0, igp, jgp),
-                        coutput0, 512.0));
+                        coutput0, 1024.0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         local_fortran_output(1, igp, jgp),
-                        coutput1, 512.0));
+                        coutput1, 1024.0));
 
           }  // jgp
         }    // igp
