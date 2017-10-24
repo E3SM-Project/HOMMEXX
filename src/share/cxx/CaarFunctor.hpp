@@ -167,9 +167,9 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for (int ilev=0; ilev<NUM_LEV_P; ++ilev) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
-      }
+      });
     });
     kv.team_barrier();
   } // TRIVIAL
