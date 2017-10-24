@@ -69,7 +69,7 @@ private:
   template <typename ArgExecSpace>
   static constexpr
   typename std::enable_if<std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  vectors_per_thread_impl() { return 8; }
+  vectors_per_thread_impl() { return 16 /*8*/; }
 
   template <typename ArgExecSpace>
   static
