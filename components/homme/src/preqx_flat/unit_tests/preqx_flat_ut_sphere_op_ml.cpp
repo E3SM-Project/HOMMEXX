@@ -1527,11 +1527,3 @@ TEST_CASE("Testing vorticity_sphere_vector()",
   std::cout << "test vorticity_sphere_vector multilevel finished. \n";
 
 }  // end of test div_sphere_wk_ml
-
-
-
-
-
-
-
-

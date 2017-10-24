@@ -657,19 +657,15 @@ curl_sphere_wk_testcov(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-//in here, which array should be addressed fastest?
-  constexpr int np_cubed = NP * NP * NP;
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_cubed),
-                       [&](const int loop_idx) {
-    const int ngp = loop_idx / NP / NP; //slowest
-    const int mgp = (loop_idx / NP) % NP;
-    const int jgp = loop_idx % NP; //fastest
-//One can move multiplication by rrearth to the last loop, but it breaks BFB
-//property for curl.
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      sphere_buf(kv.ie, 0, ngp, mgp, ilev) -= mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
-      sphere_buf(kv.ie, 1, ngp, mgp, ilev) += mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
-    });
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
+    const int ngp = loop_idx / NP;
+    const int mgp = loop_idx % NP;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        sphere_buf(kv.ie, 0, ngp, mgp, ilev) -= mp(kv.ie,jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
+        sphere_buf(kv.ie, 1, ngp, mgp, ilev) += mp(kv.ie,ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
+      });
+    }
   });
   kv.team_barrier();
 
@@ -713,46 +709,41 @@ grad_sphere_wk_testcov(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  constexpr int np_cubed = NP * NP * NP;
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_cubed),
-                       [&](const int loop_idx) {
-    const int ngp = loop_idx / NP / NP; //slowest
-    const int mgp = (loop_idx / NP) % NP;
-    const int jgp = loop_idx % NP; //fastest
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      sphere_buf(kv.ie, 0, ngp, mgp, ilev) -=(
-         mp(kv.ie,ngp,jgp)*
-         metinv(kv.ie,0,0,ngp,mgp)*
-         metdet(kv.ie,ngp,mgp)*
-         scalar(ngp,jgp,ilev)*
-         dvv(jgp,mgp)
-         +
-         mp(kv.ie,jgp,mgp)*
-         metinv(kv.ie,0,1,ngp,mgp)*
-         metdet(kv.ie,ngp,mgp)*
-         scalar(jgp,mgp,ilev)*
-         dvv(jgp,ngp));
-    //                            )*PhysicalConstants::rrearth;
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
+    const int ngp = loop_idx / NP;
+    const int mgp = loop_idx % NP;
+    for (int jgp = 0; jgp < NP; ++jgp) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        sphere_buf(kv.ie, 0, ngp, mgp, ilev) -= (
+          mp(kv.ie,ngp,jgp)*
+          metinv(kv.ie,0,0,ngp,mgp)*
+          metdet(kv.ie,ngp,mgp)*
+          scalar(ngp,jgp,ilev)*
+          dvv(jgp,mgp)
+          +
+          mp(kv.ie,jgp,mgp)*
+          metinv(kv.ie,0,1,ngp,mgp)*
+          metdet(kv.ie,ngp,mgp)*
+          scalar(jgp,mgp,ilev)*
+          dvv(jgp,ngp));
 
-      sphere_buf(kv.ie, 1, ngp, mgp, ilev) -=(
-         mp(kv.ie,ngp,jgp)*
-         metinv(kv.ie,1,0,ngp,mgp)*
-         metdet(kv.ie,ngp,mgp)*
-         scalar(ngp,jgp,ilev)*
-         dvv(jgp,mgp)
-         +
-         mp(kv.ie,jgp,mgp)*
-         metinv(kv.ie,1,1,ngp,mgp)*
-         metdet(kv.ie,ngp,mgp)*
-         scalar(jgp,mgp,ilev)*
-         dvv(jgp,ngp));
-    //                            )*PhysicalConstants::rrearth;
-    });
+        sphere_buf(kv.ie, 1, ngp, mgp, ilev) -= (
+          mp(kv.ie,ngp,jgp)*
+          metinv(kv.ie,1,0,ngp,mgp)*
+          metdet(kv.ie,ngp,mgp)*
+          scalar(ngp,jgp,ilev)*
+          dvv(jgp,mgp)
+          +
+          mp(kv.ie,jgp,mgp)*
+          metinv(kv.ie,1,1,ngp,mgp)*
+          metdet(kv.ie,ngp,mgp)*
+          scalar(jgp,mgp,ilev)*
+          dvv(jgp,ngp));
+      });
+    }
   });
   kv.team_barrier();
 
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-//don't forget to move rrearth here and in curl and in F code.
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                        [&](const int loop_idx) {
     const int igp = loop_idx / NP; //slowest
