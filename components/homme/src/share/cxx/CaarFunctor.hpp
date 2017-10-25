@@ -591,8 +591,8 @@ private:
     if (VECTOR_SIZE != 1)
       Kokkos::abort("This impl is for GPU, for which VECTOR_SIZE is 1. It will "
                     "not work if VECTOR_SIZE > 1. Eventually, we may get "
-                    "VECTOR_SIZE > 1 on GPU, which point the impl above will be "
-                    "the one to use, anyway.");
+                    "VECTOR_SIZE > 1 on GPU, at which point the alternative to "
+                    "this impl will be the one to use, anyway.");
 #endif
   }
 
