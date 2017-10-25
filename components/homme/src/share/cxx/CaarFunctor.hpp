@@ -586,10 +586,21 @@ private:
     kv.team_barrier();
   }
 
+  static KOKKOS_INLINE_FUNCTION void assert_vector_size_1 () {
+#ifndef NDEBUG
+    if (VECTOR_SIZE != 1)
+      Kokkos::abort("This impl is for GPU, for which VECTOR_SIZE is 1. It will "
+                    "not work if VECTOR_SIZE > 1. Eventually, we may get "
+                    "VECTOR_SIZE > 1 on GPU, which point the impl above will be "
+                    "the one to use, anyway.");
+#endif
+  }
+
   template<typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION
   typename std::enable_if<std::is_same<ExecSpaceType,Hommexx_Cuda>::value,void>::type
   preq_hydrostatic_impl(KernelVariables &kv) const {
+    assert_vector_size_1();
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
