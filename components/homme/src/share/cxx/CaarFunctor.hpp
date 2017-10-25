@@ -620,14 +620,21 @@ private:
           rgas_tv_dp_over_p(ilev) = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
         });
 
-      // Integrate using 1 thread per vector pack. We can use phi itself to
-      // hold the integral.
+      // Precompy this to the integration array to minimize data access and ops
+      // in the Kokkos::single-protected cumsum.
       const auto integration = Kokkos::subview(m_elements.m_phi,
                                                kv.ie, igp, jgp, Kokkos::ALL());
+      Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(kv.team, NUM_LEV-1), [&] (const int& ilev) {
+          integration(ilev) = rgas_tv_dp_over_p(ilev+1);
+        });
+
+      // Integrate using 1 thread per vector pack. We can use phi itself to
+      // hold the integral.
       Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
           integration(NUM_LEV-1) = 0;
           for (int ilev = NUM_LEV-2; ilev >= 0; --ilev)
-            integration(ilev) = integration(ilev+1) + rgas_tv_dp_over_p(ilev+1);
+            integration(ilev) += integration(ilev+1);
         });
 
       // Add integral and constant terms to phi as a SIMD-like operation.
