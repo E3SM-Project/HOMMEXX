@@ -198,42 +198,7 @@ struct CaarFunctor {
   // omega_p
   KOKKOS_INLINE_FUNCTION
   void preq_omega_ps(KernelVariables &kv) const {
-    gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
-        m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int loop_idx) {
-    Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-
-      Real integration = 0;
-      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-        const int vector_end = (ilev == NUM_LEV-1 ?
-                                ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
-                                VECTOR_SIZE-1);
-
-        const Scalar vgrad_p =
-          m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
-          m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
-          m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
-          m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
-        auto& omega_p = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-        const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-        const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
-
-        Scalar integration_ij;
-        integration_ij[0] = integration;
-        for (int iv = 0; iv < vector_end; ++iv)
-          integration_ij[iv+1] = integration_ij[iv] + div_vdp[iv];
-        omega_p = (vgrad_p - (integration_ij + 0.5*div_vdp))/p;
-        integration = integration_ij[vector_end] + div_vdp[vector_end];
-      }
-    });});
-    kv.team_barrier();
+    preq_omega_ps_impl<ExecSpace>(kv);
   } // TESTED 4
 
   // Depends on DP3D
@@ -646,6 +611,105 @@ private:
         });
     });
     kv.team_barrier();
+  }
+
+  // CUDA version
+  template <typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
+  preq_omega_ps_impl(KernelVariables &kv) const {
+    assert_vector_size_1();
+    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+      m_elements.buffers.kernel_start_times(kv.ie) = clock();
+    });
+    gradient_sphere(
+        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        m_elements.buffers.grad_buf,
+        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+
+      Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
+        m_elements.buffers.vert_integral(kv.ie, igp, jgp, 0) =
+          m_elements.buffers.div_vdp(kv.ie, igp, jgp, 0);
+        for (int ilev = 1; ilev < NUM_LEV; ++ilev) {
+          m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev) =
+            m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev - 1) +
+            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+        }
+      });
+
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                           [&](const int ilev) {
+          const Scalar vgrad_p =
+            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+
+          auto& omega_p       = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+          const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+          const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+          omega_p = (vgrad_p - (m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev) -
+                                0.5 * div_vdp)) / p;
+      });
+    });
+    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+      m_elements.buffers.kernel_end_times(kv.ie) = clock();
+    });
+  }
+
+  // Non-CUDA version
+  template <typename ExecSpaceType>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
+  preq_omega_ps_impl(KernelVariables &kv) const {
+    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+      m_elements.buffers.kernel_start_times(kv.ie) = clock();
+    });
+    gradient_sphere(
+        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        m_elements.buffers.grad_buf,
+        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int loop_idx) {
+      Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+
+        Real integration = 0;
+        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+          const int vector_end = (ilev == NUM_LEV-1 ?
+                                  ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
+                                  VECTOR_SIZE-1);
+
+          const Scalar vgrad_p =
+            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+          auto& omega_p = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+          const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+          const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+
+          Scalar integration_ij;
+          integration_ij[0] = integration;
+          for (int iv = 0; iv < vector_end; ++iv)
+            integration_ij[iv+1] = integration_ij[iv] + div_vdp[iv];
+          omega_p = (vgrad_p - (integration_ij + 0.5*div_vdp))/p;
+          integration = integration_ij[vector_end] + div_vdp[vector_end];
+        }
+      });
+    });
+    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+      m_elements.buffers.kernel_end_times(kv.ie) = clock();
+    });
   }
 
 };
