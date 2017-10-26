@@ -29,6 +29,9 @@ void caar_compute_energy_grad_c_int(const Real *dvv,
                                     const Real *pecnd,
                                     const Real *phi,
                                     const Real *velocity,
+                                    Real *tvirt,
+                                    Real *press,
+                                    Real *press_grad,
                                     Real *vtemp);
 
 void preq_omega_ps_c_int(Real *omega_p, const Real *velocity,
@@ -174,11 +177,7 @@ class compute_energy_grad_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int &level) {
-      kv.ilev = level;
-      functor.compute_energy_grad(kv);
-    });
+    functor.compute_energy_grad(kv);
   }
 };
 
@@ -196,11 +195,17 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems, engine);
   get_derivative().random_init(engine);
 
-  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_in(
-      "energy_grad input", num_elems);
-  genRandArray(energy_grad_in, engine,
-               std::uniform_real_distribution<Real>(0, 100.0));
-  Kokkos::deep_copy(elements.buffers.energy_grad, energy_grad_in);
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
+  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_in("pressure input", num_elems);
+  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad_in("pressure_grad input", num_elems);
+
+  genRandArray(temperature_virt_in, engine, std::uniform_real_distribution<Real>(0.1, 100.0));
+  genRandArray(pressure_in,         engine, std::uniform_real_distribution<Real>(0.1, 100.0));
+  genRandArray(pressure_grad_in,    engine, std::uniform_real_distribution<Real>(0.1, 100.0));
+
+  Kokkos::deep_copy(elements.buffers.temperature_virt, temperature_virt_in);
+  Kokkos::deep_copy(elements.buffers.pressure, pressure_in);
+  Kokkos::deep_copy(elements.buffers.pressure_grad, pressure_grad_in);
 
   compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
   test_functor.run_functor();
@@ -210,32 +215,37 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   Kokkos::deep_copy(energy_grad_out, elements.buffers.energy_grad);
 
   HostViewManaged<Real[2][NP][NP]> vtemp("vtemp");
+  HostViewManaged<Real[NP][NP]> tvirt("tvirt");
+  HostViewManaged<Real[NP][NP]> press("press");
+  HostViewManaged<Real[2][NP][NP]> press_grad("press_grad");
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_LEV; ++level) {
       for (int v = 0; v < VECTOR_SIZE; ++v) {
-        for (int h = 0; h < 2; h++) {
-          for (int i = 0; i < NP; i++) {
-            for (int j = 0; j < NP; j++) {
-              vtemp(h, i, j) = energy_grad_in(ie, h, i, j, level)[v];
-            }
+        for (int i = 0; i < NP; i++) {
+          for (int j = 0; j < NP; j++) {
+            press_grad(0, i, j) = pressure_grad_in(ie, 0, i, j, level)[v];
+            press_grad(1, i, j) = pressure_grad_in(ie, 1, i, j, level)[v];
+            press(i, j) = pressure_in(ie, i, j, level)[v];
+            tvirt(i, j) = temperature_virt_in(ie, i, j, level)[v];
+            vtemp(0, i, j) = 0;
+            vtemp(1, i, j) = 0;
           }
         }
         caar_compute_energy_grad_c_int(
             test_functor.dvv.data(),
-            reinterpret_cast<Real *>(
                 Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data()),
-            reinterpret_cast<Real *>(
+                                Kokkos::ALL, Kokkos::ALL).data(),
                 Kokkos::subview(test_functor.pecnd, ie, level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL).data()),
-            reinterpret_cast<Real *>(
+                                Kokkos::ALL, Kokkos::ALL).data(),
                 Kokkos::subview(test_functor.phi, ie, level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL).data()),
-            reinterpret_cast<Real *>(
+                                Kokkos::ALL, Kokkos::ALL).data(),
                 Kokkos::subview(test_functor.velocity, ie, test_functor.n0,
                                 level * VECTOR_SIZE + v, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data()),
-            reinterpret_cast<Real *>(vtemp.data()));
+                                Kokkos::ALL, Kokkos::ALL).data(),
+                tvirt.data(),
+                press.data(),
+                press_grad.data(),
+                vtemp.data());
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             const Real correct[2] = { vtemp(0, igp, jgp), vtemp(1, igp, jgp) };
@@ -261,9 +271,7 @@ class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.preq_omega_ps(kv);
-    }
+    functor.preq_omega_ps(kv);
   }
 };
 
@@ -332,9 +340,7 @@ class preq_hydrostatic_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.preq_hydrostatic(kv);
-    }
+    functor.preq_hydrostatic(kv);
   }
 };
 
@@ -400,11 +406,7 @@ class dp3d_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int &ilev) {
-      kv.ilev = ilev;
-      functor.compute_dp3d_np1(kv);
-    });
+    functor.compute_dp3d_np1(kv);
   }
 };
 
@@ -471,11 +473,7 @@ class vdp_vn0_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int idx) {
-      kv.ilev = idx;
-      functor.compute_div_vdp(kv);
-    });
+    functor.compute_div_vdp(kv);
   }
 };
 
@@ -574,9 +572,7 @@ class pressure_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    if (kv.team.team_rank() == 0) {
-      functor.compute_pressure(kv);
-    }
+    functor.compute_pressure(kv);
   }
 };
 
@@ -644,11 +640,7 @@ class temperature_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-      [&](const int &idx) {
-        kv.ilev = idx;
-        functor.compute_temperature_np1(kv);
-    });
+    functor.compute_temperature_np1(kv);
   }
 };
 
@@ -721,7 +713,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           const Real correct = temperature_f90(igp, jgp);
-          const Real computed = test_functor.temperature(ie, test_functor.np1, level, igp, jgp);
+          const Real computed = test_functor.temperature(ie, int(test_functor.np1), level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
@@ -736,11 +728,7 @@ class virtual_temperature_no_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int ilev) {
-      kv.ilev = ilev;
-      functor.compute_temperature_no_tracers_helper(kv);
-    });
+    functor.compute_temperature_no_tracers_helper(kv);
   }
 };
 
@@ -796,11 +784,7 @@ class virtual_temperature_with_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int ilev) {
-      kv.ilev = ilev;
-      functor.compute_temperature_tracers_helper(kv);
-    });
+    functor.compute_temperature_tracers_helper(kv);
   }
 };
 
@@ -863,11 +847,7 @@ class omega_p_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                         [&](const int ilev) {
-      kv.ilev = ilev;
-      functor.compute_omega_p(kv);
-    });
+    functor.compute_omega_p(kv);
   }
 };
 
