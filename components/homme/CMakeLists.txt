@@ -9,6 +9,7 @@ EXECUTE_PROCESS (COMMAND git rev-parse HEAD
                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                  OUTPUT_VARIABLE LAST_GIT_COMMIT_SHA
                  OUTPUT_STRIP_TRAILING_WHITESPACE)
+SET (LAST_GIT_COMMIT_SHA ${LAST_GIT_COMMIT_SHA} CACHE STRING "The sha of the last git commit.")
 
 MESSAGE (STATUS "The sha of the last commit is ${LAST_GIT_COMMIT_SHA}")
 
