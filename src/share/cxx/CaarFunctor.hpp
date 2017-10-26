@@ -666,9 +666,6 @@ private:
   KOKKOS_INLINE_FUNCTION
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
-    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
-      m_elements.buffers.kernel_start_times(kv.ie) = clock();
-    });
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
         Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
@@ -704,9 +701,6 @@ private:
           integration = integration_ij[vector_end] + div_vdp[vector_end];
         }
       });
-    });
-    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
-      m_elements.buffers.kernel_end_times(kv.ie) = clock();
     });
   }
 
