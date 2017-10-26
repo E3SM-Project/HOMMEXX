@@ -159,12 +159,12 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   Kokkos::deep_copy(D_exec, D_h);
 
   // Buffer View
-  ExecViewManaged<Scalar * [NUM_LEV][2][NP][NP]> buffer("buffer_cxx", nelems);
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> buffer("buffer_cxx", nelems);
 
   // Initialize derivative
-  HostViewManaged<Real * [NP][NP]> dvv_h("dvv_host", nelems);
+  HostViewManaged<Real[NP][NP]> dvv_h("dvv_host");
   init_deriv_f90(dvv_h.data());
-  ExecViewManaged<Real * [NP][NP]> dvv_exec("dvv_exec", nelems);
+  ExecViewManaged<Real[NP][NP]> dvv_exec("dvv_exec");
   Kokkos::deep_copy(dvv_exec, dvv_h);
 
   // Execution policy
@@ -190,13 +190,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        gradient_sphere(kv, D_exec, subview(dvv_exec, kv.ie, ALL, ALL),
-                        subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
-                        subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
-      });
+      gradient_sphere(kv, D_exec, dvv_exec,
+                      subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
+                      subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
@@ -209,7 +205,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         // Compute f90
         gradient_sphere_c_callable(subview(input_h, ie, level, ALL, ALL).data(),
-                                   subview(dvv_h, ie, ALL, ALL).data(),
+                                   dvv_h.data(),
                                    subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
                                    output_f90.data());
 
@@ -248,14 +244,10 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        divergence_sphere(kv, D_exec, metdet_exec,
-                          subview(dvv_exec, kv.ie, ALL, ALL),
-                          subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
-                          buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
-      });
+      divergence_sphere(kv, D_exec, metdet_exec,
+                        dvv_exec,
+                        subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
+                        buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
@@ -269,7 +261,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
         // Compute f90
         divergence_sphere_c_callable(
             subview(input_h, ie, level, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
+            dvv_h.data(),
             subview(metdet_h, ie, ALL, ALL).data(),
             subview(D_h, ie, ALL, ALL, ALL, ALL).data(), output_f90.data());
 
@@ -303,15 +295,11 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                           [&](const int level) {
-        kv.ilev = level;
-        vorticity_sphere(kv, D_exec, metdet_exec,
-                          subview(dvv_exec, kv.ie, ALL, ALL),
-                          subview(input_1_exec, kv.ie, ALL, ALL, ALL),
-                          subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
-                          subview(output_exec, kv.ie, ALL, ALL, ALL));
-      });
+      vorticity_sphere(kv, D_exec, metdet_exec,
+                       dvv_exec,
+                       subview(input_1_exec, kv.ie, ALL, ALL, ALL),
+                       subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
+                       subview(output_exec, kv.ie, ALL, ALL, ALL));
     });
 
     // Deep copy back to host
@@ -325,7 +313,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
         // Compute f90
         vorticity_sphere_c_callable(
             subview(input_h, ie, level, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
+            dvv_h.data(),
             subview(metdet_h, ie, ALL, ALL).data(),
             subview(D_h, ie, ALL, ALL, ALL, ALL).data(), output_f90.data());
 
@@ -357,7 +345,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
   // Fortran host views
   HostViewManaged<Real * [NP][NP]> scalar_h("scalar_host", nelems);
   HostViewManaged<Real * [2][NP][NP]> vector_h("vector_host", nelems);
-  HostViewManaged<Real * [NP][NP]> dvv_h("dvv_host", nelems);
+  HostViewManaged<Real   [NP][NP]> dvv_h("dvv_host");
   HostViewManaged<Real * [2][2][NP][NP]> D_h("d_host", nelems);
   HostViewManaged<Real * [2][2][NP][NP]> DInv_h("dinv_host", nelems);
   HostViewManaged<Real * [NP][NP]> metdet_h("metdet_host", nelems);
@@ -421,7 +409,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
         // Compute f90
         gradient_sphere_c_callable(
             subview(scalar_h, ie, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
+            dvv_h.data(),
             subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
             subview(vector_h, ie, ALL, ALL, ALL).data());
 
@@ -472,7 +460,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
         // Compute f90
         divergence_sphere_c_callable(
             subview(vector_h, ie, ALL, ALL, ALL).data(),
-            subview(dvv_h, ie, ALL, ALL).data(),
+            dvv_h.data(),
             subview(metdet_h, ie, ALL, ALL).data(),
             subview(DInv_h, ie, ALL, ALL, ALL, ALL).data(),
             subview(scalar_h, ie, ALL, ALL).data());
@@ -521,7 +509,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
       for (int ie = 0; ie < nelems; ++ie) {
         // Compute f90
         vorticity_sphere_c_callable(subview(vector_h, ie, ALL, ALL, ALL).data(),
-                                    subview(dvv_h, ie, ALL, ALL).data(),
+                                    dvv_h.data(),
                                     subview(metdet_h, ie, ALL, ALL).data(),
                                     subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
                                     subview(scalar_h, ie, ALL, ALL).data());

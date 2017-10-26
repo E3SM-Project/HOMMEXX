@@ -139,9 +139,10 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, vtemp) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, tvirt, press, press_grad, vtemp) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np
+    use physical_constants, only : Rgas
     use derivative_mod, only : derivative_t
 
     real (kind=real_kind), intent(in) :: dvv(np, np) ! (np, np)
@@ -149,18 +150,25 @@ contains
     real (kind=real_kind), intent(in) :: pecnd(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: phi(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: v(np, np, 2) ! (np, np, 2)
+    real (kind=real_kind), intent(in) :: tvirt(np, np) ! (np, np)
+    real (kind=real_kind), intent(in) :: press(np, np) ! (np, np)
+    real (kind=real_kind), intent(in) :: press_grad(np, np, 2) ! (np, np, 2)
     real (kind=real_kind), intent(inout) :: vtemp(np, np, 2) ! (np, np, 2)
 
     ! locals
-
-    real (kind=real_kind) :: energy_grad(np, np, 2)
-
+    integer :: i, j
     type (derivative_t) :: deriv
 
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, energy_grad)
-    vtemp = vtemp + energy_grad
+    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+
+    do i=1,np
+      do j=1,np
+        vtemp(i,j,1) = vtemp(i,j,1) + Rgas*(tvirt(i,j)/press(i,j))*press_grad(i,j,1)
+        vtemp(i,j,2) = vtemp(i,j,2) + Rgas*(tvirt(i,j)/press(i,j))*press_grad(i,j,2)
+      enddo
+    enddo
   end subroutine caar_compute_energy_grad_c_int
 
   subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)

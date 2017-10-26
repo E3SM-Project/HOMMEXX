@@ -4,6 +4,7 @@
 #include <Hommexx_config.h>
 #include <Kokkos_Core.hpp>
 
+#include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
 
 #include <vector/KokkosKernels_Vector.hpp>
@@ -25,58 +26,6 @@ using F90Ptr = Real *const; // Using this in a function signature emphasizes
                             // that the ordering is Fortran
 using CF90Ptr = const Real *const; // Using this in a function signature
                                    // emphasizes that the ordering is Fortran
-
-template <typename ExecSpace> struct DefaultThreadsDistribution {
-  static constexpr int vectors_per_thread() { return 1; }
-
-#ifdef KOKKOS_COLUMN_THREAD_ONLY
-  static int threads_per_team(const int num_elems) {
-    return ExecSpace::thread_pool_size();
-  }
-#else
-#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-  static int threads_per_team(const int num_elems) {
-    int Max_Threads_Per_Team = ExecSpace::thread_pool_size();
-    if (Max_Threads_Per_Team >= num_elems) {
-      return Max_Threads_Per_Team / num_elems;
-    } else {
-      return 1;
-    }
-  }
-#else
-  static int threads_per_team(const int num_elems) { return 1; }
-#endif // KOKKOS_PARALLELIZE_ON_ELEMENTS
-#endif // KOKKOS_COLUMN_THREAD_ONLY
-};
-
-#ifdef KOKKOS_HAVE_CUDA
-template <> struct DefaultThreadsDistribution<Kokkos::Cuda> {
-  static constexpr int vectors_per_thread() { return 16; }
-
-  static int threads_per_team(const int /*num_elems*/) {
-    return Max_Threads_Per_Team;
-  }
-
-private:
-  static constexpr int Max_Threads_Per_Team = 8;
-};
-#endif // KOKKOS_HAVE_CUDA
-
-// Selecting the execution space. If no specific request, use Kokkos default
-// exec space
-#if defined(HOMMEXX_CUDA_SPACE)
-using ExecSpace = Kokkos::Cuda;
-#elif defined(HOMMEXX_OPENMP_SPACE)
-using ExecSpace = Kokkos::OpenMP;
-#elif defined(HOMMEXX_THREADS_SPACE)
-using ExecSpace = Kokkos::Threads;
-#elif defined(HOMMEXX_SERIAL_SPACE)
-using ExecSpace = Kokkos::Serial;
-#elif defined(HOMMEXX_DEFAULT_SPACE)
-using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
-#else
-#error "No valid execution space choice"
-#endif // HOMMEXX_EXEC_SPACE
 
 #if (AVX_VERSION > 0)
 using VectorTagType =
