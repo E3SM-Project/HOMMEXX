@@ -634,12 +634,11 @@ private:
       const int jgp = loop_idx % NP;
 
       Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-        m_elements.buffers.omega_p(kv.ie, igp, jgp, 0) =
-          m_elements.buffers.div_vdp(kv.ie, igp, jgp, 0);
+        m_elements.buffers.omega_p(kv.ie, igp, jgp, 0) = 0;
         for (int ilev = 1; ilev < NUM_LEV; ++ilev) {
           m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
             m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev - 1) +
-            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev - 1);
         }
       });
 
@@ -653,7 +652,7 @@ private:
 
           const auto& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
           m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
-            (vgrad_p - (m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) -
+            (vgrad_p - (m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) +
                         0.5 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev))) / p;
       });
     });
