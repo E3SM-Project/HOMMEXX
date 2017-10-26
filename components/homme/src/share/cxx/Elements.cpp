@@ -538,64 +538,41 @@ void Elements::dinv(Real *dinv_ptr, int ie) const {
 }
 
 void Elements::BufferViews::init(int num_elems) {
-  pressure = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Pressure buffer", Kokkos::WithoutInitializing),
-      num_elems);
+  pressure =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
   pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Gradient of pressure", Kokkos::WithoutInitializing),
-      num_elems);
+      "Gradient of pressure", num_elems);
   temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Virtual Temperature", Kokkos::WithoutInitializing),
-      num_elems);
+      "Virtual Temperature", num_elems);
   temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Gradient of temperature",
-                         Kokkos::WithoutInitializing),
-      num_elems);
+      "Gradient of temperature", num_elems);
   omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Omega_P why two named the same thing???",
-                         Kokkos::WithoutInitializing),
-      num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("vdp???", Kokkos::WithoutInitializing), num_elems);
+      "Omega_P why two named the same thing???", num_elems);
+  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
   div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Divergence of dp3d * u", Kokkos::WithoutInitializing),
-      num_elems);
+      "Divergence of dp3d * u", num_elems);
   ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Kinetic Energy + Geopotential Energy",
-                         Kokkos::WithoutInitializing),
-      num_elems);
+      "Kinetic Energy + Geopotential Energy", num_elems);
   energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Gradient of ephi", Kokkos::WithoutInitializing),
-      num_elems);
-  vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Vorticity", Kokkos::WithoutInitializing), num_elems);
-  vert_integral = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Vertical Integral", Kokkos::WithoutInitializing),
-      num_elems);
+      "Gradient of ephi", num_elems);
+  vorticity =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("buffer for tracers", Kokkos::WithoutInitializing),
-      num_elems);
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("buffer for v/dp", Kokkos::WithoutInitializing),
-      num_elems);
+      "buffer for tracers", num_elems);
+  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for v/dp",
+                                                         num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("buffer for vstar*qdp", Kokkos::WithoutInitializing),
-      num_elems);
+      "buffer for vstar*qdp", num_elems);
 
-  preq_buf = ExecViewManaged<Real * [NP][NP]>(
-      Kokkos::view_alloc("Preq Buffer", Kokkos::WithoutInitializing),
-      num_elems);
+  preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
-  div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Divergence Buffer", Kokkos::WithoutInitializing),
-      num_elems);
-  grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Gradient Buffer", Kokkos::WithoutInitializing),
-      num_elems);
-  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      Kokkos::view_alloc("Vorticity Buffer", Kokkos::WithoutInitializing),
-      num_elems);
+  div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
+                                                           num_elems);
+  grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer",
+                                                            num_elems);
+  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
+                                                            num_elems);
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
