@@ -634,11 +634,11 @@ private:
       const int jgp = loop_idx % NP;
 
       Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-        m_elements.buffers.vert_integral(kv.ie, igp, jgp, 0) =
+        m_elements.buffers.omega_p(kv.ie, igp, jgp, 0) =
           m_elements.buffers.div_vdp(kv.ie, igp, jgp, 0);
         for (int ilev = 1; ilev < NUM_LEV; ++ilev) {
-          m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev) =
-            m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev - 1) +
+          m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
+            m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev - 1) +
             m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
         }
       });
@@ -651,11 +651,10 @@ private:
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
 
-          auto& omega_p       = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-          const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-          const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
-          omega_p = (vgrad_p - (m_elements.buffers.vert_integral(kv.ie, igp, jgp, ilev) -
-                                0.5 * div_vdp)) / p;
+          const auto& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+          m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
+            (vgrad_p - (m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) -
+                        0.5 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev))) / p;
       });
     });
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {

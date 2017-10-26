@@ -66,7 +66,6 @@ public:
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vert_integral;
 
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
