@@ -20,7 +20,8 @@ void Elements::init(const int num_elems) {
   m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
       "DInv - inverse metric tensor", m_num_elems);
 
-  m_omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
+  m_omega_p =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
   m_pecnd = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PECND", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
   m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
@@ -37,14 +38,15 @@ void Elements::init(const int num_elems) {
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "DP3D", m_num_elems);
 
-  m_qdp = ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
-      "qdp", m_num_elems);
-  m_eta_dot_dpdn =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn", m_num_elems);
+  m_qdp =
+      ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
+          "qdp", m_num_elems);
+  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn",
+                                                                 m_num_elems);
 }
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
-                         CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
+                       CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -152,7 +154,7 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
         h_phis(ie, igp, jgp) = random_dist(engine);
 
         for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for(int vec = 0; vec < VECTOR_SIZE; ++vec) {
+          for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
             // 3d scalars
             h_omega_p(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_pecnd(ie, igp, jgp, ilev)[vec] = random_dist(engine);
@@ -171,14 +173,15 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
             for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
                  ++q_timelevel) {
               for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
-                h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev)[vec] = random_dist(engine);
+                h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev)[vec] =
+                    random_dist(engine);
               }
             }
           }
         }
 
         for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
-          for(int vec = 0; vec < VECTOR_SIZE; ++vec) {
+          for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
             // 3d scalar at the interfaces of the levels
             h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = random_dist(engine);
           }
@@ -237,7 +240,7 @@ void Elements::pull_from_f90_pointers(
 }
 
 void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
-                         CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
+                       CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
@@ -250,11 +253,12 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
       Kokkos::create_mirror_view(m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-      int ilev    = ilevel / VECTOR_SIZE;
+      int ilev = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
-          h_omega_p(ie, igp, jgp, ilev)[ivector] = derived_omega_p[k_3d_scalars];
+          h_omega_p(ie, igp, jgp, ilev)[ivector] =
+              derived_omega_p[k_3d_scalars];
           h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
           h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
         }
@@ -280,7 +284,7 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
 }
 
 void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
-                         CF90Ptr &state_dp3d) {
+                       CF90Ptr &state_dp3d) {
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
       Kokkos::create_mirror_view(m_u);
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
@@ -292,7 +296,7 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-        int ilev    = ilevel / VECTOR_SIZE;
+        int ilev = ilevel / VECTOR_SIZE;
         int ivector = ilevel % VECTOR_SIZE;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
@@ -327,9 +331,10 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   for (int ie = 0, k_eta_dot_dp_dn = 0; ie < m_num_elems; ++ie) {
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
-    //       and on vector length, we would have to treat the last pack with care
+    //       and on vector length, we would have to treat the last pack with
+    // care
     for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
-      int ilev    = ilevel / VECTOR_SIZE;
+      int ilev = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
@@ -350,7 +355,7 @@ void Elements::pull_qdp(CF90Ptr &state_qdp) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
         for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-          int ilev    = ilevel / VECTOR_SIZE;
+          int ilev = ilevel / VECTOR_SIZE;
           int ivector = ilevel % VECTOR_SIZE;
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
@@ -364,10 +369,12 @@ void Elements::pull_qdp(CF90Ptr &state_qdp) {
   Kokkos::deep_copy(m_qdp, h_qdp);
 }
 
-void Elements::push_to_f90_pointers(
-    F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d, F90Ptr &derived_phi,
-    F90Ptr &derived_pecnd, F90Ptr &derived_omega_p, F90Ptr &derived_v,
-    F90Ptr &derived_eta_dot_dpdn, F90Ptr &state_qdp) const {
+void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
+                                    F90Ptr &state_dp3d, F90Ptr &derived_phi,
+                                    F90Ptr &derived_pecnd,
+                                    F90Ptr &derived_omega_p, F90Ptr &derived_v,
+                                    F90Ptr &derived_eta_dot_dpdn,
+                                    F90Ptr &state_qdp) const {
   push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_eta_dot(derived_eta_dot_dpdn);
@@ -375,7 +382,7 @@ void Elements::push_to_f90_pointers(
 }
 
 void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
-                         F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
+                       F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
@@ -394,7 +401,7 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-      int ilev    = ilevel / VECTOR_SIZE;
+      int ilev = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
@@ -407,14 +414,12 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
 
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] =
-              h_derived_un0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_un0(ie, igp, jgp, ilev)[ivector];
         }
       }
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] =
-              h_derived_vn0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_vn0(ie, igp, jgp, ilev)[ivector];
         }
       }
     }
@@ -422,7 +427,7 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
 }
 
 void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
-                         F90Ptr &state_dp3d) const {
+                       F90Ptr &state_dp3d) const {
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
       Kokkos::create_mirror_view(m_u);
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
@@ -438,7 +443,7 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-        int ilev    = ilevel / VECTOR_SIZE;
+        int ilev = ilevel / VECTOR_SIZE;
         int ivector = ilevel % VECTOR_SIZE;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_scalars) {
@@ -470,9 +475,10 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   for (int ie = 0; ie < m_num_elems; ++ie) {
     // Note: we must process only NUM_PHYSICAL_LEV, since the F90
     //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
-    //       and on vector length, we would have to treat the last pack with care
+    //       and on vector length, we would have to treat the last pack with
+    // care
     for (int ilevel = 0; ilevel < NUM_INTERFACE_LEV; ++ilevel) {
-      int ilev    = ilevel / VECTOR_SIZE;
+      int ilev = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn) {
@@ -493,7 +499,7 @@ void Elements::push_qdp(F90Ptr &state_qdp) const {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
         for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
-          int ilev    = ilevel / VECTOR_SIZE;
+          int ilev = ilevel / VECTOR_SIZE;
           int ivector = ilevel % VECTOR_SIZE;
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp, ++k_qdp) {
@@ -543,23 +549,33 @@ void Elements::BufferViews::init(int num_elems) {
   omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
       "Omega_P why two named the same thing???", num_elems);
   vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
-  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence of dp3d * u",
-                                                      num_elems);
+  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "Divergence of dp3d * u", num_elems);
   ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
       "Kinetic Energy + Geopotential Energy", num_elems);
-  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient of ephi",
-                                                             num_elems);
-  vorticity = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
+  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Gradient of ephi", num_elems);
+  vorticity =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
-  qtens     = ExecViewManaged<Scalar * [QSIZE_D]   [NP][NP][NUM_LEV]> ("buffer for tracers", num_elems);
-  vstar     = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>          ("buffer for v/dp", num_elems);
-  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]> ("buffer for vstar*qdp", num_elems);
+  qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
+      "buffer for tracers", num_elems);
+  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for v/dp",
+                                                         num_elems);
+  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
+      "buffer for vstar*qdp", num_elems);
 
-  preq_buf = ExecViewManaged<Real *[NP][NP]>("Preq Buffer", num_elems);
+  preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
-  div_buf  = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer", num_elems);
-  grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer", num_elems);
-  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer", num_elems);
+  div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
+                                                           num_elems);
+  grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer",
+                                                            num_elems);
+  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
+                                                            num_elems);
+
+  kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
+  kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
 }
 
 Elements &get_elements() {

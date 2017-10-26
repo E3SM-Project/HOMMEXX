@@ -101,16 +101,18 @@ void vorticity_sphere_c_callable(
 
 class compute_sphere_operator_test_ml {
  public:
+
   compute_sphere_operator_test_ml(int num_elems)
-      : scalar_input_d("scalar input", num_elems),
+      : _num_elems(num_elems),
+        scalar_input_d("scalar input", num_elems),
         scalar_input_COPY2_d("scalar input 2", num_elems),
         vector_input_d("vector input", num_elems),
         d_d("d", num_elems),
         dinv_d("dinv", num_elems),
         metinv_d("metinv", num_elems),
-        metdet_d("metdet", num_elems),
         spheremp_d("spheremp", num_elems),
         mp_d("mp", num_elems),
+        metdet_d("metdet", num_elems),
         dvv_d("dvv"),
         tensor_d("tensor", num_elems),
         vec_sph2cart_d("ver_sph2cart", num_elems),
@@ -143,8 +145,7 @@ class compute_sphere_operator_test_ml {
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d)),
-        _num_elems(num_elems) {
+            Kokkos::create_mirror_view(vector_output_d)) {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(
@@ -643,11 +644,11 @@ class compute_sphere_operator_test_ml {
                          local_scalar_output_d);
   }  // end of op() for vorticity_sphere_vector multilevel
 
+  
 
   void run_functor_gradient_sphere() const {
     // league, team, vector_length_request=1
-    Kokkos::TeamPolicy<ExecSpace, TagGradientSphereML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagGradientSphereML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     // TO FROM
@@ -655,73 +656,63 @@ class compute_sphere_operator_test_ml {
   };
 
   void run_functor_divergence_sphere_wk() const {
-    Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWkML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagDivergenceSphereWkML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
   void run_functor_laplace_wk() const {
-    Kokkos::TeamPolicy<ExecSpace, TagSimpleLaplaceML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagSimpleLaplaceML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
   void run_functor_tensor_laplace() const {
-    Kokkos::TeamPolicy<ExecSpace, TagTensorLaplaceML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagTensorLaplaceML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
   void run_functor_tensor_laplace_replace() const {
-    Kokkos::TeamPolicy<ExecSpace, TagTensorLaplaceReplaceML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagTensorLaplaceReplaceML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
   void run_functor_curl_sphere_wk_testcov() const {
-    Kokkos::TeamPolicy<ExecSpace, TagCurlSphereWkTestCovML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagCurlSphereWkTestCovML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
   void run_functor_grad_sphere_wk_testcov() const {
-    Kokkos::TeamPolicy<ExecSpace, TagGradSphereWkTestCovML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagGradSphereWkTestCovML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
   void run_functor_vlaplace_cartesian_reduced() const {
-    Kokkos::TeamPolicy<ExecSpace,
-                       TagVLaplaceCartesianReducedML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianReducedML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
   void run_functor_vlaplace_contra() const {
-    Kokkos::TeamPolicy<ExecSpace, TagVLaplaceContraML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceContraML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
   void run_functor_vorticity_sphere_vector() const {
-    Kokkos::TeamPolicy<ExecSpace, TagVorticityVectorML>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagVorticityVectorML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
@@ -1155,11 +1146,11 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         local_fortran_output(0, igp, jgp),
-                        coutput0, 512.0));
+                        coutput0, 1024.0));
             REQUIRE(std::numeric_limits<Real>::epsilon() >=
                     compare_answers(
                         local_fortran_output(1, igp, jgp),
-                        coutput1, 512.0));
+                        coutput1, 1024.0));
 
           }  // jgp
         }    // igp
@@ -1536,11 +1527,3 @@ TEST_CASE("Testing vorticity_sphere_vector()",
   std::cout << "test vorticity_sphere_vector multilevel finished. \n";
 
 }  // end of test div_sphere_wk_ml
-
-
-
-
-
-
-
-
