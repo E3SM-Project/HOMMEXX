@@ -163,29 +163,10 @@ void caar_pre_exchange_monolithic_c()
   profiling_pause();
 }
 
+//todo move to EulerStepFunctor as a static function
 void advance_qdp_c()
 {
-  // Get control structure
-  Control& data = get_control();
-
-  // Retrieve the team size
-  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = data.team_size;
-
-  // Setup the policy
-  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
-  policy.set_chunk_size(1);
-
-  // Create the functor
-  EulerStepFunctor func(data);
-
-  profiling_resume();
-  // Dispatch parallel for
-  Kokkos::parallel_for(policy, func);
-
-  // Finalize
-  ExecSpace::fence();
-  profiling_pause();
+  EulerStepFunctor::run();
 }
 
 } // extern "C"
