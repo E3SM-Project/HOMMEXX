@@ -530,10 +530,6 @@ contains
     real (kind=real_kind) ::  kappa_star(np,np,nlev)
     real (kind=real_kind) ::  vtens1(np,np,nlev)
     real (kind=real_kind) ::  vtens2(np,np,nlev)
-    real (kind=real_kind) ::  ttens(np,np,nlev)
-    real (kind=real_kind) ::  stashdp3d (np,np,nlev)
-    real (kind=real_kind) ::  tempdp3d  (np,np)
-    real (kind=real_kind) ::  tempflux  (nc,nc,4)
     type (EdgeDescriptor_t)                                       :: desc
 
     real (kind=real_kind) ::  cp2,cp_ratio,E,de,Qt,v1,v2
@@ -914,13 +910,24 @@ contains
       call caar_compute_dp3d_np1_c_int(np1, nm1, dt2, elem(ie)%spheremp, &
            divdp, eta_dot_dpdn, elem(ie)%state%dp3d)
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,tempflux)
+!$omp parallel do private(k)
 #endif
       do k=1,nlev
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
-        elem(ie)%state%T(:,:,k,np1) = elem(ie)%spheremp(:,:)*(elem(ie)%state%T(:,:,k,nm1) + dt2*ttens(:,:,k))
       enddo
+
+if(ie==1) then
+k=1
+!print *, 'BEFORE BEX --------------------------------------------- '
+!print *, 'v1', elem(ie)%state%v(:,:,1,k,np1)
+!print *, 'v12', elem(ie)%state%v(:,:,1,k,np1)
+!print *, 'T', elem(ie)%state%T(:,:,k,np1)
+!print *,ttens(:,:,k)
+!print *, 'dp3d', elem(ie)%state%dp3d(:,:,k,np1)
+!stop
+endif
+
 
     enddo
 
