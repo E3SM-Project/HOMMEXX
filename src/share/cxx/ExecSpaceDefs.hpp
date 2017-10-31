@@ -96,8 +96,8 @@ private:
     return ExecSpace::thread_pool_size();
 #else
 #ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-    if (Max_Threads_Per_Team >= num_elems) {
-      return Max_Threads_Per_Team / num_elems;
+    if (max_threads_per_team<ExecSpaceType> >= num_elems) {
+      return max_threads_per_team<ExecSpaceType> / num_elems;
     } else {
       return 1;
     }
