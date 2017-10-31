@@ -50,13 +50,11 @@ using MemoryUnmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restric
 using ExecMemSpace = ExecSpace::memory_space;
 using ScratchMemSpace = ExecSpace::scratch_memory_space;
 using HostMemSpace = Kokkos::HostSpace;
+using HostExecMemSpace = HostExecSpace::memory_space;
 
 // A team member type
-using TeamMember = Kokkos::TeamPolicy<ExecSpace>::member_type;
-
-// Native language layouts
-using FortranLayout = Kokkos::LayoutLeft;
-using CXXLayout = Kokkos::LayoutRight;
+using TeamMember     = Kokkos::TeamPolicy<ExecSpace>::member_type;
+using HostTeamMember = Kokkos::TeamPolicy<HostExecSpace>::member_type;
 
 // Short name for views
 template <typename DataType, typename MemorySpace, typename MemoryManagement>
