@@ -124,9 +124,9 @@ private:
     raw_type* ptr;
   };
 
-  void pack ();
-  void send_and_receive ();
-  void unpack ();
+  void build_requests ();
+  void pack_and_send ();
+  void recv_and_unpack ();
 
   Real*        m_send_buffer;
   Real*        m_recv_buffer;
@@ -176,7 +176,7 @@ private:
 
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
-  //std::vector<MPI_Status>   m_statuses;
+  std::vector<MPI_Status>   m_statuses;
 };
 
 BoundaryExchange& get_boundary_exchange(const std::string& be_name);

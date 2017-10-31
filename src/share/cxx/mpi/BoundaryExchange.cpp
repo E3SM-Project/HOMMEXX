@@ -1,6 +1,7 @@
 #include "BoundaryExchange.hpp"
 
 #include "Control.hpp"
+#include "Hommexx_Debug.hpp"
 
 namespace Homme
 {
@@ -43,9 +44,11 @@ BoundaryExchange::BoundaryExchange()
   m_registration_completed = false;
 
   // Create requests and statuses
-  m_send_requests.resize(m_connectivity.get_num_shared_connections(),MPI_REQUEST_NULL);
-  m_recv_requests.resize(m_connectivity.get_num_shared_connections(),MPI_REQUEST_NULL);
-  //m_statuses.resize(m_connectivity.get_num_shared_connections());
+  // Note: we put an extra null request at the end, so that if we have no share connections
+  //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
+  m_send_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
+  m_recv_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
+  m_statuses.resize(m_connectivity.get_num_shared_connections());
 
   // The zero array used for the dummy recv buffers at the 24 non-existent corner connections.
   std::fill_n(m_zero,NUM_LEV*VECTOR_SIZE,0.0);
@@ -71,9 +74,11 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
   m_registration_completed = false;
 
   // Create requests and statuses
-  m_send_requests.resize(m_connectivity.get_num_shared_connections(),MPI_REQUEST_NULL);
-  m_recv_requests.resize(m_connectivity.get_num_shared_connections(),MPI_REQUEST_NULL);
-  //m_statuses.resize(m_connectivity.get_num_shared_connections());
+  // Note: we put an extra null request at the end, so that if we have no share connections
+  //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
+  m_send_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
+  m_recv_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
+  m_statuses.resize(m_connectivity.get_num_shared_connections());
 
   // The zero array used for the dummy recv buffers at the 24 non-existent corner connections.
   std::fill_n(m_zero,NUM_LEV*VECTOR_SIZE,0.0);
@@ -129,20 +134,19 @@ void BoundaryExchange::clean_up()
   }
 
   // Make sure the data has been sent before we cleanup this class
-  //MPI_Waitall(m_send_requests.size(),m_send_requests.data(),m_statuses.data());
-  MPI_Waitall(m_send_requests.size(),m_send_requests.data(),MPI_STATUSES_IGNORE);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),m_statuses.data()));
 #ifdef HOMMEXX_DEBUG
   // TODO: check statuses
 #endif
 
   // Free buffers
-  MPI_Free_mem (m_send_buffer);
-  MPI_Free_mem (m_recv_buffer);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem (m_send_buffer));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem (m_recv_buffer));
   delete[] m_local_buffer;
 
   // Free MPI data types
-  MPI_Type_free(&m_mpi_corner_data_type);
-  MPI_Type_free(&m_mpi_edge_data_type);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_corner_data_type));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_edge_data_type));
 
   // Clear stored fields
   m_2d_fields = HostViewManaged<Pointer<Real[NP][NP]>**>(0,0);
@@ -167,9 +171,13 @@ void BoundaryExchange::clean_up()
   m_registration_completed = false;
 
   // Clean requests and statuses
+  for (int i=0; i<m_connectivity.get_num_shared_connections(); ++i) {
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]));
+  }
   m_send_requests.clear();
   m_recv_requests.clear();
-  //m_statuses.clear();
+  m_statuses.clear();
 
   // Now we're all cleaned
   m_cleaned_up = true;
@@ -186,10 +194,10 @@ void BoundaryExchange::registration_completed()
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
   m_corner_size = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_edge_size   = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
-  MPI_Type_contiguous(m_corner_size, MPI_DOUBLE, &m_mpi_corner_data_type);
-  MPI_Type_contiguous(m_edge_size, MPI_DOUBLE, &m_mpi_edge_data_type);
-  MPI_Type_commit(&m_mpi_corner_data_type);
-  MPI_Type_commit(&m_mpi_edge_data_type);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_corner_size, MPI_DOUBLE, &m_mpi_corner_data_type));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_edge_size, MPI_DOUBLE, &m_mpi_edge_data_type));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_corner_data_type));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_edge_data_type));
 
   // Compute the buffers sizes and allocating
   size_t mpi_buffers_size = 0;
@@ -201,8 +209,8 @@ void BoundaryExchange::registration_completed()
   local_buffers_size += m_corner_size * m_connectivity.get_num_local_corner_connections();
   local_buffers_size += m_edge_size   * m_connectivity.get_num_local_edge_connections();
 
-  MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_send_buffer);
-  MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_recv_buffer);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_send_buffer));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_recv_buffer));
   m_local_buffer = new Real[local_buffers_size]; // This one can be allocated 'normally'
 
   // Setting the individual field/elements buffers to point to the right piece of the buffers
@@ -305,6 +313,9 @@ void BoundaryExchange::registration_completed()
     }
   }
 
+  // Create persistend send/recv requests, to reuse over and over
+  build_requests ();
+
   // Prohibit further registration of fields
   m_registration_started   = false;
   m_registration_completed = true;
@@ -315,21 +326,66 @@ void BoundaryExchange::exchange ()
   // Check that the registration has completed first
   assert (m_registration_completed);
 
-  // Pack into send buffer
-  pack();
+  // Hey, if some process can already send me stuff while I'm still packing, that's ok
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_recv_requests.data()));
 
-  // Send and receive
-  send_and_receive();
+  // Pack and send
+  pack_and_send();
 
-  // Unpack
-  unpack();
+  // Receive and unpack
+  recv_and_unpack();
 }
 
-void BoundaryExchange::pack()
+void BoundaryExchange::build_requests()
 {
-  // Make sure the data has been sent (from previous calls) before reusing buffers
-  //MPI_Waitall(m_send_requests.size(),m_send_requests.data(),m_statuses.data());
-  MPI_Waitall(m_send_requests.size(),m_send_requests.data(),MPI_STATUSES_IGNORE);
+  auto shared_corner_connections = m_connectivity.get_shared_corner_connections();
+  auto shared_edge_connections   = m_connectivity.get_shared_edge_connections();
+
+  const int num_shared_corner_connections = m_connectivity.get_num_shared_corner_connections();
+  const int num_shared_edge_connections   = m_connectivity.get_num_shared_edge_connections();
+
+  // Setup corners requests first...
+  for (int iconn=0; iconn<num_shared_corner_connections; ++iconn)
+  {
+    const ConnectionInfo& info = shared_corner_connections[iconn];
+
+    // We build a tag that has info about the sender's element lid and connection position.
+    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
+    int send_tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
+    int recv_tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
+
+    Real* send_ptr = m_send_buffer + iconn*m_corner_size;
+    Real* recv_ptr = m_recv_buffer + iconn*m_corner_size;
+
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_corner_data_type,info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[iconn]));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_corner_data_type,info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[iconn]));
+  }
+
+  // ...then edges requests.
+  for (int iconn=0; iconn<num_shared_edge_connections; ++iconn)
+  {
+    const ConnectionInfo& info = shared_edge_connections[iconn];
+
+    // We build a tag that has info about the sender's element lid and connection position.
+    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
+    int send_tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
+    int recv_tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
+
+    Real* send_ptr = m_send_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
+    Real* recv_ptr = m_recv_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
+
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_edge_data_type,info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[iconn+num_shared_corner_connections]));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_edge_data_type,info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[iconn+num_shared_corner_connections]));
+  }
+}
+
+void BoundaryExchange::pack_and_send()
+{
+  // Make sure the send requests are inactive (can't reuse buffers otherwise)
+  int done = 0;
+  do {
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),&done,m_statuses.data()));
+  } while (done==0);
 #ifdef HOMMEXX_DEBUG
   // TODO: check statuses
 #endif
@@ -381,69 +437,16 @@ void BoundaryExchange::pack()
       }
     }
   }
+
+  // Now we can fire off the sends
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_send_requests.data()));
 }
 
-void BoundaryExchange::send_and_receive()
+void BoundaryExchange::recv_and_unpack()
 {
-  auto shared_corner_connections = m_connectivity.get_shared_corner_connections();
-  auto shared_edge_connections   = m_connectivity.get_shared_edge_connections();
+  // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),m_statuses.data()));
 
-  const int num_shared_corner_connections = m_connectivity.get_num_shared_corner_connections();
-  const int num_shared_edge_connections   = m_connectivity.get_num_shared_edge_connections();
-
-  // Process all sends first (corners, then edges)
-  for (int iconn=0; iconn<num_shared_corner_connections; ++iconn)
-  {
-    const ConnectionInfo& info = shared_corner_connections[iconn];
-
-    // We build a tag that has info about the sender's element lid and connection position.
-    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
-    int tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
-
-    Real* ptr = m_send_buffer + iconn*m_corner_size;
-    MPI_Isend(ptr,1,m_mpi_corner_data_type,info.remote_pid,tag,m_comm.m_mpi_comm,&m_send_requests[iconn]);
-  }
-  for (int iconn=0; iconn<num_shared_edge_connections; ++iconn)
-  {
-    const ConnectionInfo& info = shared_edge_connections[iconn];
-
-    // We build a tag that has info about the sender's element lid and connection position.
-    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
-    int tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
-
-    Real* ptr = m_send_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
-    MPI_Isend(ptr,1,m_mpi_edge_data_type,info.remote_pid,tag,m_comm.m_mpi_comm,&m_send_requests[iconn+num_shared_corner_connections]);
-  }
-
-  // Process all receives (corners, then edges)
-  for (int iconn=0; iconn<num_shared_corner_connections; ++iconn)
-  {
-    const ConnectionInfo& info = shared_corner_connections[iconn];
-    // We build a tag that has info about the sender's element lid and connection position.
-    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
-    int tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
-
-    Real* ptr = m_recv_buffer + iconn*m_corner_size;
-    MPI_Irecv(ptr,1,m_mpi_corner_data_type,info.remote_pid,tag,m_comm.m_mpi_comm,&m_recv_requests[iconn]);
-  }
-  for (int iconn=0; iconn<num_shared_edge_connections; ++iconn)
-  {
-    const ConnectionInfo& info = shared_edge_connections[iconn];
-
-    // We build a tag that has info about the sender's element lid and connection position.
-    // Since there are 8 neighbors, the easy way is to set tag=lid*8+pos
-    int tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
-
-    Real* ptr = m_recv_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
-    MPI_Irecv(ptr,1,m_mpi_edge_data_type,info.remote_pid,tag,m_comm.m_mpi_comm,&m_recv_requests[iconn+num_shared_corner_connections]);
-  }
-}
-
-void BoundaryExchange::unpack()
-{
-  // Make sure all the data has been received before unpacking
-  //MPI_Waitall(m_recv_requests.size(),m_recv_requests.data(),m_statuses.data());
-  MPI_Waitall(m_recv_requests.size(),m_recv_requests.data(),MPI_STATUSES_IGNORE);
 #ifdef HOMMEXX_DEBUG
   // TODO: check statuses
 #endif
