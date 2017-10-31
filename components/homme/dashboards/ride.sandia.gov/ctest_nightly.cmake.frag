@@ -228,10 +228,8 @@ if (BUILD_HOMMEXX_CUDA)
   set (CONFIGURE_OPTIONS
     "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
-    "-DBUILD_HOMME_SWEQX_FLAT=OFF"
-    "-DBUILD_HOMME_PREQX_FLAT=ON"
     "-DUSE_TRILINOS=ON"
-    "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXX_baseline/HOMMEXXBuild" 
+    "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXXNightlies/HOMMEXX_baseline/build" 
     "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
     "-DTRILINOS_INSTALL_DIR:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     )
