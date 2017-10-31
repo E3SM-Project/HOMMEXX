@@ -61,11 +61,13 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
   // Create input data arrays
   HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_cxx("", num_my_elems);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_f90("", num_my_elems);
+
   HostViewManaged<Scalar*[NUM_TIME_LEVELS][NP][NP][NUM_LEV]> field_3d_cxx ("", num_my_elems);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> field_3d_f90("", num_my_elems);
+
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][DIM][NP][NP]> field_4d_f90 ("", num_my_elems);
   HostViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]> field_4d_cxx ("", num_my_elems);
-  Real* field_2d_f90 = new Real[num_elems*NUM_TIME_LEVELS*NP*NP];
-  Real* field_3d_f90 = new Real[num_elems*NUM_TIME_LEVELS*NP*NP*NUM_PHYSICAL_LEV];
-  Real* field_4d_f90 = new Real[num_elems*NUM_TIME_LEVELS*DIM*NP*NP*NUM_PHYSICAL_LEV];
 
   // Create boundary exchange
   BoundaryExchange be(connectivity);
@@ -78,91 +80,84 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   for (int itest=0; itest<num_tests; ++itest)
   {
     // Initialize input data to random values
-    genRandArray(field_2d_f90,num_elems*NUM_TIME_LEVELS*NP*NP,engine,dreal);
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
+    genRandArray(field_2d_f90,engine,dreal);
+    Kokkos::deep_copy(field_2d_cxx,field_2d_f90);
+
+    genRandArray(field_3d_f90,engine,dreal);
+    for (int ie=0; ie<num_my_elems; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
-        for (int igp=0; igp<NP; ++igp) {
-          for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-            field_2d_cxx(ie,itl,igp,jgp) = field_2d_f90[iter];
-    }}}}
-
-    genRandArray(field_3d_f90,num_elems*DIM*NP*NP*NUM_PHYSICAL_LEV,engine,dreal);
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
-      for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
-        for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-          for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-            for (int igp=0; igp<NP; ++igp) {
-              for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-                field_3d_cxx(ie,itl,igp,jgp,ilev)[iv] = field_3d_f90[iter];
-    }}}}}}
+        for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+          const int ilev = level / VECTOR_SIZE;
+          const int ivec = level % VECTOR_SIZE;
+          for (int igp=0; igp<NP; ++igp) {
+            for (int jgp=0; jgp<NP; ++jgp) {
+              field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec] = field_3d_f90(ie,itl,level,igp,jgp);
+    }}}}}
 
 
-    genRandArray(field_4d_f90,num_elems*NUM_TIME_LEVELS*DIM*NP*NP*NUM_PHYSICAL_LEV,engine,dreal);
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
+    genRandArray(field_4d_f90,engine,dreal);
+    for (int ie=0; ie<num_my_elems; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int idim=0; idim<DIM; ++idim) {
-          for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-            for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-              for (int igp=0; igp<NP; ++igp) {
-                for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-                  field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[iv] = field_4d_f90[iter];
-    }}}}}}}
-
+          for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+            const int ilev = level / VECTOR_SIZE;
+            const int ivec = level % VECTOR_SIZE;
+            for (int igp=0; igp<NP; ++igp) {
+              for (int jgp=0; jgp<NP; ++jgp) {
+                field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec] = field_4d_f90(ie,itl,level,idim,igp,jgp);
+    }}}}}}
     // Perform boundary exchange
     be.exchange();
 
-    boundary_exchange_test_f90(field_2d_f90, field_3d_f90, field_4d_f90, DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
+    boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
 
     // Compare answers
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_my_elems; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int igp=0; igp<NP; ++igp) {
-          for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-            if(compare_answers(field_2d_f90[iter],field_2d_cxx(ie,itl,igp,jgp)) >= test_tolerance)
+          for (int jgp=0; jgp<NP; ++jgp) {
+            if(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx(ie,itl,igp,jgp)) >= test_tolerance)
             {
               std::cout << "rank,ie,itl,igp,jgp: " << rank << ", " << ie << ", " << itl << ", " << igp << ", " << jgp << "\n";
-              std::cout << "f90: " << field_2d_f90[iter] << "\n";
+              std::cout << "f90: " << field_2d_f90(ie,itl,igp,jgp) << "\n";
               std::cout << "cxx: " << field_2d_cxx(ie,itl,igp,jgp) << "\n";
             }
-            REQUIRE(compare_answers(field_2d_f90[iter],field_2d_cxx(ie,itl,igp,jgp)) < test_tolerance);
+            REQUIRE(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx(ie,itl,igp,jgp)) < test_tolerance);
     }}}}
 
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_my_elems; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
-        for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-          for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-            for (int igp=0; igp<NP; ++igp) {
-              for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-                if(compare_answers(field_3d_f90[iter],field_3d_cxx(ie,itl,igp,jgp,ilev)[iv]) >= test_tolerance)
-                {
-                  std::cout << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << iv << "\n";
-                  std::cout << "f90: " << field_3d_f90[iter] << "\n";
-                  std::cout << "cxx: " << field_3d_cxx(ie,itl,igp,jgp,ilev)[iv] << "\n";
-                }
-                REQUIRE(compare_answers(field_3d_f90[iter],field_3d_cxx(ie,itl,igp,jgp,ilev)[iv]) < test_tolerance);
-    }}}}}}
+        for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+          const int ilev = level / VECTOR_SIZE;
+          const int ivec = level % VECTOR_SIZE;
+          for (int igp=0; igp<NP; ++igp) {
+            for (int jgp=0; jgp<NP; ++jgp) {
+              if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance)
+              {
+                std::cout << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
+                std::cout << "f90: " << field_3d_f90(ie,itl,level,igp,jgp) << "\n";
+                std::cout << "cxx: " << field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec] << "\n";
+              }
+              REQUIRE(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec]) < test_tolerance);
+    }}}}}
 
-    for (int ie=0, iter=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_my_elems; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int idim=0; idim<DIM; ++idim) {
-          for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-            for (int iv=0; iv<VECTOR_SIZE; ++iv) {
-              for (int igp=0; igp<NP; ++igp) {
-                for (int jgp=0; jgp<NP; ++jgp, ++iter) {
-                  if(compare_answers(field_4d_f90[iter],field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[iv]) >= test_tolerance)
-                  {
-                    std::cout << "rank,ie,itl,idim,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << idim << ", " << igp << ", " << jgp << ", " << ilev << ", " << iv << "\n";
-                    std::cout << "f90: " << field_4d_f90[iter] << "\n";
-                    std::cout << "cxx: " << field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[iv] << "\n";
-                  }
-                  REQUIRE(compare_answers(field_4d_f90[iter],field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[iv]) < test_tolerance);
-    }}}}}}}
+          for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+            const int ilev = level / VECTOR_SIZE;
+            const int ivec = level % VECTOR_SIZE;
+            for (int igp=0; igp<NP; ++igp) {
+              for (int jgp=0; jgp<NP; ++jgp) {
+                if(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec]) >= test_tolerance)
+                {
+                  std::cout << "rank,ie,itl,idim,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << idim << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
+                  std::cout << "f90: " << field_4d_f90(ie,itl,level,idim,igp,jgp) << "\n";
+                  std::cout << "cxx: " << field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec] << "\n";
+                }
+                REQUIRE(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec]) < test_tolerance);
+    }}}}}}
   }
-
-  // Clean up
-  delete[] field_2d_f90;
-  delete[] field_3d_f90;
-  delete[] field_4d_f90;
 
   // Cleanup
   cleanup_f90();  // Deallocate stuff in the F90 module
