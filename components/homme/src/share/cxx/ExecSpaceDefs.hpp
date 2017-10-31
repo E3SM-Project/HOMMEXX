@@ -36,7 +36,7 @@ using Hommexx_Serial = void;
 using Hommexx_DefaultExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 
 // Selecting the execution space. If no specific request, use Kokkos default
-// exec space
+// exec space.
 #if defined(HOMMEXX_CUDA_SPACE)
 using ExecSpace = Hommexx_Cuda;
 #elif defined(HOMMEXX_OPENMP_SPACE)
@@ -50,8 +50,24 @@ using ExecSpace = Hommexx_DefaultExecSpace;
 #else
 #error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
-
 static_assert (!std::is_same<ExecSpace,void>::value, "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
+
+// Selecting the parallel host execution space. This is the same as ExecSpace if
+// ExecSpace!=Kokkos::Cuda. If ExecSpace==Kokkos::Cuda, we select the first
+// available in 'OpenMP,Threads,Serial'
+// This space is used for parallel operation outside the device, mostly during
+// MPI-related routines. This is to avoid repeated copies to/from the device
+// when multiple MPI calls are used in a short chunk of code. Instead, we do
+// MPI pre/post process (such as packing/unpacking data) on the host, in the
+// most parallel way possible.
+// NOTE: this is relevant only if ExecSpace is Cuda, since otherwise there is
+//       no 'real' difference between ExecSpace and HostSpace...
+using HostExecSpace = std::conditional<!std::is_same<Hommexx_OpenMP,void>::value,
+                                       Hommexx_OpenMP,
+                                       std::conditional<!std::is_same<Hommexx_Threads,void>::value,
+                                                        Hommexx_Threads, Hommexx_Serial>::type
+                                      >::type;
+static_assert (!std::is_same<HostExecSpace,void>::value, "Error! There is no Host execution space. This is highly odd. Most likely cause is that no Host execution space is enabled in Kokkos (not even Kokkos::Serial).\n");
 
 template <typename ExecSpaceType>
 struct DefaultThreadsDistribution {
