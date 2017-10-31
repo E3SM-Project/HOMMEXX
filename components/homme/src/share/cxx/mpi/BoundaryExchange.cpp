@@ -1,7 +1,6 @@
 #include "BoundaryExchange.hpp"
 
 #include "Control.hpp"
-#include "Hommexx_Debug.hpp"
 
 namespace Homme
 {
@@ -31,11 +30,10 @@ BoundaryExchange::BoundaryExchange()
  : m_comm         (get_connectivity().get_comm())
  , m_connectivity (get_connectivity())
  , m_num_elements (m_connectivity.get_num_my_elems())
+ , m_send_buffer  ( nullptr , mpi_deleter_wrapper())
+ , m_recv_buffer  ( nullptr , mpi_deleter_wrapper())
+ , m_local_buffer ( nullptr , mpi_deleter_wrapper())
 {
-  m_send_buffer  = nullptr;
-  m_recv_buffer  = nullptr;
-  m_local_buffer = nullptr;
-
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
 
@@ -43,12 +41,11 @@ BoundaryExchange::BoundaryExchange()
   m_registration_started   = false;
   m_registration_completed = false;
 
-  // Create requests and statuses
+  // Create requests
   // Note: we put an extra null request at the end, so that if we have no share connections
   //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
   m_send_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
   m_recv_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
-  m_statuses.resize(m_connectivity.get_num_shared_connections());
 
   // The zero array used for the dummy recv buffers at the 24 non-existent corner connections.
   std::fill_n(m_zero,NUM_LEV*VECTOR_SIZE,0.0);
@@ -61,11 +58,10 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
  : m_comm         (connectivity.get_comm())
  , m_connectivity (connectivity)
  , m_num_elements (m_connectivity.get_num_my_elems())
+ , m_send_buffer  ( nullptr )
+ , m_recv_buffer  ( nullptr )
+ , m_local_buffer ( nullptr )
 {
-  m_send_buffer  = nullptr;
-  m_recv_buffer  = nullptr;
-  m_local_buffer = nullptr;
-
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
 
@@ -73,12 +69,11 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
   m_registration_started   = false;
   m_registration_completed = false;
 
-  // Create requests and statuses
+  // Create requests
   // Note: we put an extra null request at the end, so that if we have no share connections
   //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
   m_send_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
   m_recv_requests.resize(m_connectivity.get_num_shared_connections()+1,MPI_REQUEST_NULL);
-  m_statuses.resize(m_connectivity.get_num_shared_connections());
 
   // The zero array used for the dummy recv buffers at the 24 non-existent corner connections.
   std::fill_n(m_zero,NUM_LEV*VECTOR_SIZE,0.0);
@@ -134,15 +129,12 @@ void BoundaryExchange::clean_up()
   }
 
   // Make sure the data has been sent before we cleanup this class
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),m_statuses.data()));
-#ifdef HOMMEXX_DEBUG
-  // TODO: check statuses
-#endif
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),MPI_STATUSES_IGNORE));
 
   // Free buffers
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem (m_send_buffer));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem (m_recv_buffer));
-  delete[] m_local_buffer;
+  m_send_buffer.reset(nullptr);
+  m_recv_buffer.reset(nullptr);
+  m_local_buffer.reset(nullptr);
 
   // Free MPI data types
   HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_corner_data_type));
@@ -170,14 +162,13 @@ void BoundaryExchange::clean_up()
   m_registration_started   = false;
   m_registration_completed = false;
 
-  // Clean requests and statuses
+  // Clean requests
   for (int i=0; i<m_connectivity.get_num_shared_connections(); ++i) {
     HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]));
     HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]));
   }
   m_send_requests.clear();
   m_recv_requests.clear();
-  m_statuses.clear();
 
   // Now we're all cleaned
   m_cleaned_up = true;
@@ -209,9 +200,14 @@ void BoundaryExchange::registration_completed()
   local_buffers_size += m_corner_size * m_connectivity.get_num_local_corner_connections();
   local_buffers_size += m_edge_size   * m_connectivity.get_num_local_edge_connections();
 
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_send_buffer));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&m_recv_buffer));
-  m_local_buffer = new Real[local_buffers_size]; // This one can be allocated 'normally'
+  Real* buffer;
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&buffer));
+  m_send_buffer.reset(buffer);
+
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&buffer));
+  m_recv_buffer.reset(buffer);
+
+  m_local_buffer = std::unique_ptr<Real[]>(new Real[local_buffers_size]); // This one can be allocated 'normally'
 
   // Setting the individual field/elements buffers to point to the right piece of the buffers
   int num_local_corner_connections  = m_connectivity.get_num_local_corner_connections();
@@ -225,13 +221,13 @@ void BoundaryExchange::registration_completed()
     const ConnectionInfo& info = m_connectivity.get_shared_corner_connections()[iconn];
     const LidPosType& local = info.local;
     for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-      m_send_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(m_send_buffer+offset);
-      m_recv_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(m_recv_buffer+offset);
+      m_send_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(&m_send_buffer[offset]);
+      m_recv_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(&m_recv_buffer[offset]);
       offset += 1;
     }
     for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-      m_send_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(m_send_buffer+offset));
-      m_recv_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(m_recv_buffer+offset));
+      m_send_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(&m_send_buffer[offset]));
+      m_recv_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(&m_recv_buffer[offset]));
       offset += NUM_LEV*VECTOR_SIZE;
     }
   }
@@ -239,13 +235,13 @@ void BoundaryExchange::registration_completed()
     const ConnectionInfo& info = m_connectivity.get_shared_edge_connections()[iconn];
     const LidPosType& local = info.local;
     for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-      m_send_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(m_send_buffer+offset);
-      m_recv_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(m_recv_buffer+offset);
+      m_send_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(&m_send_buffer[offset]);
+      m_recv_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(&m_recv_buffer[offset]);
       offset += NP;
     }
     for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-      m_send_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(m_send_buffer+offset));
-      m_recv_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(m_recv_buffer+offset));
+      m_send_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(&m_send_buffer[offset]));
+      m_recv_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(&m_recv_buffer[offset]));
       offset += NP*NUM_LEV*VECTOR_SIZE;
     }
   }
@@ -258,13 +254,13 @@ void BoundaryExchange::registration_completed()
     const ConnectionInfo& info = m_connectivity.get_local_corner_connections()[iconn];
     const LidPosType& local = info.local;
     for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-      m_send_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(m_local_buffer+offset);
-      m_recv_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(m_local_buffer+offset);
+      m_send_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(&m_local_buffer[offset]);
+      m_recv_2d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Real[1]>(&m_local_buffer[offset]);
       offset += 1;
     }
     for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-      m_send_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(m_local_buffer+offset));
-      m_recv_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(m_local_buffer+offset));
+      m_send_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(&m_local_buffer[offset]));
+      m_recv_3d_corners_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NUM_LEV]>(reinterpret_cast<Scalar*>(&m_local_buffer[offset]));
       offset += NUM_LEV*VECTOR_SIZE;
     }
   }
@@ -272,13 +268,13 @@ void BoundaryExchange::registration_completed()
     const ConnectionInfo& info = m_connectivity.get_local_edge_connections()[iconn];
     const LidPosType& local = info.local;
     for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-      m_send_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(m_local_buffer+offset);
-      m_recv_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(m_local_buffer+offset);
+      m_send_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(&m_local_buffer[offset]);
+      m_recv_2d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Real[NP]>(&m_local_buffer[offset]);
       offset += NP;
     }
     for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-      m_send_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(m_local_buffer+offset));
-      m_recv_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(m_local_buffer+offset));
+      m_send_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(&m_local_buffer[offset]));
+      m_recv_3d_edges_buffers(local.lid,ifield,local.pos) = Pointer<Scalar[NP][NUM_LEV]>(reinterpret_cast<Scalar*>(&m_local_buffer[offset]));
       offset += NP*NUM_LEV*VECTOR_SIZE;
     }
   }
@@ -354,8 +350,8 @@ void BoundaryExchange::build_requests()
     int send_tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
     int recv_tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
 
-    Real* send_ptr = m_send_buffer + iconn*m_corner_size;
-    Real* recv_ptr = m_recv_buffer + iconn*m_corner_size;
+    Real* send_ptr = &m_send_buffer[iconn*m_corner_size];
+    Real* recv_ptr = &m_recv_buffer[iconn*m_corner_size];
 
     HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_corner_data_type,info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[iconn]));
     HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_corner_data_type,info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[iconn]));
@@ -371,8 +367,8 @@ void BoundaryExchange::build_requests()
     int send_tag = info.local.lid*NUM_NEIGHBORS + info.local.pos;
     int recv_tag = info.remote.lid*NUM_NEIGHBORS + info.remote.pos;
 
-    Real* send_ptr = m_send_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
-    Real* recv_ptr = m_recv_buffer + iconn*m_edge_size + num_shared_corner_connections*m_corner_size;
+    Real* send_ptr = &m_send_buffer[iconn*m_edge_size + num_shared_corner_connections*m_corner_size];
+    Real* recv_ptr = &m_recv_buffer[iconn*m_edge_size + num_shared_corner_connections*m_corner_size];
 
     HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_edge_data_type,info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[iconn+num_shared_corner_connections]));
     HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_edge_data_type,info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[iconn+num_shared_corner_connections]));
@@ -384,11 +380,8 @@ void BoundaryExchange::pack_and_send()
   // Make sure the send requests are inactive (can't reuse buffers otherwise)
   int done = 0;
   do {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),&done,m_statuses.data()));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),&done,MPI_STATUSES_IGNORE));
   } while (done==0);
-#ifdef HOMMEXX_DEBUG
-  // TODO: check statuses
-#endif
 
   // When we pack, we copy data into the buffer views. We do not care whether the connection
   // is local or shared, since the process is the same. The difference is just in whether the
@@ -445,11 +438,8 @@ void BoundaryExchange::pack_and_send()
 void BoundaryExchange::recv_and_unpack()
 {
   // Wait for all data to arrive
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),m_statuses.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),MPI_STATUSES_IGNORE));
 
-#ifdef HOMMEXX_DEBUG
-  // TODO: check statuses
-#endif
   for (int ie=0; ie<m_num_elements; ++ie)
   {
     for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
@@ -479,60 +469,6 @@ void BoundaryExchange::recv_and_unpack()
       }
     }
   }
-/*
-  // Get control structure
-  Control& data  = get_control();
-
-  // Retrieve the team size
-  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = data.team_size;
-
-  // Setup the policy
-  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
-  policy.set_chunk_size(1);
-
-  // Finally, sum local buffers into fields' views
-  Kokkos::parallel_for(policy,[&](TeamMember team) {
-    const int ie = team.league_rank();
-
-    // First copy the edges (NOTE: we do not thread over edges nor edges points, in order to make the sum reproducible, and in the same order as it is done in Fortran)
-    // Then copy corners (NOTE: this part *could* be threaded (provided edges have ALL been updated already), since corners do not overlap)
-    // TODO: if we agree on a *different* reproducible sum order, we can thread also on edges' points, to get NPx more parallel work.
-    //       in particular, if we decide that we sum a whole edge before moving to the next one, we can process the edges' points in parallel
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
-                         [&](const int ifield) {
-      Kokkos::single(Kokkos::PerThread(team),
-                     [&](){
-        for (int k=0; k<NP; ++k) {
-          m_2d_fields(ie,ifield)(EDGE_PTS_FWD[SOUTH][k].ip,EDGE_PTS_FWD[SOUTH][k].jp) += m_recv_2d_edges_buffers(ie,ifield,SOUTH)(k);
-          m_2d_fields(ie,ifield)(EDGE_PTS_FWD[NORTH][k].ip,EDGE_PTS_FWD[NORTH][k].jp) += m_recv_2d_edges_buffers(ie,ifield,NORTH)(k);
-          m_2d_fields(ie,ifield)(EDGE_PTS_FWD[WEST][k].ip, EDGE_PTS_FWD[WEST][k].jp)  += m_recv_2d_edges_buffers(ie,ifield,WEST )(k);
-          m_2d_fields(ie,ifield)(EDGE_PTS_FWD[EAST][k].ip, EDGE_PTS_FWD[EAST][k].jp)  += m_recv_2d_edges_buffers(ie,ifield,EAST )(k);
-        }
-      });
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,NUM_CORNERS),
-                           [&](const int icorner){
-        m_2d_fields(ie,ifield)(CORNER_PTS[icorner].ip,CORNER_PTS[icorner].jp) += m_recv_2d_corners_buffers(ie,ifield,icorner)[0];
-      });
-    });
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields),
-                         [&](const int ifield) {
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,NUM_LEV),
-                         [&](const int ilev) {
-        for (int k=0; k<NP; ++k) {
-          m_3d_fields(ie,ifield)(EDGE_PTS_FWD[SOUTH][k].ip,EDGE_PTS_FWD[SOUTH][k].jp,ilev) += m_recv_3d_edges_buffers(ie,ifield,SOUTH)(k,ilev);
-          m_3d_fields(ie,ifield)(EDGE_PTS_FWD[NORTH][k].ip,EDGE_PTS_FWD[NORTH][k].jp,ilev) += m_recv_3d_edges_buffers(ie,ifield,NORTH)(k,ilev);
-          m_3d_fields(ie,ifield)(EDGE_PTS_FWD[WEST][k].ip, EDGE_PTS_FWD[WEST][k].jp, ilev) += m_recv_3d_edges_buffers(ie,ifield,WEST )(k,ilev);
-          m_3d_fields(ie,ifield)(EDGE_PTS_FWD[EAST][k].ip, EDGE_PTS_FWD[EAST][k].jp, ilev) += m_recv_3d_edges_buffers(ie,ifield,EAST )(k,ilev);
-        }
-        for (int icorner=0; icorner<NUM_CORNERS; ++icorner) {
-          m_3d_fields(ie,ifield)(CORNER_PTS[icorner].ip,CORNER_PTS[icorner].jp,ilev) += m_recv_3d_corners_buffers(ie,ifield,icorner)(ilev);
-        }
-      });
-    });
-  });
-  ExecSpace::fence();
-*/
 }
 
 } // namespace Homme
