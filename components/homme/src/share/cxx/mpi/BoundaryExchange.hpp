@@ -7,6 +7,8 @@
 #include "Utility.hpp"
 #include "Types.hpp"
 
+#include <vector>
+
 #include <assert.h>
 
 namespace Homme

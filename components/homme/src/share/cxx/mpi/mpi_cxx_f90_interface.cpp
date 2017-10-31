@@ -1,6 +1,8 @@
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
 
+#include <map>
+
 namespace Homme
 {
 
