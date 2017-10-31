@@ -6,6 +6,9 @@
 
 #include "Utility.hpp"
 #include "Types.hpp"
+#include "Hommexx_Debug.hpp"
+
+#include <memory>
 
 #include <vector>
 
@@ -130,11 +133,6 @@ private:
   void pack_and_send ();
   void recv_and_unpack ();
 
-  Real*        m_send_buffer;
-  Real*        m_recv_buffer;
-  Real*        m_local_buffer;
-  Real         m_zero[NUM_LEV*VECTOR_SIZE];
-
   HostViewManaged<Pointer<Real[NP][NP]>**>                   m_2d_fields;
   HostViewManaged<Pointer<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
@@ -178,7 +176,21 @@ private:
 
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
-  std::vector<MPI_Status>   m_statuses;
+
+  struct mpi_deleter_wrapper {
+    void operator() (Real* ptr) {
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem(ptr));
+    }
+  };
+
+  using mpi_handled_ptr = std::unique_ptr<Real[],mpi_deleter_wrapper>;
+
+  mpi_handled_ptr               m_send_buffer;
+  mpi_handled_ptr               m_recv_buffer;
+  std::unique_ptr<Real[]>       m_local_buffer;
+
+  Real         m_zero[NUM_LEV*VECTOR_SIZE];
+
 };
 
 BoundaryExchange& get_boundary_exchange(const std::string& be_name);
