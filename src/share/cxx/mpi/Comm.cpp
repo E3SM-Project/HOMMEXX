@@ -3,6 +3,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif
+#include "Hommexx_config.h"
 
 namespace Homme
 {
@@ -20,6 +21,10 @@ Comm::Comm(MPI_Comm mpi_comm)
 {
   MPI_Comm_size(m_mpi_comm,&m_size);
   MPI_Comm_rank(m_mpi_comm,&m_rank);
+
+#ifdef HOMMEXX_DEBUG
+  MPI_Comm_set_errhandler(m_mpi_comm,MPI_ERRORS_RETURN);
+#endif
 }
 
 void Comm::init ()
@@ -42,6 +47,10 @@ void Comm::init ()
 
   MPI_Comm_size(m_mpi_comm,&m_size);
   MPI_Comm_rank(m_mpi_comm,&m_rank);
+
+#ifdef HOMMEXX_DEBUG
+  MPI_Comm_set_errhandler(m_mpi_comm,MPI_ERRORS_RETURN);
+#endif
 }
 
 } // namespace Homme
