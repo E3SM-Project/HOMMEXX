@@ -229,7 +229,7 @@ if (BUILD_HOMMEXX_CUDA)
     "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
     "-DUSE_TRILINOS=ON"
-    "-DHOMME_BASELINE_DIR=/ascldap/users/ikalash/HOMMEXXNightlies/HOMMEXX_baseline/build" 
+    "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline/build" 
     "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
     "-DTRILINOS_INSTALL_DIR:PATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     )
@@ -300,7 +300,7 @@ if (BUILD_HOMMEXX_CUDA)
   # Run HOMMEXX tests
   #
 
-  set (CTEST_TEST_TIMEOUT 200)
+  set (CTEST_TEST_TIMEOUT 800)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
     RETURN_VALUE HAD_ERROR)
