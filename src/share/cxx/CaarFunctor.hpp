@@ -21,8 +21,6 @@ struct CaarFunctor {
   const Elements    m_elements;
   const Derivative  m_deriv;
 
-  static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
-
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
       m_elements(elements),
@@ -30,7 +28,7 @@ struct CaarFunctor {
   {
     // Nothing to be done here
   }
-  
+
   KOKKOS_INLINE_FUNCTION
   CaarFunctor(const Control &data, const Elements& elements,
               const Derivative& derivative)
@@ -79,9 +77,9 @@ struct CaarFunctor {
 
     gradient_sphere_update(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.ephi, kv.ie, ALL, ALL, ALL),
-        m_elements.buffers.grad_buf, Kokkos::subview(m_elements.buffers.energy_grad,
-                                                   kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.ephi, kv.ie),
+        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
 
 #ifdef NDEBUG
@@ -122,10 +120,10 @@ struct CaarFunctor {
 
     vorticity_sphere(
         kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.m_u, kv.ie, m_data.n0, ALL, ALL, ALL),
-        Kokkos::subview(m_elements.m_v, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Homme::subview(m_elements.m_u, kv.ie, m_data.n0),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
         m_elements.buffers.vort_buf,
-        Kokkos::subview(m_elements.buffers.vorticity, kv.ie, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -286,9 +284,9 @@ struct CaarFunctor {
 
     divergence_sphere(
         kv, m_elements.m_dinv, m_elements.m_metdet, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.vdp, kv.ie, ALL, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.vdp, kv.ie),
         m_elements.buffers.div_buf,
-        Kokkos::subview(m_elements.buffers.div_vdp, kv.ie, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -327,10 +325,9 @@ struct CaarFunctor {
 
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.m_t, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.temperature_grad, kv.ie, ALL, ALL, ALL,
-                        ALL));
+        Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -580,8 +577,7 @@ private:
       const int jgp = loop_idx % NP;
 
       // Use a currently unused buffer to store one column of data.
-      const auto rgas_tv_dp_over_p = Kokkos::subview(
-        m_elements.buffers.vstar, kv.ie, 0, igp, jgp, Kokkos::ALL());
+      const auto rgas_tv_dp_over_p = Homme::subview(m_elements.buffers.vstar, kv.ie, 0, igp, jgp);
 
       // Precompute this product as a SIMD-like operation.
       Kokkos::parallel_for(
@@ -632,9 +628,9 @@ private:
     });
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.pressure, kv.ie),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -676,9 +672,9 @@ private:
   preq_omega_ps_impl(KernelVariables &kv) const {
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.pressure, kv.ie),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
