@@ -538,19 +538,6 @@ contains
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
 
     do ie=nets,nete
-
-!if(ie==1) then
-!print *, 'start'
-!print *, elem(ie)%state%v(:,:,:,:,:)
-!endif
-
-!if(ie==1) then
-!print *, 'HERE----------------'
-!elem(ie)%state%v(:,:,1,:,:)=1.0
-!elem(ie)%state%v(:,:,2,:,:)=0.0
-!endif
-
-
       !ps => elem(ie)%state%ps_v(:,:,n0)
       phi => elem(ie)%derived%phi(:,:,:)
       dp  => elem(ie)%state%dp3d(:,:,:,n0)
@@ -733,9 +720,6 @@ contains
 
          do j=1,np
             do i=1,np
-  !             gpterm = hvcoord%hybm(k)*T_v(i,j,k)/p(i,j,k)
-  !             glnps1 = Rgas*gpterm*grad_ps(i,j,1)
-  !             glnps2 = Rgas*gpterm*grad_ps(i,j,2)
                gpterm = T_v(i,j,k)/p(i,j,k)
                glnps1 = Rgas*gpterm*grad_p(i,j,1,k)
                glnps2 = Rgas*gpterm*grad_p(i,j,2,k)
@@ -743,29 +727,12 @@ contains
                v1     = elem(ie)%state%v(i,j,1,k,n0)
                v2     = elem(ie)%state%v(i,j,2,k,n0)
 
-!if((ie==1).AND.(k==72))then
-!print *, 'i, j ', i, j
-!print *, 'v_vadv', v_vadv(i,j,1,k)
-!print *, '2nd term', v2*(elem(ie)%fcor(i,j) + vort(i,j,k))
-!print *, '3rd term', vtemp(i,j,1)
-!print *, '4rd term', glnps1
-!endif
-
                vtens1(i,j,k) =  - v_vadv(i,j,1,k)                           &
                     + v2*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
                     - (vtemp(i,j,1) + glnps1)
-               !
-               ! phl: add forcing term to zonal wind u
-               !
                vtens2(i,j,k) =   - v_vadv(i,j,2,k)                            &
                     - v1*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
                     - (vtemp(i,j,2) + glnps2)
-               !
-               ! phl: add forcing term to meridional wind v
-               !
-!               !!
-!               !! phl: add forcing term to T
-!               !!
             end do
          end do
       end do vertloop
@@ -932,18 +899,6 @@ contains
       call caar_compute_dp3d_np1_c_int(np1, nm1, dt2, elem(ie)%spheremp, &
            divdp, eta_dot_dpdn, elem(ie)%state%dp3d)
 
-#if 0
-if(ie==1) then
-k=72
-print *, 'BEFORE BEX BOTH PARTS OF V ', k
-print *, 'v1 np1', elem(ie)%state%v(:,:,1,k,np1)
-print *, 'v2 np1', elem(ie)%state%v(:,:,2,k,np1)
-print *, 'v1 nm1', elem(ie)%state%v(:,:,1,k,nm1)
-print *, 'v2 nm1', elem(ie)%state%v(:,:,2,k,nm1)
-print *, 'vtens1', vtens1(:,:,k)
-print *, 'vtens2', vtens2(:,:,k)
-endif
-#endif
 
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
@@ -953,28 +908,6 @@ endif
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
       enddo
-
-#if 0
-if(ie==1) then
-!k=1
-!print *, 'BEFORE BEX ', k
-!print *, 'v1', elem(ie)%state%v(:,:,1,k,np1)
-!print *, 'v2', elem(ie)%state%v(:,:,1,k,np1)
-!print *, 'T', elem(ie)%state%T(:,:,k,np1)
-!print *, 'dp3d', elem(ie)%state%dp3d(:,:,k,np1)
-k=72
-print *, 'BEFORE BEX ', k
-print *, 'v1', elem(ie)%state%v(:,:,1,k,np1)
-print *, 'v2', elem(ie)%state%v(:,:,2,k,np1)
-print *, 'T', elem(ie)%state%T(:,:,k,np1)
-print *, 'dp3d', elem(ie)%state%dp3d(:,:,k,np1)
-print *, 'vtens1', vtens1(:,:,k)
-print *, 'vtens2', vtens2(:,:,k)
-
-stop
-endif
-#endif
-
 
     enddo
 
