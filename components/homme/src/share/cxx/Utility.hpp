@@ -66,6 +66,14 @@ subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,MemManagement> v_i
   return ViewUnmanaged<ScalarType [DIM2][DIM3][DIM4],MemSpace>(&v_in(ie,idim1,0,0,0));
 }
 
+template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM4],MemSpace>
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2, int idim3)
+{
+  return ViewUnmanaged<ScalarType [DIM4],MemSpace>(&v_in(ie,idim1,idim2,idim3,0));
+}
+
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace>
