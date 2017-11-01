@@ -41,8 +41,8 @@ void finalize_connectivity ()
 
 void cleanup_mpi_structures ()
 {
-  std::map<std::string,BoundaryExchange> be = get_all_boundary_exchange ();
-  for (auto it : be) {
+  std::map<std::string,BoundaryExchange>& be = get_all_boundary_exchange ();
+  for (auto& it : be) {
     it.second.clean_up();
   }
 }
