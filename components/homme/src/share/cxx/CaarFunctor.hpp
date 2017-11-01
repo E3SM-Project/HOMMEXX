@@ -21,6 +21,10 @@ struct CaarFunctor {
   const Elements    m_elements;
   const Derivative  m_deriv;
 
+  // Tags for pre/post exchange loops
+  struct TagPreExchange {};   // CAAR routine up to boundary exchange
+  struct TagPostExchange {};  // CAAR routine after boundary exchange
+
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
       m_elements(elements),
@@ -431,7 +435,7 @@ struct CaarFunctor {
   } // UNTESTED 13
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TeamMember& team) const {
+  void operator()(const TagPreExchange&, const TeamMember& team) const {
     start_timer("caar compute");
     KernelVariables kv(team);
 
@@ -443,6 +447,26 @@ struct CaarFunctor {
 
     compute_phase_3(kv);
     stop_timer("caar compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagPostExchange&, TeamMember team) const {
+
+    // Rescaling tendencies by inverse mass matrix on sphere
+    int ie = team.league_rank();
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP*NP),
+                         [&](const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
+                           [&](const int &ilev) {
+        m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+        m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+        m_elements.m_v(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+        m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+      });
+    });
   }
 
   KOKKOS_INLINE_FUNCTION
