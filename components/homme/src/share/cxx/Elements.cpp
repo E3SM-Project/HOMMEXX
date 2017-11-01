@@ -14,6 +14,7 @@ void Elements::init(const int num_elems) {
 
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
   m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
+  m_rspheremp = ExecViewManaged<Real * [NP][NP]>("RSPHEREMP", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
@@ -45,10 +46,16 @@ void Elements::init(const int num_elems) {
           "qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn",
                                                                  m_num_elems);
+
+  h_u    = Kokkos::create_mirror_view(m_u);
+  h_v    = Kokkos::create_mirror_view(m_v);
+  h_t    = Kokkos::create_mirror_view(m_t);
+  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
+  h_qdp  = Kokkos::create_mirror_view(m_qdp);
 }
 
-void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
-                       CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
+void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
+                       CF90Ptr &rspheremp, CF90Ptr &metdet, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -57,6 +64,8 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       Kokkos::create_mirror_view(m_metdet);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
       Kokkos::create_mirror_view(m_spheremp);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_rspheremp =
+      Kokkos::create_mirror_view(m_rspheremp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
@@ -71,6 +80,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       for (int jgp = 0; jgp < NP; ++jgp, ++k_scalars) {
         h_fcor(ie, igp, jgp) = fcor[k_scalars];
         h_spheremp(ie, igp, jgp) = spheremp[k_scalars];
+        h_rspheremp(ie, igp, jgp) = rspheremp[k_scalars];
         h_metdet(ie, igp, jgp) = metdet[k_scalars];
         h_phis(ie, igp, jgp) = phis[k_scalars];
       }
@@ -94,6 +104,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_fcor, h_fcor);
   Kokkos::deep_copy(m_metdet, h_metdet);
   Kokkos::deep_copy(m_spheremp, h_spheremp);
+  Kokkos::deep_copy(m_rspheremp, h_rspheremp);
   Kokkos::deep_copy(m_phis, h_phis);
 
   Kokkos::deep_copy(m_d, h_d);
@@ -110,6 +121,8 @@ void Elements::random_init(const int num_elems, const int seed) {
       Kokkos::create_mirror_view(m_fcor);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
       Kokkos::create_mirror_view(m_spheremp);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_rspheremp =
+      Kokkos::create_mirror_view(m_rspheremp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_metdet =
       Kokkos::create_mirror_view(m_metdet);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
@@ -131,19 +144,6 @@ void Elements::random_init(const int num_elems, const int seed) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
 
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
-      Kokkos::create_mirror_view(m_v);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
-      Kokkos::create_mirror_view(m_t);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
-  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
-
-  ExecViewManaged<
-      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
-      Kokkos::create_mirror_view(m_qdp);
-
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
       Kokkos::create_mirror_view(m_eta_dot_dpdn);
 
@@ -153,6 +153,7 @@ void Elements::random_init(const int num_elems, const int seed) {
         // 2d scalars
         h_fcor(ie, igp, jgp) = random_dist(engine);
         h_spheremp(ie, igp, jgp) = random_dist(engine);
+        h_rspheremp(ie, igp, jgp) = random_dist(engine);
         h_metdet(ie, igp, jgp) = random_dist(engine);
         h_phis(ie, igp, jgp) = random_dist(engine);
 
@@ -212,6 +213,7 @@ void Elements::random_init(const int num_elems, const int seed) {
   Kokkos::deep_copy(m_fcor, h_fcor);
   Kokkos::deep_copy(m_metdet, h_metdet);
   Kokkos::deep_copy(m_spheremp, h_spheremp);
+  Kokkos::deep_copy(m_rspheremp, h_rspheremp);
   Kokkos::deep_copy(m_phis, h_phis);
 
   Kokkos::deep_copy(m_d, h_d);
@@ -288,14 +290,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
 
 void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
                        CF90Ptr &state_dp3d) {
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
-      Kokkos::create_mirror_view(m_v);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
-      Kokkos::create_mirror_view(m_t);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
-  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
   for (int ie = 0, k_4d_scalars = 0, k_4d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
@@ -351,9 +345,6 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
 }
 
 void Elements::pull_qdp(CF90Ptr &state_qdp) {
-  ExecViewManaged<
-      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
-      Kokkos::create_mirror_view(m_qdp);
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
       for (int iq = 0; iq < QSIZE_D; ++iq) {
@@ -431,14 +422,6 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
 
 void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
                        F90Ptr &state_dp3d) const {
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
-      Kokkos::create_mirror_view(m_v);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
-      Kokkos::create_mirror_view(m_t);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
-  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
   Kokkos::deep_copy(h_u, m_u);
   Kokkos::deep_copy(h_v, m_v);
   Kokkos::deep_copy(h_t, m_t);
@@ -494,9 +477,6 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
 }
 
 void Elements::push_qdp(F90Ptr &state_qdp) const {
-  ExecViewManaged<
-      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
-      Kokkos::create_mirror_view(m_qdp);
   Kokkos::deep_copy(h_qdp, m_qdp);
   for (int ie = 0, k_qdp = 0; ie < m_num_elems; ++ie) {
     for (int qni = 0; qni < Q_NUM_TIME_LEVELS; ++qni) {
