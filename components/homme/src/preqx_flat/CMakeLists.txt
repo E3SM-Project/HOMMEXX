@@ -106,6 +106,7 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
+  ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_si_mod.F90
   ${SRC_SHARE_DIR}/prim_si_ref_mod.F90
@@ -148,6 +149,10 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/mpi_cxx_f90_interface.cpp
 )
 
 # If the user specified a file for custom compiler options use those
@@ -187,6 +192,7 @@ IF (${USE_KOKKOS_KERNELS})
   SET (PREQX_FLAT_INCLUDE_DIRS
     ${PREQX_FLAT_INCLUDE_DIRS}
     ${SRC_SHARE_DIR}/cxx
+    ${SRC_SHARE_DIR}/cxx/mpi
     ${UTILS_TIMING_SRC_DIR}
   )
 ENDIF ()
