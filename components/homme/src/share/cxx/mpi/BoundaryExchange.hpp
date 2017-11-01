@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <vector>
+#include <map>
 
 #include <assert.h>
 
@@ -71,7 +72,7 @@ private:
     Pointer () : ptr(nullptr) {}
     Pointer (raw_type* src) : ptr(src) {}
 
-    const raw_type* const data() const { return ptr; }
+    const raw_type* data() const { return ptr; }
 
     const raw_type& operator[] (const int i) const
     {
