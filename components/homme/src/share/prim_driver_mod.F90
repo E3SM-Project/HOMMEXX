@@ -113,7 +113,7 @@ contains
     use schedtype_mod,      only: schedule
     use schedule_mod,       only: genEdgeSched,  PrintSchedule
     use spacecurve_mod,     only: genspacepart
-    use thread_mod,         only: nthreads, omp_get_thread_num, vert_num_threads
+    use thread_mod,         only: nthreads, omp_get_thread_num
     use time_mod,           only: nmax, time_at, timelevel_init, timelevel_t
 
 #ifndef CAM
@@ -121,6 +121,10 @@ contains
 #else
     use infnan,             only: nan, assignment(=)
     use shr_reprosum_mod,   only: repro_sum => shr_reprosum_calc
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+    use prim_cxx_driver_mod, only: init_cxx_mpi_structures
 #endif
 
 #ifdef TRILINOS
@@ -326,6 +330,10 @@ contains
     ! ====================================================
 
     call genEdgeSched(elem,iam,Schedule(1),MetaVertex(1))
+
+#ifdef USE_KOKKOS_KERNELS
+    call init_cxx_mpi_structures (nelemd, par, GridEdge, MetaVertex(1))
+#endif
 
     allocate(global_shared_buf(nelemd,nrepro_vars))
     global_shared_buf=0.0_real_kind
@@ -581,7 +589,8 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, elem_metdet, elem_state_phis
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, &
+                                    elem_rspheremp, elem_metdet, elem_state_phis
     use iso_c_binding,        only: c_ptr, c_loc
 #endif
 
@@ -626,7 +635,8 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
-    type (c_ptr) :: elem_spheremp_ptr, elem_metdet_ptr, elem_state_phis_ptr
+    type (c_ptr) :: elem_spheremp_ptr, elem_rspheremp_ptr
+    type (c_ptr) :: elem_metdet_ptr, elem_state_phis_ptr
 #endif
 
 #ifdef TRILINOS
@@ -669,14 +679,16 @@ contains
 #ifdef USE_KOKKOS_KERNELS
   interface
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
-                                 elem_spheremp_ptr, elem_metdet_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
+                                   elem_spheremp_ptr, elem_rspheremp_ptr,  &
+                                   elem_metdet_ptr, phis_ptr) bind(c)
+      use iso_c_binding, only : c_ptr, c_int
       !
       ! Inputs
       !
-      integer      , intent(in) :: nelemd
+      integer (kind=c_int), intent(in) :: nelemd
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
-      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_metdet_ptr, phis_ptr
+      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_rspheremp_ptr
+      type (c_ptr) , intent(in) :: elem_metdet_ptr, phis_ptr
     end subroutine init_elements_2d_c
   end interface
 #endif
@@ -999,11 +1011,12 @@ contains
     elem_Dinv_ptr       = c_loc(elem_Dinv)
     elem_fcor_ptr       = c_loc(elem_fcor)
     elem_spheremp_ptr   = c_loc(elem_spheremp)
+    elem_rspheremp_ptr  = c_loc(elem_rspheremp)
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_state_phis_ptr = c_loc(elem_state_phis)
-    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, &
-                           elem_fcor_ptr, elem_spheremp_ptr,  &
-                           elem_metdet_ptr, elem_state_phis_ptr)
+    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr, &
+                             elem_spheremp_ptr, elem_rspheremp_ptr,            &
+                             elem_metdet_ptr, elem_state_phis_ptr)
 #endif
 
   end subroutine prim_init2
