@@ -123,8 +123,8 @@ class compute_sphere_operator_test {
   ExecViewManaged<Real * [2][NP][NP]> vector_input_d;
   ExecViewManaged<Real * [2][2][NP][NP]> d_d;
   ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
-  ExecViewManaged<Real * [NP][NP]> spheremp_d;
   ExecViewManaged<Real * [NP][NP]> metdet_d;
+  ExecViewManaged<Real * [NP][NP]> spheremp_d;
   ExecViewManaged<Real[NP][NP]> dvv_d;
   ExecViewManaged<Real * [NP][NP]> scalar_output_d;
   ExecViewManaged<Real * [2][NP][NP]> vector_output_d;
@@ -196,7 +196,7 @@ class compute_sphere_operator_test {
     ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
       Kokkos::subview(scalar_output_d, _index,
                       Kokkos::ALL, Kokkos::ALL);
-  
+
     laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
                   local_temp1_d, local_scalar_input_d,
                   local_sphere_buf, local_scalar_output_d);
@@ -243,7 +243,7 @@ class compute_sphere_operator_test {
     ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
       Kokkos::subview(scalar_output_d, _index,
                       Kokkos::ALL, Kokkos::ALL);
-  
+
     divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
                             local_vector_input_d,
                             local_sphere_buf,
@@ -266,7 +266,7 @@ class compute_sphere_operator_test {
       Kokkos::subview(vector_output_d, _index,
                       Kokkos::ALL, Kokkos::ALL,
                       Kokkos::ALL);
-  
+
     gradient_sphere_sl(kv, dinv_d, dvv_d,
                        local_scalar_input_d,
                        local_sphere_buf,
