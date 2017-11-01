@@ -14,15 +14,19 @@ class Derivative;
  * the program. Second, a context need not be a singleton, and each Context
  * object can have different Elements, Control, Derivative, etc., objects. (That
  * probably isn't needed, but Context immediately supports it.)
- *  
+ *
  * Finally, Context has two singleton functions: singleton(), which returns
  * Context&, and finalize_singleton(). The second is called in a unit test exe
  * main before Kokkos::finalize().
  */
 class Context {
-  std::shared_ptr<Control> control_;
-  std::shared_ptr<Elements> elements_;
-  std::shared_ptr<Derivative> derivative_;
+
+  // Note: using uniqe_ptr disables copy construction
+  std::unique_ptr<Control> control_;
+  std::unique_ptr<Elements> elements_;
+  std::unique_ptr<Derivative> derivative_;
+
+  static bool has_singleton;
 
   // Clear the objects Context manages.
   void clear();
@@ -38,8 +42,7 @@ public:
 
   // Exactly one singleton.
   static Context& singleton();
-  // Call this to clean up the resources in this Context prior to calling, e.g.,
-  // Kokkos::finalize().
+
   static void finalize_singleton();
 };
 
