@@ -179,7 +179,7 @@ private:
 
   struct mpi_deleter_wrapper {
     void operator() (Real* ptr) {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem(ptr));
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Free_mem(ptr));
     }
   };
 

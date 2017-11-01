@@ -32,7 +32,7 @@ BoundaryExchange::BoundaryExchange()
  , m_num_elements (m_connectivity.get_num_my_elems())
  , m_send_buffer  ( nullptr , mpi_deleter_wrapper())
  , m_recv_buffer  ( nullptr , mpi_deleter_wrapper())
- , m_local_buffer ( nullptr , mpi_deleter_wrapper())
+ , m_local_buffer ( nullptr )
 {
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -58,8 +58,8 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
  : m_comm         (connectivity.get_comm())
  , m_connectivity (connectivity)
  , m_num_elements (m_connectivity.get_num_my_elems())
- , m_send_buffer  ( nullptr )
- , m_recv_buffer  ( nullptr )
+ , m_send_buffer  ( nullptr , mpi_deleter_wrapper())
+ , m_recv_buffer  ( nullptr , mpi_deleter_wrapper())
  , m_local_buffer ( nullptr )
 {
   m_num_2d_fields = 0;
