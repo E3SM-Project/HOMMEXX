@@ -188,13 +188,14 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   // This must be a reference to ensure the views are
   // initialized in the singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_in("pressure input", num_elems);
@@ -282,13 +283,14 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
@@ -351,14 +353,15 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   using TestType = compute_subfunctor_test<preq_hydrostatic_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems, seed);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
       "host virtual temperature", num_elems);
@@ -417,13 +420,14 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
@@ -484,13 +488,13 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
@@ -583,15 +587,16 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   using TestType = compute_subfunctor_test<pressure_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   TestType test_functor(elements);
 
@@ -651,15 +656,16 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   using TestType = compute_subfunctor_test<temperature_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
-  Context::singleton().get_derivative().random_init(engine);
+  elements.random_init(num_elems, seed);
+  Context::singleton().get_derivative().random_init(seed);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
@@ -740,14 +746,14 @@ TEST_CASE("virtual temperature no tracers",
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
 
   using TestType = compute_subfunctor_test<virtual_temperature_no_tracers_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems, seed);
 
   TestType test_functor(elements);
   sync_to_host(elements.m_t, test_functor.temperature);
@@ -796,7 +802,7 @@ TEST_CASE("virtual temperature with tracers",
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
 
   using TestType =
       compute_subfunctor_test<virtual_temperature_with_tracers_test>;
@@ -804,7 +810,7 @@ TEST_CASE("virtual temperature with tracers",
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems, seed);
 
   TestType test_functor(elements);
   sync_to_host(elements.m_qdp, test_functor.qdp);
@@ -858,14 +864,15 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   constexpr const int num_elems = 10;
 
   std::random_device rd;
-  rngAlg engine(rd());
+  const int seed = rd();
+  rngAlg engine(seed);
 
   using TestType = compute_subfunctor_test<omega_p_test>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems, seed);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
       "source omega p", num_elems);

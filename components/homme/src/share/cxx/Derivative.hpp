@@ -3,8 +3,6 @@
 
 #include "Types.hpp"
 
-#include <random>
-
 namespace Homme {
 
 class Derivative {
@@ -13,7 +11,7 @@ public:
 
   void init(CF90Ptr &dvv);
 
-  void random_init(std::mt19937_64 &engine);
+  void random_init(const int seed);
 
   void dvv(Real *dvv);
 

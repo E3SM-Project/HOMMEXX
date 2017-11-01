@@ -1,5 +1,7 @@
 #include "Derivative.hpp"
 
+#include <random>
+
 namespace Homme {
 
 Derivative::Derivative()
@@ -22,7 +24,8 @@ void Derivative::init(CF90Ptr &dvv_ptr) {
   Kokkos::deep_copy(m_dvv_exec, dvv_host);
 }
 
-void Derivative::random_init(std::mt19937_64 &engine) {
+void Derivative::random_init(const int seed) {
+  std::mt19937_64 engine(seed);
   std::uniform_real_distribution<Real> random_dist(16.0, 8192.0);
   ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host =
       Kokkos::create_mirror_view(m_dvv_exec);

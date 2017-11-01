@@ -1,6 +1,8 @@
 #include "Elements.hpp"
 #include "Utility.hpp"
 
+#include <random>
+
 #include <assert.h>
 
 namespace Homme {
@@ -98,7 +100,8 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_dinv, h_dinv);
 }
 
-void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
+void Elements::random_init(const int num_elems, const int seed) {
+  std::mt19937_64 engine(seed);
   init(num_elems);
   constexpr const Real min_value = 0.015625;
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
