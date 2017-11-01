@@ -5,7 +5,6 @@
 #include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
-#include "Context.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
 
@@ -24,19 +23,20 @@ struct CaarFunctor {
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
 
-  CaarFunctor()
+  CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
-      m_elements(Context::singleton().get_elements()),
-      m_deriv(Context::singleton().get_derivative())
+      m_elements(elements),
+      m_deriv(derivative)
   {
     // Nothing to be done here
   }
   
   KOKKOS_INLINE_FUNCTION
-    CaarFunctor(const Control &data)
-      : m_data(data),
-        m_elements(Context::singleton().get_elements()),
-        m_deriv(Context::singleton().get_derivative())
+  CaarFunctor(const Control &data, const Elements& elements,
+              const Derivative& derivative)
+    : m_data(data),
+      m_elements(elements),
+      m_deriv(derivative)
   {
     // Nothing to be done here
   }

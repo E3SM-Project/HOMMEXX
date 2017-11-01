@@ -1,6 +1,7 @@
 #include "Derivative.hpp"
 #include "Elements.hpp"
 #include "Control.hpp"
+#include "Context.hpp"
 
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
@@ -152,7 +153,8 @@ void caar_pre_exchange_monolithic_c()
   policy.set_chunk_size(1);
 
   // Create the functor
-  CaarFunctor func(data);
+  CaarFunctor func(data, Context::singleton().get_elements(),
+                   Context::singleton().get_derivative());
 
   profiling_resume();
   // Dispatch parallel for

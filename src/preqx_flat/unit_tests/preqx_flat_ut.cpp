@@ -86,7 +86,8 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements)
-      : functor(), velocity("Velocity", elements.num_elems()),
+      : functor(elements, Context::singleton().get_derivative()),
+        velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
         phis("Phis?", elements.num_elems()),
