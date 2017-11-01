@@ -19,7 +19,7 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
                           const bool& compute_diagonstics, const Real& eta_ave_w,
                           CRCPtr& hybrid_a_ptr)
 {
-  Control& control = get_control ();
+  Control& control = Context::singleton().get_control ();
 
   // Adjust indices
   int nets_c = nets-1;
@@ -33,7 +33,7 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
 
 void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
 {
-  Control& control = get_control ();
+  Control& control = Context::singleton().get_control ();
 
   // Adjust indices
   control.nets  = nets-1;
@@ -48,14 +48,14 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
 void init_derivative_c (CF90Ptr& dvv)
 {
-  Derivative& deriv = get_derivative ();
+  Derivative& deriv = Context::singleton().get_derivative ();
   deriv.init(dvv);
 }
 
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                        CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
 {
-  Elements& r = get_elements ();
+  Elements& r = Context::singleton().get_elements ();
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,spheremp,metdet,phis);
 }
@@ -65,7 +65,7 @@ void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF9
                        CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
                        CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
 {
-  Elements& r = get_elements();
+  Elements& r = Context::singleton().get_elements();
   // Copy data from f90 pointers to cxx views
   r.pull_from_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
                            elem_derived_phi_ptr,elem_derived_pecnd_ptr,
@@ -78,7 +78,7 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
-  Elements& r = get_elements();
+  Elements& r = Context::singleton().get_elements();
   r.push_to_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
                          elem_derived_phi_ptr,elem_derived_pecnd_ptr,
                          elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
@@ -87,8 +87,8 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
 
 void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
 {
-  Elements& r = get_elements();
-  const Control& data = get_control();
+  Elements& r = Context::singleton().get_elements();
+  const Control& data = Context::singleton().get_control();
 
   // Copy data from f90 pointers to cxx views
   r.pull_qdp(elem_state_Qdp_ptr);
@@ -115,8 +115,8 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
 
 void euler_push_results_c (F90Ptr& qtens_ptr)
 {
-  const Elements& r = get_elements();
-  const Control& data = get_control();
+  const Elements& r = Context::singleton().get_elements();
+  const Control& data = Context::singleton().get_control();
 
   ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>             qtens_exec = r.buffers.qtens;
   ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror qtens_host = Kokkos::create_mirror_view(qtens_exec);
@@ -141,7 +141,7 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
 void caar_pre_exchange_monolithic_c()
 {
   // Get control structure
-  Control& data  = get_control();
+  Control& data  = Context::singleton().get_control();
 
   // Retrieve the team size
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
@@ -166,7 +166,7 @@ void caar_pre_exchange_monolithic_c()
 void advance_qdp_c()
 {
   // Get control structure
-  Control& data = get_control();
+  Control& data = Context::singleton().get_control();
 
   // Retrieve the team size
   const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();

@@ -39,10 +39,4 @@ void Derivative::dvv(Real *dvv_ptr) {
   Kokkos::deep_copy(dvv_f90, m_dvv_exec);
 }
 
-Derivative &get_derivative() {
-  static Derivative deriv;
-
-  return deriv;
-}
-
 } // namespace Homme
