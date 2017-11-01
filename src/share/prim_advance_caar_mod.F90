@@ -12,14 +12,9 @@ module prim_advance_caar_mod
   use control_mod,    only: qsplit,rsplit
   use derivative_mod, only: derivative_t, vorticity, divergence, gradient, gradient_wk
   use dimensions_mod, only: np, nlev, nlevp, nvar, nc, nelemd
-  use edgetype_mod,   only: EdgeDescriptor_t, EdgeBuffer_t
+  use edgetype_mod,   only: EdgeBuffer_t
   use element_mod,    only: element_t
-  use hybrid_mod,     only: hybrid_t
-  use hybvcoord_mod,  only: hvcoord_t
-  use kinds,          only: real_kind, iulog
-  use perf_mod,       only: t_startf, t_stopf, t_barrierf, t_adj_detailf ! _EXTERNAL
-  use parallel_mod,   only: abortmp, parallel_t, iam
-  use time_mod,       only: Timelevel_t
+  use perf_mod,       only: t_startf, t_stopf
 
   implicit none
   private
@@ -29,7 +24,57 @@ module prim_advance_caar_mod
 
   public :: distribute_flux_at_corners, edge3p1, compute_and_apply_rhs
 
-  contains
+  private :: compute_and_apply_rhs_f90
+#ifdef USE_KOKKOS_KERNELS
+  private :: compute_and_apply_rhs_cxx
+#endif
+
+  interface
+    subroutine init_control_caar_c (nets,nete,nelemd,nm1,n0,np1,qn0,dt2,ps0, &
+                                    compute_diagnostics,eta_ave_w,rsplit,hybrid_a_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_int, c_double
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: np1,nm1,n0,qn0,nets,nete,nelemd,rsplit
+      logical,               intent(in) :: compute_diagnostics
+      real (kind=c_double),  intent(in) :: dt2, ps0, eta_ave_w
+      type (c_ptr),          intent(in) :: hybrid_a_ptr
+    end subroutine init_control_caar_c
+
+    subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                 elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                 elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                 elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    end subroutine caar_pull_data_c
+
+    subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                    elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                    elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    end subroutine caar_push_results_c
+
+    subroutine caar_monolithic_c () bind(c)
+    end subroutine caar_monolithic_c
+  end interface
+
+contains
 
   !
   ! phl notes: output is stored in first argument. Advances from 2nd argument using tendencies evaluated at 3rd rgument:
@@ -65,14 +110,10 @@ module prim_advance_caar_mod
   ! ===================================
 
   use kinds,          only : real_kind
-  use bndry_mod,      only : bndry_exchangev
-  use derivative_mod, only : derivative_t, subcell_dss_fluxes
-  use dimensions_mod, only : nlev, ntrac
-  use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
-  use edgetype_mod,   only : edgedescriptor_t
+  use derivative_mod, only : derivative_t
   use element_mod,    only : element_t
   use hybvcoord_mod,  only : hvcoord_t
-  use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic
+  use hybrid_mod,     only : hybrid_t
 
   implicit none
 
@@ -85,81 +126,175 @@ module prim_advance_caar_mod
   logical               , intent(in)    :: compute_diagnostics
   real (kind=real_kind) , intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
 
-  type (EdgeDescriptor_t)                                 :: desc
-  real (kind=real_kind)   , dimension(np,np,nlev)         :: stashdp3d
-  real (kind=real_kind)   , dimension(0:np+1,0:np+1,nlev) :: corners
-  real (kind=real_kind)   , dimension(2,2,2)              :: cflux
-  real (kind=real_kind)   , dimension(nc,nc,4)            :: tempflux
-  real (kind=real_kind)   , dimension(np,np)              :: tempdp3d
-  integer                                                 :: ie, k, kptr
+#ifdef USE_KOKKOS_KERNELS
+    call compute_and_apply_rhs_cxx (np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                    deriv,nets,nete,compute_diagnostics,eta_ave_w)
+#else
+    call compute_and_apply_rhs_f90 (np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                    deriv,nets,nete,compute_diagnostics,eta_ave_w)
+#endif
+  end subroutine compute_and_apply_rhs
+
+#ifdef USE_KOKKOS_KERNELS
+  subroutine compute_and_apply_rhs_cxx(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                       deriv,nets,nete,compute_diagnostics,eta_ave_w)
+    use iso_c_binding,  only : c_ptr, c_loc
+    use kinds,          only : real_kind
+    use derivative_mod, only : derivative_t
+    use element_mod,    only : element_t
+    use hybvcoord_mod,  only : hvcoord_t
+    use hybrid_mod,     only : hybrid_t
+    use dimensions_mod, only : nelemd
+    use element_mod,    only : elem_state_v, elem_state_temp, elem_state_dp3d
+    use element_mod,    only : elem_derived_phi, elem_derived_pecnd
+    use element_mod,    only : elem_derived_omega_p, elem_derived_vn0
+    use element_mod,    only : elem_derived_eta_dot_dpdn, elem_state_Qdp
+
+    implicit none
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_a_ptr
+
+    type (hvcoord_t)      , intent(in), target :: hvcoord
+    type (element_t)      , intent(inout)      :: elem(:)
+    type (hybrid_t)       , intent(in)         :: hybrid
+    type (derivative_t)   , intent(in)         :: deriv
+    integer               , intent(in)         :: np1, nm1, n0, qn0, nets, nete
+    real (kind=real_kind) , intent(in)         :: dt2
+    logical               , intent(in)         :: compute_diagnostics
+    real (kind=real_kind) , intent(in)         :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+
+    call t_startf("caar_overhead")
+
+    hvcoord_a_ptr             = c_loc(hvcoord%hyai)
+    call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,rsplit,hvcoord_a_ptr)
+
+    elem_state_v_ptr              = c_loc(elem_state_v)
+    elem_state_t_ptr              = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
+    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                           elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar_overhead")
+
+    call t_startf('compute_and_apply_rhs')
+    call caar_monolithic_c ()
+    call t_stopf('compute_and_apply_rhs')
+
+    call t_startf("caar_overhead")
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                              elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar_overhead")
+  end subroutine compute_and_apply_rhs_cxx
+#endif
+
+  subroutine compute_and_apply_rhs_f90(np1,nm1,n0,qn0,dt2,elem,hvcoord,hybrid,&
+                                       deriv,nets,nete,compute_diagnostics,eta_ave_w)
+
+    use kinds,          only : real_kind
+    use bndry_mod,      only : bndry_exchangev
+    use derivative_mod, only : derivative_t, subcell_dss_fluxes
+    use dimensions_mod, only : nlev, ntrac
+    use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
+    use edgetype_mod,   only : edgedescriptor_t
+    use element_mod,    only : element_t, elem_state_temp, elem_state_v, elem_state_dp3d
+    use hybvcoord_mod,  only : hvcoord_t
+    use hybrid_mod,     only : hybrid_t
+    use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic_f90
+use utils_mod, only : FrobeniusNorm
+
+    implicit none
+
+    type (hvcoord_t)      , intent(in)    :: hvcoord
+    type (element_t)      , intent(inout) :: elem(:)
+    type (hybrid_t)       , intent(in)    :: hybrid
+    type (derivative_t)   , intent(in)    :: deriv
+    integer               , intent(in)    :: np1, nm1, n0, qn0, nets, nete
+    real (kind=real_kind) , intent(in)    :: dt2
+    logical               , intent(in)    :: compute_diagnostics
+    real (kind=real_kind) , intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+
+    type (EdgeDescriptor_t)                                 :: desc
+    real (kind=real_kind)   , dimension(np,np,nlev)         :: stashdp3d
+    real (kind=real_kind)   , dimension(0:np+1,0:np+1,nlev) :: corners
+    real (kind=real_kind)   , dimension(2,2,2)              :: cflux
+    real (kind=real_kind)   , dimension(nc,nc,4)            :: tempflux
+    real (kind=real_kind)   , dimension(np,np)              :: tempdp3d
+    integer                                                 :: ie, k, kptr
 
 !JMD  call t_barrierf('sync_compute_and_apply_rhs', hybrid%par%comm)
 
 !pw call t_adj_detailf(+1)
-  call t_startf('compute_and_apply_rhs')
+    call t_startf('compute_and_apply_rhs')
 
-  call caar_pre_exchange_monolithic (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
-                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
-  call t_stopf('compute_and_apply_rhs')
+    call caar_pre_exchange_monolithic_f90 (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                           deriv,nets,nete,compute_diagnostics,eta_ave_w)
+    call t_stopf('compute_and_apply_rhs')
 
-  do ie=nets,nete
-     ! =========================================================
-     !
-     ! Pack ps(np1), T, and v tendencies into comm buffer
-     !
-     ! =========================================================
-     kptr=0
-     call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
+    do ie=nets,nete
+       ! =========================================================
+       !
+       ! Pack T, v and dp3d tendencies into comm buffer
+       !
+       ! =========================================================
+       kptr=0
+       call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
 
-     kptr=kptr+nlev
-     call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
+       kptr=kptr+nlev
+       call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
 
-     kptr=kptr+2*nlev
-     call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+       kptr=kptr+2*nlev
+       call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+    end do
 
-  end do
+    ! =============================================================
+    ! Insert communications here: for shared memory, just a single
+    ! sync is required
+    ! =============================================================
 
-  ! =============================================================
-  ! Insert communications here: for shared memory, just a single
-  ! sync is required
-  ! =============================================================
+    call t_startf('caar_bexchV')
+    call bndry_exchangeV(hybrid,edge3p1)
+    call t_stopf('caar_bexchV')
 
-  call t_startf('caar_bexchV')
-  call bndry_exchangeV(hybrid,edge3p1)
-  call t_stopf('caar_bexchV')
+    do ie=nets,nete
+       ! ===========================================================
+       ! Unpack the edges for vgrad_T and v tendencies...
+       ! ===========================================================
+       kptr=0
+       call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
 
-  do ie=nets,nete
-     ! ===========================================================
-     ! Unpack the edges for vgrad_T and v tendencies...
-     ! ===========================================================
-     kptr=0
-     call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
+       kptr=kptr+nlev
+       call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
 
-     kptr=kptr+nlev
-     call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
+       kptr=kptr+2*nlev
+       call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
 
-     kptr=kptr+2*nlev
-     call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
-
-     ! ====================================================
-     ! Scale tendencies by inverse mass matrix
-     ! ====================================================
+       ! ====================================================
+       ! Scale tendencies by inverse mass matrix
+       ! ====================================================
 
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
 #endif
-     do k=1,nlev
-        elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
-        elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
-        elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
-     end do
-
-     ! vertically lagrangian: complete dp3d timestep:
-     do k=1,nlev
-        elem(ie)%state%dp3d(:,:,k,np1)=elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-     enddo
-
-  end do
+       do k=1,nlev
+          elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
+          elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
+          elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
+          elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
+       enddo
+    end do
 
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
@@ -168,7 +303,7 @@ module prim_advance_caar_mod
 #endif
 !pw  call t_adj_detailf(-1)
 
-  end subroutine compute_and_apply_rhs
+  end subroutine compute_and_apply_rhs_f90
 
   subroutine distribute_flux_at_corners(cflux, corners, getmapP)
     use kinds,          only : int_kind, real_kind
