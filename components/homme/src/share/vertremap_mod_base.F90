@@ -806,7 +806,7 @@ function compute_ppm( a , dx )    result(coefs)
     !Computed these coefficients from the edge values and cell mean in Maple. Assumes normalized coordinates: xi=(x-x0)/dx
     coefs(0,j) = 1.5 * a(j) - ( al + ar ) / 4.
     coefs(1,j) = ar - al
-    coefs(2,j) = 3. * (-2. * a(j) + ( al + ar ))
+    coefs(2,j) = -6. * a(j) + 3. * ( al + ar )
   enddo
 
   !If we're not using a mirrored boundary condition, then make the two cells bordering the top and bottom
