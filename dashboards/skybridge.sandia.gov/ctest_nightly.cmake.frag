@@ -223,8 +223,6 @@ if (BUILD_HOMMEXX_SERIAL)
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
-    "-DBUILD_HOMME_SWEQX_FLAT=OFF"
-    "-DBUILD_HOMME_PREQX_FLAT=ON"
     "-DTRILINOS_INSTALL_DIR:FILEPATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
     "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
     )
@@ -415,8 +413,6 @@ if (BUILD_HOMMEXX_OPENMP)
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
-    "-DBUILD_HOMME_SWEQX_FLAT=OFF"
-    "-DBUILD_HOMME_PREQX_FLAT=ON"
     "-DTRILINOS_INSTALL_DIR:FILEPATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstallOpenMP"
     "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
     )

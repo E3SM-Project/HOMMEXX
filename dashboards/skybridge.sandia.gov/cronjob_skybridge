@@ -1,10 +1,7 @@
 #this cronjob is run on login12 of skybridge
 00 00 * * 1-7  rm -rf /gpfs1/ikalash/hommexxCDash/Skybridge*/*
-30 00 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "bash nightly_cron_script_trilinos_checkout.sh"
-00 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_serial.sh"
-30 01 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_serial.batch
-00 03 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_openmp.sh"
-30 03 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; sbatch run_all_openmp.batch
+30 00 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "bash nightly_cron_script_trilinos_checkout.sh; source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_serial.sh; sbatch run_all_serial.batch"
+00 03 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_openmp.sh; sbatch run_all_openmp.batch"
 01 06 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_serial.sh
 01 06 * * 1-7  cd /home/ikalash/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
 05 06 * * 1-7  chmod -R 0755 /ascldap/users/ikalash/nightlyHOMMEXXCDash
