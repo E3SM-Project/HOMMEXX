@@ -513,8 +513,8 @@ contains
     !
     ! Locals
     !
-    real (kind=real_kind), pointer, dimension(:,:)      :: ps         ! surface pressure for current tiime level
     real (kind=real_kind), pointer, dimension(:,:,:)   :: phi
+    real (kind=real_kind), pointer, dimension(:,:,:)   :: dp
 
     real (kind=real_kind), dimension(np,np,nlev)   :: omega_p
     real (kind=real_kind), dimension(np,np,nlev)   :: T_v
@@ -524,12 +524,10 @@ contains
     real (kind=real_kind), dimension(np,np,2)    :: vtemp     ! generic gradient storage
     real (kind=real_kind), dimension(np,np,2,nlev):: vdp       !
     real (kind=real_kind), dimension(np,np,2     ):: v         !
-    real (kind=real_kind), dimension(np,np,2)      :: grad_ps    ! lat-lon coord version
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p
     real (kind=real_kind), dimension(np,np,2,nlev) :: grad_p_m_pmet  ! gradient(p- p_met)
     real (kind=real_kind), dimension(np,np,nlev)   :: vort       ! vorticity
     real (kind=real_kind), dimension(np,np,nlev)   :: p          ! pressure
-    real (kind=real_kind), dimension(np,np,nlev)   :: dp         ! delta pressure
     real (kind=real_kind), dimension(np,np,nlev)   :: rdp        ! inverse of delta pressure
     real (kind=real_kind), dimension(np,np,nlev)   :: T_vadv     ! temperature vertical advection
     real (kind=real_kind), dimension(np,np,nlev)   :: vgrad_p    ! v.grad(p)
@@ -540,10 +538,6 @@ contains
     real (kind=real_kind) ::  kappa_star(np,np,nlev)
     real (kind=real_kind) ::  vtens1(np,np,nlev)
     real (kind=real_kind) ::  vtens2(np,np,nlev)
-    real (kind=real_kind) ::  ttens(np,np,nlev)
-    real (kind=real_kind) ::  stashdp3d (np,np,nlev)
-    real (kind=real_kind) ::  tempdp3d  (np,np)
-    real (kind=real_kind) ::  tempflux  (nc,nc,4)
     type (EdgeDescriptor_t)                                       :: desc
 
     real (kind=real_kind) ::  cp2,cp_ratio,E,de,Qt,v1,v2
@@ -554,74 +548,27 @@ contains
     do ie=nets,nete
       !ps => elem(ie)%state%ps_v(:,:,n0)
       phi => elem(ie)%derived%phi(:,:,:)
+      dp  => elem(ie)%state%dp3d(:,:,:,n0)
+! dont thread this because of k-1 dependence:
+      p(:,:,1)=hvcoord%hyai(1)*hvcoord%ps0 + dp(:,:,1)/2
+      do k=2,nlev
+         p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
+      enddo
 
-      ! ==================================================
-      ! compute pressure (p) on half levels from ps
-      ! using the hybrid coordinates relationship, i.e.
-      ! e.g. equation (3.a.92) of the CCM-2 description,
-      ! (NCAR/TN-382+STR), June 1993, p. 24.
-      ! ==================================================
-      ! vertically eulerian only needs grad(ps)
-      if (rsplit==0) &
-           grad_ps = gradient_sphere(elem(ie)%state%ps_v(:,:,n0),deriv,elem(ie)%Dinv)
-
-
-      ! ============================
-      ! compute p and delta p
-      ! ============================
-!#if (defined COLUMN_OPENMP)
-!!$omp parallel do private(k,i,j)
-!#endif
-!     do k=1,nlev+1
-!       ph(:,:,k)   = hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0)
-!     end do
-
-#if (defined COLUMN_OPENMP_BROKEN)
-!  Note that the following does not work with OpenMP threading turned on.
-!  The line
-!              p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
-!  is sequential in that it depends upon the previous p(:,:,k-1) and therefore
-!  gives a race condition.
-!  !$omp parallel do private(k,i,j,v1,v2,vtemp)
-#endif
-      if (rsplit==0) then
-        do k=1,nlev
-          dp(:,:,k) = (hvcoord%hyai(k+1)*hvcoord%ps0 + hvcoord%hybi(k+1)*elem(ie)%state%ps_v(:,:,n0)) &
-               - (hvcoord%hyai(k)*hvcoord%ps0 + hvcoord%hybi(k)*elem(ie)%state%ps_v(:,:,n0))
-
-          p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,n0)
-
-          grad_p(:,:,:,k) = hvcoord%hybm(k)*grad_ps(:,:,:)
-        enddo
-      else
-        ! vertically lagrangian code: we advect dp3d instead of ps_v
-        ! we also need grad(p) at all levels (not just grad(ps))
-        !p(k)= hyam(k)*ps0 + hybm(k)*ps
-        !    = .5*(hyai(k+1)+hyai(k))*ps0 + .5*(hybi(k+1)+hybi(k))*ps
-        !    = .5*(ph(k+1) + ph(k) )  = ph(k) + dp(k)/2
-        !
-        ! p(k+1)-p(k) = ph(k+1)-ph(k) + (dp(k+1)-dp(k))/2
-        !             = dp(k) + (dp(k+1)-dp(k))/2 = (dp(k+1)+dp(k))/2
-        dp(:,:,1) = elem(ie)%state%dp3d(:,:,1,n0)
-        do k=2,nlev
-          dp(:,:,k) = elem(ie)%state%dp3d(:,:,k,n0)
-        enddo
-        call caar_compute_pressure_c_int(hvcoord%hyai(1), hvcoord%ps0, dp, p)
-      endif
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,v1,v2,vtemp)
 #endif
       do k=1,nlev
-        ! if rsplit=0, then we computed grad_p by hand from grad_ps
-         if (rsplit>0) then
-           grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
-         end if
-
-        rdp(:,:,k) = 1.0D0/dp(:,:,k)
+         grad_p(:,:,:,k) = gradient_sphere(p(:,:,k),deriv,elem(ie)%Dinv)
+         rdp(:,:,k) = 1.0D0/dp(:,:,k)
 
         ! ============================
         ! compute vgrad_lnps
         ! ============================
+
+!og: why is this here? there is i,j loop in the routine.
+!og: computes vdp = v*dp, derived_vn0=+eta_ave_w*vdp (why +=?),
+!divdp=div_sphere(vdp)
         call caar_compute_divdp(elem(ie), deriv, eta_ave_w, elem(ie)%state%dp3d(:, :, k, n0), &
                                 elem(ie)%state%v(:, :, :, k, n0), elem(ie)%derived%vn0(:, :, :, k), &
                                 vdp(:, :, :, k), divdp(:, :, k))
@@ -629,8 +576,6 @@ contains
           do i=1,np
             v1 = elem(ie)%state%v(i,j,1,k,n0)
             v2 = elem(ie)%state%v(i,j,2,k,n0)
-  !          vgrad_p(i,j,k) = &
-  !               hvcoord%hybm(k)*(v1*grad_ps(i,j,1) + v2*grad_ps(i,j,2))
             vgrad_p(i,j,k) = (v1*grad_p(i,j,1,k) + v2*grad_p(i,j,2,k))
           end do
         end do
@@ -783,30 +728,19 @@ contains
 
          do j=1,np
             do i=1,np
-  !             gpterm = hvcoord%hybm(k)*T_v(i,j,k)/p(i,j,k)
-  !             glnps1 = Rgas*gpterm*grad_ps(i,j,1)
-  !             glnps2 = Rgas*gpterm*grad_ps(i,j,2)
                gpterm = T_v(i,j,k)/p(i,j,k)
                glnps1 = Rgas*gpterm*grad_p(i,j,1,k)
                glnps2 = Rgas*gpterm*grad_p(i,j,2,k)
 
                v1     = elem(ie)%state%v(i,j,1,k,n0)
                v2     = elem(ie)%state%v(i,j,2,k,n0)
-               vtens1(i,j,k) = & !  - v_vadv(i,j,1,k)                           &
+
+               vtens1(i,j,k) =  - v_vadv(i,j,1,k)                           &
                     + v2*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
                     - (vtemp(i,j,1) + glnps1)
-               !
-               ! phl: add forcing term to zonal wind u
-               !
                vtens2(i,j,k) =   - v_vadv(i,j,2,k)                            &
                     - v1*(elem(ie)%fcor(i,j) + vort(i,j,k))        &
                     - (vtemp(i,j,2) + glnps2)
-               !
-               ! phl: add forcing term to meridional wind v
-               !
-!               !!
-!               !! phl: add forcing term to T
-!               !!
             end do
          end do
       end do vertloop
@@ -969,48 +903,23 @@ contains
 !     ! note that we allow np1=n0 or nm1
 !     ! apply mass matrix
 !     ! =========================================================
-!     if (dt2<0) then
-!        ! calling program just wanted DSS'd RHS, skip time advance
-!#if (defined COLUMN_OPENMP)
-!!$omp parallel do private(k,tempflux)
-!#endif
-!        do k=1,nlev
-!           elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*vtens1(:,:,k)
-!           elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*vtens2(:,:,k)
-!           elem(ie)%state%T(:,:,k,np1) = elem(ie)%spheremp(:,:)*ttens(:,:,k)
-!           if (rsplit>0) &
-!              elem(ie)%state%dp3d(:,:,k,np1) = -elem(ie)%spheremp(:,:)*&
-!              (divdp(:,:,k) + eta_dot_dpdn(:,:,k+1)-eta_dot_dpdn(:,:,k))
-!           if (0<rsplit.and.0<ntrac.and.eta_ave_w.ne.0.) then
-!              v(:,:,1) =  elem(ie)%Dinv(:,:,1,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,1,2)*vdp(:,:,2,k)
-!              v(:,:,2) =  elem(ie)%Dinv(:,:,2,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,2,2)*vdp(:,:,2,k)
-!              tempflux =  eta_ave_w*subcell_div_fluxes(v, np, nc, elem(ie)%metdet)
-!              elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) - tempflux
-!           end if
-!        enddo
-!        elem(ie)%state%ps_v(:,:,np1) = -elem(ie)%spheremp(:,:)*sdot_sum
-!      else
 
       call caar_compute_dp3d_np1_c_int(np1, nm1, dt2, elem(ie)%spheremp, &
            divdp, eta_dot_dpdn, elem(ie)%state%dp3d)
+
+
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,tempflux)
+!$omp parallel do private(k)
 #endif
+
       do k=1,nlev
         elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,1,k,nm1) + dt2*vtens1(:,:,k) )
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%v(:,:,2,k,nm1) + dt2*vtens2(:,:,k) )
-        if (0<rsplit.and.0<ntrac.and.eta_ave_w.ne.0.) then
-           v(:,:,1) =  elem(ie)%Dinv(:,:,1,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,1,2)*vdp(:,:,2,k)
-           v(:,:,2) =  elem(ie)%Dinv(:,:,2,1)*vdp(:,:,1,k) + elem(ie)%Dinv(:,:,2,2)*vdp(:,:,2,k)
-           tempflux =  eta_ave_w*subcell_div_fluxes(v, np, nc, elem(ie)%metdet)
-           elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) - tempflux
-        end if
       enddo
 
-      elem(ie)%state%ps_v(:,:,np1) = elem(ie)%spheremp(:,:)*( elem(ie)%state%ps_v(:,:,nm1) - dt2*sdot_sum )
-  !      endif
     enddo
 
   end subroutine caar_pre_exchange_monolithic_f90
+
 
 end module caar_pre_exchange_driver_mod

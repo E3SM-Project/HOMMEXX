@@ -58,6 +58,7 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_derived_phi              (:,:,:,:)     ! geopotential
   real (kind=real_kind), allocatable, target, public :: elem_derived_omega_p          (:,:,:,:)     ! vertical tendency (derived)
   real (kind=real_kind), allocatable, target, public :: elem_derived_eta_dot_dpdn     (:,:,:,:)     ! mean vertical flux from dynamics
+  real (kind=real_kind), allocatable, target, public :: elem_derived_eta_dot_dpdn_prescribed(:,:,:,:)     ! mean vertical flux from dynamics
   real (kind=real_kind), allocatable, target, public :: elem_derived_grad_lnps        (:,:,:,:)     ! gradient of log surface pressure
   real (kind=real_kind), allocatable, target, public :: elem_derived_zeta             (:,:,:,:)     ! relative vorticity
   real (kind=real_kind), allocatable, target, public :: elem_derived_div              (:,:,:,:,:)   ! divergence
@@ -228,6 +229,7 @@ module element_mod
     real (kind=real_kind), pointer :: phi(:,:,:)                          ! geopotential
     real (kind=real_kind), pointer :: omega_p(:,:,:)                      ! vertical tendency (derived)
     real (kind=real_kind), pointer :: eta_dot_dpdn(:,:,:)                 ! mean vertical flux from dynamics
+    real (kind=real_kind), pointer :: eta_dot_dpdn_prescribed(:,:,:)      ! prescribed wind test cases
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
     real (kind=real_kind), pointer :: grad_lnps(:,:,:)                    ! gradient of log surface pressure
@@ -249,6 +251,7 @@ module element_mod
     real (kind=real_kind) :: phi(np,np,nlev)                          ! geopotential
     real (kind=real_kind) :: omega_p(np,np,nlev)                      ! vertical tendency (derived)
     real (kind=real_kind) :: eta_dot_dpdn(np,np,nlevp)                ! mean vertical flux from dynamics
+    real (kind=real_kind) :: eta_dot_dpdn_prescribed(np,np,nlevp)     ! prescribed wind test cases
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
     real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure
@@ -848,6 +851,7 @@ contains
     allocate( elem_derived_phi              (np,np,nlev,nelemd)                    )
     allocate( elem_derived_omega_p          (np,np,nlev,nelemd)                    )
     allocate( elem_derived_eta_dot_dpdn     (np,np,nlevp,nelemd)                   )
+    allocate( elem_derived_eta_dot_dpdn_prescribed     (np,np,nlevp,nelemd)                   )
     allocate( elem_derived_grad_lnps        (np,np,2,nelemd)                       )
     allocate( elem_derived_zeta             (np,np,nlev,nelemd)                    )
     allocate( elem_derived_div              (np,np,nlev,timelevels,nelemd)         )
@@ -868,6 +872,7 @@ contains
       elem(ie)%derived%phi                  => elem_derived_phi              (:,:,:,ie)
       elem(ie)%derived%omega_p              => elem_derived_omega_p          (:,:,:,ie)
       elem(ie)%derived%eta_dot_dpdn         => elem_derived_eta_dot_dpdn     (:,:,:,ie)
+      elem(ie)%derived%eta_dot_dpdn_prescribed=>elem_derived_eta_dot_dpdn_prescribed(:,:,:,ie)
       elem(ie)%derived%grad_lnps            => elem_derived_grad_lnps        (:,:,:,ie)
       elem(ie)%derived%zeta                 => elem_derived_zeta             (:,:,:,ie)
       elem(ie)%derived%div                  => elem_derived_div              (:,:,:,:,ie)
