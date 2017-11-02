@@ -106,7 +106,7 @@ SET(SWEQX_FLAT_DEPS
   ${SRC_BASE}/jrio.c
   ${SRC_KERNELS_DIR}/recover_q.cpp
   ${SRC_KERNELS_DIR}/team_parallel.cpp
-  ${SRC_SHARE}/cxx/kokkos_init.cpp
+  ${SRC_SHARE}/cxx/Hommexx_Session.cpp
 )
 
 SET(SWEQX_FLAT_SRCS
