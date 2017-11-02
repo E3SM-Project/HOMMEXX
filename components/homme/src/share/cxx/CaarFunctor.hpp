@@ -475,8 +475,8 @@ private:
         const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         for (int iv=0; iv<=vector_end; ++iv) {
-          // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
-          p[iv] = p_prev + 0.5*dp_prev+ 0.5*dp[iv];
+          // p[k] = p[k-1] + 0.5*(dp[k-1] + dp[k])
+          p[iv] = p_prev + 0.5*(dp_prev + dp[iv]);
           // Update p[k-1] and dp[k-1]
           p_prev = p[iv];
           dp_prev = dp[iv];

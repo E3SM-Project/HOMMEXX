@@ -552,7 +552,7 @@ contains
 ! dont thread this because of k-1 dependence:
       p(:,:,1)=hvcoord%hyai(1)*hvcoord%ps0 + dp(:,:,1)/2
       do k=2,nlev
-         p(:,:,k)=p(:,:,k-1) + dp(:,:,k-1)/2 + dp(:,:,k)/2
+         p(:,:,k)=p(:,:,k-1) + (dp(:,:,k-1) + dp(:,:,k))/2
       enddo
 
 #if (defined COLUMN_OPENMP)
