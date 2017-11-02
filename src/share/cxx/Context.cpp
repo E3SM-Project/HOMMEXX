@@ -36,17 +36,11 @@ void Context::clear() {
 
 Context& Context::singleton() {
   static Context c;
-
-  Context::has_singleton = true;
   return c;
 }
 
 void Context::finalize_singleton() {
-  if (Context::has_singleton) {
-    singleton().clear();
-  }
+  singleton().clear();
 }
-
-bool Context::has_singleton = false;
 
 } // namespace Homme

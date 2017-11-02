@@ -26,8 +26,6 @@ class Context {
   std::unique_ptr<Elements> elements_;
   std::unique_ptr<Derivative> derivative_;
 
-  static bool has_singleton;
-
   // Clear the objects Context manages.
   void clear();
 
