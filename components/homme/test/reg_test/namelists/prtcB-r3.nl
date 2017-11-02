@@ -8,7 +8,7 @@ u_perturb         = 1
 rotate_grid       = 0
 ne                = ${HOMME_TESTS_NE}
 qsize             = 4
-ndays             = 9
+ndays             = ${HOMME_TESTS_NDAYS}
 statefreq         = 72
 restartfreq       = 43200
 restartfile       = "./R0001"
@@ -61,12 +61,11 @@ profile_outpe_num   = 100
 profile_single_file = .true.
 /
 
-
 !  timunits: 0= steps, 1=days, 2=hours
 &analysis_nl
  interp_gridtype   = 2
  output_timeunits  = 1,1
- output_frequency  = 3,3
+ output_frequency  = ${HOMME_TESTS_NDAYS},${HOMME_TESTS_NDAYS}
  output_start_time = 0,0
  output_end_time   = 30000,30000
  output_varnames1  = 'ps','zeta','u','v','T'

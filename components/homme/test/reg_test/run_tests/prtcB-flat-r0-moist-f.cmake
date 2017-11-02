@@ -1,11 +1,11 @@
 
-SET(TEST_NAME prtcB-flat-r0-moist-short-f)
+SET(TEST_NAME prtcB-flat-r0-moist-f)
 # The specifically compiled executable that this test uses
 SET(EXEC_NAME prtcB_flat)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/prtcB-r0-moist-short.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/prtcB-r0-moist.nl)
 SET(VCOORD_FILES ${HOMME_ROOT}/test/vcoord/acme-72*)
 
 # compare all of these files against baselines:
