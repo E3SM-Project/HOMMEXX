@@ -34,9 +34,4 @@ void Control::set_team_size()
   team_size = std::max(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), default_team_size);
 }
 
-Control &get_control() {
-  static Control cd;
-  return cd;
-}
-
 } // namespace Homme

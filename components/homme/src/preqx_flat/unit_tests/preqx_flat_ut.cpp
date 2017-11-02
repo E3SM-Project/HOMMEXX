@@ -7,13 +7,13 @@
 #undef NDEBUG
 
 #include "Control.hpp"
-
 #include "CaarFunctor.hpp"
 #include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 #include "Utility.hpp"
+#include "Context.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -86,7 +86,8 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements)
-      : functor(), velocity("Velocity", elements.num_elems()),
+      : functor(elements, Context::singleton().get_derivative()),
+        velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
         phis("Phis?", elements.num_elems()),
@@ -102,7 +103,7 @@ public:
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
                         qn0, ps0, dt, false, eta_ave_w, hybrid_a);
 
-    get_derivative().dvv(dvv.data());
+    Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
                                 dp3d.data(), phi.data(), pecnd.data(),
@@ -191,9 +192,9 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are
   // initialized in the singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_in("pressure input", num_elems);
@@ -285,9 +286,9 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
@@ -356,7 +357,7 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
@@ -420,9 +421,9 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
@@ -487,9 +488,9 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
@@ -588,9 +589,9 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   TestType test_functor(elements);
 
@@ -656,9 +657,9 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
-  get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init(engine);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
@@ -745,7 +746,7 @@ TEST_CASE("virtual temperature no tracers",
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
 
   TestType test_functor(elements);
@@ -802,7 +803,7 @@ TEST_CASE("virtual temperature with tracers",
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
 
   TestType test_functor(elements);
@@ -863,7 +864,7 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
-  Elements &elements = get_elements();
+  Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
