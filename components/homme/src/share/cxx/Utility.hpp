@@ -459,6 +459,17 @@ sync_to_device(Source_T source, Dest_T dest) {
   Kokkos::deep_copy(dest, dest_mirror);
 }
 
+template <typename ValueType>
+KOKKOS_INLINE_FUNCTION
+ValueType min(const ValueType &v1, const ValueType &v2) {
+  if(v1 < v2) {
+    return v1;
+  }
+  else {
+    return v2;
+  }
+}
+
 template <typename ViewType>
 typename std::enable_if<
     !std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type

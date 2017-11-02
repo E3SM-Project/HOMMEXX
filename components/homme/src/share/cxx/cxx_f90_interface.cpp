@@ -5,6 +5,7 @@
 
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
+#include "RemapFunctor.hpp"
 
 #include "profiling.hpp"
 
