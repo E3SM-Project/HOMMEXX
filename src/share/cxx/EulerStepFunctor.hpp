@@ -17,8 +17,8 @@ struct EulerStepFunctor
 
   EulerStepFunctor (const Control& data)
    : m_data    (data)
-   , m_elements(get_elements())
-   , m_deriv   (get_derivative())
+   , m_elements(Context::singleton().get_elements())
+   , m_deriv   (Context::singleton().get_derivative())
   {
     // Nothing to be done here
   }

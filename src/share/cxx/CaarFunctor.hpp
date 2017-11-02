@@ -23,13 +23,21 @@ struct CaarFunctor {
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
 
-  CaarFunctor() : m_data(), m_elements(get_elements()), m_deriv(get_derivative()) {
+  CaarFunctor(const Elements& elements, const Derivative& derivative)
+    : m_data(),
+      m_elements(elements),
+      m_deriv(derivative)
+  {
     // Nothing to be done here
   }
-
+  
   KOKKOS_INLINE_FUNCTION
-  CaarFunctor(const Control &data)
-      : m_data(data), m_elements(get_elements()), m_deriv(get_derivative()) {
+  CaarFunctor(const Control &data, const Elements& elements,
+              const Derivative& derivative)
+    : m_data(data),
+      m_elements(elements),
+      m_deriv(derivative)
+  {
     // Nothing to be done here
   }
 

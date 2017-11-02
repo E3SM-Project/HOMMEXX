@@ -5,10 +5,15 @@
 
 #include <Kokkos_Core.hpp>
 
+#include "Hommexx_Session.hpp"
+
 int main(int argc, char **argv) {
-  Kokkos::initialize();
-  Kokkos::DefaultExecutionSpace::print_configuration(std::cout, true);
+
+  Homme::initialize_hommexx_session();
+
   int result = Catch::Session().run(argc, argv);
-  Kokkos::finalize();
+
+  Homme::finalize_hommexx_session();
+
   return result;
 }

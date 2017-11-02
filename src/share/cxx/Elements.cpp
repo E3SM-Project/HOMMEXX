@@ -578,9 +578,4 @@ void Elements::BufferViews::init(int num_elems) {
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
 }
 
-Elements &get_elements() {
-  static Elements r;
-  return r;
-}
-
 } // namespace Homme

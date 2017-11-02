@@ -1,5 +1,6 @@
 #include <Types.hpp>
 #include "profiling.hpp"
+#include "Context.hpp"
 
 #include <iostream>
 
@@ -18,7 +19,10 @@ void init_kokkos(const bool print_configuration = true) {
   ExecSpace::print_configuration(std::cout, print_configuration);
 }
 
-void finalize_kokkos() { Kokkos::finalize(); }
+void finalize_kokkos() {
+  Homme::Context::finalize_singleton();
+  Kokkos::finalize();
+}
 
 } // extern "C"
 

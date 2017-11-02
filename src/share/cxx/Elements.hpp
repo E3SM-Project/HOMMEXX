@@ -125,9 +125,6 @@ private:
   int m_num_elems;
 };
 
-// TODO: DON'T USE SINGLETONS
-Elements &get_elements();
-
 } // Homme
 
 #endif // HOMME_REGION_HPP
