@@ -40,6 +40,7 @@ program prim_main
 #endif
 
   implicit none
+#ifdef USE_KOKKOS_KERNELS
   interface
      subroutine initialize_hommexx_session() bind(c)
      end subroutine initialize_hommexx_session
@@ -47,6 +48,7 @@ program prim_main
      subroutine finalize_hommexx_session() bind(c)
      end subroutine finalize_hommexx_session
   end interface
+#endif
 
   type (element_t),  pointer  :: elem(:)
   type (fvm_struct), pointer  :: fvm(:)

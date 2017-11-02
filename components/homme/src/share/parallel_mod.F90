@@ -309,6 +309,12 @@ contains
   ! and prints a message
   ! =========================================================
   subroutine abortmp(string)
+#ifdef USE_KOKKOS_KERNELS
+  interface
+     subroutine finalize_hommexx_session() bind(c)
+     end subroutine finalize_hommexx_session
+  end interface
+#endif
 #ifdef CAM
     use cam_abortutils, only : endrun ! _EXTENRAL
 #else
@@ -323,6 +329,9 @@ contains
     write(*,*) iam,' ABORTING WITH ERROR: ',string
 #ifdef _AIX
     call xl__trbk()
+#endif
+#ifdef USE_KOKKOS_KERNELS
+    call finalize_hommexx_session()
 #endif
 #ifdef _MPI
     call MPI_Abort(MPI_COMM_WORLD,info,ierr)
