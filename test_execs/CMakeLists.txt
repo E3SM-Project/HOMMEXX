@@ -211,6 +211,21 @@ INCLUDE(${HOMME_SOURCE_DIR}/test/reg_test/run_tests/test-list.cmake)
 #  replaceBaselineResults target
 SET(TEST_DIR_LIST "")
 
+#################################
+#  Testing setup
+#################################
+IF (DEFINED HOMME_TESTS_NE)
+  # The user requested a specific value for ne. We honor it, provided it is >=2
+  IF (HOMME_TESTS_NE LESS 2)
+    MESSAGE (FATAL_ERROR "Error! You asked for ne=${HOMME_TESTS_NE}, but the minimum possible value is 2.")
+  ENDIF()
+  SET(HOMME_TESTING_PROFILE "user-defined")
+  MESSAGE (STATUS "Creating tests with user-defined profile, and ne=${HOMME_TESTS_NE}")
+ELSE()
+  setTestsNE(${HOMME_TESTING_PROFILE})
+  MESSAGE (STATUS "Creating tests with profile: '${HOMME_TESTING_PROFILE}'")
+ENDIF()
+
 createTests(HOMME_TESTS)
 
 CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST)

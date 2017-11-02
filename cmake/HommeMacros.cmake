@@ -170,12 +170,25 @@ macro(createTestExec execName execType macroNP macroNC macroPLEV
 
 endmacro(createTestExec)
 
+MACRO (setTestsNE testingProfile)
+  STRING(TOLOWER "${testingProfile}" testingProfile_ci)
 
+  IF ( "${testingProfile_ci}" STREQUAL "dev" )
+    SET (HOMME_TESTS_NE 2)
+  ELSEIF ( "${testingProfile_ci}" STREQUAL "short" )
+    SET (HOMME_TESTS_NE 4)
+  ELSEIF ( "${testingProfile_ci}" STREQUAL "nightly" )
+    SET (HOMME_TESTS_NE 12)
+  ELSE()
+    MESSAGE (FATAL_ERROR "Error! Testing profile '${testingProfile}' not implemented.")
+  ENDIF()
+ENDMACRO()
 
 macro (copyDirFiles testDir)
   # Copy all of the files into the binary dir
   FOREACH (singleFile ${NAMELIST_FILES})
-    FILE(COPY ${singleFile} DESTINATION ${testDir})
+    GET_FILENAME_COMPONENT(fileName ${singleFile} NAME)
+    CONFIGURE_FILE(${singleFile} ${testDir}/${fileName})
   ENDFOREACH ()
   FOREACH (singleFile ${VCOORD_FILES})
     FILE(COPY ${singleFile} DESTINATION ${testDir}/vcoord)
