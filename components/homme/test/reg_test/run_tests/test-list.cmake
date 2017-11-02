@@ -12,10 +12,10 @@ SET(HOMME_TESTS
   prtcB-flat-r3-f.cmake
   prtcB-flat-r0-c.cmake
   prtcB-flat-r3-c.cmake
-  prtcA-r0-f-moist-short-f.cmake
-  prtcA-r3-f-moist-short-f.cmake
-  prtcB-r0-f-moist-short-f.cmake
-  prtcB-r3-f-moist-short-f.cmake
+  prtcA-r0-moist-short-f.cmake
+  prtcA-r3-moist-short-f.cmake
+  prtcB-r0-moist-short-f.cmake
+  prtcB-r3-moist-short-f.cmake
   prtcA-flat-r0-moist-short-f.cmake
   prtcA-flat-r3-moist-short-f.cmake
   prtcA-flat-r0-moist-short-c.cmake
