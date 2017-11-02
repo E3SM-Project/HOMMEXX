@@ -6,7 +6,7 @@ topology          = "cube"
 test_case         = "jw_baroclinic"
 u_perturb         = 1
 rotate_grid       = 0
-ne                = 12
+ne                = ${HOMME_TESTS_NE}
 qsize             = 4
 ndays             = 9
 statefreq         = 72
@@ -61,7 +61,7 @@ profile_outpe_num   = 100
 profile_single_file = .true.
 /
 
-!  timunits: 0= steps, 1=days, 2=hours			
+!  timunits: 0= steps, 1=days, 2=hours
 &analysis_nl
  interp_gridtype   = 2
  output_timeunits  = 1,1
