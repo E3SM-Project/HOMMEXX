@@ -12,37 +12,38 @@
 
 namespace Homme {
 
-static constexpr size_t remap_dim = 3 + QSIZE_D;
-
 struct Vert_Remap_Alg {};
 
 struct PPM_Boundary_Conditions {};
 
 // Corresponds to remap alg = 1
+template <size_t _remap_dim>
 struct PPM_Mirrored : public PPM_Boundary_Conditions {
+  static constexpr auto remap_dim = _remap_dim;
+
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range grid_indices_1() {
-    return int_range(0, NUM_PHYSICAL_LEV);
+  static constexpr Loop_Range<int> grid_indices_1() {
+    return Loop_Range<int>(0, NUM_PHYSICAL_LEV);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range grid_indices_2() {
-    return int_range(2, NUM_PHYSICAL_LEV + 1);
+  static constexpr Loop_Range<int> grid_indices_2() {
+    return Loop_Range<int>(2, NUM_PHYSICAL_LEV + 1);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_1() {
-    return int_range(0, NUM_PHYSICAL_LEV + 2);
+  static constexpr Loop_Range<int> ppm_indices_1() {
+    return Loop_Range<int>(0, NUM_PHYSICAL_LEV + 2);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_2() {
-    return int_range(0, NUM_PHYSICAL_LEV + 1);
+  static constexpr Loop_Range<int> ppm_indices_2() {
+    return Loop_Range<int>(0, NUM_PHYSICAL_LEV + 1);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_3() {
-    return int_range(1, NUM_PHYSICAL_LEV + 1);
+  static constexpr Loop_Range<int> ppm_indices_3() {
+    return Loop_Range<int>(1, NUM_PHYSICAL_LEV + 1);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -54,30 +55,32 @@ struct PPM_Mirrored : public PPM_Boundary_Conditions {
 };
 
 // Corresponds to remap alg = 2
-struct PPM_Fixed : public PPM_Boundary_Conditions {
+template <size_t _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
+  static constexpr auto remap_dim = _remap_dim;
+
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range grid_indices_1() {
-    return int_range(0, NUM_PHYSICAL_LEV);
+  static constexpr Loop_Range<int> grid_indices_1() {
+    return Loop_Range<int>(0, NUM_PHYSICAL_LEV);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range grid_indices_2() {
-    return int_range(2, NUM_PHYSICAL_LEV + 1);
+  static constexpr Loop_Range<int> grid_indices_2() {
+    return Loop_Range<int>(2, NUM_PHYSICAL_LEV + 1);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_1() {
-    return int_range(2, NUM_PHYSICAL_LEV);
+  static constexpr Loop_Range<int> ppm_indices_1() {
+    return Loop_Range<int>(2, NUM_PHYSICAL_LEV);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_2() {
-    return int_range(2, NUM_PHYSICAL_LEV - 1);
+  static constexpr Loop_Range<int> ppm_indices_2() {
+    return Loop_Range<int>(2, NUM_PHYSICAL_LEV - 1);
   }
 
   KOKKOS_INLINE_FUNCTION
-  static constexpr int_range ppm_indices_3() {
-    return int_range(3, NUM_PHYSICAL_LEV - 1);
+  static constexpr Loop_Range<int> ppm_indices_3() {
+    return Loop_Range<int>(3, NUM_PHYSICAL_LEV - 1);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -106,6 +109,7 @@ struct PPM_Fixed : public PPM_Boundary_Conditions {
 template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   static_assert(std::is_base_of<PPM_Boundary_Conditions, boundaries>::value,
                 "PPM_Vert_Remap requires a valid PPM boundary condition");
+  static constexpr auto remap_dim = boundaries::remap_dim;
 
   PPM_Vert_Remap(const Control &data) {
     for (int i = 0; i < remap_dim; ++i) {
@@ -173,38 +177,46 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   KOKKOS_INLINE_FUNCTION
   static void
   compute_ppm(KernelVariables &kv,
-              ExecViewUnmanaged<const Real *[NUM_PHYSICAL_LEV + 4]> cell_means,
-              ExecViewUnmanaged<const Real *[NUM_PHYSICAL_LEV + 2][10]> dx,
-              ExecViewUnmanaged<Real *[NUM_PHYSICAL_LEV + 2]> dma,
-              ExecViewUnmanaged<Real *[NUM_PHYSICAL_LEV + 1]> ai,
-              ExecViewUnmanaged<Real *[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {
+              ExecViewUnmanaged<const Real * [NUM_PHYSICAL_LEV + 4]> cell_means,
+              ExecViewUnmanaged<const Real * [NUM_PHYSICAL_LEV + 2][10]> dx,
+              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 2]> dma,
+              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 1]> ai,
+              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV][3]> parabola_coeffs) {
     for (int j : boundaries::ppm_indices_1()) {
       if ((cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) *
-          (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)) >
+              (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)) >
           0.0) {
-        Real da =
-          dx(kv.ie, j, 0) * (dx(kv.ie, j, 1) * (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
-                             dx(kv.ie, j, 2) * (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)));
-        dma(kv.ie, j) =
-          min(min(fabs(da), 2.0 * fabs(cell_means(kv.ie, j + 1) - cell_means(kv.ie, j))),
-              2.0 * fabs(cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1))) *
-            copysign(1.0, da);
+        Real da = dx(kv.ie, j, 0) *
+                  (dx(kv.ie, j, 1) *
+                       (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
+                   dx(kv.ie, j, 2) *
+                       (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)));
+        dma(kv.ie, j) = min(min(fabs(da), 2.0 * fabs(cell_means(kv.ie, j + 1) -
+                                                     cell_means(kv.ie, j))),
+                            2.0 * fabs(cell_means(kv.ie, j + 2) -
+                                       cell_means(kv.ie, j + 1))) *
+                        copysign(1.0, da);
       } else {
         dma(kv.ie, j) = 0.0;
       }
     }
 
     for (int j : boundaries::ppm_indices_2()) {
-      ai(kv.ie, j) = cell_means(kv.ie, j + 1) +
-        dx(kv.ie, j, 3) * (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
-        dx(kv.ie, j, 4) * (dx(kv.ie, j, 5) * (dx(kv.ie, j, 6) - dx(kv.ie, j, 7)) *
-                           (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) -
-                           dx(kv.ie, j, 8) * dma(kv.ie, j + 1) + dx(kv.ie, j, 9) * dma(kv.ie, j));
+      ai(kv.ie, j) =
+          cell_means(kv.ie, j + 1) +
+          dx(kv.ie, j, 3) *
+              (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
+          dx(kv.ie, j, 4) *
+              (dx(kv.ie, j, 5) * (dx(kv.ie, j, 6) - dx(kv.ie, j, 7)) *
+                   (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) -
+               dx(kv.ie, j, 8) * dma(kv.ie, j + 1) +
+               dx(kv.ie, j, 9) * dma(kv.ie, j));
     }
 
     for (int j : boundaries::ppm_indices_3()) {
       Real al = ai(kv.ie, j - 1), ar = ai(kv.ie, j);
-      if ((ar - cell_means(kv.ie, j + 1)) * (cell_means(kv.ie, j + 1) - al) <= 0.) {
+      if ((ar - cell_means(kv.ie, j + 1)) * (cell_means(kv.ie, j + 1) - al) <=
+          0.) {
         al = cell_means(kv.ie, j + 1);
         ar = cell_means(kv.ie, j + 1);
       }
@@ -220,9 +232,11 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       // Computed these coefficients from the edge values and
       // cell mean in Maple. Assumes normalized coordinates:
       // xi=(x-x0)/dx
-      parabola_coeffs(kv.ie, j - 1, 0) = 1.5 * cell_means(kv.ie, j + 1) - (al + ar) / 4.0;
+      parabola_coeffs(kv.ie, j - 1, 0) =
+          1.5 * cell_means(kv.ie, j + 1) - (al + ar) / 4.0;
       parabola_coeffs(kv.ie, j - 1, 1) = ar - al;
-      parabola_coeffs(kv.ie, j - 1, 2) = -6.0 * cell_means(kv.ie, j + 1) + 3.0 * (al + ar);
+      parabola_coeffs(kv.ie, j - 1, 2) =
+          -6.0 * cell_means(kv.ie, j + 1) + 3.0 * (al + ar);
     }
 
     boundaries::apply_ppm_boundary(kv, cell_means, parabola_coeffs);
@@ -350,32 +364,37 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   }
 
 private:
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 4]>, remap_dim> ao;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 4]>, remap_dim>
-  dpo;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 4]>, remap_dim>
-  dpn;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 2]>, remap_dim>
-  pio;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 1]>, remap_dim>
-  pin;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 1]>, remap_dim>
-  mass_o;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV]>, remap_dim> z1;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV]>, remap_dim> z2;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 2][10]>, remap_dim>
-  ppmdx;
-  Kokkos::Array<ExecViewUnmanaged<int * [NUM_PHYSICAL_LEV]>, remap_dim> kid;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
+                remap_dim> ao;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
+                remap_dim> dpo;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
+                remap_dim> dpn;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>,
+                remap_dim> pio;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
+                remap_dim> pin;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
+                remap_dim> mass_o;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>, remap_dim>
+  z1;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>, remap_dim>
+  z2;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]>,
+                remap_dim> ppmdx;
+  Kokkos::Array<ExecViewUnmanaged<int * [NP][NP][NUM_PHYSICAL_LEV]>, remap_dim>
+  kid;
 
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 2]>, remap_dim>
-  dma;
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 1]>, remap_dim> ai;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>,
+                remap_dim> dma;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
+                remap_dim> ai;
 
-  Kokkos::Array<ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV][3]>, remap_dim>
-  parabola_coeffs;
+  Kokkos::Array<ExecViewUnmanaged<Real * [NP][NP][NUM_PHYSICAL_LEV][3]>,
+                remap_dim> parabola_coeffs;
 };
 
-template <typename remap_type> struct RemapFunctor {
+template <typename remap_type> struct Remap_Functor {
   static_assert(std::is_base_of<Vert_Remap_Alg, remap_type>::value,
                 "RemapFunctor not given a remap algorithm to use");
 
@@ -384,7 +403,7 @@ template <typename remap_type> struct RemapFunctor {
 
   remap_type remap;
 
-  RemapFunctor(const Control &data, const Elements &elements)
+  Remap_Functor(const Control &data, const Elements &elements)
       : m_data(data), m_elements(elements), remap(data) {}
 
   KOKKOS_INLINE_FUNCTION
@@ -393,8 +412,8 @@ template <typename remap_type> struct RemapFunctor {
     KernelVariables kv(team);
 
     int num_remap = 0;
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
-    remap_vals;
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                  remap_type::remap_dim> remap_vals;
     if (m_data.rsplit == 0) {
       // No remapping here, just dpstar check
     } else {
@@ -408,9 +427,10 @@ template <typename remap_type> struct RemapFunctor {
 
     if (m_data.qsize > 0) {
       // remap_Q_ppm Qdp
-      for(int i = 0; i < m_data.qsize; i++, num_remap++) {
+      for (int i = 0; i < m_data.qsize; i++, num_remap++) {
         // Need to verify this is the right tracer timelevel
-        remap_vals[num_remap] = Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, i);
+        remap_vals[num_remap] =
+            Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, i);
       }
     }
     if (num_remap > 0) {
@@ -427,6 +447,7 @@ template <typename remap_type> struct RemapFunctor {
     return KernelVariables::shmem_size(team_size);
   }
 };
+
 }
 
 #endif // HOMMEXX_REMAP_FUNCTOR_HPP
