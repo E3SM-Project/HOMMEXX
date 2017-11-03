@@ -228,6 +228,7 @@ if (BUILD_HOMMEXX_CUDA)
   set (CONFIGURE_OPTIONS
     "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
+    "-DUSE_TRILINOS=FALSE"
     "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline_P100/build" 
     "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
