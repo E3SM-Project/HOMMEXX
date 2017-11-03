@@ -575,15 +575,16 @@ Kokkos::TeamPolicy<ExecSpace, Tag> get_default_team_policy(const int nelems) {
 // Used for iterating over a range of integers
 // With this, you can write
 // for(int i : int_range(start, end))
-class int_range {
+template <typename ordered_iterable>
+class Loop_Range {
 
 public:
   class iterator {
-    friend class int_range;
+    friend class Loop_Range;
 
   public:
     KOKKOS_INLINE_FUNCTION
-    long int operator*() const { return i_; }
+    ordered_iterable operator*() const { return i_; }
     const iterator &operator++() {
       ++i_;
       return *this;
@@ -603,10 +604,10 @@ public:
 
   protected:
     KOKKOS_INLINE_FUNCTION
-    constexpr iterator(long int start) : i_(start) {}
+    constexpr iterator(ordered_iterable start) : i_(start) {}
 
   private:
-    unsigned long i_;
+    ordered_iterable i_;
   };
 
   KOKKOS_INLINE_FUNCTION
@@ -616,7 +617,8 @@ public:
   constexpr iterator end() const { return end_; }
 
   KOKKOS_INLINE_FUNCTION
-  constexpr int_range(long int begin, long int end) : begin_(begin), end_(end) {}
+  constexpr Loop_Range(ordered_iterable begin, ordered_iterable end)
+      : begin_(begin), end_(end) {}
 
 private:
   iterator begin_;
