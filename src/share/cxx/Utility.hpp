@@ -571,6 +571,58 @@ Kokkos::TeamPolicy<ExecSpace, Tag> get_default_team_policy(const int nelems) {
                                             vectors_per_thread);
 }
 
+// Source: https://stackoverflow.com/a/7185723
+// Used for iterating over a range of integers
+// With this, you can write
+// for(int i : int_range(start, end))
+class int_range {
+
+public:
+  class iterator {
+    friend class int_range;
+
+  public:
+    KOKKOS_INLINE_FUNCTION
+    long int operator*() const { return i_; }
+    const iterator &operator++() {
+      ++i_;
+      return *this;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    iterator operator++(int) {
+      iterator copy(*this);
+      ++i_;
+      return copy;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    bool operator==(const iterator &other) const { return i_ == other.i_; }
+    KOKKOS_INLINE_FUNCTION
+    bool operator!=(const iterator &other) const { return i_ != other.i_; }
+
+  protected:
+    KOKKOS_INLINE_FUNCTION
+    constexpr iterator(long int start) : i_(start) {}
+
+  private:
+    unsigned long i_;
+  };
+
+  KOKKOS_INLINE_FUNCTION
+  constexpr iterator begin() const { return begin_; }
+
+  KOKKOS_INLINE_FUNCTION
+  constexpr iterator end() const { return end_; }
+
+  KOKKOS_INLINE_FUNCTION
+  constexpr int_range(long int begin, long int end) : begin_(begin), end_(end) {}
+
+private:
+  iterator begin_;
+  iterator end_;
+};
+
 } // namespace Homme
 
 #endif // HOMMEXX_UTILITY_HPP
