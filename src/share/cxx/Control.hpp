@@ -35,10 +35,11 @@ struct Control {
 
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
-             const int nm1,  const int n0,   const int np1,
-             const int qn0,  const Real dt2, const Real ps0,
-             const bool compute_diagonstics, const Real eta_ave_w,
-             CRCPtr hybrid_a_ptr);
+             const int qn0,  const Real ps0, CRCPtr hybrid_a_ptr);
+
+  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
+                          const Real dt, const Real eta_ave_w,
+                          const bool compute_diagonstics);
 
   // This method sets team_size if it wasn't already set via environment variable in the constructor
   void set_team_size ();

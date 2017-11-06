@@ -125,6 +125,18 @@ private:
   max_threads_per_team () { return ArgExecSpace::thread_pool_size(); }
 };
 
+// A templated typedef for MD range policy (used in RK stages)
+template<typename ExecutionSpace, int Rank>
+using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
+                          < ExecutionSpace,
+                            Kokkos::Experimental::Rank
+                              < Rank,
+                                Kokkos::Experimental::Iterate::Right,
+                                Kokkos::Experimental::Iterate::Right
+                              >,
+                            Kokkos::IndexType<int>
+                          >;
+
 } // namespace Homme
 
 #endif // HOMMEXX_EXEC_SPACE_DEFS_HPP

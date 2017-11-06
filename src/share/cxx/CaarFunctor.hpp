@@ -43,6 +43,12 @@ struct CaarFunctor {
     // Nothing to be done here
   }
 
+  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
+                          const Real dt, const Real eta_ave_w,
+                          const bool compute_diagonstics) {
+    m_data.set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagonstics);
+  }
+
   // Depends on PHI (after preq_hydrostatic), PECND
   // Modifies Ephi_grad
   // Computes \nabla (E + phi) + \nabla (P) * Rgas * T_v / P
@@ -298,7 +304,7 @@ struct CaarFunctor {
   // Might depend on QDP, DP3D_current
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_div_vdp(KernelVariables &kv) const {
-    if (m_data.qn0 == -1) {
+    if (m_data.qn0 < 0) {
       compute_temperature_no_tracers_helper(kv);
     } else {
       compute_temperature_tracers_helper(kv);
