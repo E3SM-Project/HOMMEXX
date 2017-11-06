@@ -1,7 +1,8 @@
 SET(CONFIG_DIR       ${CMAKE_BINARY_DIR}/src)
 SET(SRC_SHARE_DIR    ${HOMME_SOURCE_DIR}/src/share)
+SET(SRC_PREQX_DIR    ${HOMME_SOURCE_DIR}/src/preqx_flat)
 SET(SHARE_UT_DIR     ${CMAKE_CURRENT_SOURCE_DIR})
-SET(UTILS_TIMING_DIR ${HOMME_SOURCE_DIR}/utils/timing)
+SET(TIMING_DIR       ${HOMME_SOURCE_DIR}/utils/timing)
 
 ### Sphere operators unit test ###
 
