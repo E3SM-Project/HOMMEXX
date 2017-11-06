@@ -200,6 +200,7 @@ void BoundaryExchange::registration_completed()
   local_buffers_size += m_corner_size * m_connectivity.get_num_local_corner_connections();
   local_buffers_size += m_edge_size   * m_connectivity.get_num_local_edge_connections();
 
+  // Buffers are better allocated by MPI, which *may* optimize their location in memory
   Real* buffer;
   HOMMEXX_MPI_CHECK_ERROR(MPI_Alloc_mem (mpi_buffers_size*sizeof(Real),MPI_INFO_NULL,&buffer));
   m_send_buffer.reset(buffer);
@@ -312,7 +313,7 @@ void BoundaryExchange::registration_completed()
   // Create persistend send/recv requests, to reuse over and over
   build_requests ();
 
-  // Prohibit further registration of fields
+  // Prohibit further registration of fields, and allow exchange
   m_registration_started   = false;
   m_registration_completed = true;
 }
@@ -339,6 +340,8 @@ void BoundaryExchange::build_requests()
 
   const int num_shared_corner_connections = m_connectivity.get_num_shared_corner_connections();
   const int num_shared_edge_connections   = m_connectivity.get_num_shared_edge_connections();
+
+  // TODO: we could make these for's into parallel_for's if we want. But it is just a setup cost.
 
   // Setup corners requests first...
   for (int iconn=0; iconn<num_shared_corner_connections; ++iconn)
@@ -390,8 +393,13 @@ void BoundaryExchange::pack_and_send()
   int num_connections = m_connectivity.get_num_connections();
   HostViewUnmanaged<const ConnectionInfo*> connections(m_connectivity.get_connections().data(),num_connections);
 
-  // TODO: parallel for's
-  for (int iconn=0; iconn<num_connections; ++iconn) {
+  // TODO: perhaps a RangeFor is enough?
+  Kokkos::TeamPolicy<HostExecSpace>  policy(num_connections, Kokkos::AUTO());
+
+  Kokkos::parallel_for(policy, [&](HostTeamMember team){
+
+    const int iconn = team.league_rank();
+
     const ConnectionInfo& info = connections[iconn];
     const LidPosType& field_lpt  = info.local;
     // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
@@ -402,34 +410,38 @@ void BoundaryExchange::pack_and_send()
     if (info.kind==CORNER_KIND) {
       const GaussPoint& pt = CORNER_PTS[field_lpt.pos];
       // First, pack 2d fields
-      for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                           [&](const int ifield){
         m_send_2d_corners_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)[0] = m_2d_fields(field_lpt.lid,ifield)(pt.ip,pt.jp);
-      }
+      });
       // Then, pack 3d fields
-      for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields),
+                           [&](const int ifield){
         for (int ilev=0; ilev<NUM_LEV; ++ilev) {
           m_send_3d_corners_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(ilev) = m_3d_fields(field_lpt.lid,ifield)(pt.ip,pt.jp,ilev);
         }
-      }
+      });
     } else {
       // Note: if the remote edge is in the reverse order, we read the field_lpt points backwards
       const auto& pts  = EDGE_PTS[info.direction][field_lpt.pos];
       // First, pack 2d fields
-      for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                           [&](const int ifield){
         for (int k=0; k<NP; ++k) {
           m_send_2d_edges_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k) = m_2d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp);
         }
-      }
+      });
       // Then, pack 3d fields
-      for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields),
+                           [&](const int ifield){
         for (int k=0; k<NP; ++k) {
           for (int ilev=0; ilev<NUM_LEV; ++ilev) {
             m_send_3d_edges_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k,ilev) = m_3d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
           }
         }
-      }
+      });
     }
-  }
+  });
 
   // Now we can fire off the sends
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_send_requests.data()));
@@ -440,9 +452,13 @@ void BoundaryExchange::recv_and_unpack()
   // Wait for all data to arrive
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),MPI_STATUSES_IGNORE));
 
-  for (int ie=0; ie<m_num_elements; ++ie)
-  {
-    for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
+  // TODO: parallel for's
+  Kokkos::TeamPolicy<HostExecSpace>  policy(m_num_elements, Kokkos::AUTO());
+
+  Kokkos::parallel_for(policy, [&](HostTeamMember team){
+    const int ie = team.league_rank();
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                         [&](const int ifield){
       for (int k=0; k<NP; ++k) {
         m_2d_fields(ie,ifield)(EDGE_PTS_FWD[SOUTH][k].ip,EDGE_PTS_FWD[SOUTH][k].jp) += m_recv_2d_edges_buffers(ie,ifield,SOUTH)[k];
         m_2d_fields(ie,ifield)(EDGE_PTS_FWD[NORTH][k].ip,EDGE_PTS_FWD[NORTH][k].jp) += m_recv_2d_edges_buffers(ie,ifield,NORTH)[k];
@@ -452,8 +468,9 @@ void BoundaryExchange::recv_and_unpack()
       for (int icorner=0; icorner<NUM_CORNERS; ++icorner) {
         m_2d_fields(ie,ifield)(CORNER_PTS[icorner].ip,CORNER_PTS[icorner].jp) += m_recv_2d_corners_buffers(ie,ifield,icorner)[0];
       }
-    }
-    for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
+    });
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                         [&](const int ifield){
       for (int k=0; k<NP; ++k) {
         for (int ilev=0; ilev<NUM_LEV; ++ilev) {
           m_3d_fields(ie,ifield)(EDGE_PTS_FWD[SOUTH][k].ip,EDGE_PTS_FWD[SOUTH][k].jp,ilev) += m_recv_3d_edges_buffers(ie,ifield,SOUTH)(k,ilev);
@@ -467,8 +484,8 @@ void BoundaryExchange::recv_and_unpack()
           m_3d_fields(ie,ifield)(CORNER_PTS[icorner].ip,CORNER_PTS[icorner].jp,ilev) += m_recv_3d_corners_buffers(ie,ifield,icorner)(ilev);
         }
       }
-    }
-  }
+    });
+  });
 }
 
 } // namespace Homme
