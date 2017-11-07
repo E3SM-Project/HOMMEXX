@@ -7,6 +7,8 @@
 #include <Kokkos_Array.hpp>
 
 #include "Types.hpp"
+#include "Control.hpp"
+#include "Elements.hpp"
 
 #include "profiling.hpp"
 
@@ -47,10 +49,8 @@ template <int _remap_dim> struct PPM_Mirrored : public PPM_Boundary_Conditions {
 
   KOKKOS_INLINE_FUNCTION
   static void apply_ppm_boundary(
-      KernelVariables &kv,
-      Kokkos::Array<ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]>, remap_dim>
-          cell_means, Kokkos::Array<ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]>,
-                                    remap_dim> &parabola_coeffs) {}
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {}
 };
 
 // Corresponds to remap alg = 2
@@ -84,8 +84,8 @@ template <int _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
 
   KOKKOS_INLINE_FUNCTION
   static void apply_ppm_boundary(
-      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> cell_means,
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> parabola_coeffs) {
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {
     parabola_coeffs(0, 0) = cell_means(2);
     parabola_coeffs(1, 0) = cell_means(3);
 
@@ -143,10 +143,10 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  static void
-  compute_grids(KernelVariables &kv,
-                const ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> dx,
-                const ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> grids) {
+  void compute_grids(
+      KernelVariables &kv,
+      const ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> dx,
+      const ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> grids) const {
     for (int j : boundaries::grid_indices_1()) {
       grids(j, 0) = dx(j + 1) / (dx(j) + dx(j + 1) + dx(j + 2));
 
@@ -175,13 +175,13 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  static void
-  compute_ppm(KernelVariables &kv,
-              ExecViewUnmanaged<const Real * [NUM_PHYSICAL_LEV + 4]> cell_means,
-              ExecViewUnmanaged<const Real * [NUM_PHYSICAL_LEV + 2][10]> dx,
-              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 2]> dma,
-              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV + 1]> ai,
-              ExecViewUnmanaged<Real * [NUM_PHYSICAL_LEV][3]> parabola_coeffs) {
+  void compute_ppm(
+      KernelVariables &kv,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 2][10]> dx,
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2]> dma,
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 1]> ai,
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) const {
     for (int j : boundaries::ppm_indices_1()) {
       if ((cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) *
               (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)) >
@@ -240,15 +240,16 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
           -6.0 * cell_means(kv.ie, j + 1) + 3.0 * (al + ar);
     }
 
-    boundaries::apply_ppm_boundary(kv, cell_means, parabola_coeffs);
+    boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
   }
 
   KOKKOS_INLINE_FUNCTION
-  void remap(KernelVariables &kv, const int &num_remap,
-             ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-             ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-             Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                           remap_dim> remap_vals) {
+  void
+  remap(KernelVariables &kv, const int &num_remap,
+        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
+        Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
+            remap_vals) const {
     constexpr int gs = 2; // ?
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
                          [&](const int &loop_idx) {
@@ -322,18 +323,21 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
             dpo[var](kv.ie, igp, jgp, kk + 1);
       } // k loop
 
-      compute_grids(kv, Homme::subview(dpo[var], kv.ie, igp, jgp),
-                    Homme::subview(ppmdx[var], kv.ie, igp, jgp));
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
+          Homme::subview(dpo[var], kv.ie, igp, jgp);
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
+          Homme::subview(ppmdx[var], kv.ie, igp, jgp);
+      compute_grids(kv, point_dpo, point_ppmdx);
 
       for (int q = 0; q < num_remap; q++) {
         mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
         for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
           const int ilevel = k / VECTOR_SIZE;
           const int ivector = k % VECTOR_SIZE;
-          ao[var](kv.ie, k + 2) =
+          ao[var](kv.ie, igp, jgp, k + 2) =
               remap_vals[var](kv.ie, q, igp, jgp, ilevel)[ivector];
           mass_o[var](kv.ie, igp, jgp, k + 1) =
-              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, k + 2);
+              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
           ao[var](kv.ie, igp, jgp, k + 2) /= dpo[var](kv.ie, igp, jgp, k + 2);
         } // end k loop
 
@@ -344,17 +348,17 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         } // k loop
 
         compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
-                    Homme::subview(ppmdx[var], igp, jgp),
-                    Homme::subview(dma[var], igp, jgp),
-                    Homme::subview(ai[var], igp, jgp),
-                    Homme::subview(parabola_coeffs[var], igp, jgp));
+                    Homme::subview(ppmdx[var], kv.ie, igp, jgp),
+                    Homme::subview(dma[var], kv.ie, igp, jgp),
+                    Homme::subview(ai[var], kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
 
         Real massn1 = 0.0;
 
         // Maybe just recompute massn1 and double our work to get significantly
         // more threads?
         for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int kk = kid[var](kv.ie, k);
+          const int kk = kid[var](kv.ie, igp, jgp, k);
           const Real a0 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
                      a1 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
                      a2 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2);
@@ -374,7 +378,6 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
     });   // End team thread range
   }
 
-private:
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
                 remap_dim> ao;
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
@@ -412,26 +415,58 @@ template <typename remap_type> struct Remap_Functor {
   Control m_data;
   const Elements m_elements;
 
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness;
+
   remap_type remap;
 
   Remap_Functor(const Control &data, const Elements &elements)
-      : m_data(data), m_elements(elements), remap(data) {}
+      : m_data(data), m_elements(elements),
+        tgt_layer_thickness("Target layer thickness", data.num_elems),
+        remap(data) {}
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TeamMember &team) {
+  void operator()(const TeamMember &team) const {
     start_timer("Remap functor");
     KernelVariables kv(team);
 
     int num_remap = 0;
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;
+
+    // The states which need to be remapped
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, 3> state_remap{
+      { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+        Homme::subview(m_elements.m_t, kv.ie, m_data.np1) }
+    };
     if (m_data.rsplit == 0) {
       // No remapping here, just dpstar check
     } else {
-      remap_vals[0] = Homme::subview(m_elements.m_u, kv.ie, m_data.np1);
-      remap_vals[1] = Homme::subview(m_elements.m_v, kv.ie, m_data.np1);
-      remap_vals[2] = Homme::subview(m_elements.m_t, kv.ie, m_data.np1);
-      num_remap = 3;
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP * NUM_LEV),
+                           [&](const int &loop_idx) {
+        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
+        const int jgp = (loop_idx / NUM_LEV) % NP;
+        const int ilev = loop_idx % NUM_LEV;
+        tgt_layer_thickness(kv.ie, igp, jgp, ilev) =
+            (m_data.hybrid_a(ilev + 1) -
+             m_data.hybrid_a(ilev) * m_data.ps0)
+          // + (m_data.hybrid_b(ilev + 1) - m_data.hybrid_b(ilev))
+          // * ps_v
+          ;
+      });
+      Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(kv.team, state_remap.size()),
+          [&](const int &var) { remap_vals[var] = state_remap[var]; });
+      Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP * NUM_LEV),
+          [&](const int &loop_idx) {
+            const int var = ((loop_idx / NUM_LEV) / NP) / NP;
+            const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
+            const int jgp = (loop_idx / NUM_LEV) % NP;
+            const int ilev = loop_idx % NUM_LEV;
+            remap_vals[var](igp, jgp, ilev) *=
+                m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev);
+          });
     }
 
     if (m_data.qsize > 0) {
@@ -443,9 +478,10 @@ template <typename remap_type> struct Remap_Functor {
       }
     }
     if (num_remap > 0) {
-      remap_type::remap(kv, num_remap,
-                        Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
-                        remap_vals);
+
+      remap.remap(kv, num_remap,
+                  Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+                  Homme::subview(tgt_layer_thickness, kv.ie), remap_vals);
     }
 
     stop_timer("Remap functor");
@@ -456,7 +492,6 @@ template <typename remap_type> struct Remap_Functor {
     return KernelVariables::shmem_size(team_size);
   }
 };
-
 }
 
 #endif // HOMMEXX_REMAP_FUNCTOR_HPP
