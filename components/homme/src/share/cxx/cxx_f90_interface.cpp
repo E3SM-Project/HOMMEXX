@@ -19,7 +19,7 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
                           const int& nm1, const int& n0, const int& np1,
                           const int& qn0, const Real& dt2, const Real& ps0,
                           const bool& compute_diagonstics, const Real& eta_ave_w,
-                          CRCPtr& hybrid_a_ptr)
+                          CRCPtr& hybrid_a_ptr, CRCPtr &hybrid_b_ptr)
 {
   Control& control = Context::singleton().get_control ();
 
@@ -30,7 +30,7 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
   int nm1_c = nm1-1;
   int qn0_c = qn0==-1 ? qn0 : qn0-1;  // the -1 index has a special meaning, and -2 is not even contemplated
   int np1_c = np1-1;
-  control.init(nets_c, nete_c, num_elems, nm1_c, n0_c, np1_c, qn0_c, dt2, ps0, compute_diagonstics, eta_ave_w, hybrid_a_ptr);
+  control.init(nets_c, nete_c, num_elems, nm1_c, n0_c, np1_c, qn0_c, dt2, ps0, compute_diagonstics, eta_ave_w, hybrid_a_ptr, hybrid_b_ptr);
 }
 
 void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
