@@ -57,20 +57,20 @@ using TeamMember     = Kokkos::TeamPolicy<ExecSpace>::member_type;
 using HostTeamMember = Kokkos::TeamPolicy<HostExecSpace>::member_type;
 
 // Short name for views
-template <typename DataType, typename MemorySpace, typename MemoryManagement>
-using ViewType = Kokkos::View<DataType, Kokkos::LayoutRight, MemorySpace, MemoryManagement>;
+template <typename DataType, typename... Properties>
+using ViewType = Kokkos::View<DataType, Kokkos::LayoutRight, Properties...>;
 
 // Managed/Unmanaged view
-template <typename DataType, typename MemorySpace>
-using ViewManaged = ViewType<DataType, MemorySpace, MemoryManaged>;
-template <typename DataType, typename MemorySpace>
-using ViewUnmanaged = ViewType<DataType, MemorySpace, MemoryUnmanaged>;
+template <typename DataType, typename... Properties>
+using ViewManaged = ViewType<DataType, Properties..., MemoryManaged>;
+template <typename DataType, typename... Properties>
+using ViewUnmanaged = ViewType<DataType, Properties..., MemoryUnmanaged>;
 
 // Host/Device views
-template <typename DataType, typename MemoryManagement>
-using HostView = ViewType<DataType, HostMemSpace, MemoryManagement>;
-template <typename DataType, typename MemoryManagement>
-using ExecView = ViewType<DataType, ExecMemSpace, MemoryManagement>;
+template <typename DataType, typename... Properties>
+using HostView = ViewType<DataType, HostMemSpace, Properties...>;
+template <typename DataType, typename... Properties>
+using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
 
 // Further specializations for execution space and managed/unmanaged memory
 template <typename DataType>

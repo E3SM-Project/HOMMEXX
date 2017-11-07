@@ -36,19 +36,19 @@ public:
   bool is_registration_completed () const { return m_registration_completed; }
 
   // Note: num_dims is the # of dimensions to exchange, while idim is the first to exchange
-  template<int DIM, typename MemoryManagement>
-  void register_field (HostView<Real*[DIM][NP][NP],MemoryManagement> field, int num_dims, int idim);
-  template<int DIM, typename MemoryManagement>
-  void register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],MemoryManagement> field, int num_dims, int idim);
+  template<int DIM, typename... Properties>
+  void register_field (HostView<Real*[DIM][NP][NP],Properties...> field, int num_dims, int idim);
+  template<int DIM, typename... Properties>
+  void register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],Properties...> field, int num_dims, int idim);
 
   // Note: the outer dimension MUST be sliced, while the inner dimension can be fully exchanged
-  template<int OUTER_DIM, int DIM, typename MemoryManagement>
-  void register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV],MemoryManagement> field, int idim_out, int num_dims, int idim);
+  template<int OUTER_DIM, int DIM, typename... Properties>
+  void register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV],Properties...> field, int idim_out, int num_dims, int idim);
 
-  template<typename MemoryManagement>
-  void register_field (HostView<Real*[NP][NP],MemoryManagement> field);
-  template<typename MemoryManagement>
-  void register_field (HostView<Scalar*[NP][NP][NUM_LEV],MemoryManagement> field);
+  template<typename... Properties>
+  void register_field (HostView<Real*[NP][NP],Properties...> field);
+  template<typename... Properties>
+  void register_field (HostView<Scalar*[NP][NP][NUM_LEV],Properties...> field);
 
   // Initialize the window, the buffers, and the MPI data types
   void registration_completed();
@@ -199,8 +199,8 @@ std::map<std::string,BoundaryExchange>& get_all_boundary_exchange();
 
 // ============================ REGISTER METHODS ========================= //
 
-template<int DIM, typename MemoryManagement>
-void BoundaryExchange::register_field (HostView<Real*[DIM][NP][NP],MemoryManagement> field, int num_dims, int start_dim)
+template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (HostView<Real*[DIM][NP][NP],Properties...> field, int num_dims, int start_dim)
 {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
@@ -217,8 +217,8 @@ void BoundaryExchange::register_field (HostView<Real*[DIM][NP][NP],MemoryManagem
   m_num_2d_fields += num_dims;
 }
 
-template<int DIM, typename MemoryManagement>
-void BoundaryExchange::register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],MemoryManagement> field, int num_dims, int start_dim)
+template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],Properties...> field, int num_dims, int start_dim)
 {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
@@ -235,8 +235,8 @@ void BoundaryExchange::register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],Me
   m_num_3d_fields += num_dims;
 }
 
-template<int OUTER_DIM, int DIM, typename MemoryManagement>
-void BoundaryExchange::register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV],MemoryManagement> field, int outer_dim, int num_dims, int start_dim)
+template<int OUTER_DIM, int DIM, typename... Properties>
+void BoundaryExchange::register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV],Properties...> field, int outer_dim, int num_dims, int start_dim)
 {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
@@ -253,8 +253,8 @@ void BoundaryExchange::register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][
   m_num_3d_fields += num_dims;
 }
 
-template<typename MemoryManagement>
-void BoundaryExchange::register_field (HostView<Real*[NP][NP],MemoryManagement> field)
+template<typename... Properties>
+void BoundaryExchange::register_field (HostView<Real*[NP][NP],Properties...> field)
 {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
@@ -267,8 +267,8 @@ void BoundaryExchange::register_field (HostView<Real*[NP][NP],MemoryManagement> 
   ++m_num_2d_fields;
 }
 
-template<typename MemoryManagement>
-void BoundaryExchange::register_field (HostView<Scalar*[NP][NP][NUM_LEV],MemoryManagement> field)
+template<typename... Properties>
+void BoundaryExchange::register_field (HostView<Scalar*[NP][NP][NUM_LEV],Properties...> field)
 {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
