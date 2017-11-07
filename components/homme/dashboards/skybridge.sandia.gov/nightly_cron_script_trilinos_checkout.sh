@@ -13,7 +13,8 @@ rm -rf nightly_log*
 rm -rf results*
 rm -rf slurm*
 rm -rf modules*out
-rm -rf build_kokkos*out 
+rm -rf build_kokkos*out
+rm -rf env_openmp.out 
 
 cat trilinosCheckout ctest_nightly.cmake.frag >& ctest_nightly.cmake  
 
