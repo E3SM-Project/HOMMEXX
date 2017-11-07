@@ -6,7 +6,7 @@ SET(TIMING_DIR       ${HOMME_SOURCE_DIR}/utils/timing)
 
 ### Sphere operators unit test ###
 
-SET (SHARE_UT_SRCS
+SET (SPHERE_OPERATORS_UT_SRCS
   ${SRC_SHARE_DIR}/kinds.F90
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
@@ -19,15 +19,22 @@ SET (SHARE_UT_SRCS
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/quadrature_mod.F90
-  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.F90
 )
 
 SET (CONFIG_DEFINES PIO_INTERP NC=4 NP=4 PLEV=8 QSIZE_D=4 _PRIM TIMING=1 _MPI=1 _PRESTART=1 _WK_GRAD=1 HOMME_QUAD_PREC=1)
-SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS ${CONFIG_DIR} ${SRC_SHARE_DIR} ${SRC_SHARE_DIR}/cxx ${SHARE_UT_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS
+  ${CONFIG_DIR}
+  ${SRC_SHARE_DIR}
+  ${SRC_SHARE_DIR}/cxx
+  ${SHARE_UT_DIR}
+  ${TIMING_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
 cxx_unit_test (sphere_operators_ut "${SPHERE_OPERATORS_UT_SRCS}" "${SPHERE_OPERATORS_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}")
 
 ### Boundary exchange unit test ###
@@ -53,7 +60,10 @@ SET (BOUNDARY_EXCHANGE_UT_SRCS
   ${SRC_SHARE_DIR}/schedule_mod.F90
   ${SRC_SHARE_DIR}/spacecurve_mod.F90
   ${SRC_SHARE_DIR}/thread_mod.F90
-  ${SRC_SHARE_DIR}/cxx//Control.cpp
+  ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/Control.cpp
+  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
@@ -67,5 +77,13 @@ SET (BOUNDARY_EXCHANGE_UT_SRCS
 )
 
 SET (CONFIG_DEFINES NP=4 NC=4 PLEV=16 QSIZE_D=4 _MPI=1 HOMMEXX_MPI_TEST)
-SET (BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS ${CONFIG_DIR} ${SRC_SHARE_DIR} ${SRC_SHARE_DIR}/cxx ${SRC_SHARE_DIR}/cxx/mpi ${SHARE_UT_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+SET (BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS
+  ${CONFIG_DIR}
+  ${SRC_SHARE_DIR}
+  ${SRC_SHARE_DIR}/cxx
+  ${SRC_SHARE_DIR}/cxx/mpi
+  ${SHARE_UT_DIR}
+  ${TIMING_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
 cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_SRCS}" "${BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}")
