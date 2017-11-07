@@ -351,6 +351,7 @@ macro(resetTestVariables)
   SET(OMP_NAMELIST_FILES)
   SET(OMP_NUM_THREADS)
   SET(TRILINOS_XML_FILE)
+  SET(TIMEOUT)
 endmacro(resetTestVariables)
 
 macro(printTestSummary)
@@ -523,6 +524,10 @@ macro(createTest testFile)
 
     # Force cprnc to be built when the individual test is run
     ADD_DEPENDENCIES(${THIS_TEST_INDIV} cprnc)
+
+    if (NOT "${TIMEOUT}" STREQUAL "")
+      set_tests_properties(${THIS_TEST} PROPERTIES TIMEOUT ${TIMEOUT})
+    endif ()
 
     # Now make the Individual targets
     #ADD_CUSTOM_COMMAND(TARGET ${THIS_TEST_INDIV}
