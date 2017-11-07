@@ -38,7 +38,7 @@ struct Control {
              const int nm1,  const int n0,   const int np1,
              const int qn0,  const Real dt2, const Real ps0,
              const bool compute_diagonstics, const Real eta_ave_w,
-             CRCPtr hybrid_a_ptr);
+             CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr);
 
   // This method sets team_size if it wasn't already set via environment variable in the constructor
   void set_team_size ();
@@ -81,8 +81,10 @@ struct Control {
   // apply remap every rsplit tracer timesteps
   int rsplit;
 
-  // hybryd a
+  // hybrid a
   ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
+  // hybrid b
+  ExecViewManaged<Real[NUM_LEV_P]> hybrid_b;
 };
 
 } // Namespace Homme

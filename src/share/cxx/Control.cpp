@@ -7,7 +7,7 @@ void Control::init(const int nets_in, const int nete_in,
                    const int n0_in, const int np1_in, const int qn0_in,
                    const Real dt_in, const Real ps0_in,
                    const bool compute_diagonstics_in,
-                   const Real eta_ave_w_in, CRCPtr hybrid_a_ptr) {
+                   const Real eta_ave_w_in, CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr) {
   nets = nets_in;
   nete = nete_in;
   num_elems = num_elems_in;
@@ -20,10 +20,15 @@ void Control::init(const int nets_in, const int nete_in,
   compute_diagonstics = compute_diagonstics_in;
   eta_ave_w = eta_ave_w_in;
   hybrid_a = ExecViewManaged<Real[NUM_LEV_P]>(
-      "Hybrid coordinates; translates between pressure and velocity");
+      "Hybrid a coordinates; translates between pressure and velocity");
+  hybrid_b = ExecViewManaged<Real[NUM_LEV_P]>(
+      "Hybrid b coordinates; translates between pressure and velocity");
 
   HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
   Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+
+  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_b(hybrid_b_ptr);
+  Kokkos::deep_copy(hybrid_b, host_hybrid_b);
 
   set_team_size();
 }
