@@ -12,3 +12,6 @@ SET(VCOORD_FILES ${HOMME_ROOT}/test/vcoord/acme-72*)
 SET(NC_OUTPUT_FILES
   jw_baroclinic1.nc
   jw_baroclinic2.nc)
+
+# For GPU testbeds, for now.
+SET(TIMEOUT 60)

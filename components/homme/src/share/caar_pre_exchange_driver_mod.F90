@@ -287,7 +287,7 @@ contains
       do j = 1, np
         do i = 1, np
           pressure(i, j, k) = pressure(i, j, k - 1) + &
-               dp(i, j, k - 1) / 2 + dp(i, j, k) / 2
+               (dp(i, j, k - 1) + dp(i, j, k)) / 2
         end do
       end do
     end do
