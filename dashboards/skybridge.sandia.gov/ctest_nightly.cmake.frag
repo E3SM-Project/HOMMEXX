@@ -225,7 +225,7 @@ if (BUILD_HOMMEXX_SERIAL)
     "-DUSE_NUM_PROCS=16"
     "-DUSE_TRILINOS=FALSE"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
-    "-DHOMME_BASELINE_DIR=/projects/hommexx/HOMMEXX_baseline/build" 
+    "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild")
@@ -294,7 +294,7 @@ if (BUILD_HOMMEXX_SERIAL)
   # Run HOMMEXX tests
   #
 
-  set (CTEST_TEST_TIMEOUT 700)
+  set (CTEST_TEST_TIMEOUT 1200)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
     RETURN_VALUE HAD_ERROR)
@@ -416,7 +416,7 @@ if (BUILD_HOMMEXX_OPENMP)
     "-DUSE_NUM_PROCS=16"
     "-DUSE_TRILINOS=FALSE"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstallOpenMP"
-    "-DHOMME_BASELINE_DIR=/projects/hommexx/HOMMEXX_baseline/build" 
+    "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP")
@@ -485,7 +485,7 @@ if (BUILD_HOMMEXX_OPENMP)
   # Run HOMMEXX tests
   #
 
-  set (CTEST_TEST_TIMEOUT 700)
+  set (CTEST_TEST_TIMEOUT 1200)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP"
     RETURN_VALUE HAD_ERROR)
