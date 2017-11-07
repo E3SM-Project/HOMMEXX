@@ -4,4 +4,7 @@
 00 03 * * 1-7  cd /projects/hommexx/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash build_kokkos_openmp.sh >& build_kokkos_openmp.out"; sbatch run_all_openmp.batch
 01 06 * * 1-7  cd /projects/hommexx/nightlyHOMMEXXCDash; bash send_email_ctest_serial.sh
 01 06 * * 1-7  cd /projects/hommexx/nightlyHOMMEXXCDash; bash send_email_ctest_openmp.sh
-05 06 * * 1-7  chmod -R 0755 /projects/hommexx/nightlyHOMMEXXCDash
+#05 06 * * 1-7  chmod -R 0755 /projects/hommexx/nightlyHOMMEXXCDash
+05 06 * * 1-7 chgrp wg-cmdv-hommexx -R /projects/hommexx/*
+07 06 * * 1-7 chmod ug+rwX -R /projects/hommexx/*
+
