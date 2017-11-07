@@ -106,6 +106,19 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
 
 template <typename MemSpace, typename MemManagement, typename ScalarType,
           int DIM1, int DIM2, int DIM3, int DIM4>
+KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
+subview(
+    ViewType<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement> v_in,
+    int var) {
+  assert(v_in.data() != nullptr);
+  assert(var < v_in.extent_int(0));
+  assert(var >= 0);
+  return ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>(
+      &v_in.implementation_map().reference(var, 0, 0, 0));
+}
+
+template <typename MemSpace, typename MemManagement, typename ScalarType,
+          int DIM1, int DIM2, int DIM3, int DIM4>
 KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM4], MemSpace>
 subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
             v_in, int ie, int tl, int igp, int jgp) {
@@ -120,19 +133,6 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
   assert(jgp >= 0);
   return ViewUnmanaged<ScalarType[DIM4], MemSpace>(
       &v_in.implementation_map().reference(ie, tl, igp, jgp, 0));
-}
-
-template <typename MemSpace, typename MemManagement, typename ScalarType,
-          int DIM1, int DIM2, int DIM3, int DIM4>
-KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
-subview(
-    ViewType<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement> v_in,
-    int var) {
-  assert(v_in.data() != nullptr);
-  assert(var < v_in.extent_int(0));
-  assert(var >= 0);
-  return ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>(
-      &v_in.implementation_map().reference(var, 0, 0, 0));
 }
 
 template <typename MemSpace, typename MemManagement, typename ScalarType,
@@ -585,6 +585,8 @@ public:
   public:
     KOKKOS_INLINE_FUNCTION
     ordered_iterable operator*() const { return i_; }
+
+    KOKKOS_INLINE_FUNCTION
     const iterator &operator++() {
       ++i_;
       return *this;
