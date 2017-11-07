@@ -397,7 +397,6 @@ void BoundaryExchange::pack_and_send()
   Kokkos::TeamPolicy<HostExecSpace>  policy(num_connections, Kokkos::AUTO());
 
   Kokkos::parallel_for(policy, [&](HostTeamMember team){
-
     const int iconn = team.league_rank();
 
     const ConnectionInfo& info = connections[iconn];
@@ -469,7 +468,7 @@ void BoundaryExchange::recv_and_unpack()
         m_2d_fields(ie,ifield)(CORNER_PTS[icorner].ip,CORNER_PTS[icorner].jp) += m_recv_2d_corners_buffers(ie,ifield,icorner)[0];
       }
     });
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields),
                          [&](const int ifield){
       for (int k=0; k<NP; ++k) {
         for (int ilev=0; ilev<NUM_LEV; ++ilev) {
