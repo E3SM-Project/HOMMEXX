@@ -356,7 +356,7 @@ sync_to_device(Source_T source, Dest_T dest) {
 
 template <typename ViewType>
 typename std::enable_if<
-    !std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type
+    !std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
 frobenius_norm(const ViewType view) {
   typename ViewType::pointer_type data = view.data();
 
@@ -378,7 +378,7 @@ frobenius_norm(const ViewType view) {
 
 template <typename ViewType>
 typename std::enable_if<
-    std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type
+    std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
 frobenius_norm(const ViewType view) {
   typename ViewType::pointer_type data = view.data();
 
