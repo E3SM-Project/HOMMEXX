@@ -269,7 +269,8 @@ macro (setUpTestDir TEST_DIR)
   FILE(APPEND ${THIS_TEST_SCRIPT} "\n") # new line
   SET (TEST_INDEX 1)
   FOREACH (singleFile ${NAMELIST_FILES})
-    FILE(APPEND ${THIS_TEST_SCRIPT} "TEST_${TEST_INDEX}=\"${CMAKE_CURRENT_BINARY_DIR}/${EXEC_NAME}/${EXEC_NAME} < ${singleFile}\"\n")
+    GET_FILENAME_COMPONENT(fileName ${singleFile} NAME)
+    FILE(APPEND ${THIS_TEST_SCRIPT} "TEST_${TEST_INDEX}=\"${CMAKE_CURRENT_BINARY_DIR}/${EXEC_NAME}/${EXEC_NAME} < ${TEST_DIR}/${fileName}\"\n")
     FILE(APPEND ${THIS_TEST_SCRIPT} "\n") # new line
     MATH(EXPR TEST_INDEX "${TEST_INDEX} + 1")
   ENDFOREACH ()
@@ -364,6 +365,7 @@ macro(resetTestVariables)
   SET(OMP_NAMELIST_FILES)
   SET(OMP_NUM_THREADS)
   SET(TRILINOS_XML_FILE)
+  SET(PROFILE)
 endmacro(resetTestVariables)
 
 macro(printTestSummary)
@@ -448,16 +450,47 @@ macro(printTestSummary)
 
 endmacro(printTestSummary)
 
-# Macro to create the individual tests
-macro(createTest testFile)
+# Temporarily, before I propagate to all the files.
+macro (set_homme_tests_parameters testFile profile)
+  if ("${testFile}" MATCHES ".*-moist.*")
+    if ("${profile}" STREQUAL "dev")
+      set (HOMME_TESTS_NE 2)
+      set (HOMME_TESTS_NDAYS 1)
+    elseif ("${profile}" STREQUAL "short")
+      set (HOMME_TESTS_NE 4)
+      set (HOMME_TESTS_NDAYS 1)
+    else ()
+      set (HOMME_TESTS_NE 4)
+      set (HOMME_TESTS_NDAYS 2)
+    endif ()
+  else ()
+    if ("${profile}" STREQUAL "dev")
+      set (HOMME_TESTS_NE 2)
+      set (HOMME_TESTS_NDAYS 1)
+    elseif ("${profile}" STREQUAL "short")
+      set (HOMME_TESTS_NE 4)
+      set (HOMME_TESTS_NDAYS 9)
+    else ()
+      set (HOMME_TESTS_NE 12)
+      set (HOMME_TESTS_NDAYS 9)
+    endif ()
+  endif ()
+endmacro ()
 
-  SET (THIS_TEST_INPUT ${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${testFile})
+# Macro to create the individual tests
+macro(createTest testFile testProfile)
+
+  SET (THIS_TEST_INPUT "${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${testFile}.cmake")
 
   resetTestVariables()
+
+  SET (PROFILE ${testProfile})
+  set_homme_tests_parameters(${testFile} ${testProfile})
 
   SET(HOMME_ROOT ${HOMME_SOURCE_DIR})
 
   INCLUDE(${THIS_TEST_INPUT})
+  set (TEST_NAME "${TEST_NAME}-ne${HOMME_TESTS_NE}-ndays${HOMME_TESTS_NDAYS}")
 
   FILE(GLOB NAMELIST_FILES ${NAMELIST_FILES})
   FILE(GLOB VCOORD_FILES ${VCOORD_FILES})
@@ -520,6 +553,8 @@ macro(createTest testFile)
     # Force cprnc to be built when the individual test is run
     SET_TESTS_PROPERTIES(${THIS_TEST} PROPERTIES DEPENDS cprnc)
 
+    SET_TESTS_PROPERTIES(${THIS_TEST} PROPERTIES LABELS ${testProfile})
+
     # Individual target to rerun and diff the tests
     SET(THIS_TEST_INDIV "test-${TEST_NAME}")
 
@@ -546,35 +581,80 @@ macro(createTest testFile)
   ENDIF ()
 endmacro(createTest)
 
-macro(createTests testList)
+macro (createTestsWithProfile testList profile)
+  foreach (test ${${testList}})
+    createTest(${test} ${profile})
+  endforeach ()
+endmacro (createTestsWithProfile)
 
-  FOREACH (test ${${testList}})
-    createTest(${test})
-  ENDFOREACH ()
-endmacro(createTests)
+# Make a list of all testing profiles no more intensive than the given profile.
+function (make_profiles_up_to profile profiles)
+  string (TOLOWER "${profile}" profile_ci)
+  set (tmp)
+  if ("${profile_ci}" STREQUAL "dev")
+    list (APPEND tmp "dev")
+  elseif ("${profile_ci}" STREQUAL "short")
+    list (APPEND tmp "dev")
+    list (APPEND tmp "short")
+  elseif ("${profile_ci}" STREQUAL "nightly")
+    list (APPEND tmp "dev")
+    list (APPEND tmp "short")
+    list (APPEND tmp "nightly")
+  else ()
+    message (FATAL_ERROR "Testing profile '${profile}' not implemented.")
+  endif ()
+  set (profiles "${tmp}" PARENT_SCOPE)
+endfunction ()
 
-MACRO(CREATE_CXX_VS_F90_TESTS TESTS_LIST)
+macro (createTests testList profile)
+  message("-- Generating tests no more intensive than profile ${profile}.\n"
+    "   Example ctest lines:\n"
+    "     ctest -LE \"nightly\": All tests except nightly.\n"
+    "     ctest -L \"dev|unit\": Tests label dev or unit.")
+  make_profiles_up_to(${profile} profiles)
+  foreach (p ${profiles})
+    message("-- For profile ${p}:")
+    createTestsWithProfile(${testList} ${p})
+  endforeach ()
+endmacro (createTests)
+
+MACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE TESTS_LIST testProfile)
 
   FOREACH (TEST ${${TESTS_LIST}})
-    MESSAGE ("-- Creating cxx-f90 comparison test for test ${TEST}")
-
     SET (TEST_FILE_F90 "${TEST}-f.cmake")
-
+    
+    set_homme_tests_parameters(${TEST} ${testProfile})
+    set (PROFILE ${testProfile})
     INCLUDE (${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${TEST_FILE_F90})
 
-    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${TEST}-f/movies)
-    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${TEST}-c/movies)
+    SET (TEST_NAME_SUFFIX "ne${HOMME_TESTS_NE}-ndays${HOMME_TESTS_NDAYS}")
+    SET (F90_TEST_NAME "${TEST}-f-${TEST_NAME_SUFFIX}")
+    SET (CXX_TEST_NAME "${TEST}-c-${TEST_NAME_SUFFIX}")
+    SET (TEST_NAME "${TEST}-${TEST_NAME_SUFFIX}_cxx_vs_f90")
+    MESSAGE ("-- Creating cxx-f90 comparison test ${TEST_NAME}")
+
+    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${F90_TEST_NAME}/movies)
+    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/movies)
 
     CONFIGURE_FILE (${HOMME_SOURCE_DIR}/cmake/CprncCxxVsF90.cmake.in
-                    ${HOMME_BINARY_DIR}/tests/${TEST}-c/CprncCxxVsF90.cmake @ONLY)
+                    ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/CprncCxxVsF90.cmake @ONLY)
 
-    ADD_TEST (NAME ${TEST}_cxx_vs_f90
+    ADD_TEST (NAME "${TEST_NAME}"
               COMMAND ${CMAKE_COMMAND} -P CprncCxxVsF90.cmake
-              WORKING_DIRECTORY ${HOMME_BINARY_DIR}/tests/${TEST}-c)
+              WORKING_DIRECTORY ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME})
 
-    SET_TESTS_PROPERTIES(${TEST}_cxx_vs_f90 PROPERTIES DEPENDS "${TEST}-f;${TEST}-c")
+    SET_TESTS_PROPERTIES(${TEST_NAME} PROPERTIES DEPENDS "${F90_TEST_NAME};${CXX_TEST_NAME}"
+      LABELS ${testProfile})
   ENDFOREACH ()
-ENDMACRO(CREATE_CXX_VS_F90_TESTS)
+ENDMACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE)
+
+macro (CREATE_CXX_VS_F90_TESTS tests_list profile)
+  make_profiles_up_to(${profile} profiles)
+  foreach (p ${profiles})
+    message("-- For profile ${p}:")
+    CREATE_CXX_VS_F90_TESTS_WITH_PROFILE(${tests_list} ${p})
+  endforeach ()  
+endmacro (CREATE_CXX_VS_F90_TESTS)
 
 macro(testQuadPrec HOMME_QUAD_PREC)
 
