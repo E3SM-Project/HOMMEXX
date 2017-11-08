@@ -92,12 +92,13 @@ contains
 !JMD  call t_barrierf('sync_compute_and_apply_rhs', hybrid%par%comm)
 
 !pw call t_adj_detailf(+1)
-    call t_startf('compute_and_apply_rhs')
+    call t_startf('caar compute')
 
     call caar_pre_exchange_monolithic_f90 (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                            deriv,nets,nete,compute_diagnostics,eta_ave_w)
-    call t_stopf('compute_and_apply_rhs')
+    call t_stopf('caar compute')
 
+    call t_startf('caar_bexchV')
     do ie=nets,nete
        ! =========================================================
        !
@@ -119,9 +120,7 @@ contains
     ! sync is required
     ! =============================================================
 
-    call t_startf('caar_bexchV')
     call bndry_exchangeV(hybrid,edge3p1)
-    call t_stopf('caar_bexchV')
 
     do ie=nets,nete
        ! ===========================================================
@@ -150,6 +149,7 @@ contains
           elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
        enddo
     end do
+    call t_stopf('caar_bexchV')
 
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
