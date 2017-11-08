@@ -456,23 +456,13 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagPostExchange&, TeamMember team) const {
+  void operator()(const int ie, const int igp, const int jgp, const int ilev) const {
 
     // Rescaling tendencies by inverse mass matrix on sphere
-    int ie = team.league_rank();
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP*NP),
-                         [&](const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
-                           [&](const int &ilev) {
-        m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-        m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-        m_elements.m_v(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-        m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-      });
-    });
+    m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_v(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
   }
 
   KOKKOS_INLINE_FUNCTION

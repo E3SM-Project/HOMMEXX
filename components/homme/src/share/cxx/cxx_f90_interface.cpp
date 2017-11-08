@@ -136,7 +136,7 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
                        Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
-                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post)
+                       MDRangePolicy<ExecSpace,4> policy_post)
 {
   // --- Pre boundary exchange
   profiling_resume();
@@ -145,6 +145,7 @@ void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchang
   profiling_pause();
 
   // Do the boundary exchange
+  start_timer("caar_bexchV");
   Kokkos::deep_copy(elements.h_u,elements.m_u);
   Kokkos::deep_copy(elements.h_v,elements.m_v);
   Kokkos::deep_copy(elements.h_t,elements.m_t);
@@ -162,6 +163,7 @@ void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchang
   Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
   ExecSpace::fence();
   profiling_pause();
+  stop_timer("caar_bexchV");
 }
 
 void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
@@ -181,9 +183,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Setup the policies
   Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre  (data.num_elems, threads_per_team, vectors_per_thread);
-  Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post (data.num_elems, threads_per_team, vectors_per_thread);
-  policy_pre.set_chunk_size(1);
-  policy_post.set_chunk_size(1);
+  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
 
   // Setup the boundary exchange
   BoundaryExchange* be[NUM_TIME_LEVELS];
@@ -225,7 +225,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   Kokkos::Experimental::md_parallel_for(
-    MDRangePolicy<ExecSpace,4>({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1}),
+    MDRangePolicy<HostExecSpace,4>({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1}),
     [&](int ie, int igp, int jgp, int ilev) {
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
