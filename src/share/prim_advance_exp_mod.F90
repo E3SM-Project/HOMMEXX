@@ -342,7 +342,6 @@ module prim_advance_exp_mod
       call t_stopf("KG3-5stage_timestep")
 #else
 #ifdef USE_KOKKOS_KERNELS
-      call t_startf("U3-5stage_timestep")
       call t_startf("caar_overhead")
       hvcoord_a_ptr             = c_loc(hvcoord%hyai)
       ! In F, elem range is [nets,nete]. In C, elem range is [nets,nete).
@@ -364,7 +363,9 @@ module prim_advance_exp_mod
                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
       call t_stopf("caar_overhead")
 
+      call t_startf("U3-5stage_timestep")
       call u3_5stage_timestep_c(nm1-1,n0-1,np1-1,dt,eta_ave_w,compute_diagnostics)
+      call t_stopf("U3-5stage_timestep")
 
       call t_startf("caar_overhead")
       call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
@@ -372,7 +373,6 @@ module prim_advance_exp_mod
                                 elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                 elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
       call t_stopf("caar_overhead")
-      call t_stopf("U3-5stage_timestep")
 #else
       ! Ullrich 3nd order 5 stage:   CFL=sqrt( 4^2 -1) = 3.87
       ! u1 = u0 + dt/5 RHS(u0)  (save u1 in timelevel nm1)
