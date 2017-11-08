@@ -633,8 +633,8 @@ MACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE TESTS_LIST testProfile)
     SET (TEST_NAME "${TEST}-${TEST_NAME_SUFFIX}_cxx_vs_f90")
     MESSAGE ("-- Creating cxx-f90 comparison test ${TEST_NAME}")
 
-    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${F90_TEST_NAME}-f/movies)
-    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}-c/movies)
+    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${F90_TEST_NAME}/movies)
+    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/movies)
 
     CONFIGURE_FILE (${HOMME_SOURCE_DIR}/cmake/CprncCxxVsF90.cmake.in
                     ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/CprncCxxVsF90.cmake @ONLY)
