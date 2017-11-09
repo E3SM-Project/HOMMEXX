@@ -71,8 +71,7 @@ struct CaarFunctor {
                    m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
                        m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev));
         m_elements.buffers.ephi(kv.ie, igp, jgp, ilev) =
-            k_energy + (m_elements.m_phi(kv.ie, igp, jgp, ilev) +
-                        m_elements.m_pecnd(kv.ie, igp, jgp, ilev));
+            k_energy + m_elements.m_phi(kv.ie, igp, jgp, ilev); 
       });
     });
     kv.team_barrier();

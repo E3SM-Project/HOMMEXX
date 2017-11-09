@@ -21,7 +21,7 @@ module caar_pre_exchange_driver_mod
       type (c_ptr),          intent(in) :: hybrid_a_ptr
     end subroutine init_control_caar_c
     subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                               elem_derived_phi_ptr,             &
                                                elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                                elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
       use iso_c_binding , only : c_ptr
@@ -29,12 +29,12 @@ module caar_pre_exchange_driver_mod
       ! Inputs
       !
       type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr 
       type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     end subroutine caar_pull_data_c
     subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                               elem_derived_phi_ptr,             &
                                                elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                                elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
       use iso_c_binding , only : c_ptr
@@ -42,7 +42,7 @@ module caar_pre_exchange_driver_mod
       ! Inputs
       !
       type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr
       type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     end subroutine caar_push_results_c
@@ -66,7 +66,7 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     use dimensions_mod , only : nelemd
     use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                elem_derived_phi, elem_derived_pecnd,           &
+                                elem_derived_phi,            &
                                 elem_derived_omega_p, elem_derived_vn0,         &
                                 elem_derived_eta_dot_dpdn, elem_state_Qdp
     use iso_c_binding  , only : c_ptr, c_loc
@@ -74,7 +74,7 @@ contains
     implicit none
 
     type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_phi_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     type (c_ptr) :: hvcoord_a_ptr
@@ -105,13 +105,12 @@ contains
     elem_state_t_ptr              = c_loc(elem_state_temp)
     elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
     elem_derived_phi_ptr          = c_loc(elem_derived_phi)
-    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
     elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
     elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
     elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
     elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
     call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                         elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                         elem_derived_phi_ptr,             &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
     call t_stopf("caar_overhead")
@@ -130,7 +129,7 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     call t_startf("caar_overhead")
     call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                         elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                         elem_derived_phi_ptr,             &
                                          elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
     call t_stopf("caar_overhead")
@@ -139,7 +138,7 @@ contains
   end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, tvirt, press, press_grad, vtemp) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, phi, v, tvirt, press, press_grad, vtemp) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use physical_constants, only : Rgas
@@ -147,7 +146,6 @@ contains
 
     real (kind=real_kind), intent(in) :: dvv(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2) ! (np, np, 2, 2)
-    real (kind=real_kind), intent(in) :: pecnd(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: phi(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: v(np, np, 2) ! (np, np, 2)
     real (kind=real_kind), intent(in) :: tvirt(np, np) ! (np, np)
@@ -161,7 +159,7 @@ contains
 
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+    call caar_compute_energy_grad(deriv, Dinv, phi, v, vtemp)
 
     do i=1,np
       do j=1,np
@@ -171,14 +169,13 @@ contains
     enddo
   end subroutine caar_compute_energy_grad_c_int
 
-  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+  subroutine caar_compute_energy_grad(deriv, Dinv, phi, v, vtemp)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use derivative_mod, only : derivative_t, gradient_sphere
     use physical_constants, only : Rgas
     type (derivative_t), intent(in) :: deriv
     real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2)
-    real (kind=real_kind), intent(in) :: pecnd(np, np)
     real (kind=real_kind), intent(in) :: phi(np, np)
     real (kind=real_kind), intent(in) :: v(np, np, 2)
     real (kind=real_kind), intent(out) :: vtemp(np, np, 2)
@@ -191,7 +188,7 @@ contains
         v1 = v(i, j, 1)
         v2 = v(i, j, 2)
         E = 0.5D0 * (v1 * v1 + v2 * v2)
-        Ephi(i, j)=E + (phi(i, j) + pecnd(i, j))
+        Ephi(i, j)=E + phi(i, j) 
       end do
     end do
     vtemp = gradient_sphere(Ephi, deriv, Dinv)
@@ -724,7 +721,7 @@ contains
                                        elem(ie)%state%T(:, :, k, n0), &
                                        elem(ie)%state%T(:, :, k, np1))
          ! vtemp = grad ( E + PHI )
-         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
+         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
          do j=1,np
             do i=1,np

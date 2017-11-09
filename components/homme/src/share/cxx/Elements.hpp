@@ -25,10 +25,10 @@ public:
   ExecViewManaged<Real * [2][2][NP][NP]> m_d;
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
-  // Omega is the pressure vertical velocity
+  // Omega is the 'pressure vertical velocity' in papers, 
+  // but omega=Dp/Dt  (not really vertical velocity).
+  // In homme derived%omega_p=(1/p)*(Dp/Dt)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
-  // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_pecnd;
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
   // ???
@@ -36,7 +36,7 @@ public:
   // ???
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
 
-  // Lateral Velocity
+  // Velocity
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
   // Temperature
@@ -97,10 +97,10 @@ public:
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
                               CF90Ptr &state_dp3d, CF90Ptr &derived_phi,
-                              CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
+                              CF90Ptr &derived_omega_p,
                               CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn,
                               CF90Ptr &state_qdp);
-  void pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
+  void pull_3d(CF90Ptr &derived_phi, 
                CF90Ptr &derived_omega_p, CF90Ptr &derived_v);
   void pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d);
   void pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn);
@@ -108,11 +108,11 @@ public:
 
   // Push the results from the exec space views to the F90 pointers
   void push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp,
-                            F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+                            F90Ptr &derived_phi, 
                             F90Ptr &derived_omega_p, F90Ptr &derived_v,
                             F90Ptr &derived_eta_dot_dpdn,
                             F90Ptr &state_qdp) const;
-  void push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+  void push_3d(F90Ptr &derived_phi, 
                F90Ptr &derived_omega_p, F90Ptr &derived_v) const;
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;

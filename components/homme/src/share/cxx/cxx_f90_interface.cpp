@@ -62,26 +62,26 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                       CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_pecnd_ptr,
+                       CF90Ptr& elem_derived_phi_ptr,
                        CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
                        CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   // Copy data from f90 pointers to cxx views
   r.pull_from_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
-                           elem_derived_phi_ptr,elem_derived_pecnd_ptr,
+                           elem_derived_phi_ptr,
                            elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                          F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
+                          F90Ptr& elem_derived_phi_ptr, 
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   r.push_to_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
-                         elem_derived_phi_ptr,elem_derived_pecnd_ptr,
+                         elem_derived_phi_ptr,
                          elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
