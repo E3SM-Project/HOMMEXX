@@ -270,7 +270,12 @@ macro (setUpTestDir TEST_DIR)
   SET (TEST_INDEX 1)
   FOREACH (singleFile ${NAMELIST_FILES})
     GET_FILENAME_COMPONENT(fileName ${singleFile} NAME)
-    FILE(APPEND ${THIS_TEST_SCRIPT} "TEST_${TEST_INDEX}=\"${CMAKE_CURRENT_BINARY_DIR}/${EXEC_NAME}/${EXEC_NAME} < ${TEST_DIR}/${fileName}\"\n")
+    # The baseline runs don't see TIMEOUT, so use Linux timeout as a workaround.
+    set (SH_TIMEOUT_CMD)
+    if (TIMEOUT)
+      set(SH_TIMEOUT_CMD "timeout ${TIMEOUT} ")
+      endif ()
+    FILE(APPEND ${THIS_TEST_SCRIPT} "TEST_${TEST_INDEX}=\"${SH_TIMEOUT_CMD}${CMAKE_CURRENT_BINARY_DIR}/${EXEC_NAME}/${EXEC_NAME} < ${TEST_DIR}/${fileName}\"\n")
     FILE(APPEND ${THIS_TEST_SCRIPT} "\n") # new line
     MATH(EXPR TEST_INDEX "${TEST_INDEX} + 1")
   ENDFOREACH ()
