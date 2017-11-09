@@ -26,7 +26,6 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 void caar_compute_energy_grad_c_int(const Real *dvv,
                                     const Real *Dinv,
-                                    const Real *pecnd,
                                     const Real *phi,
                                     const Real *velocity,
                                     Real *tvirt,
@@ -91,7 +90,6 @@ public:
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
         phis("Phis?", elements.num_elems()),
-        pecnd("Potential Energy CND?", elements.num_elems()),
         omega_p("Omega_P", elements.num_elems()),
         derived_v("Derived V?", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
@@ -106,7 +104,7 @@ public:
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
-                                dp3d.data(), phi.data(), pecnd.data(),
+                                dp3d.data(), phi.data(), 
                                 omega_p.data(), derived_v.data(),
                                 eta_dpdn.data(), qdp.data());
 
@@ -148,7 +146,6 @@ public:
   HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> phi;
   HostViewManaged<Real * [NP][NP]> phis;
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dpdn;
@@ -235,8 +232,6 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
         caar_compute_energy_grad_c_int(
             test_functor.dvv.data(),
                 Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data(),
-                Kokkos::subview(test_functor.pecnd, ie, level * VECTOR_SIZE + v,
                                 Kokkos::ALL, Kokkos::ALL).data(),
                 Kokkos::subview(test_functor.phi, ie, level * VECTOR_SIZE + v,
                                 Kokkos::ALL, Kokkos::ALL).data(),

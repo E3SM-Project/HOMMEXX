@@ -22,7 +22,6 @@ void Elements::init(const int num_elems) {
 
   m_omega_p =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
-  m_pecnd = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PECND", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
   m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
       "Derived Lateral Velocity 1", m_num_elems);
@@ -119,8 +118,6 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
 
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
@@ -157,7 +154,6 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
           for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
             // 3d scalars
             h_omega_p(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            h_pecnd(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_phi(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_derived_un0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
             h_derived_vn0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
@@ -215,7 +211,6 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
   Kokkos::deep_copy(m_dinv, h_dinv);
 
   Kokkos::deep_copy(m_omega_p, h_omega_p);
-  Kokkos::deep_copy(m_pecnd, h_pecnd);
   Kokkos::deep_copy(m_phi, h_phi);
   Kokkos::deep_copy(m_derived_un0, h_derived_un0);
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
@@ -231,20 +226,18 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
 
 void Elements::pull_from_f90_pointers(
     CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
-    CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
+    CF90Ptr &derived_phi, CF90Ptr &derived_omega_p,
     CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
-  pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  pull_3d(derived_phi, derived_omega_p, derived_v);
   pull_4d(state_v, state_t, state_dp3d);
   pull_eta_dot(derived_eta_dot_dpdn);
   pull_qdp(state_qdp);
 }
 
-void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
+void Elements::pull_3d(CF90Ptr &derived_phi, 
                        CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
@@ -259,7 +252,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
           h_omega_p(ie, igp, jgp, ilev)[ivector] =
               derived_omega_p[k_3d_scalars];
-          h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
           h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
         }
       }
@@ -277,7 +269,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
     }
   }
   Kokkos::deep_copy(m_omega_p, h_omega_p);
-  Kokkos::deep_copy(m_pecnd, h_pecnd);
   Kokkos::deep_copy(m_phi, h_phi);
   Kokkos::deep_copy(m_derived_un0, h_derived_un0);
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
@@ -371,22 +362,19 @@ void Elements::pull_qdp(CF90Ptr &state_qdp) {
 
 void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
                                     F90Ptr &state_dp3d, F90Ptr &derived_phi,
-                                    F90Ptr &derived_pecnd,
                                     F90Ptr &derived_omega_p, F90Ptr &derived_v,
                                     F90Ptr &derived_eta_dot_dpdn,
                                     F90Ptr &state_qdp) const {
-  push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  push_3d(derived_phi, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_eta_dot(derived_eta_dot_dpdn);
   push_qdp(state_qdp);
 }
 
-void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+void Elements::push_3d(F90Ptr &derived_phi, 
                        F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
@@ -395,7 +383,6 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
       Kokkos::create_mirror_view(m_derived_vn0);
 
   Kokkos::deep_copy(h_omega_p, m_omega_p);
-  Kokkos::deep_copy(h_pecnd, m_pecnd);
   Kokkos::deep_copy(h_phi, m_phi);
   Kokkos::deep_copy(h_derived_un0, m_derived_un0);
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
@@ -407,7 +394,6 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
           derived_omega_p[k_3d_scalars] =
               h_omega_p(ie, igp, jgp, ilev)[ivector];
-          derived_pecnd[k_3d_scalars] = h_pecnd(ie, igp, jgp, ilev)[ivector];
           derived_phi[k_3d_scalars] = h_phi(ie, igp, jgp, ilev)[ivector];
         }
       }
