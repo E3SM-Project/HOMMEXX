@@ -273,7 +273,8 @@ macro (setUpTestDir TEST_DIR)
     # The baseline runs don't see TIMEOUT, so use Linux timeout as a workaround.
     set (SH_TIMEOUT_CMD)
     if (TIMEOUT)
-      set(SH_TIMEOUT_CMD "timeout ${TIMEOUT} ")
+      MATH(EXPR SH_TIMEOUT "${TIMEOUT} + 10")
+      set(SH_TIMEOUT_CMD "timeout ${SH_TIMEOUT} ")
       endif ()
     FILE(APPEND ${THIS_TEST_SCRIPT} "TEST_${TEST_INDEX}=\"${SH_TIMEOUT_CMD}${CMAKE_CURRENT_BINARY_DIR}/${EXEC_NAME}/${EXEC_NAME} < ${TEST_DIR}/${fileName}\"\n")
     FILE(APPEND ${THIS_TEST_SCRIPT} "\n") # new line
