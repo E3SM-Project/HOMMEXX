@@ -81,8 +81,12 @@ struct Control {
   // apply remap every rsplit tracer timesteps
   int rsplit;
 
-  // hybryd a
-  ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
+  // hybrid coefficients
+  ExecViewManaged<Real[NUM_LEV_P]> hybrid_am;
+  ExecViewManaged<Real[NUM_LEV_P+1]> hybrid_ai;
+  ExecViewManaged<Real[NUM_LEV_P]> hybrid_bm;
+  ExecViewManaged<Real[NUM_LEV_P+1]> hybrid_bi;
+
 };
 
 } // Namespace Homme

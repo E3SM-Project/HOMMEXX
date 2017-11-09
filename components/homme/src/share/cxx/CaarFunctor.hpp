@@ -103,7 +103,15 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
+
+    //we can avoind this if if compute_eta_dpdn is templated wrt rsplit
+    //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
     compute_eta_dpdn_rsplit(kv);
+    if(!rsplit){
+      //name is so-so
+      compute_eta_dpdn_no_rsplit(kv);
+      //preq_vertadvect too
+    };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
@@ -185,12 +193,44 @@ struct CaarFunctor {
   void compute_eta_dpdn_no_rsplit(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
-      // TODO: Compute the actual value for this if rsplit=0.
-      // Note this will be unsafe to thread over levels,
-      // so thread over points instead
-      // for (int ilev=0; ilev<NUM_INTERFACE_LEV; ++ilev) {
-      //   m_elements.eta_dot_dpdn += eta_ave_w*eta_dot_dpdn
-      // }
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      //Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
+//do it without vectorization for now, like in Cuda space but without kokkos single
+      for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
+        //m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
+      //});
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        //should here be tmp.shift... ?
+        const int kp1 = k+1;
+        const int ilevp1 = kp1 / VECTOR_SIZE;
+        const int ivecp1 = kp1 % VECTOR_SIZE;
+        m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] = 
+           m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec]
+           + m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+      }
+      constexprt const int Np1 = NUM_PHYSICAL_LEV;
+      const int ilevNp1 = k / VECTOR_SIZE;
+      const int ivecNp1 = k % VECTOR_SIZE;
+      Real sdot_sum = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilevNp1)[ivecNp1];
+     
+      for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] -= hybrid_bi(k)*sdot_sum;
+      }
+
+      constexprt const int k = NUM_PHYSICAL_LEV;
+      const int ilev = k / VECTOR_SIZE;
+      const int ivec = k % VECTOR_SIZE;
+      Real sdot_sum = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+ 
+      for(int k=0,...)
+{
+
+}
+
     });
   } // Unimplemented
 
@@ -386,7 +426,7 @@ struct CaarFunctor {
   } // TESTED 12
 
   // Computes the vertical advection of T and v
-  // Not currently used
+  //Part of code with rsplit=0
   KOKKOS_INLINE_FUNCTION
   void preq_vertadv(
       const TeamMember &,
@@ -464,7 +504,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
+      Real p_prev = m_data.hybrid_am(0) * m_data.ps0;
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
         const int vector_end = (ilev == NUM_LEV-1 ?
                                 ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
@@ -497,7 +537,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_a(0) * m_data.ps0;
+      Real p_prev = m_data.hybrid_am(0) * m_data.ps0;
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;
