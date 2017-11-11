@@ -7,7 +7,11 @@ void Control::init(const int nets_in, const int nete_in,
                    const int n0_in, const int np1_in, const int qn0_in,
                    const Real dt_in, const Real ps0_in,
                    const bool compute_diagonstics_in,
-                   const Real eta_ave_w_in, CRCPtr hybrid_a_ptr) {
+                   const Real eta_ave_w_in, 
+                   CRCPtr hybrid_am_ptr,
+                   CRCPtr hybrid_ai_ptr,
+                   CRCPtr hybrid_bm_ptr,
+                   CRCPtr hybrid_bi_ptr) {
   nets = nets_in;
   nete = nete_in;
   num_elems = num_elems_in;
@@ -19,11 +23,23 @@ void Control::init(const int nets_in, const int nete_in,
   ps0 = ps0_in;
   compute_diagonstics = compute_diagonstics_in;
   eta_ave_w = eta_ave_w_in;
-  hybrid_a = ExecViewManaged<Real[NUM_LEV_P]>(
-      "Hybrid coordinates; translates between pressure and velocity");
+  hybrid_am = ExecViewManaged<Real[NUM_LEV_P]>(
+      "Hybrid coordinates; coefficient A_midpoints");
+  hybrid_ai = ExecViewManaged<Real[NUM_LEV_P+1]>(
+      "Hybrid coordinates; coefficient A_interfaces");
+  hybrid_bm = ExecViewManaged<Real[NUM_LEV_P]>(
+      "Hybrid coordinates; coefficient B_midpoints");
+  hybrid_bi = ExecViewManaged<Real[NUM_LEV_P+1]>(
+      "Hybrid coordinates; coefficient B_interfaces");
 
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
-  Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_am(hybrid_a_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_ai(hybrid_a_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_bm(hybrid_a_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_bi(hybrid_a_ptr);
+  Kokkos::deep_copy(hybrid_am, host_hybrid_am);
+  Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
+  Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
+  Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
 
   set_team_size();
 }

@@ -38,7 +38,10 @@ struct Control {
              const int nm1,  const int n0,   const int np1,
              const int qn0,  const Real dt2, const Real ps0,
              const bool compute_diagonstics, const Real eta_ave_w,
-             CRCPtr hybrid_a_ptr);
+             CRCPtr hybrid_am_ptr,
+             CRCPtr hybrid_ai_ptr,
+             CRCPtr hybrid_bm_ptr,
+             CRCPtr hybrid_bi_ptr);
 
   // This method sets team_size if it wasn't already set via environment variable in the constructor
   void set_team_size ();

@@ -103,20 +103,20 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
-
-    //we can avoind this if if compute_eta_dpdn is templated wrt rsplit
-    //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
-    compute_eta_dpdn_rsplit(kv);
-    if(!rsplit){
+   //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
+   //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
+   compute_eta_dpdn_rsplit(kv);
+   if(!rsplit){
       //name is so-so
       compute_eta_dpdn_no_rsplit(kv);
-      //preq_vertadvect too
+      preq_vertadv_2(kv);
     };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     // Note this is dependent on eta_dot_dpdn from other levels and will cause
     // issues when rsplit is 0
+    // OG NOTE THIS!
     compute_dp3d_np1(kv);
     check_dp3d(kv);
   } // TRIVIAL
@@ -195,11 +195,8 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      //Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
 //do it without vectorization for now, like in Cuda space but without kokkos single
       for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
-        //m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
-      //});
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
         //should here be tmp.shift... ?
@@ -210,9 +207,10 @@ struct CaarFunctor {
            m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec]
            + m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
       }
+//better name for this index
       constexprt const int Np1 = NUM_PHYSICAL_LEV;
-      const int ilevNp1 = k / VECTOR_SIZE;
-      const int ivecNp1 = k % VECTOR_SIZE;
+      const int ilevNp1 = Np1 / VECTOR_SIZE;
+      const int ivecNp1 = Np1 % VECTOR_SIZE;
       Real sdot_sum = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilevNp1)[ivecNp1];
      
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
@@ -221,18 +219,11 @@ struct CaarFunctor {
         m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] -= hybrid_bi(k)*sdot_sum;
       }
 
-      constexprt const int k = NUM_PHYSICAL_LEV;
-      const int ilev = k / VECTOR_SIZE;
-      const int ivec = k % VECTOR_SIZE;
-      Real sdot_sum = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
- 
-      for(int k=0,...)
-{
-
-}
+      m_elements.eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0; 
+      m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0; 
 
     });
-  } // Unimplemented
+  } // NOT TESTED
 
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
@@ -424,6 +415,47 @@ struct CaarFunctor {
     });
     kv.team_barrier();
   } // TESTED 12
+
+
+  KOKKOS_INLINE_FUNCTION
+  void preq_vertadv_2(const TeamMember & kv){
+/*
+    constexpr const int k_0 = 0;
+    for (int j = 0; j < NP; ++j) {
+      for (int i = 0; i < NP; ++i) {
+        Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
+        T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
+        for (int h = 0; h < 2; ++h) {
+          v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
+        }
+      }
+    }
+    constexpr const int k_f = NUM_LEV - 1;
+    for (int k = k_0 + 1; k < k_f; ++k) {
+      for (int j = 0; j < NP; ++j) {
+        for (int i = 0; i < NP; ++i) {
+          Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
+          Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
+          T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
+                            facm * (T(k, j, i) - T(k - 1, j, i));
+          for (int h = 0; h < 2; ++h) {
+            v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
+                                 facm * (v(k, h, j, i) - v(k - 1, h, j, i));
+          }
+        }
+      }
+    }
+    for (int j = 0; j < NP; ++j) {
+      for (int i = 0; i < NP; ++i) {
+        Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
+        T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
+        for (int h = 0; h < 2; ++h) {
+          v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
+        }
+      }
+    }
+*/
+  } // UNTESTED 13A
 
   // Computes the vertical advection of T and v
   //Part of code with rsplit=0
