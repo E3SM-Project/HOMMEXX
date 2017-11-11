@@ -659,12 +659,15 @@ contains
          T_vadv=0
          v_vadv=0
       else
+
+!make this an F function
          do k=1,nlev
             ! ==================================================
             ! add this term to PS equation so we exactly conserve dry mass
             ! ==================================================
             sdot_sum(:,:) = sdot_sum(:,:) + divdp(:,:,k)
             eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
+            ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k)
          end do
 
          ! ===========================================================
@@ -686,6 +689,9 @@ contains
          ! ==============================================
          call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
               eta_dot_dpdn,rdp,T_vadv,v_vadv)
+
+!end of F function
+
       endif
 
       ! ================================

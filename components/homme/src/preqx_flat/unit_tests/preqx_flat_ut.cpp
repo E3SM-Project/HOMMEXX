@@ -97,9 +97,14 @@ public:
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), dvv("dvv"), nets(1),
         nete(elements.num_elems()) {
-    Real hybrid_a[NUM_LEV_P] = { 0 };
+    Real hybrid_am[NUM_LEV_P] = { 0 };
+    Real hybrid_ai[NUM_LEV_P+1] = { 0 };
+    Real hybrid_bm[NUM_LEV_P] = { 0 };
+    Real hybrid_bi[NUM_LEV_P+1] = { 0 };
+
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
-                        qn0, ps0, dt, false, eta_ave_w, hybrid_a);
+                        qn0, ps0, dt, false, eta_ave_w, 
+                        hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
 
     Context::singleton().get_derivative().dvv(dvv.data());
 
@@ -590,13 +595,33 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
-  genRandArray(hybrid_a_mirror, engine,
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+
+
+//OG coefficients A and B increase is not taken into here...
+//probably, does not matter
+  genRandArray(hybrid_am_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
+  genRandArray(hybrid_ai_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  genRandArray(hybrid_bm_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  genRandArray(hybrid_bi_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 1.0));
+
+//OG does init use any of hybrid coefficients? do they need to be generated?
+//init makes device copies
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
                                    TestType::n0, TestType::np1, TestType::qn0,
                                    TestType::dt, TestType::ps0, false,
-                                   TestType::eta_ave_w, hybrid_a_mirror.data());
+                                   TestType::eta_ave_w, 
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bp_mirror.data());
 
   test_functor.run_functor();
 
