@@ -41,7 +41,7 @@ namespace Homme
 // | From the picture we can immediately state the following:                                                     |
 // |                                                                                                              |
 // |  1) edge neighbors contain 4 points/dofs, while corners contain only 1                                       |
-// |  2) the S/N edges store the points contiguously, while the W/E points are strided (stride is 4=NP)           |
+// |  2) the S/N edges store the points contiguously, while the W/E points are strided (stride is NP)             |
 // |     (Note: this is relevant only if we decide to switch to RMA, avoiding buffers, and copying                |
 // |            data directly to/from host views)                                                                 |
 // |                                                                                                              |
@@ -61,131 +61,182 @@ namespace Homme
 // | (S/W, S/N, W/E, E/N) are marked as 'forward', meaning that the 1st dof on elem1's edge matches the           |
 // | 1st dof on elem2's edge.                                                                                     |
 // | NOTE: in F90, in this context, 'edge' means an edge of the dual mesh, i.e., a connection between elements.   |
-// |       Here, we reserve the word 'edge' for the mesh edges, and we use words like 'neighbor' or 'connection'  |
-// |       to refer to the 8 possible connections with neighboring elements.                                      |
+// |       Here, we reserve the word 'edge' for the mesh edges, and we use 'connection' to refer to the 8         |
+// |       possible connections with neighboring elements.                                                        |
 // |                                                                                                              |
-// | The W/E/S/N edges and SW/SE/NW/NE from a neighboring element are stored on a buffer, to allow all MPI        |
-// | operations to be over before the local view is updated. Edges and corners are stored on different buffers,   |
-// | to allow each process to then sum the buffers in the view always in the same order, and maintain             |
-// | reproducibility of the boundary exchange. The corners will be stored in a buffer with 4 entries per          |
-// | element/level. The edges will be stored in a buffer with 16 entries. We decide to store the edges            |
-// | horizontally in the buffer, so that each edge is stored contiguously (this may help when kokkos copies       |
-// | the buffer into the field later). In other words, at each elem/level, the 4 edges are stored                 |
-// | in the buffer in the following way:                                                                          |
-// |                                                                                                              |
-// |     -- j -- >                                                                                                |
-// | |  W1 W2 W3 W4                                                                                               |
-// | i  E1 E2 E3 E4                                                                                               |
-// | |  S1 S2 S3 S4                                                                                               |
-// | V  N1 N2 N3 N4                                                                                               |
+// | The W/E/S/N/SW/SE/NW/NE values from a neighboring element are stored on a buffer, to allow all MPI           |
+// | operations to be over before the local view is updated. The values are then summed into the local field      |
+// | view in a pre-established order, to guarantee reproducibility of the accumulation.                           |
 // |                                                                                                              |
 // +--------------------------------------------------------------------------------------------------------------+
 
 // Here we define a bunch of conxtexpr int's and arrays (of arrays (of arrays)) of ints, which we can
-// use to easily detect the type of neighbor (corner or edge), whether an edge is strided (W/E) or
-// contiguous (S/N), whether the remote edge has a reverse direction, the idx of the first point of
-// an edge, and more.
+// use to easily retrieve information about a connection, such as the kind (corner or edge), the ordering
+// on the remote (only relevant for edges), the (i,j) coordinates of the Gauss point(s) in the connection,
+// and more.
 
-// The kind of connection: corner or edge
-enum ConnectionKind
-{
-  CORNER_KIND = 0,
-  EDGE_KIND   = 1
+// Convert strong typed enum to the underlying int value
+// TODO: perhaps move this to Utility.hpp
+template<typename E>
+constexpr typename std::underlying_type<E>::type etoi(E e) {
+  return static_cast<typename std::underlying_type<E>::type>(e);
+}
+
+// The kind of connection: edge, corner or missing (one of the corner connections on one of the 8 cube vertices)
+constexpr int NUM_CONNECTION_KINDS = 3;
+enum class ConnectionKind : int {
+  EDGE    = 0,
+  CORNER  = 1,
+  MISSING = 2,  // Used to detect missing connections
+  ANY     = 3   // Used when the kind of connection is not needed
+};
+
+// The locality of connection: local, shared or missing
+constexpr int NUM_CONNECTION_SHARINGS = 3;
+enum class ConnectionSharing : int {
+  LOCAL   = 0,
+  SHARED  = 1,
+  MISSING = 2,  // Used to detect missing connections
+  ANY     = 3   // Used, kind of connection is not needed
 };
 
 // Number of neighbors
-constexpr int NUM_CORNERS = 4;
-constexpr int NUM_EDGES   = 4;
-constexpr int NUM_NEIGHBORS = NUM_CORNERS + NUM_EDGES;
-constexpr int cornerId (const int connection) { return connection - NUM_EDGES; }
+constexpr int NUM_CONNECTIONS_PER_KIND = 4;
+constexpr int NUM_CORNERS = NUM_CONNECTIONS_PER_KIND;
+constexpr int NUM_EDGES   = NUM_CONNECTIONS_PER_KIND;
+constexpr int NUM_CONNECTIONS = NUM_CORNERS + NUM_EDGES;
+constexpr int CORNERS_OFFSET = NUM_EDGES;
 
-// Edges
-constexpr int WEST  = 0;
-constexpr int EAST  = 1;
-constexpr int SOUTH = 2;
-constexpr int NORTH = 3;
+enum class ConnectionName : int {
+  // Edges
+  WEST  = 0,
+  EAST  = 1,
+  SOUTH = 2,
+  NORTH = 3,
 
-// Corners
-constexpr int SWEST = 0;
-constexpr int SEAST = 1;
-constexpr int NWEST = 2;
-constexpr int NEAST = 3;
+  // Corners
+  SWEST = 4,
+  SEAST = 5,
+  NWEST = 6,
+  NEAST = 7
+};
 
-// Direction (of an edge)
-constexpr int DIRECTION_FWD = 0;
-constexpr int DIRECTION_BWD = 1;
+constexpr int CONNECTION_SIZE[NUM_CONNECTION_KINDS] =
+  { NP,   // EDGE
+    1,    // CORNER
+    0     // MISSING (for completeness, but probably never used)
+  };
 
-// We define local and remote neighbor types. This is because the way we store/read/write things on local strucutres
-// is not the same as we store/read/write things on remote structures. In particular, we will have
-// - local types: CORNER, EDGE_CONTIGUOUS_FWD, EDGE_STRIDED
-// - remtoe types: CORNER, EDGE_CONTIGUOUS_FWD, EDGE_CONTIGUOUS_BWD
-constexpr int CORNER              = 0;
-constexpr int EDGE_CONTIGUOUS_FWD = 1;
-constexpr int EDGE_CONTIGUOUS_BWD = 2;
-constexpr int EDGE_STRIDED        = 2;
+constexpr ConnectionKind CONNECTION_KIND[NUM_CONNECTIONS] =
+    { ConnectionKind::EDGE,     // W
+      ConnectionKind::EDGE,     // E
+      ConnectionKind::EDGE,     // S
+      ConnectionKind::EDGE,     // N
+      ConnectionKind::CORNER,   // SW
+      ConnectionKind::CORNER,   // SE
+      ConnectionKind::CORNER,   // NW
+      ConnectionKind::CORNER    // NE
+    };
 
-constexpr int NUM_NEIGHBOR_TYPES = 3;
+// Direction (useful only for an edge)
+constexpr int NUM_DIRECTIONS = 3;
+enum class Direction : int {
+  FORWARD  = 0,
+  BACKWARD = 1,
+  INVALID  = 2
+};
 
-//                                               W  E  S  N  SW  SE  NW  NE
-constexpr int IS_EDGE_NEIGHBOR[NUM_NEIGHBORS] = {1, 1, 1, 1, 0,  0,  0,  0};
-constexpr int IS_STRIDED_EDGE[NUM_EDGES] = {1, 1, 0, 0};
+// This is really only needed for edge-edge connections, but for
+// completeness (and ease of coding) we put them all. Notice that
+// edge-corner is not a valid connection
+constexpr Direction CONNECTION_DIRECTION[NUM_CONNECTIONS][NUM_CONNECTIONS] =
+  {
+    {Direction::BACKWARD, Direction::FORWARD,  Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // W/(W-E-S-N)
+    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // E/(W-E-S-N)
+    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // S/(W-E-S-N)
+    {Direction::BACKWARD, Direction::FORWARD,  Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // N/(W-E-S-N)
+    {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
+    {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
+    {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
+    {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD}
+  };
 
-constexpr int NEIGHBOR_EDGE_DIRECTION[NUM_EDGES][NUM_EDGES] = {
-                                     {DIRECTION_BWD, DIRECTION_FWD, DIRECTION_FWD, DIRECTION_BWD},  // W/(W-E-S-N)
-                                     {DIRECTION_FWD, DIRECTION_BWD, DIRECTION_BWD, DIRECTION_FWD},  // E/(W-E-S-N)
-                                     {DIRECTION_FWD, DIRECTION_BWD, DIRECTION_BWD, DIRECTION_FWD},  // S/(W-E-S-N)
-                                     {DIRECTION_BWD, DIRECTION_FWD, DIRECTION_FWD, DIRECTION_BWD}}; // N/(W-E-S-N)
-
-// A simple struct to store i,j indices of a gauss point. This is much like an std::pair (or, better, an std::tuple),
-// but with shorter and more meaningful member names than 'first' and 'second' or 'get(0)'
+// A simple struct to store i,j indices of a gauss point. This is much like an std::pair,
+// but with shorter and more meaningful member names than 'first' and 'second'.
 // Note: we want to allow aggregate initialization, so no explitit constructors (and no non-static methods)!
 struct GaussPoint
 {
   int ip;   // i
   int jp;   // j
-  int idx;  // = ip*NP+jp
 };
 
-// We only need 12 out of these 16, but for clarity, we define them all
-constexpr GaussPoint GP_0  = {0, 0,  0};
-constexpr GaussPoint GP_1  = {0, 1,  1};
-constexpr GaussPoint GP_2  = {0, 2,  2};
-constexpr GaussPoint GP_3  = {0, 3,  3};
-constexpr GaussPoint GP_4  = {1, 0,  4};
-constexpr GaussPoint GP_5  = {1, 1,  5};
-constexpr GaussPoint GP_6  = {1, 2,  6};
-constexpr GaussPoint GP_7  = {1, 3,  7};
-constexpr GaussPoint GP_8  = {2, 0,  8};
-constexpr GaussPoint GP_9  = {2, 1,  9};
-constexpr GaussPoint GP_10 = {2, 2, 10};
-constexpr GaussPoint GP_11 = {2, 3, 11};
-constexpr GaussPoint GP_12 = {3, 0, 12};
-constexpr GaussPoint GP_13 = {3, 1, 13};
-constexpr GaussPoint GP_14 = {3, 2, 14};
-constexpr GaussPoint GP_15 = {3, 3, 15};
+// We only need 12 out of these 16, but for clarity, we define them all, plus an invalid one
+constexpr GaussPoint GP_0  = {0, 0};
+constexpr GaussPoint GP_1  = {0, 1};
+constexpr GaussPoint GP_2  = {0, 2};
+constexpr GaussPoint GP_3  = {0, 3};
+constexpr GaussPoint GP_4  = {1, 0};
+constexpr GaussPoint GP_5  = {1, 1};
+constexpr GaussPoint GP_6  = {1, 2};
+constexpr GaussPoint GP_7  = {1, 3};
+constexpr GaussPoint GP_8  = {2, 0};
+constexpr GaussPoint GP_9  = {2, 1};
+constexpr GaussPoint GP_10 = {2, 2};
+constexpr GaussPoint GP_11 = {2, 3};
+constexpr GaussPoint GP_12 = {3, 0};
+constexpr GaussPoint GP_13 = {3, 1};
+constexpr GaussPoint GP_14 = {3, 2};
+constexpr GaussPoint GP_15 = {3, 3};
+constexpr GaussPoint GP_INVALID = {-1, -1};
 
-constexpr std::array<GaussPoint,NP> WEST_EDGE_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
-constexpr std::array<GaussPoint,NP> EAST_EDGE_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
-constexpr std::array<GaussPoint,NP> SOUTH_EDGE_PTS_FWD = {{ GP_0 , GP_1 , GP_2 , GP_3  }};
-constexpr std::array<GaussPoint,NP> NORTH_EDGE_PTS_FWD = {{ GP_12, GP_13, GP_14, GP_15 }};
+// We want to be able to access a connection's points in a uniform way.
+// Unfortunately, corners have 1 point, while edges have NP points. To
+// allow a single interface, we store 'NP' points for corners too, where
+// the 2nd,3rd and 4th point are GP_INVALID, an invalid gauss point.
 
-constexpr std::array<GaussPoint,NP> WEST_EDGE_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
-constexpr std::array<GaussPoint,NP> EAST_EDGE_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
-constexpr std::array<GaussPoint,NP> SOUTH_EDGE_PTS_BWD = {{ GP_3 , GP_2 , GP_1 , GP_0  }};
-constexpr std::array<GaussPoint,NP> NORTH_EDGE_PTS_BWD = {{ GP_15, GP_14, GP_13, GP_12 }};
+using ArrayGP = std::array<GaussPoint,NP>;
 
-// Now we pack all the indices
-constexpr std::array<std::array<GaussPoint,NP>,NUM_EDGES> EDGE_PTS_FWD =
-          { WEST_EDGE_PTS_FWD, EAST_EDGE_PTS_FWD, SOUTH_EDGE_PTS_FWD, NORTH_EDGE_PTS_FWD};
+constexpr ArrayGP WEST_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
+constexpr ArrayGP EAST_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
+constexpr ArrayGP SOUTH_PTS_FWD = {{ GP_0 , GP_1 , GP_2 , GP_3  }};
+constexpr ArrayGP NORTH_PTS_FWD = {{ GP_12, GP_13, GP_14, GP_15 }};
 
-constexpr std::array<std::array<GaussPoint,NP>,NUM_EDGES> EDGE_PTS_BWD =
-          { WEST_EDGE_PTS_BWD, EAST_EDGE_PTS_BWD, SOUTH_EDGE_PTS_BWD, NORTH_EDGE_PTS_BWD};
+constexpr ArrayGP WEST_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
+constexpr ArrayGP EAST_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
+constexpr ArrayGP SOUTH_PTS_BWD = {{ GP_3 , GP_2 , GP_1 , GP_0  }};
+constexpr ArrayGP NORTH_PTS_BWD = {{ GP_15, GP_14, GP_13, GP_12 }};
 
-// Finally, we pack the two arrays (F and B) in one
-constexpr std::array<std::array<GaussPoint,NP>,NUM_EDGES> EDGE_PTS[2] = {EDGE_PTS_FWD, EDGE_PTS_BWD};
+constexpr ArrayGP SWEST_PTS = {{ GP_0 , GP_INVALID, GP_INVALID, GP_INVALID }};
+constexpr ArrayGP SEAST_PTS = {{ GP_3 , GP_INVALID, GP_INVALID, GP_INVALID }};
+constexpr ArrayGP NWEST_PTS = {{ GP_12, GP_INVALID, GP_INVALID, GP_INVALID }};
+constexpr ArrayGP NEAST_PTS = {{ GP_15, GP_INVALID, GP_INVALID, GP_INVALID }};
 
-// The corner gauss points
-constexpr std::array<GaussPoint,NUM_CORNERS> CORNER_PTS = {GP_0, GP_3, GP_12, GP_15};
+constexpr ArrayGP NO_PTS = {{ }}; // Used as a placeholder later on
+
+// Now we pack all the connection points
+
+// Connections fwd
+constexpr ArrayGP CONNECTION_PTS_FWD [NUM_CONNECTIONS] =
+  { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+
+// Connections bwd
+constexpr ArrayGP CONNECTION_PTS_BWD [NUM_CONNECTIONS] =
+  { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+
+// All connections
+constexpr ArrayGP CONNECTION_PTS[NUM_DIRECTIONS][NUM_CONNECTIONS] =
+  {
+    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+    { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+    { NO_PTS }  // You should never access CONNECTIONS_PTS with Direction=INVALID
+  };
+
+// Edges and corners (fwd), used in the unpacking
+constexpr ArrayGP EDGE_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
+    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD };
+
+constexpr ArrayGP CORNER_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
+  { SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS};
 
 } // namespace Homme
 
