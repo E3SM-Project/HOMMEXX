@@ -58,100 +58,25 @@ public:
 
 private:
 
-  template<typename T>
-  struct Pointer {
-    static constexpr size_t rank = std::rank<T>::value;
-    static_assert (rank==1 || rank==2 || rank==3, "Error! Unsupported rank.\n");
-
-    static constexpr int first_extent  = static_cast<int>(std::extent<T,0>::value);
-    static constexpr int second_extent = static_cast<int>(std::extent<T,1>::value);
-    static constexpr int third_extent  = static_cast<int>(std::extent<T,2>::value);
-
-    using raw_type = typename std::remove_all_extents<T>::type;
-
-    Pointer () : ptr(nullptr) {}
-    Pointer (raw_type* src) : ptr(src) {}
-
-    const raw_type* data() const { return ptr; }
-
-    const raw_type& operator[] (const int i) const
-    {
-      assert (rank==1);
-      assert (i>=0 && i<first_extent);
-      return ptr[i];
-    }
-    raw_type& operator[] (const int i)
-    {
-      assert (rank==1);
-      assert (i>=0 && i<first_extent);
-      return ptr[i];
-    }
-
-    const raw_type& operator() (const int i) const
-    {
-      assert (rank==1);
-      assert (i>=0 && i<first_extent);
-      return ptr[i];
-    }
-    raw_type& operator() (const int i)
-    {
-      assert (rank==1);
-      assert (i>=0 && i<first_extent);
-      return ptr[i];
-    }
-
-    const raw_type& operator() (const int i, const int j) const
-    {
-      assert (rank==2);
-      assert (i>=0 && i<first_extent && j>=0 && j<second_extent);
-      return ptr[i*second_extent+j];
-    }
-    raw_type& operator() (const int i, const int j)
-    {
-      assert (rank==2);
-      assert (i>=0 && i<first_extent && j>=0 && j<second_extent);
-      return ptr[i*second_extent+j];
-    }
-
-    const raw_type& operator() (const int i, const int j, const int k) const
-    {
-      assert (rank==3);
-      assert (i>=0 && i<first_extent && j>=0 && j<second_extent && k>=0 && k<third_extent);
-      return ptr[(i*second_extent + j)*third_extent + k];
-    }
-    raw_type& operator() (const int i, const int j, const int k)
-    {
-      assert (rank==3);
-      assert (i>=0 && i<first_extent && j>=0 && j<second_extent && k>=0 && k<third_extent);
-      return ptr[(i*second_extent + j)*third_extent + k];
-    }
-
-  private:
-    raw_type* ptr;
-  };
-
   void build_requests ();
   void pack_and_send ();
   void recv_and_unpack ();
 
-  HostViewManaged<Pointer<Real[NP][NP]>**>                   m_2d_fields;
-  HostViewManaged<Pointer<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
+  HostViewManaged<HostViewUnmanaged<Real[NP][NP]>**>                   m_2d_fields;
+  HostViewManaged<HostViewUnmanaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
   // These views can look quite complicated. Basically, we want something like
   // edge_buffer(ielem,ifield,iedge) to point to the right area of one of the
   // three buffers above. In particular, if it is a local connection, it will
   // point to m_local_buffer (on both send and recv views), while for shared
-  // connection, it will point to the corresponding mpi buffer.
+  // connection, it will point to the corresponding mpi buffer, and for missing
+  // connection, it will point to the send/recv blackhole.
 
-  HostViewManaged<Pointer<Real[1]>**[NUM_CORNERS]>              m_send_2d_corners_buffers;
-  HostViewManaged<Pointer<Real[NP]>**[NUM_EDGES]>               m_send_2d_edges_buffers;
-  HostViewManaged<Pointer<Scalar[NUM_LEV]>**[NUM_CORNERS]>      m_send_3d_corners_buffers;
-  HostViewManaged<Pointer<Scalar[NP][NUM_LEV]>**[NUM_EDGES]>    m_send_3d_edges_buffers;
+  HostViewManaged<HostViewUnmanaged<Real*>**[NUM_CONNECTIONS]>               m_send_2d_buffers;
+  HostViewManaged<HostViewUnmanaged<Real*>**[NUM_CONNECTIONS]>               m_recv_2d_buffers;
 
-  HostViewManaged<Pointer<Real[1]>**[NUM_CORNERS]>              m_recv_2d_corners_buffers;
-  HostViewManaged<Pointer<Real[NP]>**[NUM_EDGES]>               m_recv_2d_edges_buffers;
-  HostViewManaged<Pointer<Scalar[NUM_LEV]>**[NUM_CORNERS]>      m_recv_3d_corners_buffers;
-  HostViewManaged<Pointer<Scalar[NP][NUM_LEV]>**[NUM_EDGES]>    m_recv_3d_edges_buffers;
+  HostViewManaged<HostViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>    m_send_3d_buffers;
+  HostViewManaged<HostViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>    m_recv_3d_buffers;
 
   // The number of registered fields
   int         m_num_2d_fields;
@@ -169,11 +94,9 @@ private:
 
   int                 m_num_elements;
 
-  int                 m_corner_size;
-  int                 m_edge_size;
+  int                       m_elem_buf_size[2];
 
-  MPI_Datatype m_mpi_corner_data_type;
-  MPI_Datatype m_mpi_edge_data_type;
+  MPI_Datatype              m_mpi_data_type[2];
 
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
@@ -190,7 +113,8 @@ private:
   mpi_handled_ptr               m_recv_buffer;
   std::unique_ptr<Real[]>       m_local_buffer;
 
-  Real         m_zero[NUM_LEV*VECTOR_SIZE];
+  Real         m_blackhole_send[NUM_LEV*VECTOR_SIZE];
+  Real         m_blackhole_recv[NUM_LEV*VECTOR_SIZE];
 
 };
 
@@ -210,7 +134,7 @@ void BoundaryExchange::register_field (HostView<Real*[DIM][NP][NP],Properties...
 
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      m_2d_fields(ie,m_num_2d_fields+idim) = Pointer<Real[NP][NP]>(&field(ie,start_dim+idim,0,0));
+      m_2d_fields(ie,m_num_2d_fields+idim) = Homme::subview(field,ie,start_dim+idim);
     }
   }
 
@@ -228,7 +152,7 @@ void BoundaryExchange::register_field (HostView<Scalar*[DIM][NP][NP][NUM_LEV],Pr
 
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      m_3d_fields(ie,m_num_3d_fields+idim) = Pointer<Scalar[NP][NP][NUM_LEV]>(&field(ie,start_dim+idim,0,0,0));
+      m_3d_fields(ie,m_num_3d_fields+idim) = Homme::subview(field,ie,start_dim+idim);
     }
   }
 
@@ -246,7 +170,7 @@ void BoundaryExchange::register_field (HostView<Scalar*[OUTER_DIM][DIM][NP][NP][
 
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      m_3d_fields(ie,m_num_3d_fields+idim) = Pointer<Scalar[NP][NP][NUM_LEV]>(&field(ie,outer_dim,start_dim+idim,0,0,0));
+      m_3d_fields(ie,m_num_3d_fields+idim) = Homme::subview(field,ie,outer_dim,start_dim+idim);
     }
   }
 
@@ -261,7 +185,7 @@ void BoundaryExchange::register_field (HostView<Real*[NP][NP],Properties...> fie
   assert (m_num_2d_fields+1<=m_2d_fields.extent_int(1));
 
   for (int ie=0; ie<m_num_elements; ++ie) {
-    m_2d_fields(ie,m_num_2d_fields) = Pointer<Real*[NP][NP]>(&field(ie,0,0));
+    m_2d_fields(ie,m_num_2d_fields) = Homme::subview(field,ie);
   }
 
   ++m_num_2d_fields;
@@ -275,7 +199,7 @@ void BoundaryExchange::register_field (HostView<Scalar*[NP][NP][NUM_LEV],Propert
   assert (m_num_3d_fields+1<=m_3d_fields.extent_int(1));
 
   for (int ie=0; ie<m_num_elements; ++ie) {
-    m_3d_fields(ie,m_num_3d_fields) = Pointer<Scalar*[NP][NP][NUM_LEV]>(&field(ie,0,0,0));
+    m_3d_fields(ie,m_num_3d_fields) = Homme::subview(field,ie);
   }
 
   ++m_num_3d_fields;
