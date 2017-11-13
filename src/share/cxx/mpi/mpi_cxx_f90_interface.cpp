@@ -9,11 +9,10 @@ namespace Homme
 extern "C"
 {
 
-void init_connectivity (const int& num_local_elems, const int& num_local_connections, const int& num_shared_connections)
+void init_connectivity (const int& num_local_elems)
 {
   Connectivity& connectivity = get_connectivity();
-  connectivity.set_num_my_elems(num_local_elems);
-  connectivity.set_num_connections(num_local_connections,num_shared_connections);
+  connectivity.set_num_elements(num_local_elems);
 }
 
 void add_connection (const int& first_elem_lid,  const int& first_elem_pos,  const int& first_elem_pid,
