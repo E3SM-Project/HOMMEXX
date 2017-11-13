@@ -564,6 +564,8 @@ void Elements::BufferViews::init(int num_elems) {
                                                          num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "buffer for vstar*qdp", num_elems);
+  qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
+      "work buffer for tracers", num_elems);
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 

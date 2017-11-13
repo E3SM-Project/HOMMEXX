@@ -23,8 +23,7 @@ struct EulerStepFunctor
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
-  {
-  }
+  {}
 
   KOKKOS_INLINE_FUNCTION
   static size_t shmem_size(int /*team_size*/) {
@@ -131,7 +130,7 @@ private:
     divergence_sphere_update(
       kv, -m_data.dt, 1.0, dinv, metdet, dvv,
       Kokkos::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq, ALL, ALL, ALL, ALL),
-      m_elements.buffers.vdp,
+      Kokkos::subview(m_elements.buffers.qwrk, kv.ie, kv.iq, ALL, ALL, ALL, ALL),
       Kokkos::subview(m_elements.buffers.qtens, kv.ie, kv.iq, ALL, ALL, ALL));
   }
 
