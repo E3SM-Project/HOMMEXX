@@ -37,7 +37,6 @@ contains
 
   subroutine prim_advance_init(par, elem,integration)
     use edge_mod, only : initEdgeBuffer
-    use control_mod, only : qsplit,rsplit
     implicit none
 
     type (parallel_t) :: par
@@ -45,18 +44,8 @@ contains
     character(len=*)    , intent(in) :: integration
     integer :: i
     integer :: ie
-!    integer, allocatable :: globalid(:)
 
-!    print *,'prim_advance_init: nelemd:= ',nelemd
-!    allocate(globalid(nelemd))
-!    print *,'prim_advance_init: after allocate '
-!    print *,'prim_advance_init: before call to initNewEdgeBuffer rsplit: ',rsplit
-    if (rsplit==0) then
-       call initEdgeBuffer(par,edge3p1,elem,3*nlev+1)
-    else
-       ! need extra buffer space for dp3d
-       call initEdgeBuffer(par,edge3p1,elem,4*nlev+1)
-    endif
+    call initEdgeBuffer(par,edge3p1,elem,4*nlev)
 
     if(integration == 'semi_imp') then
        call initEdgeBuffer(par,edge1,elem,nlev)

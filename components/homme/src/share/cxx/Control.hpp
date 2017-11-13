@@ -1,5 +1,5 @@
-#ifndef HOMMEXX_CAAR_CONTROL_HPP
-#define HOMMEXX_CAAR_CONTROL_HPP
+#ifndef HOMMEXX_CONTROL_HPP
+#define HOMMEXX_CONTROL_HPP
 
 #include "Types.hpp"
 
@@ -85,8 +85,6 @@ struct Control {
   ExecViewManaged<Real[NUM_LEV_P]> hybrid_a;
 };
 
-Control& get_control ();
-
 } // Namespace Homme
 
-#endif // HOMMEXX_CAAR_CONTROL_HPP
+#endif // HOMMEXX_CONTROL_HPP

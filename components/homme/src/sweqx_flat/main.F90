@@ -37,11 +37,11 @@ program main
   implicit none
 
   interface
-     subroutine init_kokkos() bind(c)
-     end subroutine init_kokkos
+     subroutine initialize_hommexx_session() bind(c)
+     end subroutine initialize_hommexx_session
 
-     subroutine finalize_kokkos() bind(c)
-     end subroutine finalize_kokkos
+     subroutine finalize_hommexx_session() bind(c)
+     end subroutine finalize_hommexx_session
   end interface
 
   type (element_t), pointer :: elem(:)
@@ -102,7 +102,7 @@ program main
   if(par%masterproc) print *, 'FORTRAN kernels only, DONT_USE_KOKKOS is set.'
 #else
   if(par%masterproc) print *, 'C++ kernels only, DONT_USE_KOKKOS is not set.'
-  call init_kokkos()
+  call initialize_hommexx_session()
 #endif 
 
   ! =====================================
@@ -135,7 +135,7 @@ program main
   ! ================================================
   ! End distributed memory region
   ! ================================================
-  call finalize_kokkos()
+  call finalize_hommexx_session()
   call t_stopf('Total')
   call t_prf('HommeSWTime',par%comm)
   call t_finalizef()

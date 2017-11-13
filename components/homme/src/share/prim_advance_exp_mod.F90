@@ -21,7 +21,7 @@ module prim_advance_exp_mod
   use parallel_mod,   only: abortmp, parallel_t, iam
   use time_mod,       only: Timelevel_t
   use prim_advance_caar_mod, only: compute_and_apply_rhs, edge3p1
-  use prim_advance_hypervis_mod, only: advance_hypervis, advance_hypervis_dp, advance_hypervis_lf
+  use prim_advance_hypervis_mod, only: advance_hypervis_dp, advance_hypervis_lf
 
   implicit none
   private
@@ -217,13 +217,8 @@ module prim_advance_exp_mod
              + 2*elem(ie)%state%v(:,:,:,:,np1)/3
         elem(ie)%state%T(:,:,:,np1)= elem(ie)%state%T(:,:,:,n0)/3 &
              + 2*elem(ie)%state%T(:,:,:,np1)/3
-        if (rsplit==0) then
-          elem(ie)%state%ps_v(:,:,np1)= elem(ie)%state%ps_v(:,:,n0)/3 &
-               + 2*elem(ie)%state%ps_v(:,:,np1)/3
-        else
-          elem(ie)%state%dp3d(:,:,:,np1)= elem(ie)%state%dp3d(:,:,:,n0)/3 &
-               + 2*elem(ie)%state%dp3d(:,:,:,np1)/3
-        endif
+        elem(ie)%state%dp3d(:,:,:,np1)= elem(ie)%state%dp3d(:,:,:,n0)/3 &
+             + 2*elem(ie)%state%dp3d(:,:,:,np1)/3
       enddo
       call t_stopf("RK2-SSP3_timestep")
     else if (method==3) then
@@ -281,30 +276,15 @@ module prim_advance_exp_mod
       ! Ullrich 3nd order 5 stage:   CFL=sqrt( 4^2 -1) = 3.87
       ! u1 = u0 + dt/5 RHS(u0)  (save u1 in timelevel nm1)
       call t_startf("U3-5stage_timestep")
-
-      !
-      ! phl: rhs: t=t
-      !
       call compute_and_apply_rhs(nm1,n0,n0,qn0,dt/5,elem,hvcoord,hybrid,&
            deriv,nets,nete,compute_diagnostics,eta_ave_w/4)
       ! u2 = u0 + dt/5 RHS(u1)
-      !
-      ! phl: rhs: t=t+dt/5
-      !
       call compute_and_apply_rhs(np1,n0,nm1,qn0,dt/5,elem,hvcoord,hybrid,&
            deriv,nets,nete,.false.,0d0)
       ! u3 = u0 + dt/3 RHS(u2)
-      !
-      ! phl: rhs: t=t+2*dt/5
-      !
       call compute_and_apply_rhs(np1,n0,np1,qn0,dt/3,elem,hvcoord,hybrid,&
            deriv,nets,nete,.false.,0d0)
       ! u4 = u0 + 2dt/3 RHS(u3)
-
-      !
-      ! phl: rhs: t=t+2*dt/5+dt/3
-      !
-
       call compute_and_apply_rhs(np1,n0,np1,qn0,2*dt/3,elem,hvcoord,hybrid,&
            deriv,nets,nete,.false.,0d0)
 
@@ -314,19 +294,10 @@ module prim_advance_exp_mod
              - elem(ie)%state%v(:,:,:,:,n0) ) /4
         elem(ie)%state%T(:,:,:,nm1)= (5*elem(ie)%state%T(:,:,:,nm1) &
              - elem(ie)%state%T(:,:,:,n0) )/4
-        if (rsplit==0) then
-          elem(ie)%state%ps_v(:,:,nm1)= ( 5*elem(ie)%state%ps_v(:,:,nm1) &
-               - elem(ie)%state%ps_v(:,:,n0) )/4
-        else
-          elem(ie)%state%dp3d(:,:,:,nm1)= (5*elem(ie)%state%dp3d(:,:,:,nm1) &
-               - elem(ie)%state%dp3d(:,:,:,n0) )/4
-        endif
+        elem(ie)%state%dp3d(:,:,:,nm1)= (5*elem(ie)%state%dp3d(:,:,:,nm1) &
+                - elem(ie)%state%dp3d(:,:,:,n0) )/4
       enddo
       ! u5 = (5*u1/4 - u0/4) + 3dt/4 RHS(u4)
-      !
-      ! phl: rhs: t=t+2*dt/5+dt/3+3*dt/4         -wrong RK times ...
-      !
-
       call compute_and_apply_rhs(np1,nm1,np1,qn0,3*dt/4,elem,hvcoord,hybrid,&
            deriv,nets,nete,.false.,3*eta_ave_w/4)
       ! final method is the same as:
@@ -495,13 +466,8 @@ module prim_advance_exp_mod
       ! leapfrog special case
       call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
     else if (method<=10) then ! not implicit
-      if (rsplit==0) then
-        ! forward-in-time, maybe hypervis applied to PS
-        call advance_hypervis(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
-      else
-        ! forward-in-time, hypervis applied to dp3d
-        call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
-      endif
+      ! forward-in-time, hypervis applied to dp3d
+      call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
     endif
 
 #ifdef ENERGY_DIAGNOSTICS
@@ -544,6 +510,7 @@ module prim_advance_exp_mod
 
     real (kind=real_kind) :: dp(np,np)! pressure thickness, vflux
     real(kind=real_kind)  :: time
+    real(kind=real_kind)  :: eta_dot_dpdn(np,np,nlevp)
 
     integer :: ie,k,n0,np1
 
@@ -553,32 +520,31 @@ module prim_advance_exp_mod
 
     call set_test_prescribed_wind(elem,deriv,hybrid,hv,dt,tl,nets,nete)
 
+    ! accumulate velocities and fluxes over timesteps
+    ! test code only dont bother to openmp thread
     do ie = nets,nete
-      ! asp2008 tests:
-      ! call asp_advection_vertical(time,hv,elem(ie)%state%ps_v(:,:,n0),eta_dot_dpdn)
-      ! accumulate mean fluxes for advection
-      !   if (rsplit==0) then
-      !      elem(ie)%derived%eta_dot_dpdn(:,:,:) = &
-      !           elem(ie)%derived%eta_dot_dpdn(:,:,:) + eta_dot_dpdn(:,:,:)*eta_ave_w
-      !   else
-      !      ! lagrangian case.  mean vertical velocity = 0. compute dp3d on floating levels
-      !      elem(ie)%derived%eta_dot_dpdn(:,:,:) = 0
-      !     do k=1,nlev
-      !         elem(ie)%state%dp3d(:,:,k,np1) = elem(ie)%state%dp3d(:,:,k,n0) + dt*(eta_dot_dpdn(:,:,k+1) - eta_dot_dpdn(:,:,k))
-      !      enddo
-      !   end if
-
-      ! get mean horizontal flux (rho*vel) for tracer advection
-      do k=1,nlev
-         if (rsplit==0) then
-            dp(:,:) =(hv%hyai(k+1)-hv%hyai(k))*hv%ps0 + (hv%hybi(k+1)-hv%hybi(k))*elem(ie)%state%ps_v(:,:,n0)
-         else
-            dp(:,:) = elem(ie)%state%dp3d(:,:,k,n0)
-         end if
-         elem(ie)%derived%vn0(:,:,1,k)=elem(ie)%derived%vn0(:,:,1,k) + eta_ave_w*elem(ie)%state%v(:,:,1,k,n0)*dp(:,:)
-         elem(ie)%derived%vn0(:,:,2,k)=elem(ie)%derived%vn0(:,:,2,k) + eta_ave_w*elem(ie)%state%v(:,:,2,k,n0)*dp(:,:)
-      enddo
-   end do
+       eta_dot_dpdn(:,:,:)=elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,:)
+       ! accumulate mean fluxes for advection                                                        
+       if (rsplit==0) then
+          elem(ie)%derived%eta_dot_dpdn(:,:,:) = &
+               elem(ie)%derived%eta_dot_dpdn(:,:,:) +eta_dot_dpdn(:,:,:)*eta_ave_w
+       else
+          ! lagrangian case.  mean vertical velocity = 0                                             
+          elem(ie)%derived%eta_dot_dpdn(:,:,:) = 0
+          ! update position of floating levels
+          do k=1,nlev
+             elem(ie)%state%dp3d(:,:,k,np1) = elem(ie)%state%dp3d(:,:,k,n0)  &
+                  + dt*(eta_dot_dpdn(:,:,k+1) - eta_dot_dpdn(:,:,k))
+          enddo
+       end if
+       ! accumulate U*dp 
+       do k=1,nlev
+          elem(ie)%derived%vn0(:,:,1,k)=elem(ie)%derived%vn0(:,:,1,k)+&
+eta_ave_w*elem(ie)%state%v(:,:,1,k,n0)*elem(ie)%state%dp3d(:,:,k,tl%n0)
+          elem(ie)%derived%vn0(:,:,2,k)=elem(ie)%derived%vn0(:,:,2,k)+&
+eta_ave_w*elem(ie)%state%v(:,:,2,k,n0)*elem(ie)%state%dp3d(:,:,k,tl%n0)
+       enddo
+    end do
 
   end subroutine
 #endif

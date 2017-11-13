@@ -109,18 +109,14 @@ module prim_advance_caar_mod
      !
      ! =========================================================
      kptr=0
-     call edgeVpack(edge3p1, elem(ie)%state%ps_v(:,:,np1),1,kptr,ie)
-
-     kptr=1
      call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
 
-     kptr=nlev+1
+     kptr=kptr+nlev
      call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
 
-     if (rsplit>0) then
-        kptr=kptr+2*nlev
-        call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
-     endif
+     kptr=kptr+2*nlev
+     call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+
   end do
 
   ! =============================================================
@@ -137,48 +133,13 @@ module prim_advance_caar_mod
      ! Unpack the edges for vgrad_T and v tendencies...
      ! ===========================================================
      kptr=0
-     call edgeVunpack(edge3p1, elem(ie)%state%ps_v(:,:,np1), 1, kptr, ie)
-
-     kptr=1
      call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
 
-     kptr=nlev+1
+     kptr=kptr+nlev
      call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
 
-     if (rsplit>0) then
-        if (0<ntrac.and.eta_ave_w.ne.0.) then
-          do k=1,nlev
-             stashdp3d(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)/elem(ie)%spheremp(:,:)
-          end do
-        endif
-
-        corners = 0.0d0
-        corners(1:np,1:np,:) = elem(ie)%state%dp3d(:,:,:,np1)
-        kptr=kptr+2*nlev
-        call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
-
-        if  (0<ntrac.and.eta_ave_w.ne.0.) then
-          desc = elem(ie)%desc
-          call edgeDGVunpack(edge3p1, corners, nlev, kptr, ie)
-          corners = corners/dt2
-
-          do k=1,nlev
-            tempdp3d = elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-            tempdp3d = tempdp3d - stashdp3d(:,:,k)
-            tempdp3d = tempdp3d/dt2
-
-            call distribute_flux_at_corners(cflux, corners(:,:,k), desc%getmapP)
-
-            cflux(1,1,:)   = elem(ie)%rspheremp(1,  1) * cflux(1,1,:)
-            cflux(2,1,:)   = elem(ie)%rspheremp(np, 1) * cflux(2,1,:)
-            cflux(1,2,:)   = elem(ie)%rspheremp(1, np) * cflux(1,2,:)
-            cflux(2,2,:)   = elem(ie)%rspheremp(np,np) * cflux(2,2,:)
-
-            tempflux =  eta_ave_w*subcell_dss_fluxes(tempdp3d, np, nc, elem(ie)%metdet, cflux)
-            elem(ie)%sub_elem_mass_flux(:,:,:,k) = elem(ie)%sub_elem_mass_flux(:,:,:,k) + tempflux
-          end do
-        end if
-     endif
+     kptr=kptr+2*nlev
+     call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
 
      ! ====================================================
      ! Scale tendencies by inverse mass matrix
@@ -193,17 +154,11 @@ module prim_advance_caar_mod
         elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
      end do
 
-     if (rsplit>0) then
-        ! vertically lagrangian: complete dp3d timestep:
-        do k=1,nlev
-           elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-        enddo
-        ! when debugging: also update ps_v
-        !elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
-     else
-        ! vertically eulerian: complete ps_v timestep:
-        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%ps_v(:,:,np1)
-     endif
+     ! vertically lagrangian: complete dp3d timestep:
+     do k=1,nlev
+        elem(ie)%state%dp3d(:,:,k,np1)=elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
+     enddo
+
   end do
 
 #ifdef DEBUGOMP

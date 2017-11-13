@@ -1,0 +1,31 @@
+#Jenkins project name: HOMMEXX_ride_CUDA_ProjSpace
+
+#!/bin/bash -lxe
+
+cd /home/projects/hommexx/nightlyCDash
+
+rm -rf * 
+
+mkdir repos
+
+cd repos
+cp -r ${WORKSPACE}/repos/HOMMEXX .
+cp -r ${WORKSPACE}/repos/Trilinos .
+
+export jenkins_hommexx_dir=/home/projects/hommexx/nightlyCDash/repos/HOMMEXX
+export jenkins_trilinos_dir=/home/projects/hommexx/nightlyCDash/repos/Trilinos
+
+cd ..
+
+#echo "Test" | /bin/mail -s "Hello world" ikalash@sandia.gov
+
+cp ${jenkins_hommexx_dir}/components/homme/dashboards/ride.sandia.gov/* .
+
+bsub -Is -x -n 16 -W 04:00 -J $BUILD_TAG -q rhel7F ./run_all_lsf.sh
+
+echo "Sending email..."
+bash send_email_ctest_cuda.sh
+echo "...done!" 
+
+chgrp wg-cmdv-hommexx -R /home/projects/hommexx/nightlyCDash/* 
+chmod ug+rwX -R /home/projects/hommexx/nightlyCDash/*

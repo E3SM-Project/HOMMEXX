@@ -4,6 +4,7 @@ SET(UNITTESTER_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
   ADD_EXECUTABLE(${target_name} ${UNITTESTER_DIR}/tester.cpp ${target_srcs})
   ADD_TEST(${target_name}_test ${target_name})
+  SET_TESTS_PROPERTIES(${target_name}_test PROPERTIES LABELS "unit")
 
   TARGET_LINK_LIBRARIES(${target_name} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 
