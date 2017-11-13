@@ -24,12 +24,10 @@ struct EulerStepFunctor
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
   {
-    // Nothing to be done here
   }
 
   KOKKOS_INLINE_FUNCTION
   static size_t shmem_size(int /*team_size*/) {
-    // One scalar buffer and two vector buffers
     return 0;
   }
 
@@ -56,7 +54,7 @@ struct EulerStepFunctor
 
   static void run() {
     // Get control structure
-    Control& data = get_control();
+    Control& data = Context::singleton().get_control();
 
     // Create the functor
     EulerStepFunctor func(data);
