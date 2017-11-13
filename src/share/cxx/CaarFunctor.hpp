@@ -23,13 +23,21 @@ struct CaarFunctor {
 
   static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
 
-  CaarFunctor() : m_data(), m_elements(get_elements()), m_deriv(get_derivative()) {
+  CaarFunctor(const Elements& elements, const Derivative& derivative)
+    : m_data(),
+      m_elements(elements),
+      m_deriv(derivative)
+  {
     // Nothing to be done here
   }
-
+  
   KOKKOS_INLINE_FUNCTION
-  CaarFunctor(const Control &data)
-      : m_data(data), m_elements(get_elements()), m_deriv(get_derivative()) {
+  CaarFunctor(const Control &data, const Elements& elements,
+              const Derivative& derivative)
+    : m_data(data),
+      m_elements(elements),
+      m_deriv(derivative)
+  {
     // Nothing to be done here
   }
 
@@ -467,8 +475,8 @@ private:
         const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         for (int iv=0; iv<=vector_end; ++iv) {
-          // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
-          p[iv] = p_prev + 0.5*dp_prev+ 0.5*dp[iv];
+          // p[k] = p[k-1] + 0.5*(dp[k-1] + dp[k])
+          p[iv] = p_prev + 0.5*(dp_prev + dp[iv]);
           // Update p[k-1] and dp[k-1]
           p_prev = p[iv];
           dp_prev = dp[iv];
@@ -498,8 +506,8 @@ private:
         Real& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)[ivec];
         const Real dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec];
 
-        // p[k] = p[k-1] + 0.5*dp[k-1] + 0.5*dp[k]
-        p = p_prev + 0.5*dp_prev+ 0.5*dp;
+        // p[k] = p[k-1] + 0.5*(dp[k-1] + dp[k])
+        p = p_prev + 0.5*(dp_prev+ dp);
         // Update p[k-1] and dp[k-1]
         p_prev = p;
         dp_prev = dp;

@@ -15,7 +15,7 @@ using Hommexx_Cuda = Kokkos::Cuda;
 using Hommexx_Cuda = void;
 #endif
 
-#ifdef KOKKO_HAVE_OPENMP
+#ifdef KOKKOS_HAVE_OPENMP
 using Hommexx_OpenMP = Kokkos::OpenMP;
 #else
 using Hommexx_OpenMP = void;

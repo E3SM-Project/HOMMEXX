@@ -10,7 +10,7 @@ createTestExec(prtcB_flat preqx_flat 4 4 72 FALSE FALSE 35 Fortran)
 INCLUDE_DIRECTORIES(${PREQX_FLAT_INCLUDE_DIRS})
 
 # Copy the needed input files to the binary dir
-CONFIGURE_FILE (${CMAKE_SOURCE_DIR}/test/reg_test/namelists/prtcB-r3.nl
+CONFIGURE_FILE (${CMAKE_SOURCE_DIR}/test/reg_test/namelists/prtcB-r3-dry.nl
                ${CMAKE_CURRENT_BINARY_DIR}/namelist.nl
                 COPYONLY)
 

@@ -40,13 +40,15 @@ program prim_main
 #endif
 
   implicit none
+#ifdef USE_KOKKOS_KERNELS
   interface
-     subroutine init_kokkos() bind(c)
-     end subroutine init_kokkos
+     subroutine initialize_hommexx_session() bind(c)
+     end subroutine initialize_hommexx_session
 
-     subroutine finalize_kokkos() bind(c)
-     end subroutine finalize_kokkos
+     subroutine finalize_hommexx_session() bind(c)
+     end subroutine finalize_hommexx_session
   end interface
+#endif
 
   type (element_t),  pointer  :: elem(:)
   type (fvm_struct), pointer  :: fvm(:)
@@ -70,7 +72,7 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   ! Kokkos has to be initialized before it is used, and before fortran initializes anything in OpenMP
-  call init_kokkos()
+  call initialize_hommexx_session()
 #endif
 
   ! =====================================================
@@ -297,10 +299,6 @@ program prim_main
   call prim_movie_finish
 #endif
 
-#ifdef USE_KOKKOS_KERNELS
-  call finalize_kokkos()
-#endif
-
   call t_stopf('Total')
   if(par%masterproc) print *,"writing timing data"
 !   write(numproc_char,*) par%nprocs
@@ -310,6 +308,9 @@ program prim_main
   call t_prf('HommeTime', par%comm)
   if(par%masterproc) print *,"calling t_finalizef"
   call t_finalizef()
+#ifdef USE_KOKKOS_KERNELS
+  call finalize_hommexx_session()
+#endif
   call haltmp("exiting program...")
 end program prim_main
 

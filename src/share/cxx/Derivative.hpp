@@ -24,8 +24,6 @@ private:
   ExecViewManaged<Real[NP][NP]> m_dvv_exec;
 };
 
-Derivative &get_derivative();
-
 } // namespace Homme
 
 #endif // HOMMEXX_DERIVATIVE_HPP
