@@ -18,74 +18,74 @@ namespace Homme {
 // Note: we template on ScalarType to allow both Real and Scalar case, and
 //       also to allow const/non-const versions.
 // Note: we assume to have exactly one runtime dimension.
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1>
+template<typename ScalarType, int DIM1, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1],MemSpace>
-subview(ViewType<ScalarType*[DIM1],MemSpace,MemManagement> v_in, int ie)
+subview(ViewType<ScalarType*[DIM1],MemSpace,Properties...> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [DIM1],MemSpace>(&v_in(ie,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
+template<typename ScalarType, int DIM1, int DIM2, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2],MemSpace,MemManagement> v_in, int ie)
+subview(ViewType<ScalarType*[DIM1][DIM2],MemSpace,Properties...> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [DIM1][DIM2],MemSpace>(&v_in(ie,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3],MemSpace,MemManagement> v_in, int ie)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3],MemSpace,Properties...> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [DIM1][DIM2][DIM3],MemSpace>(&v_in(ie,0,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM2][DIM3],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3],MemSpace,MemManagement> v_in, int ie, int idim1)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3],MemSpace,Properties...> v_in, int ie, int idim1)
 {
   return ViewUnmanaged<ScalarType [DIM2][DIM3],MemSpace>(&v_in(ie,idim1,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,MemManagement> v_in, int ie)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,Properties...> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [DIM1][DIM2][DIM3][DIM4],MemSpace>(&v_in(ie,0,0,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,MemManagement> v_in, int ie, int idim1)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,Properties...> v_in, int ie, int idim1)
 {
   return ViewUnmanaged<ScalarType [DIM2][DIM3][DIM4],MemSpace>(&v_in(ie,idim1,0,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM4],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2, int idim3)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4],MemSpace,Properties...> v_in, int ie, int idim1, int idim2, int idim3)
 {
   return ViewUnmanaged<ScalarType [DIM4],MemSpace>(&v_in(ie,idim1,idim2,idim3,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace,MemManagement> v_in, int ie)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace,Properties...> v_in, int ie)
 {
   return ViewUnmanaged<ScalarType [DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace>(&v_in(ie,0,0,0,0,0));
 }
 
-template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5>
+template<typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5, typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM3][DIM4][DIM5],MemSpace>
-subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
+subview(ViewType<ScalarType*[DIM1][DIM2][DIM3][DIM4][DIM5],MemSpace,Properties...> v_in, int ie, int idim1, int idim2)
 {
   return ViewUnmanaged<ScalarType [DIM3][DIM4][DIM5],MemSpace>(&v_in(ie,idim1,idim2,0,0,0));
 }
