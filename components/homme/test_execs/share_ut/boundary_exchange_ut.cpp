@@ -56,18 +56,18 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   Connectivity& connectivity = get_connectivity();
 
   // Retrieve local number of elements
-  int num_my_elems = connectivity.get_num_my_elems();
+  int num_elements = connectivity.get_num_elements();
   int rank = connectivity.get_comm().m_rank;
 
   // Create input data arrays
-  HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_cxx("", num_my_elems);
-  HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_f90("", num_my_elems);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_cxx("", num_elements);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_f90("", num_elements);
 
-  HostViewManaged<Scalar*[NUM_TIME_LEVELS][NP][NP][NUM_LEV]> field_3d_cxx ("", num_my_elems);
-  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> field_3d_f90("", num_my_elems);
+  HostViewManaged<Scalar*[NUM_TIME_LEVELS][NP][NP][NUM_LEV]> field_3d_cxx ("", num_elements);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> field_3d_f90("", num_elements);
 
-  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][DIM][NP][NP]> field_4d_f90 ("", num_my_elems);
-  HostViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]> field_4d_cxx ("", num_my_elems);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][DIM][NP][NP]> field_4d_f90 ("", num_elements);
+  HostViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]> field_4d_cxx ("", num_elements);
 
   // Create boundary exchange
   BoundaryExchange be(connectivity);
@@ -84,7 +84,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
     Kokkos::deep_copy(field_2d_cxx,field_2d_f90);
 
     genRandArray(field_3d_f90,engine,dreal);
-    for (int ie=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
           const int ilev = level / VECTOR_SIZE;
@@ -96,7 +96,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
 
     genRandArray(field_4d_f90,engine,dreal);
-    for (int ie=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int idim=0; idim<DIM; ++idim) {
           for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
@@ -112,7 +112,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
     boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
 
     // Compare answers
-    for (int ie=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int igp=0; igp<NP; ++igp) {
           for (int jgp=0; jgp<NP; ++jgp) {
@@ -125,7 +125,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
             REQUIRE(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx(ie,itl,igp,jgp)) < test_tolerance);
     }}}}
 
-    for (int ie=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
           const int ilev = level / VECTOR_SIZE;
@@ -141,7 +141,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
               REQUIRE(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec]) < test_tolerance);
     }}}}}
 
-    for (int ie=0; ie<num_my_elems; ++ie) {
+    for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int idim=0; idim<DIM; ++idim) {
           for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {

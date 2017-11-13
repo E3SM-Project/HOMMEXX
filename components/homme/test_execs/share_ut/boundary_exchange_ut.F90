@@ -165,12 +165,12 @@ contains
     use dimensions_mod, only : nelem
     use parallel_mod,   only : abortmp
     interface
-      subroutine init_connectivity (nelemd,num_local,num_shared) bind (c)
+      subroutine init_connectivity (nelemd) bind (c)
         use iso_c_binding, only : c_int
         !
         ! Inputs
         !
-        integer (kind=c_int), intent(in) :: nelemd, num_local, num_shared
+        integer (kind=c_int), intent(in) :: nelemd
       end subroutine init_connectivity
       subroutine finalize_connectivity () bind(c)
       end subroutine finalize_connectivity
@@ -194,32 +194,12 @@ contains
     !
     ! Locals
     !
-    integer :: ie, num_edges, num_local, num_shared, num_total_global, num_total_on_proc, ierr
+    integer :: ie, num_edges, ierr
     type(GridEdge_t) :: e
-
-    num_local = 0
-    num_shared = 0
 
     num_edges = SIZE(GridEdge)
 
-    do ie=1,num_edges
-      e = GridEdge(ie)
-      if (e%head%processor_number-1 .eq. par%rank) then
-        if(e%head%processor_number .eq. e%tail%processor_number) then
-          num_local = num_local+1
-        else
-          num_shared = num_shared+1
-        endif
-      endif
-    enddo
-
-    num_total_on_proc = num_shared+num_local
-    call MPI_Allreduce(num_total_on_proc,num_total_global,1,MPI_INTEGER,MPI_SUM,par%comm,ierr)
-    if (num_total_global /= num_edges) then
-      call abortmp ("Error! Somehow the number of local and shared edges don't add up to the total number of edges")
-    endif
-
-    call init_connectivity(nelemd, num_local, num_shared)
+    call init_connectivity(nelemd)
 
     do ie=1,num_edges
       e = GridEdge(ie)
