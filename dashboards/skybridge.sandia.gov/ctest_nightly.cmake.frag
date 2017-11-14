@@ -413,7 +413,7 @@ if (BUILD_HOMMEXX_OPENMP)
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
-    "-DUSE_NUM_PROCS=16"
+    "-DUSE_NUM_PROCS=8"
     "-DUSE_TRILINOS=FALSE"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstallOpenMP"
     "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
