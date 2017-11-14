@@ -1,3 +1,4 @@
+#include "Context.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
 
@@ -11,7 +12,7 @@ extern "C"
 
 void init_connectivity (const int& num_local_elems)
 {
-  Connectivity& connectivity = get_connectivity();
+  Connectivity& connectivity = Context::singleton().get_connectivity();
   connectivity.set_num_elements(num_local_elems);
 }
 
@@ -26,21 +27,21 @@ void add_connection (const int& first_elem_lid,  const int& first_elem_pos,  con
     std::abort();
   }
 
-  Connectivity& connectivity = get_connectivity();
+  Connectivity& connectivity = Context::singleton().get_connectivity();
   connectivity.add_connection(first_elem_lid-1, first_elem_pos-1, first_elem_pid-1,
                    second_elem_lid-1,second_elem_pos-1,second_elem_pid-1);
 }
 
 void finalize_connectivity ()
 {
-  Connectivity& connectivity = get_connectivity();
+  Connectivity& connectivity = Context::singleton().get_connectivity();
 
   connectivity.finalize();
 }
 
 void cleanup_mpi_structures ()
 {
-  std::map<std::string,BoundaryExchange>& be = get_all_boundary_exchange ();
+  std::map<std::string,BoundaryExchange>& be = Context::singleton().get_boundary_exchanges ();
   for (auto& it : be) {
     it.second.clean_up();
   }

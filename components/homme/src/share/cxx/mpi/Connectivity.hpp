@@ -95,8 +95,6 @@ private:
   HostViewManaged<ConnectionInfo*[NUM_CONNECTIONS]> m_connections;
 };
 
-Connectivity& get_connectivity();
-
 } // namespace Homme
 
 #endif // HOMMEXX_CONNECTIVITY_HPP
