@@ -22,6 +22,9 @@ SET (SPHERE_OPERATORS_UT_SRCS
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.F90
 )
@@ -31,6 +34,7 @@ SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS
   ${CONFIG_DIR}
   ${SRC_SHARE_DIR}
   ${SRC_SHARE_DIR}/cxx
+  ${SRC_SHARE_DIR}/cxx/mpi
   ${SHARE_UT_DIR}
   ${TIMING_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}

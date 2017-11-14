@@ -1,4 +1,6 @@
 #include <catch/catch.hpp>
+
+#include "Context.hpp"
 #include "BoundaryExchange.hpp"
 #include "Connectivity.hpp"
 #include "Utility.hpp"
@@ -53,7 +55,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
   //// Create connectivity
   init_connectivity_f90(num_scalar_fields_2d, num_scalar_fields_3d, num_vector_fields_3d, DIM);
-  Connectivity& connectivity = get_connectivity();
+  Connectivity& connectivity = Context::singleton().get_connectivity();
 
   // Retrieve local number of elements
   int num_elements = connectivity.get_num_elements();

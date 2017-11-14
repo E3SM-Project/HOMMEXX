@@ -127,10 +127,4 @@ void Connectivity::clean_up()
   m_finalized = false;
 }
 
-Connectivity& get_connectivity()
-{
-  static Connectivity c;
-  return c;
-}
-
 } // namespace Homme
