@@ -51,14 +51,6 @@ public:
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
-  // Host views for views we need to pass to BoundaryExchange
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror              h_u;
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror              h_v;
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror              h_t;
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror              h_dp3d;
-  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror   h_qdp;
-
-
   struct BufferViews {
 
     BufferViews() = default;

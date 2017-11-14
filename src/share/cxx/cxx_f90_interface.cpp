@@ -146,17 +146,7 @@ void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchang
 
   // Do the boundary exchange
   start_timer("caar_bexchV");
-  Kokkos::deep_copy(elements.h_u,elements.m_u);
-  Kokkos::deep_copy(elements.h_v,elements.m_v);
-  Kokkos::deep_copy(elements.h_t,elements.m_t);
-  Kokkos::deep_copy(elements.h_dp3d,elements.m_dp3d);
-
   be.exchange();
-
-  Kokkos::deep_copy(elements.m_u,elements.h_u);
-  Kokkos::deep_copy(elements.m_v,elements.h_v);
-  Kokkos::deep_copy(elements.m_t,elements.h_t);
-  Kokkos::deep_copy(elements.m_dp3d,elements.h_dp3d);
 
   // --- Post boundary echange
   profiling_resume();
@@ -190,16 +180,16 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
     std::stringstream ss;
     ss << "caar tl " << tl;
-    be[tl] = &get_boundary_exchange(ss.str());
+    be[tl] = &Context::singleton().get_boundary_exchange(ss.str());
 
     // Set the views of this time level into this time level's boundary exchange
     if (!be[tl]->is_registration_completed())
     {
       be[tl]->set_num_fields(0,4);
-      be[tl]->register_field(elements.h_u,1,tl);
-      be[tl]->register_field(elements.h_v,1,tl);
-      be[tl]->register_field(elements.h_t,1,tl);
-      be[tl]->register_field(elements.h_dp3d,1,tl);
+      be[tl]->register_field(elements.m_u,1,tl);
+      be[tl]->register_field(elements.m_v,1,tl);
+      be[tl]->register_field(elements.m_t,1,tl);
+      be[tl]->register_field(elements.m_dp3d,1,tl);
 
       be[tl]->registration_completed();
     }
@@ -225,7 +215,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   Kokkos::Experimental::md_parallel_for(
-    MDRangePolicy<HostExecSpace,4>({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1}),
+    policy_post,
     [&](int ie, int igp, int jgp, int ilev) {
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
