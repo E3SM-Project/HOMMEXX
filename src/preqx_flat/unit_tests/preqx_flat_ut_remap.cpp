@@ -9,6 +9,8 @@
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "Control.hpp"
+#include "RemapFunctor.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -77,6 +79,129 @@ void remap_q_ppm_c_callable(Real *Qdp, const int &nx,
                             const int &alg);
 
 };  // extern C
+
+template <typename boundary_cond> class ppm_remap_functor_test {
+  static_assert(std::is_base_of<PPM_Boundary_Conditions, boundary_cond>::value,
+                "PPM Remap test must have a valid boundary condition");
+
+public:
+  static constexpr int num_remap = boundary_cond::remap_dim;
+
+  ppm_remap_functor_test(Control &data)
+      : remap(data), ne(data.num_elems),
+        src_layer_thickness("source layer thickness", ne),
+        tgt_layer_thickness("target layer thickness", ne) {
+    for (int var = 0; var < num_remap; ++var) {
+      remap_vals[var] =
+          ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap var", ne);
+    }
+  }
+
+  struct TagGridTest {};
+  struct TagPPMTest {};
+  struct TagRemapTest {};
+
+  void test_grid() {
+    std::random_device rd;
+    rngAlg engine(rd());
+    for (int i = 0; i < num_remap; ++i) {
+      genRandArray(remap.dpo[i], engine,
+                   std::uniform_real_distribution<Real>(0.125, 0.875));
+    }
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
+    ExecSpace::fence();
+  }
+
+  void test_ppm() {
+    std::random_device rd;
+    rngAlg engine(rd());
+    for (int i = 0; i < num_remap; ++i) {
+      genRandArray(remap.dpo[i], engine,
+                   std::uniform_real_distribution<Real>(0.125, 0.875));
+    }
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
+    ExecSpace::fence();
+  }
+
+  void test_remap() {
+    std::random_device rd;
+    rngAlg engine(rd());
+    for (int i = 0; i < num_remap; ++i) {
+      genRandArray(remap.dpo[i], engine,
+                   std::uniform_real_distribution<Real>(0.125, 0.875));
+    }
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagRemapTest>(ne), *this);
+    ExecSpace::fence();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagGridTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = loop_idx / NP / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_grids(kv, Homme::subview(remap.dpo[var], kv.ie, igp, jgp),
+                          Homme::subview(remap.ppmdx[var], kv.ie, igp, jgp));
+    });
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagPPMTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = loop_idx / NP / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_ppm(
+          kv, Homme::subview(remap.ao[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ppmdx[var], kv.ie, igp, jgp),
+          Homme::subview(remap.dma[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ai[var], kv.ie, igp, jgp),
+          Homme::subview(remap.parabola_coeffs[var], kv.ie, igp, jgp));
+    });
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagRemapTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_remap>
+    elem_remap;
+    for (int var = 0; var < num_remap; ++var) {
+      elem_remap[var] = Homme::subview(remap_vals[var], kv.ie);
+    }
+    remap.remap(kv, num_remap, Homme::subview(src_layer_thickness, kv.ie),
+                Homme::subview(tgt_layer_thickness, kv.ie), elem_remap);
+  }
+
+  const int ne;
+  PPM_Vert_Remap<boundary_cond> remap;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness;
+  Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
+  remap_vals;
+};
+
+TEST_CASE("ppm", "vertical remap") {
+  constexpr int remap_dim = 38;
+  Control data;
+  data.num_elems = 10;
+  ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
+  ppm_remap_functor_test<PPM_Fixed<remap_dim> > remap_test_fixed(data);
+  remap_test_mirrored.test_grid();
+  remap_test_fixed.test_grid();
+  remap_test_mirrored.test_ppm();
+  remap_test_fixed.test_ppm();
+  remap_test_mirrored.test_remap();
+  remap_test_fixed.test_remap();
+}
+
+#if 0
 
 class remap_test {
  public:
@@ -441,3 +566,4 @@ TEST_CASE("Testing remap_Q_ppm() with alg=2",
   const int _alg = 2;
   testbody_remap_Q_ppm(_alg);
 };  // end fo test compute_ppm, alg=2
+#endif // 0
