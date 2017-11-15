@@ -245,12 +245,12 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
   KOKKOS_INLINE_FUNCTION
   void
-  remap(KernelVariables &kv, const int &num_remap,
+  remap(KernelVariables &kv, const int num_remap,
         ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
         ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
         Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
             remap_vals) const {
-    constexpr int gs = 2; // ?
+    constexpr int gs = 2; // ghost cells
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
                          [&](const int &loop_idx) {
       const int var = loop_idx / (NP * NP);
@@ -417,13 +417,21 @@ template <typename remap_type> struct Remap_Functor {
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness;
 
+  // Surface pressure
+  ExecViewManaged<Real * [NP][NP]> ps_v;
+
+  // ???
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> dp;
+
   remap_type remap;
 
   Remap_Functor(const Control &data, const Elements &elements)
       : m_data(data), m_elements(elements),
         tgt_layer_thickness("Target layer thickness", data.num_elems),
+        ps_v("Surface pressure", data.num_elems), dp("dp", data.num_elems),
         remap(data) {}
 
+  // Just implemented for CUDA until Kyungjoo's work is finished
   KOKKOS_INLINE_FUNCTION
   void operator()(const TeamMember &team) const {
     start_timer("Remap functor");
@@ -442,46 +450,97 @@ template <typename remap_type> struct Remap_Functor {
     if (m_data.rsplit == 0) {
       // No remapping here, just dpstar check
     } else {
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP * NUM_LEV),
+
+      // Compute ps_v separately, as it requires a parallel reduce
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                            [&](const int &loop_idx) {
-        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-        const int jgp = (loop_idx / NUM_LEV) % NP;
-        const int ilev = loop_idx % NUM_LEV;
-        tgt_layer_thickness(kv.ie, igp, jgp, ilev) =
-            (m_data.hybrid_a(ilev + 1) -
-             m_data.hybrid_a(ilev) * m_data.ps0)
-          // + (m_data.hybrid_b(ilev + 1) - m_data.hybrid_b(ilev))
-          // * ps_v
-          ;
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+
+        Kokkos::parallel_reduce(
+            Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+            [&](const int &ilevel, Real &accumulator) {
+              const int ilev = ilevel / VECTOR_SIZE;
+              const int vec_lev = ilevel % VECTOR_SIZE;
+              accumulator +=
+                  m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vec_lev];
+            },
+            ps_v(kv.ie, igp, jgp));
+        ps_v(kv.ie, igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
       });
+      kv.team_barrier();
+
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                           [&](const int &idx) {
+        const int igp = idx / NP;
+        const int jgp = idx % NP;
+
+        // Until Kyungjoo's vectorization works on CUDA
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                       NUM_PHYSICAL_LEV),
+                             [&](const int &ilevel) {
+          const int ilev = ilevel / VECTOR_SIZE;
+          const int vec_lev = ilevel % VECTOR_SIZE;
+          dp(kv.ie, igp, jgp, ilev)[vec_lev] =
+              (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
+                  m_data.ps0 +
+              (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
+                  ps_v(kv.ie, igp, jgp, ilevel);
+
+          tgt_layer_thickness(kv.ie, igp, jgp, ilev) =
+              (m_data.hybrid_a(ilev + 1) - m_data.hybrid_a(ilev) * m_data.ps0) +
+              (m_data.hybrid_b(ilev + 1) - m_data.hybrid_b(ilev)) *
+                  ps_v(kv.ie, igp, jgp, ilev);
+        });
+      });
+
       Kokkos::parallel_for(
           Kokkos::TeamThreadRange(kv.team, state_remap.size()),
           [&](const int &var) { remap_vals[var] = state_remap[var]; });
-      Kokkos::parallel_for(
-          Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP * NUM_LEV),
-          [&](const int &loop_idx) {
-            const int var = ((loop_idx / NUM_LEV) / NP) / NP;
-            const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-            const int jgp = (loop_idx / NUM_LEV) % NP;
-            const int ilev = loop_idx % NUM_LEV;
-            remap_vals[var](igp, jgp, ilev) *=
-                m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev);
-          });
-    }
+
+      kv.team_barrier();
+
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(
+                               kv.team, state_remap.size() * NP * NP * NUM_LEV),
+                           [&](const int &loop_idx) {
+        const int var = ((loop_idx / NUM_LEV) / NP) / NP;
+        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
+        const int jgp = (loop_idx / NUM_LEV) % NP;
+        const int ilev = loop_idx % NUM_LEV;
+        remap_vals[var](igp, jgp, ilev) *=
+            m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev);
+      });
+      kv.team_barrier();
+    } // rsplit == 0
 
     if (m_data.qsize > 0) {
       // remap_Q_ppm Qdp
-      for (int i = 0; i < m_data.qsize; i++, num_remap++) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, m_data.qsize),
+                           [&](const int &i) {
         // Need to verify this is the right tracer timelevel
-        remap_vals[num_remap] =
+        remap_vals[num_remap + i] =
             Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, i);
-      }
+      });
+      num_remap += m_data.qsize;
+      kv.team_barrier();
     }
-    if (num_remap > 0) {
 
+    if (num_remap > 0) {
       remap.remap(kv, num_remap,
                   Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
                   Homme::subview(tgt_layer_thickness, kv.ie), remap_vals);
+      kv.team_barrier();
+    }
+    if (m_data.rsplit != 0) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(
+                               kv.team, state_remap.size() * NP * NP * NUM_LEV),
+                           [&](const int &idx) {
+        const int var = ((loop_idx / NUM_LEV) / NP) / NP;
+        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
+        const int jgp = (loop_idx / NUM_LEV) % NP;
+        const int ilev = loop_idx % NUM_LEV;
+        state_remap[var](igp, jgp, ilev) /= dp(kv.ie, igp, jgp, ilev);
+      });
     }
 
     stop_timer("Remap functor");
