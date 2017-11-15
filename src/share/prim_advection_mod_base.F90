@@ -1736,11 +1736,48 @@ OMP_SIMD
 
   Qtens_ptr = c_loc(Qtens)
   call euler_push_results_c(Qtens_ptr)
+
+  do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+ !$omp parallel do private(q,k,dp_star)
+#endif
+    do q=1,qsize
+      do k=1,nlev
+        ! optionally add in hyperviscosity computed above:
+        if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
+      enddo
+
+      if ( limiter_option == 8) then
+        ! apply limiter to Q = Qtens / dp_star
+        call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
+                                      qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+      endif
+
+      ! apply mass matrix, overwrite np1 with solution:
+      ! dont do this earlier, since we allow np1_qdp == n0_qdp
+      ! and we dont want to overwrite n0_qdp until we are done using it
+      do k = 1 , nlev
+        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
+      enddo
+
+      if ( limiter_option == 4 ) then
+         call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
+      endif
+    enddo
+  end do
+
+  do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+ !$omp parallel do private(q,k,dp_star)
+#endif
+    do q=1,qsize
+      call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
+    enddo
+  end do  
 #else
   call t_startf("advance_qdp")
   call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
   call t_stopf("advance_qdp")
-#endif
 
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
@@ -1775,6 +1812,7 @@ OMP_SIMD
       call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
     enddo
   enddo ! ie loop
+#endif
 
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
