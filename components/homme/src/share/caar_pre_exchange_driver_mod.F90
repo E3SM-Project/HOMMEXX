@@ -470,6 +470,49 @@ contains
     end do
   end subroutine caar_compute_temperature
 
+
+!computes eta_dot_dpdn, T_vadv, V_vadv if rsplit>0
+!since it is so simple, there is only c_int version
+  subroutine caar_compute_eta_dot_dpdn_vert_lagrange_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np,nlev
+    use hybvcoord_mod  , only : hvcoord_t
+    implicit none
+
+    type (hvcoord_t)     , intent(in) :: hvcoord
+! halflevel vertical velocity on p-grid
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_dot_dpdn
+    real (kind=real_kind), intent(in),    dimension(np,np,nlev)   :: divdp
+    real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
+    integer :: k
+
+    do k=1,nlev
+    ! ==================================================
+    ! add this term to PS equation so we exactly conserve dry mass
+    ! ==================================================
+       sdot_sum(:,:) = sdot_sum(:,:) + divdp(:,:,k)
+       eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
+       ! can this be replaced with
+       ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k) ?
+    end do
+
+    ! ===========================================================
+    ! at this point, eta_dot_dpdn contains integral_etatop^eta[ divdp ]
+    ! compute at interfaces:
+    !    eta_dot_dpdn = -dp/dt - integral_etatop^eta[ divdp ]
+    ! for reference: at mid layers we have:
+    !    omega = v grad p  - integral_etatop^eta[ divdp ]
+    ! ===========================================================
+    do k=1,nlev-1
+       eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
+    end do
+
+    eta_dot_dpdn(:,:,1     ) = 0.0D0
+    eta_dot_dpdn(:,:,nlev+1) = 0.0D0
+
+  end subroutine caar_compute_eta_dot_dpdn_vert_lagrange_c_int
+
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -646,7 +689,7 @@ contains
       !    (div(v_k) + v_k.grad(lnps))*dsigma_k = div( v dp )
       ! used by eta_dot_dpdn and lnps tendency
       ! ==================================================
-      sdot_sum=0
+!      sdot_sum=0
 
 
       ! ==================================================
@@ -661,28 +704,8 @@ contains
       else
 
 !make this an F function
-         do k=1,nlev
-            ! ==================================================
-            ! add this term to PS equation so we exactly conserve dry mass
-            ! ==================================================
-            sdot_sum(:,:) = sdot_sum(:,:) + divdp(:,:,k)
-            eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
-            ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k)
-         end do
-
-         ! ===========================================================
-         ! at this point, eta_dot_dpdn contains integral_etatop^eta[ divdp ]
-         ! compute at interfaces:
-         !    eta_dot_dpdn = -dp/dt - integral_etatop^eta[ divdp ]
-         ! for reference: at mid layers we have:
-         !    omega = v grad p  - integral_etatop^eta[ divdp ]
-         ! ===========================================================
-         do k=1,nlev-1
-            eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:) -eta_dot_dpdn(:,:,k+1)
-         end do
-
-         eta_dot_dpdn(:,:,1     ) = 0.0D0
-         eta_dot_dpdn(:,:,nlev+1) = 0.0D0
+         ! compute eta_dot_dpdn
+         call caar_compute_eta_dot_dpdn_vert_lagrange_c_int(eta_dot_dpdn, divdp, hvcoord)
 
          ! ===========================================================
          ! Compute vertical advection of T and v from eq. CCM2 (3.b.1)
