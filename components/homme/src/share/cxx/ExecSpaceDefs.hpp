@@ -38,15 +38,15 @@ using Hommexx_DefaultExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 // Selecting the execution space. If no specific request, use Kokkos default
 // exec space.
 #if defined(HOMMEXX_CUDA_SPACE)
-using ExecSpace = Hommexx_Cuda;
+  using ExecSpace = Hommexx_Cuda;
 #elif defined(HOMMEXX_OPENMP_SPACE)
-using ExecSpace = Hommexx_OpenMP;
+  using ExecSpace = Hommexx_OpenMP;
 #elif defined(HOMMEXX_THREADS_SPACE)
-using ExecSpace = Hommexx_Threads;
+  using ExecSpace = Hommexx_Threads;
 #elif defined(HOMMEXX_SERIAL_SPACE)
-using ExecSpace = Hommexx_Serial;
+  using ExecSpace = Hommexx_Serial;
 #elif defined(HOMMEXX_DEFAULT_SPACE)
-using ExecSpace = Hommexx_DefaultExecSpace;
+  using ExecSpace = Hommexx_DefaultExecSpace;
 #else
 #error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
@@ -79,8 +79,8 @@ private:
     return ExecSpace::thread_pool_size();
 #else
 #ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-    if (max_threads_per_team<ExecSpaceType> >= num_elems) {
-      return max_threads_per_team<ExecSpaceType> / num_elems;
+    if (max_threads_per_team<ExecSpaceType>() >= num_elems) {
+      return max_threads_per_team<ExecSpaceType>() / num_elems;
     } else {
       return 1;
     }
