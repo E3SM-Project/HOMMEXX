@@ -65,6 +65,17 @@ public:
   KOKKOS_FORCEINLINE_FUNCTION
   void operator() (const TagUnpack&, const TeamMember& team) const;
 
+  template<typename ptr_type,typename raw_type>
+  struct Pointer {
+
+    Pointer& operator= (const ptr_type& p) { ptr = p; return *this; }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    raw_type& operator[] (int i) { return ptr[i]; }
+
+    ptr_type ptr;
+  };
+
 private:
 
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;

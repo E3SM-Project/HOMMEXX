@@ -195,43 +195,64 @@ void BoundaryExchange::registration_completed()
   //       (24 times, to be precise, one for each of the 3 corner connections on each of the
   //       cube's vertices), but it's never written into, so will always contain zeros (set by the constructor).
 
-  size_t buf_offset[3] = {0, 0, 0}; // LOCAL, SHARED and MISSING
-  int increment[3] = {NP, 1, 0}; // EDGE, CORNER, MISSING
-  ExecViewManaged<Real*>::pointer_type all_send_buffers[3] = {m_local_buffer.data(), m_send_buffer.data(), m_blackhole_send.data()};
-  ExecViewManaged<Real*>::pointer_type all_recv_buffers[3] = {m_local_buffer.data(), m_recv_buffer.data(), m_blackhole_recv.data()};
+  ExecViewManaged<size_t[3]> buf_offset("");
+  Kokkos::deep_copy(buf_offset,0);
 
-  ConnectionHelpers helpers;
+  ExecViewManaged<int[3]> increment("");
+  ExecViewManaged<int[3]>::HostMirror h_increment;
+  h_increment[etoi(ConnectionKind::EDGE)]    = NP;
+  h_increment[etoi(ConnectionKind::CORNER)]  =  1;
+  h_increment[etoi(ConnectionKind::MISSING)] =  0;
+  Kokkos::deep_copy(increment,h_increment);
+
+  ExecViewManaged<Pointer<decltype(m_local_buffer.data()),decltype(*m_local_buffer.data())>[3]> all_send_buffers(""), all_recv_buffers("");
+  ExecViewManaged<Pointer<decltype(m_local_buffer.data()),decltype(*m_local_buffer.data())>[3]>::HostMirror h_all_send_buffers, h_all_recv_buffers;
+  h_all_send_buffers = Kokkos::create_mirror_view(all_send_buffers);
+  h_all_recv_buffers = Kokkos::create_mirror_view(all_recv_buffers);
+
+  h_all_send_buffers[etoi(ConnectionSharing::LOCAL)]   = m_local_buffer.data();
+  h_all_send_buffers[etoi(ConnectionSharing::SHARED)]  = m_send_buffer.data();
+  h_all_send_buffers[etoi(ConnectionSharing::MISSING)] = m_blackhole_send.data();
+  h_all_recv_buffers[etoi(ConnectionSharing::LOCAL)]   = m_local_buffer.data();
+  h_all_recv_buffers[etoi(ConnectionSharing::SHARED)]  = m_recv_buffer.data();
+  h_all_recv_buffers[etoi(ConnectionSharing::MISSING)] = m_blackhole_recv.data();
+
+  Kokkos::deep_copy(all_send_buffers, h_all_send_buffers);
+  Kokkos::deep_copy(all_recv_buffers, h_all_recv_buffers);
 
   auto connections = m_connectivity.get_connections();
   // TODO: parallel on device? It's only a setup though...
-  for (int ie=0; ie<m_num_elements; ++ie) {
-    for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
-      const ConnectionInfo& info = connections(ie,iconn);
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,NUM_CONNECTIONS},{1,1}),
+                       KOKKOS_LAMBDA(const int ie, const int iconn) {
+    const ConnectionInfo& info = connections(ie,iconn);
+    ConnectionHelpers helpers;
 
-      const LidPos& local  = info.local;
+    const LidPos& local  = info.local;
 
-      Real* send_buffer = all_send_buffers[info.sharing];
-      Real* recv_buffer = all_recv_buffers[info.sharing];
+    auto send_buffer = all_send_buffers[info.sharing];
+    auto recv_buffer = all_recv_buffers[info.sharing];
 
-      //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
-      //      would be the same as edges, and we would not need the if statements here (and later on)
+    //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
+    //      would be the same as edges, and we would not need the if statements here (and later on)
 
-      for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-        m_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-        m_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-        buf_offset[info.sharing] += increment[info.kind];
-      }
-      for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-        m_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-        m_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-        buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
-      }
+    for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
+      m_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+      m_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+      buf_offset[info.sharing] += increment[info.kind];
     }
-  }
+    for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
+      m_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+      m_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+      buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
+    }
+  });
 
+#ifdef HOMMEXX_DEBUG
   // Sanity check
-  assert (buf_offset[etoi(ConnectionSharing::LOCAL)]==local_buffer_size);
-  assert (buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
+  ExecViewManaged<size_t[3]>::HostMirror h_buf_offset = Kokkos::create_mirror_view(buf_offset);
+  assert (h_buf_offset[etoi(ConnectionSharing::LOCAL)]==local_buffer_size);
+  assert (h_buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
+#endif // HOMMEXX_DEBUG
 
   // Create persistend send/recv requests, to reuse over and over
   build_requests ();
