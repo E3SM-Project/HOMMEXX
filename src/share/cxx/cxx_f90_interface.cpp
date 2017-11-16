@@ -216,7 +216,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   Kokkos::Experimental::md_parallel_for(
     policy_post,
-    [&](int ie, int igp, int jgp, int ilev) {
+    KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_v(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,igp,jgp,ilev)-elements.m_v(ie,n0,igp,jgp,ilev))/4.0;
