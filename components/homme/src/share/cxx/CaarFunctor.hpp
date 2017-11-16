@@ -30,8 +30,7 @@ struct CaarFunctor {
   {
     // Nothing to be done here
   }
-  
-  KOKKOS_INLINE_FUNCTION
+
   CaarFunctor(const Control &data, const Elements& elements,
               const Derivative& derivative)
     : m_data(data),

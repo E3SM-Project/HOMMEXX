@@ -532,15 +532,17 @@ template <typename remap_type> struct Remap_Functor {
       kv.team_barrier();
     }
     if (m_data.rsplit != 0) {
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(
-                               kv.team, state_remap.size() * NP * NP * NUM_LEV),
-                           [&](const int &idx) {
-        const int var = ((loop_idx / NUM_LEV) / NP) / NP;
-        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-        const int jgp = (loop_idx / NUM_LEV) % NP;
-        const int ilev = loop_idx % NUM_LEV;
-        state_remap[var](igp, jgp, ilev) /= dp(kv.ie, igp, jgp, ilev);
-      });
+      Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(kv.team, state_remap.size() * NP * NP),
+          [&](const int &loop_idx) {
+            const int var = (loop_idx / NP) / NP;
+            const int igp = (loop_idx / NP) % NP;
+            const int jgp = loop_idx % NP;
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                                 [&](const int &ilev) {
+              state_remap[var](igp, jgp, ilev) /= dp(kv.ie, igp, jgp, ilev);
+            });
+          });
     }
 
     stop_timer("Remap functor");
