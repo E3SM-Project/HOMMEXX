@@ -21,6 +21,9 @@ class BoundaryExchange
 {
 public:
 
+  struct TagPack {};
+  struct TagUnpack {};
+
   BoundaryExchange();
   BoundaryExchange(const Connectivity& connectivity);
   ~BoundaryExchange();
@@ -55,11 +58,14 @@ public:
   // Exchange all registered fields
   void exchange ();
 
-private:
-
   void build_requests ();
-  void pack_and_send ();
-  void recv_and_unpack ();
+
+  KOKKOS_FORCEINLINE_FUNCTION
+  void operator() (const TagPack&, const TeamMember& team) const;
+  KOKKOS_FORCEINLINE_FUNCTION
+  void operator() (const TagUnpack&, const TeamMember& team) const;
+
+private:
 
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
@@ -111,7 +117,6 @@ private:
 
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_recv;
-
 };
 
 // ============================ REGISTER METHODS ========================= //
@@ -127,11 +132,10 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP],Properties...
   assert (start_dim+num_dims<=DIM);
   assert (m_num_2d_fields+num_dims<=m_2d_fields.extent_int(1));
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
-    for (int idim=0; idim<num_dims; ++idim) {
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                       KOKKOS_LAMBDA(const int ie, const int idim){
       m_2d_fields(ie,m_num_2d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL);
-    }
-  }
+  });
 
   m_num_2d_fields += num_dims;
 }
@@ -147,11 +151,10 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV],Pr
   assert (start_dim+num_dims<=DIM);
   assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
-    for (int idim=0; idim<num_dims; ++idim) {
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                       KOKKOS_LAMBDA(const int ie, const int idim){
       m_3d_fields(ie,m_num_3d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL,ALL);
-    }
-  }
+  });
 
   m_num_3d_fields += num_dims;
 }
@@ -167,11 +170,10 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   assert (start_dim+num_dims<=DIM);
   assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
-    for (int idim=0; idim<num_dims; ++idim) {
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                       KOKKOS_LAMBDA(const int ie, const int idim){
       m_3d_fields(ie,m_num_3d_fields+idim) = Kokkos::subview(field,ie,outer_dim,start_dim+idim,ALL,ALL,ALL);
-    }
-  }
+  });
 
   m_num_3d_fields += num_dims;
 }
@@ -185,9 +187,10 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP],Properties...> fie
   assert (m_registration_started && !m_registration_completed);
   assert (m_num_2d_fields+1<=m_2d_fields.extent_int(1));
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
+  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+                       KOKKOS_LAMBDA(const int ie){
     m_2d_fields(ie,m_num_2d_fields) = Kokkos::subview(field,ie,ALL,ALL);
-  }
+  });
 
   ++m_num_2d_fields;
 }
@@ -201,11 +204,94 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Propert
   assert (m_registration_started && !m_registration_completed);
   assert (m_num_3d_fields+1<=m_3d_fields.extent_int(1));
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
+  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+                       KOKKOS_LAMBDA(const int ie){
     m_3d_fields(ie,m_num_3d_fields) = Kokkos::subview(field,ie,ALL,ALL,ALL);
-  }
+  });
 
   ++m_num_3d_fields;
+}
+
+// ============================ FUNCTOR METHODS ========================= //
+
+KOKKOS_FORCEINLINE_FUNCTION
+void BoundaryExchange::operator() (const TagPack&, const TeamMember& team) const
+{
+  ConnectionHelpers helpers;
+
+  const int ie = team.league_rank();
+
+  // First, pack 2d fields...
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_2d_fields*NUM_CONNECTIONS),
+                       KOKKOS_LAMBDA(const int idx){
+    const int ifield = idx / NUM_CONNECTIONS;
+    const int iconn  = idx % NUM_CONNECTIONS;
+
+    const ConnectionInfo& info = m_connectivity.get_connection(ie,iconn);
+    const LidPos& field_lpt  = info.local;
+    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+    // for local connections we need to manually copy on the remote element lid. We can do it here
+    const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+
+    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
+    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
+    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+      m_send_2d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k) = m_2d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp);
+    }
+  });
+  // ...then pack 3d fields.
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+                       KOKKOS_LAMBDA(const int idx){
+    const int ilev   =  idx % NUM_LEV;
+    const int iconn  = (idx / NUM_LEV) % NUM_CONNECTIONS;
+    const int ifield = (idx / NUM_LEV) / NUM_CONNECTIONS;
+
+    const ConnectionInfo& info = m_connectivity.get_connection(ie,iconn);
+    const LidPos& field_lpt  = info.local;
+    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+    // for local connections we need to manually copy on the remote element lid. We can do it here
+    const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+
+    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
+    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
+    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+      m_send_3d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k,ilev) = m_3d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+    }
+  });
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void BoundaryExchange::operator() (const TagUnpack&, const TeamMember& team) const
+{
+  ConnectionHelpers helpers;
+
+  const int ie = team.league_rank();
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                       [&](const int ifield){
+    for (int k=0; k<NP; ++k) {
+      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += m_recv_2d_buffers(ie,ifield,iedge)[k];
+      }
+    }
+    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+      m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner)[0];
+    }
+  });
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields*NUM_LEV),
+                       [&](const int idx){
+    const int ifield = idx / NUM_LEV;
+    const int ilev   = idx % NUM_LEV;
+    for (int k=0; k<NP; ++k) {
+      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += m_recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+      }
+    }
+    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+      m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+    }
+  });
 }
 
 } // namespace Homme
