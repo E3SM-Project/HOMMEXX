@@ -2,11 +2,13 @@
 #define HOMMEXX_CONNECTIVITY_HELPERS_HPP
 
 #include "Dimensions.hpp"
+#include "Types.hpp"
+
 #ifdef HOMMEXX_DEBUG
 #include <assert.h>
 #endif
 
-#include <array>
+#include <Kokkos_Array.hpp>
 
 namespace Homme
 {
@@ -70,20 +72,18 @@ namespace Homme
 // |                                                                                                              |
 // +--------------------------------------------------------------------------------------------------------------+
 
-// Here we define a bunch of conxtexpr int's and arrays (of arrays (of arrays)) of ints, which we can
-// use to easily retrieve information about a connection, such as the kind (corner or edge), the ordering
-// on the remote (only relevant for edges), the (i,j) coordinates of the Gauss point(s) in the connection,
-// and more.
-
 // Convert strong typed enum to the underlying int value
 // TODO: perhaps move this to Utility.hpp
 template<typename E>
-constexpr typename std::underlying_type<E>::type etoi(E e) {
+constexpr
+KOKKOS_FORCEINLINE_FUNCTION
+typename std::underlying_type<E>::type etoi(E e) {
   return static_cast<typename std::underlying_type<E>::type>(e);
 }
 
+// =================== Connection enums ====================== //
+
 // The kind of connection: edge, corner or missing (one of the corner connections on one of the 8 cube vertices)
-constexpr int NUM_CONNECTION_KINDS = 3;
 enum class ConnectionKind : int {
   EDGE    = 0,
   CORNER  = 1,
@@ -92,20 +92,12 @@ enum class ConnectionKind : int {
 };
 
 // The locality of connection: local, shared or missing
-constexpr int NUM_CONNECTION_SHARINGS = 3;
 enum class ConnectionSharing : int {
   LOCAL   = 0,
   SHARED  = 1,
   MISSING = 2,  // Used to detect missing connections
   ANY     = 3   // Used, kind of connection is not needed
 };
-
-// Number of neighbors
-constexpr int NUM_CONNECTIONS_PER_KIND = 4;
-constexpr int NUM_CORNERS = NUM_CONNECTIONS_PER_KIND;
-constexpr int NUM_EDGES   = NUM_CONNECTIONS_PER_KIND;
-constexpr int NUM_CONNECTIONS = NUM_CORNERS + NUM_EDGES;
-constexpr int CORNERS_OFFSET = NUM_EDGES;
 
 enum class ConnectionName : int {
   // Edges
@@ -121,23 +113,6 @@ enum class ConnectionName : int {
   NEAST = 7
 };
 
-constexpr int CONNECTION_SIZE[NUM_CONNECTION_KINDS] =
-  { NP,   // EDGE
-    1,    // CORNER
-    0     // MISSING (for completeness, but probably never used)
-  };
-
-constexpr ConnectionKind CONNECTION_KIND[NUM_CONNECTIONS] =
-    { ConnectionKind::EDGE,     // W
-      ConnectionKind::EDGE,     // E
-      ConnectionKind::EDGE,     // S
-      ConnectionKind::EDGE,     // N
-      ConnectionKind::CORNER,   // SW
-      ConnectionKind::CORNER,   // SE
-      ConnectionKind::CORNER,   // NW
-      ConnectionKind::CORNER    // NE
-    };
-
 // Direction (useful only for an edge)
 constexpr int NUM_DIRECTIONS = 3;
 enum class Direction : int {
@@ -146,11 +121,58 @@ enum class Direction : int {
   INVALID  = 2
 };
 
-// This is really only needed for edge-edge connections, but for
-// completeness (and ease of coding) we put them all. Notice that
-// edge-corner is not a valid connection
-constexpr Direction CONNECTION_DIRECTION[NUM_CONNECTIONS][NUM_CONNECTIONS] =
-  {
+// ============ Constexpr counters =========== //
+
+constexpr int NUM_CONNECTION_KINDS     = 3;
+constexpr int NUM_CONNECTION_SHARINGS  = 3;
+constexpr int NUM_CONNECTIONS_PER_KIND = 4;
+
+constexpr int NUM_CORNERS     = NUM_CONNECTIONS_PER_KIND;
+constexpr int NUM_EDGES       = NUM_CONNECTIONS_PER_KIND;
+constexpr int NUM_CONNECTIONS = NUM_CORNERS + NUM_EDGES;
+
+// =========== A simple type for a Gauss Point =========== //
+
+// A simple struct to store i,j indices of a gauss point. This is much like an std::pair,
+// but with shorter and more meaningful member names than 'first' and 'second'.
+// Note: we want to allow aggregate initialization, so no explitit constructors (and no non-static methods)!
+struct GaussPoint
+{
+  int ip;   // i
+  int jp;   // j
+};
+using ArrayGP = Kokkos::Array<GaussPoint,NP>;
+
+// =========== A container struct for the information about connections =========== //
+
+// Here we define a bunch of conxtexpr int's and arrays (of arrays (of arrays)) of ints, which we can
+// use to easily retrieve information about a connection, such as the kind (corner or edge), the ordering
+// on the remote (only relevant for edges), the (i,j) coordinates of the Gauss point(s) in the connection,
+// and more.
+struct ConnectionHelpers {
+
+  // Unpacking edges in the following order: S, N, W, E. For corners, order doesn't really matter
+  const int UNPACK_EDGES_ORDER  [NUM_EDGES]   = { etoi(ConnectionName::SOUTH), etoi(ConnectionName::NORTH), etoi(ConnectionName::WEST),  etoi(ConnectionName::EAST) };
+  const int UNPACK_CORNERS_ORDER[NUM_CORNERS] = { etoi(ConnectionName::SWEST), etoi(ConnectionName::SEAST), etoi(ConnectionName::NWEST), etoi(ConnectionName::NEAST)};
+
+  const int CONNECTION_SIZE[NUM_CONNECTION_KINDS] = {
+    NP,   // EDGE
+    1,    // CORNER
+    0     // MISSING (for completeness, but probably never used)
+  };
+
+  const ConnectionKind CONNECTION_KIND[NUM_CONNECTIONS] = {
+      ConnectionKind::EDGE,     // W
+      ConnectionKind::EDGE,     // E
+      ConnectionKind::EDGE,     // S
+      ConnectionKind::EDGE,     // N
+      ConnectionKind::CORNER,   // SW
+      ConnectionKind::CORNER,   // SE
+      ConnectionKind::CORNER,   // NW
+      ConnectionKind::CORNER    // NE
+  };
+
+  const Direction CONNECTION_DIRECTION[NUM_CONNECTIONS][NUM_CONNECTIONS] = {
     {Direction::BACKWARD, Direction::FORWARD,  Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // W/(W-E-S-N)
     {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // E/(W-E-S-N)
     {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // S/(W-E-S-N)
@@ -161,82 +183,67 @@ constexpr Direction CONNECTION_DIRECTION[NUM_CONNECTIONS][NUM_CONNECTIONS] =
     {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD}
   };
 
-// A simple struct to store i,j indices of a gauss point. This is much like an std::pair,
-// but with shorter and more meaningful member names than 'first' and 'second'.
-// Note: we want to allow aggregate initialization, so no explitit constructors (and no non-static methods)!
-struct GaussPoint
-{
-  int ip;   // i
-  int jp;   // j
+  // We only need 12 out of these 16, but for clarity, we define them all, plus an invalid one
+  const GaussPoint GP_0       {  0,  0 };
+  const GaussPoint GP_1       {  0,  1 };
+  const GaussPoint GP_2       {  0,  2 };
+  const GaussPoint GP_3       {  0,  3 };
+  const GaussPoint GP_4       {  1,  0 };
+  const GaussPoint GP_5       {  1,  1 };
+  const GaussPoint GP_6       {  1,  2 };
+  const GaussPoint GP_7       {  1,  3 };
+  const GaussPoint GP_8       {  2,  0 };
+  const GaussPoint GP_9       {  2,  1 };
+  const GaussPoint GP_10      {  2,  2 };
+  const GaussPoint GP_11      {  2,  3 };
+  const GaussPoint GP_12      {  3,  0 };
+  const GaussPoint GP_13      {  3,  1 };
+  const GaussPoint GP_14      {  3,  2 };
+  const GaussPoint GP_15      {  3,  3 };
+  const GaussPoint GP_INVALID { -1, -1 };
+
+  const ArrayGP WEST_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
+  const ArrayGP EAST_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
+  const ArrayGP SOUTH_PTS_FWD = {{ GP_0 , GP_1 , GP_2 , GP_3  }};
+  const ArrayGP NORTH_PTS_FWD = {{ GP_12, GP_13, GP_14, GP_15 }};
+
+  const ArrayGP WEST_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
+  const ArrayGP EAST_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
+  const ArrayGP SOUTH_PTS_BWD = {{ GP_3 , GP_2 , GP_1 , GP_0  }};
+  const ArrayGP NORTH_PTS_BWD = {{ GP_15, GP_14, GP_13, GP_12 }};
+
+  const ArrayGP SWEST_PTS = {{ GP_0 , GP_INVALID, GP_INVALID, GP_INVALID }};
+  const ArrayGP SEAST_PTS = {{ GP_3 , GP_INVALID, GP_INVALID, GP_INVALID }};
+  const ArrayGP NWEST_PTS = {{ GP_12, GP_INVALID, GP_INVALID, GP_INVALID }};
+  const ArrayGP NEAST_PTS = {{ GP_15, GP_INVALID, GP_INVALID, GP_INVALID }};
+
+  const ArrayGP NO_PTS = {{ }}; // Used as a placeholder later on
+
+  // Now we pack all the connection points
+
+  // Connections fwd
+  const ArrayGP CONNECTION_PTS_FWD [NUM_CONNECTIONS] =
+    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+
+  // Connections bwd
+  const ArrayGP CONNECTION_PTS_BWD [NUM_CONNECTIONS] =
+    { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+
+  // All connections
+  const ArrayGP CONNECTION_PTS[NUM_DIRECTIONS][NUM_CONNECTIONS] =
+    {
+      { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+      { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+      { NO_PTS }  // You should never access CONNECTIONS_PTS with Direction=INVALID
+    };
+
+  // Edges and corners (fwd), used in the unpacking
+  const ArrayGP EDGE_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
+      { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD };
+
+  const ArrayGP CORNER_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
+    { SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS};
 };
-
-// We only need 12 out of these 16, but for clarity, we define them all, plus an invalid one
-constexpr GaussPoint GP_0  = {0, 0};
-constexpr GaussPoint GP_1  = {0, 1};
-constexpr GaussPoint GP_2  = {0, 2};
-constexpr GaussPoint GP_3  = {0, 3};
-constexpr GaussPoint GP_4  = {1, 0};
-constexpr GaussPoint GP_5  = {1, 1};
-constexpr GaussPoint GP_6  = {1, 2};
-constexpr GaussPoint GP_7  = {1, 3};
-constexpr GaussPoint GP_8  = {2, 0};
-constexpr GaussPoint GP_9  = {2, 1};
-constexpr GaussPoint GP_10 = {2, 2};
-constexpr GaussPoint GP_11 = {2, 3};
-constexpr GaussPoint GP_12 = {3, 0};
-constexpr GaussPoint GP_13 = {3, 1};
-constexpr GaussPoint GP_14 = {3, 2};
-constexpr GaussPoint GP_15 = {3, 3};
-constexpr GaussPoint GP_INVALID = {-1, -1};
-
-// We want to be able to access a connection's points in a uniform way.
-// Unfortunately, corners have 1 point, while edges have NP points. To
-// allow a single interface, we store 'NP' points for corners too, where
-// the 2nd,3rd and 4th point are GP_INVALID, an invalid gauss point.
-
-using ArrayGP = std::array<GaussPoint,NP>;
-
-constexpr ArrayGP WEST_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
-constexpr ArrayGP EAST_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
-constexpr ArrayGP SOUTH_PTS_FWD = {{ GP_0 , GP_1 , GP_2 , GP_3  }};
-constexpr ArrayGP NORTH_PTS_FWD = {{ GP_12, GP_13, GP_14, GP_15 }};
-
-constexpr ArrayGP WEST_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
-constexpr ArrayGP EAST_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
-constexpr ArrayGP SOUTH_PTS_BWD = {{ GP_3 , GP_2 , GP_1 , GP_0  }};
-constexpr ArrayGP NORTH_PTS_BWD = {{ GP_15, GP_14, GP_13, GP_12 }};
-
-constexpr ArrayGP SWEST_PTS = {{ GP_0 , GP_INVALID, GP_INVALID, GP_INVALID }};
-constexpr ArrayGP SEAST_PTS = {{ GP_3 , GP_INVALID, GP_INVALID, GP_INVALID }};
-constexpr ArrayGP NWEST_PTS = {{ GP_12, GP_INVALID, GP_INVALID, GP_INVALID }};
-constexpr ArrayGP NEAST_PTS = {{ GP_15, GP_INVALID, GP_INVALID, GP_INVALID }};
-
-constexpr ArrayGP NO_PTS = {{ }}; // Used as a placeholder later on
-
-// Now we pack all the connection points
-
-// Connections fwd
-constexpr ArrayGP CONNECTION_PTS_FWD [NUM_CONNECTIONS] =
-  { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
-
-// Connections bwd
-constexpr ArrayGP CONNECTION_PTS_BWD [NUM_CONNECTIONS] =
-  { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
-
-// All connections
-constexpr ArrayGP CONNECTION_PTS[NUM_DIRECTIONS][NUM_CONNECTIONS] =
-  {
-    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
-    { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
-    { NO_PTS }  // You should never access CONNECTIONS_PTS with Direction=INVALID
-  };
-
-// Edges and corners (fwd), used in the unpacking
-constexpr ArrayGP EDGE_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
-    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD };
-
-constexpr ArrayGP CORNER_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
-  { SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS};
 
 } // namespace Homme
 

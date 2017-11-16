@@ -65,11 +65,18 @@ public:
   //@name Getters
   //@{
 
-  HostViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS]> get_connections () const { return m_connections; }
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS]> get_connections () const { return m_connections; }
+  KOKKOS_INLINE_FUNCTION
+  const ConnectionInfo& get_connection (const int ie, const int iconn) const { return m_connections(ie,iconn); }
 
   // Get number of connections with given kind and sharing
   int get_num_connections (const ConnectionSharing sharing, const ConnectionKind kind) const {
-    return m_num_connections(etoi(sharing), etoi(kind));
+    #ifdef __CUDA_ARCH__
+      return m_num_connections(etoi(sharing), etoi(kind));
+    #else
+      return h_num_connections(etoi(sharing), etoi(kind));
+    #endif
   }
 
   // Shortcuts for common sharing/kind pairs
@@ -90,9 +97,14 @@ private:
 
   int     m_num_elements;
 
-  HostViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]> m_num_connections;
+  ConnectionHelpers m_helpers;
 
-  HostViewManaged<ConnectionInfo*[NUM_CONNECTIONS]> m_connections;
+  // TODO: do we need the counters on the device? It appears we never use them...
+  ExecViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]>             m_num_connections;
+  ExecViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]>::HostMirror h_num_connections;
+
+  ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>             m_connections;
+  ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>::HostMirror h_connections;
 };
 
 } // namespace Homme

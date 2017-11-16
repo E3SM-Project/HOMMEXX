@@ -18,17 +18,18 @@ void Connectivity::set_num_elements (const int num_elements)
 {
   m_num_elements = num_elements;
 
-  m_connections = HostViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("Connections", m_num_elements);
-  m_num_connections = HostViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]>("Connections counts");
+  m_connections = ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("Connections", m_num_elements);
+  h_connections = Kokkos::create_mirror_view(m_connections);
 
-  Kokkos::deep_copy (m_num_connections,0);
+  m_num_connections = ExecViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]>("Connections counts");
+  h_num_connections = Kokkos::create_mirror_view(m_num_connections);
 
   // Initialize all connections to MISSING
   // Note: we still include local element/position, since we need that even for
   //       missinc connections!
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
-      ConnectionInfo& info = m_connections(ie,iconn);
+      ConnectionInfo& info = h_connections(ie,iconn);
 
       info.sharing = etoi(ConnectionSharing::MISSING);
       info.kind    = etoi(ConnectionKind::MISSING);
@@ -37,6 +38,9 @@ void Connectivity::set_num_elements (const int num_elements)
       info.local.pos = iconn;
     }
   }
+
+  // Initialize all counters to 0 (even the missing ones)
+  Kokkos::deep_copy (h_num_connections,0);
 }
 
 void Connectivity::add_connection (const int first_elem_lid,  const int first_elem_pos,  const int first_elem_pid,
@@ -54,10 +58,10 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
   {
 #ifdef HOMMEXX_DEBUG
     // There is no edge-to-corner connection. Either the elements share a corner or an edge.
-    assert (CONNECTION_KIND[first_elem_pos]==CONNECTION_KIND[second_elem_pos]);
+    assert (m_helpers.CONNECTION_KIND[first_elem_pos]==m_helpers.CONNECTION_KIND[second_elem_pos]);
 #endif
 
-    ConnectionInfo& info = m_connections(first_elem_lid,first_elem_pos);
+    ConnectionInfo& info = h_connections(first_elem_lid,first_elem_pos);
     LidPos& local  = info.local;
     LidPos& remote = info.remote;
 
@@ -68,11 +72,10 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
     remote.pos = second_elem_pos;
 
     // Kind
-    info.kind = etoi(CONNECTION_KIND[first_elem_pos]);
-
+    info.kind = etoi(m_helpers.CONNECTION_KIND[first_elem_pos]);
 
     // Direction
-    info.direction  = etoi(CONNECTION_DIRECTION[local.pos][remote.pos]);
+    info.direction = etoi(m_helpers.CONNECTION_DIRECTION[local.pos][remote.pos]);
 
     if (second_elem_pid!=m_comm.m_rank)
     {
@@ -84,23 +87,29 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
       info.sharing = etoi(ConnectionSharing::LOCAL);
     }
 
-    ++m_num_connections(info.sharing,info.kind);
+    ++h_num_connections(info.sharing,info.kind);
   }
 }
 
 void Connectivity::finalize()
 {
-  // Sanity check: Homme does not allow less than 2*2 elements per face, so each element
+  // Sanity check: Homme does not allow less than 2*2 elements on each of the cube's faces, so each element
   // should have at most ONE missing connection
-  for (int ie=0; ie<m_num_elements; ++ie) {
-    bool missing[NUM_CORNERS] = {false, false, false, false};
+  constexpr int corners[NUM_CORNERS] = { etoi(ConnectionName::SWEST), etoi(ConnectionName::SEAST), etoi(ConnectionName::NWEST), etoi(ConnectionName::NEAST)};
 
-    for (int ic=0; ic<NUM_CORNERS; ++ic) {
-      if (m_connections(ie,ic+CORNERS_OFFSET).kind == etoi(ConnectionKind::MISSING)) {
+  for (int ie=0; ie<m_num_elements; ++ie) {
+#ifdef HOMMEXX_DEBUG
+    bool missing[NUM_CORNERS] = {false, false, false, false};
+#endif
+
+    for (int ic : corners) {
+      if (h_connections(ie,ic).kind == etoi(ConnectionKind::MISSING)) {
+#ifdef HOMMEXX_DEBUG
         missing[ic] = true;
+#endif
 
         // Just for tracking purposes
-        ++m_num_connections(etoi(ConnectionSharing::MISSING),etoi(ConnectionKind::MISSING));
+        ++h_num_connections(etoi(ConnectionSharing::MISSING),etoi(ConnectionKind::MISSING));
       }
     }
     assert (std::count(missing,missing+NUM_CORNERS,true)<=1);
@@ -109,20 +118,27 @@ void Connectivity::finalize()
   // Updating counters for groups with same sharing/kind
   for (int kind=0; kind<NUM_CONNECTION_KINDS; ++kind) {
     for (int sharing=0; sharing<NUM_CONNECTION_SHARINGS; ++sharing) {
-      m_num_connections(etoi(ConnectionSharing::ANY),kind) += m_num_connections(sharing,kind);
-      m_num_connections(sharing,etoi(ConnectionKind::ANY)) += m_num_connections(sharing,kind);
+      h_num_connections(etoi(ConnectionSharing::ANY),kind) += h_num_connections(sharing,kind);
+      h_num_connections(sharing,etoi(ConnectionKind::ANY)) += h_num_connections(sharing,kind);
     }
-    m_num_connections(etoi(ConnectionKind::ANY),etoi(ConnectionKind::ANY)) += m_num_connections(etoi(ConnectionSharing::ANY),kind);
+    h_num_connections(etoi(ConnectionKind::ANY),etoi(ConnectionKind::ANY)) += h_num_connections(etoi(ConnectionSharing::ANY),kind);
   }
+
+  // Copying to device
+  Kokkos::deep_copy(m_connections, h_connections);
+  Kokkos::deep_copy(m_num_connections, h_num_connections);
 
   m_finalized = true;
 }
 
 void Connectivity::clean_up()
 {
-  m_connections = HostViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("",0);
-
+  m_connections = ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("",0);
   Kokkos::deep_copy(m_num_connections,0);
+
+  // Cleaning up also the host mirrors
+  Kokkos::deep_copy(h_connections, m_connections);
+  Kokkos::deep_copy(h_num_connections,0);
 
   m_finalized = false;
 }
