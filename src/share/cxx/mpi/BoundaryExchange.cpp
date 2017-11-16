@@ -198,8 +198,8 @@ void BoundaryExchange::registration_completed()
   ExecViewManaged<size_t[3]> buf_offset("");
   Kokkos::deep_copy(buf_offset,0);
 
-  ExecViewManaged<int[3]> increment("");
-  ExecViewManaged<int[3]>::HostMirror h_increment;
+  ExecViewManaged<int[3]> increment("increment");
+  ExecViewManaged<int[3]>::HostMirror h_increment("h_increment");
   h_increment[etoi(ConnectionKind::EDGE)]    = NP;
   h_increment[etoi(ConnectionKind::CORNER)]  =  1;
   h_increment[etoi(ConnectionKind::MISSING)] =  0;
