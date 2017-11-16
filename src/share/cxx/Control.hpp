@@ -40,6 +40,8 @@ struct Control {
              const bool compute_diagonstics, const Real eta_ave_w,
              CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr);
 
+  void random_init(int num_elems, int seed);
+
   // This method sets team_size if it wasn't already set via environment variable in the constructor
   void set_team_size ();
 

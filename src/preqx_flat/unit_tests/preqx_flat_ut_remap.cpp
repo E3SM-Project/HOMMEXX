@@ -189,8 +189,9 @@ public:
 
 TEST_CASE("ppm", "vertical remap") {
   constexpr int remap_dim = 38;
+  constexpr int num_elems = 30;
   Control data;
-  data.num_elems = 10;
+  data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
   ppm_remap_functor_test<PPM_Fixed<remap_dim> > remap_test_fixed(data);
   remap_test_mirrored.test_grid();
