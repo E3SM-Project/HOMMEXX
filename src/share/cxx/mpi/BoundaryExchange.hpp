@@ -287,7 +287,8 @@ void BoundaryExchange::operator() (const TagUnpack&, const TeamMember& team) con
       }
     }
     for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-      m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner)[0];
+      if (m_recv_2d_buffers(ie,ifield,icorner).size() > 0)
+        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner)[0];
     }
   });
   Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields*NUM_LEV),
@@ -300,7 +301,8 @@ void BoundaryExchange::operator() (const TagUnpack&, const TeamMember& team) con
       }
     }
     for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-      m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+      if (m_recv_3d_buffers(ie,ifield,icorner).size() > 0)
+        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner)(0,ilev);
     }
   });
 }
