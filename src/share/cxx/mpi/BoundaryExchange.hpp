@@ -106,7 +106,7 @@ private:
 
   const Comm&         m_comm;
 
-  const Connectivity& m_connectivity;
+  const Connectivity  m_connectivity;
 
   int                 m_num_elements;
 
