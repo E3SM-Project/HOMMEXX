@@ -183,61 +183,61 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 1]> ai,
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) const {
     for (int j : boundaries::ppm_indices_1()) {
-      if ((cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) *
-              (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)) >
+      if ((cell_means(j + 2) - cell_means(j + 1)) *
+              (cell_means(j + 1) - cell_means(j)) >
           0.0) {
-        Real da = dx(kv.ie, j, 0) *
-                  (dx(kv.ie, j, 1) *
-                       (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
-                   dx(kv.ie, j, 2) *
-                       (cell_means(kv.ie, j + 1) - cell_means(kv.ie, j)));
-        dma(kv.ie, j) = min(min(fabs(da), 2.0 * fabs(cell_means(kv.ie, j + 1) -
-                                                     cell_means(kv.ie, j))),
-                            2.0 * fabs(cell_means(kv.ie, j + 2) -
-                                       cell_means(kv.ie, j + 1))) *
+        Real da = dx(j, 0) *
+                  (dx(j, 1) *
+                       (cell_means(j + 2) - cell_means(j + 1)) +
+                   dx(j, 2) *
+                       (cell_means(j + 1) - cell_means(j)));
+        dma(j) = min(min(fabs(da), 2.0 * fabs(cell_means(j + 1) -
+                                                     cell_means(j))),
+                            2.0 * fabs(cell_means(j + 2) -
+                                       cell_means(j + 1))) *
                         copysign(1.0, da);
       } else {
-        dma(kv.ie, j) = 0.0;
+        dma(j) = 0.0;
       }
     }
 
     for (int j : boundaries::ppm_indices_2()) {
-      ai(kv.ie, j) =
-          cell_means(kv.ie, j + 1) +
-          dx(kv.ie, j, 3) *
-              (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) +
-          dx(kv.ie, j, 4) *
-              (dx(kv.ie, j, 5) * (dx(kv.ie, j, 6) - dx(kv.ie, j, 7)) *
-                   (cell_means(kv.ie, j + 2) - cell_means(kv.ie, j + 1)) -
-               dx(kv.ie, j, 8) * dma(kv.ie, j + 1) +
-               dx(kv.ie, j, 9) * dma(kv.ie, j));
+      ai(j) =
+          cell_means(j + 1) +
+          dx(j, 3) *
+              (cell_means(j + 2) - cell_means(j + 1)) +
+          dx(j, 4) *
+              (dx(j, 5) * (dx(j, 6) - dx(j, 7)) *
+                   (cell_means(j + 2) - cell_means(j + 1)) -
+               dx(j, 8) * dma(j + 1) +
+               dx(j, 9) * dma(j));
     }
 
     for (int j : boundaries::ppm_indices_3()) {
-      Real al = ai(kv.ie, j - 1);
-      Real ar = ai(kv.ie, j);
-      if ((ar - cell_means(kv.ie, j + 1)) * (cell_means(kv.ie, j + 1) - al) <=
+      Real al = ai(j - 1);
+      Real ar = ai(j);
+      if ((ar - cell_means(j + 1)) * (cell_means(j + 1) - al) <=
           0.) {
-        al = cell_means(kv.ie, j + 1);
-        ar = cell_means(kv.ie, j + 1);
+        al = cell_means(j + 1);
+        ar = cell_means(j + 1);
       }
-      if ((ar - al) * (cell_means(kv.ie, j + 1) - (al + ar) / 2.0) >
+      if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) >
           (ar - al) * (ar - al) / 6.0) {
-        al = 3.0 * cell_means(kv.ie, j + 1) - 2.0 * ar;
+        al = 3.0 * cell_means(j + 1) - 2.0 * ar;
       }
-      if ((ar - al) * (cell_means(kv.ie, j + 1) - (al + ar) / 2.0) <
+      if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) <
           -(ar - al) * (ar - al) / 6.0) {
-        ar = 3.0 * cell_means(kv.ie, j + 1) - 2.0 * al;
+        ar = 3.0 * cell_means(j + 1) - 2.0 * al;
       }
 
       // Computed these coefficients from the edge values and
       // cell mean in Maple. Assumes normalized coordinates:
       // xi=(x-x0)/dx
-      parabola_coeffs(kv.ie, j - 1, 0) =
-          1.5 * cell_means(kv.ie, j + 1) - (al + ar) / 4.0;
-      parabola_coeffs(kv.ie, j - 1, 1) = ar - al;
-      parabola_coeffs(kv.ie, j - 1, 2) =
-          -6.0 * cell_means(kv.ie, j + 1) + 3.0 * (al + ar);
+      parabola_coeffs(j - 1, 0) =
+          1.5 * cell_means(j + 1) - (al + ar) / 4.0;
+      parabola_coeffs(j - 1, 1) = ar - al;
+      parabola_coeffs(j - 1, 2) =
+          -6.0 * cell_means(j + 1) + 3.0 * (al + ar);
     }
 
     boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
