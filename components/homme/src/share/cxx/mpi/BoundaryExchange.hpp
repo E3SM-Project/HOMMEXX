@@ -143,10 +143,14 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP],Properties...
   assert (start_dim+num_dims<=DIM);
   assert (m_num_2d_fields+num_dims<=m_2d_fields.extent_int(1));
 
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int idim){
-      m_2d_fields(ie,m_num_2d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL);
-  });
+  {
+    auto l_num_2d_fields = m_num_2d_fields;
+    auto l_2d_fields = m_2d_fields;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                         KOKKOS_LAMBDA(const int ie, const int idim){
+        l_2d_fields(ie,l_num_2d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL);
+    });
+  }
 
   m_num_2d_fields += num_dims;
 }
@@ -162,10 +166,14 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV],Pr
   assert (start_dim+num_dims<=DIM);
   assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
 
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int idim){
-      m_3d_fields(ie,m_num_3d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL,ALL);
-  });
+  {
+    auto l_num_3d_fields = m_num_3d_fields;
+    auto l_3d_fields = m_3d_fields;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                         KOKKOS_LAMBDA(const int ie, const int idim){
+        l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL,ALL);
+    });
+  }
 
   m_num_3d_fields += num_dims;
 }
@@ -181,10 +189,14 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   assert (start_dim+num_dims<=DIM);
   assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
 
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int idim){
-      m_3d_fields(ie,m_num_3d_fields+idim) = Kokkos::subview(field,ie,outer_dim,start_dim+idim,ALL,ALL,ALL);
-  });
+  {
+    auto l_num_3d_fields = m_num_3d_fields;
+    auto l_3d_fields = m_3d_fields;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+                         KOKKOS_LAMBDA(const int ie, const int idim){
+        l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,outer_dim,start_dim+idim,ALL,ALL,ALL);
+    });
+  }
 
   m_num_3d_fields += num_dims;
 }
@@ -198,10 +210,14 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP],Properties...> fie
   assert (m_registration_started && !m_registration_completed);
   assert (m_num_2d_fields+1<=m_2d_fields.extent_int(1));
 
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
-                       KOKKOS_LAMBDA(const int ie){
-    m_2d_fields(ie,m_num_2d_fields) = Kokkos::subview(field,ie,ALL,ALL);
-  });
+  {
+    auto l_num_2d_fields = m_num_2d_fields;
+    auto l_2d_fields = m_2d_fields;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+                         KOKKOS_LAMBDA(const int ie){
+      l_2d_fields(ie,l_num_2d_fields) = Kokkos::subview(field,ie,ALL,ALL);
+    });
+  }
 
   ++m_num_2d_fields;
 }
@@ -215,10 +231,14 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Propert
   assert (m_registration_started && !m_registration_completed);
   assert (m_num_3d_fields+1<=m_3d_fields.extent_int(1));
 
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
-                       KOKKOS_LAMBDA(const int ie){
-    m_3d_fields(ie,m_num_3d_fields) = Kokkos::subview(field,ie,ALL,ALL,ALL);
-  });
+  {
+    auto l_num_3d_fields = m_num_3d_fields;
+    auto l_3d_fields = m_3d_fields;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+                         KOKKOS_LAMBDA(const int ie){
+      l_3d_fields(ie,l_num_3d_fields) = Kokkos::subview(field,ie,ALL,ALL,ALL);
+    });
+  }
 
   ++m_num_3d_fields;
 }
