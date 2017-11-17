@@ -358,6 +358,8 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
           // Maybe just recompute massn1 and double our work
           // to get significantly more threads?
           for(int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+            const int ilevel = k / VECTOR_SIZE;
+            const int ivector = k % VECTOR_SIZE;
             const int kk = kid[var](kv.ie, igp, jgp, k);
             const Real a0 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
                        a1 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
@@ -372,7 +374,7 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
             const Real massn2 =
                 mass_o[var](kv.ie, igp, jgp, kk - 1) +
                 integrate_par * dpo[var](kv.ie, igp, jgp, kk + 1);
-            remap_vals[var](igp, jgp, k) = massn2 - massn1;
+            remap_vals[var](igp, jgp, ilevel)[ivector] = massn2 - massn1;
             massn1 = massn2;
           }  // k loop
         });  // End team thread range
