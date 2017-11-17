@@ -221,7 +221,12 @@ void BoundaryExchange::registration_completed()
   Kokkos::deep_copy(all_recv_buffers, h_all_recv_buffers);
 
   auto connections = m_connectivity.get_connections();
-  // TODO: parallel on device? It's only a setup though...
+  auto l_num_2d_fields = m_num_2d_fields;
+  auto l_send_2d_buffers = m_send_2d_buffers;
+  auto l_recv_2d_buffers = m_recv_2d_buffers;
+  auto l_num_3d_fields = m_num_3d_fields;
+  auto l_send_3d_buffers = m_send_3d_buffers;
+  auto l_recv_3d_buffers = m_recv_3d_buffers;
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,NUM_CONNECTIONS},{1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn) {
     const ConnectionInfo& info = connections(ie,iconn);
@@ -235,14 +240,14 @@ void BoundaryExchange::registration_completed()
     //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
     //      would be the same as edges, and we would not need the if statements here (and later on)
 
-    for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-      m_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-      m_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+    for (int ifield=0; ifield<l_num_2d_fields; ++ifield) {
+      l_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+      l_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
       buf_offset[info.sharing] += increment[info.kind];
     }
-    for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-      m_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-      m_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+    for (int ifield=0; ifield<l_num_3d_fields; ++ifield) {
+      l_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+      l_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
       buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
     }
   });
