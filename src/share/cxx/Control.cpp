@@ -32,10 +32,10 @@ void Control::init(const int nets_in, const int nete_in,
   hybrid_bi = ExecViewManaged<Real[NUM_LEV_P+1]>(
       "Hybrid coordinates; coefficient B_interfaces");
 
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_am(hybrid_a_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_ai(hybrid_a_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_bm(hybrid_a_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_bi(hybrid_a_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_am(hybrid_am_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_ai(hybrid_ai_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_bm(hybrid_bm_ptr);
+  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_bi(hybrid_bi_ptr);
   Kokkos::deep_copy(hybrid_am, host_hybrid_am);
   Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
   Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
