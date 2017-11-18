@@ -105,18 +105,17 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
    //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
    //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
-   compute_eta_dpdn_rsplit(kv);
-   if(!rsplit){
-      //name is so-so
-      compute_eta_dpdn_no_rsplit(kv);
-      preq_vertadv_2(kv);
+   assign_zero_to_eta_dot_dpdn(kv);
+   if(!m_data.rsplit){
+      compute_eta_dot_dpdn_vertadv_euler(kv);
+      preq_vertadv(kv);
     };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     // Note this is dependent on eta_dot_dpdn from other levels and will cause
     // issues when rsplit is 0
-    // OG NOTE THIS!
+    // OG NOTE THIS! is it tested with eta_dot_dpdn \neq 0?
     compute_dp3d_np1(kv);
     check_dp3d(kv);
   } // TRIVIAL
@@ -177,7 +176,7 @@ struct CaarFunctor {
   // Make a templated subclass of an untemplated version of CaarFunctor
   // Specialize the templated subclass to implement these based on rsplit
   KOKKOS_INLINE_FUNCTION
-  void compute_eta_dpdn_rsplit(KernelVariables &kv) const {
+  void assign_zero_to_eta_dot_dpdn(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -189,8 +188,50 @@ struct CaarFunctor {
     kv.team_barrier();
   } // TRIVIAL
 
+
   KOKKOS_INLINE_FUNCTION
-  void compute_eta_dpdn_no_rsplit(KernelVariables &kv) const {
+  void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
+//do it without vectorization for now, like in Cuda space but without kokkos single
+      for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        const int kp1 = k+1;
+        const int ilevp1 = kp1 / VECTOR_SIZE;
+        const int ivecp1 = kp1 % VECTOR_SIZE;
+        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) += 
+           m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] =
+           m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
+      }
+
+      //note that index starts from 1
+      for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] -= 
+           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
+      }
+
+      constexpr const int Np1 = NUM_PHYSICAL_LEV;
+      const int ilevNp1 = Np1 / VECTOR_SIZE;
+      const int ivecNp1 = Np1 % VECTOR_SIZE;
+
+      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0;
+      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
+
+    });
+  }//not tested
+
+
+//this impl avoids sdot_sum array, but noncrucial energy diagn needs it
+/*
+  KOKKOS_INLINE_FUNCTION
+  void compute_eta_dpdn_(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -224,6 +265,7 @@ struct CaarFunctor {
 
     });
   } // NOT TESTED
+*/
 
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI

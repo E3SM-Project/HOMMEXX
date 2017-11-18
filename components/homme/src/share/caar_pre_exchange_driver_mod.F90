@@ -473,7 +473,7 @@ contains
 
 !computes eta_dot_dpdn, T_vadv, V_vadv if rsplit>0
 !since it is so simple, there is only c_int version
-  subroutine caar_compute_eta_dot_dpdn_vert_lagrange_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord) bind(c)
+  subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np,nlev
     use hybvcoord_mod  , only : hvcoord_t
@@ -510,7 +510,7 @@ contains
     eta_dot_dpdn(:,:,1     ) = 0.0D0
     eta_dot_dpdn(:,:,nlev+1) = 0.0D0
 
-  end subroutine caar_compute_eta_dot_dpdn_vert_lagrange_c_int
+  end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 
 
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
@@ -689,7 +689,10 @@ contains
       !    (div(v_k) + v_k.grad(lnps))*dsigma_k = div( v dp )
       ! used by eta_dot_dpdn and lnps tendency
       ! ==================================================
-!      sdot_sum=0
+      !it is used in energy diagnostics, too, so, it cannot be moved in 
+      !caar_compute_eta_dot_dpdn_... unless we recompute it 
+      !(probably, the best solution assuming divdp does not change before energy)
+      sdot_sum=0
 
 
       ! ==================================================
@@ -705,7 +708,7 @@ contains
 
 !make this an F function
          ! compute eta_dot_dpdn
-         call caar_compute_eta_dot_dpdn_vert_lagrange_c_int(eta_dot_dpdn, divdp, hvcoord)
+         call caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord)
 
          ! ===========================================================
          ! Compute vertical advection of T and v from eq. CCM2 (3.b.1)

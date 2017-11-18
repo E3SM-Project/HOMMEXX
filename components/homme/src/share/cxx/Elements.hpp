@@ -15,19 +15,19 @@ class Elements {
 public:
   // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
-  // Differential geometry things
+  // Quadrature weights and metric tensor
   ExecViewManaged<Real * [NP][NP]> m_spheremp;
   ExecViewManaged<Real * [NP][NP]> m_metdet;
-  // Prescrived surface geopotential height at eta = 1
+  // Prescrived surface geopotential at eta = 1 (at bottom)
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
-  // Differential geometry tensors
+  // D (map for covariant coordinates) and D^{-1}
   ExecViewManaged<Real * [2][2][NP][NP]> m_d;
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
   // Omega is the 'pressure vertical velocity' in papers, 
   // but omega=Dp/Dt  (not really vertical velocity).
-  // In homme derived%omega_p=(1/p)*(Dp/Dt)
+  // In homme omega is scaled, derived%omega_p=(1/p)*(Dp/Dt)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
@@ -36,12 +36,12 @@ public:
   // ???
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
 
-  // Velocity
+  // Velocity in lon lat basis
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
   // Temperature
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
-  // ???
+  // dp ( it is dp/d\eta * delta(eta))
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
   // q is the specific humidity
@@ -51,6 +51,8 @@ public:
   //    (note there are NUM_LEV_P of them)
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+
+//OG what is logic to put smth in buffers or not?
 
   struct BufferViews {
 
@@ -63,6 +65,7 @@ public:
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> omega_p;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vdp;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> div_vdp;
+    ExecViewManaged<Real*      [NP][NP]> sdot_sum;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
