@@ -71,6 +71,11 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
                                     const Real *t_current,
                                     Real *t_future);
 
+void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn, 
+                                                   Real *sdot_sum, 
+                                                   const Real *divdp, 
+                                                   const Real &hybi);
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -97,6 +102,8 @@ public:
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), dvv("dvv"), nets(1),
         nete(elements.num_elems()) {
+
+//make these random
     Real hybrid_am[NUM_LEV_P] = { 0 };
     Real hybrid_ai[NUM_LEV_P+1] = { 0 };
     Real hybrid_bm[NUM_LEV_P] = { 0 };
