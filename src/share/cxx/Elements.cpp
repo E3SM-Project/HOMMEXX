@@ -15,23 +15,24 @@ void Elements::init(const int num_elems) {
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
+//D is not a metric tensor, D^tD is
   m_d =
-      ExecViewManaged<Real * [2][2][NP][NP]>("D - metric tensor", m_num_elems);
+      ExecViewManaged<Real * [2][2][NP][NP]>("matrix D", m_num_elems);
   m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
-      "DInv - inverse metric tensor", m_num_elems);
+      "DInv - inverse of matrix D", m_num_elems);
 
   m_omega_p =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
   m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Lateral Velocity 1", m_num_elems);
+      "Derived Velocity u", m_num_elems);
   m_derived_vn0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Lateral Velocity 2", m_num_elems);
+      "Derived Velocity v", m_num_elems);
 
   m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
-      "Lateral Velocity 1", m_num_elems);
+      "Velocity u", m_num_elems);
   m_v = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
-      "Lateral Velocity 2", m_num_elems);
+      "Velocity v", m_num_elems);
   m_t = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "Temperature", m_num_elems);
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(

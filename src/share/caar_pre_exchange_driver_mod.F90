@@ -473,13 +473,12 @@ contains
 
 !computes eta_dot_dpdn, T_vadv, V_vadv if rsplit>0
 !since it is so simple, there is only c_int version
-  subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord) bind(c)
+  subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hybi) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np,nlev
-    use hybvcoord_mod  , only : hvcoord_t
     implicit none
 
-    type (hvcoord_t)     , intent(in) :: hvcoord
+    real (kind=real_kind), intent(in) :: hybi
 ! halflevel vertical velocity on p-grid
     real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_dot_dpdn
     real (kind=real_kind), intent(in),    dimension(np,np,nlev)   :: divdp
@@ -504,7 +503,7 @@ contains
     !    omega = v grad p  - integral_etatop^eta[ divdp ]
     ! ===========================================================
     do k=1,nlev-1
-       eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
+       eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
     end do
 
     eta_dot_dpdn(:,:,1     ) = 0.0D0
@@ -708,7 +707,7 @@ contains
 
 !make this an F function
          ! compute eta_dot_dpdn
-         call caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord)
+         call caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord%hybi)
 
          ! ===========================================================
          ! Compute vertical advection of T and v from eq. CCM2 (3.b.1)
