@@ -93,14 +93,17 @@ public:
       : functor(elements, Context::singleton().get_derivative()),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
-        dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
-        phis("Phis?", elements.num_elems()),
+        dp3d("DP3D", elements.num_elems()), 
+        phi("Phi", elements.num_elems()),
+        phis("Phi_surf", elements.num_elems()),
         omega_p("Omega_P", elements.num_elems()),
-        derived_v("Derived V?", elements.num_elems()),
+        derived_v("Derived V", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
-        qdp("QDP", elements.num_elems()), metdet("metdet", elements.num_elems()),
+        qdp("QDP", elements.num_elems()), 
+        metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
-        spheremp("SphereMP", elements.num_elems()), dvv("dvv"), nets(1),
+        spheremp("SphereMP", elements.num_elems()), 
+        dvv("dvv"), nets(1),
         nete(elements.num_elems()) {
 
 //make these random
@@ -113,6 +116,7 @@ public:
                         qn0, ps0, dt, false, eta_ave_w, 
                         hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
 
+//is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
@@ -894,6 +898,8 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems, engine);
 
+//which omega_p should survive? buffers or m_omega_p?
+//sort it out
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
       "source omega p", num_elems);
   genRandArray(source_omega_p, engine,
@@ -937,3 +943,84 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
     }
   }
 }
+
+class eta_dot_dpdn_vertadv_euler_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.compute_eta_dot_dp_deta_vertadv_euler(kv);
+  }
+};
+
+TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
+
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  Elements &elements = Context::singleton().get_elements();
+  //element fields (except buffers) are randomly init-ed
+  elements.random_init(num_elems, engine);
+
+  //host or source? diff tests use diff. name convensions
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
+  HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
+  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
+  genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
+  sync_to_device(div_vdp, elements.buffers.div_vdp);
+  sync_to_device(sdot_sum, elements.buffers.sdot_sum);
+
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> divdp_f90("divdp f90", num_elems);
+
+//need to finish this...
+  TestType test_functor(elements);
+  sync_to_host(elements.buffers.div_vdp, divdp_f90);
+
+
+
+  //RUN subfunctor 
+  test_functor.run_functor();
+  sync_to_host(elements.m_div_vdp, test_functor.omega_p);
+
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
+  temperature_virt_cxx("virtual temperature cxx", num_elems);
+
+  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
+
+  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
+      "virtual temperature f90");
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_omega_p_c_int(test_functor.eta_ave_w,
+                               Kokkos::subview(source_omega_p, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(omega_p_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL,
+                                               Kokkos::ALL).data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct = omega_p_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = test_functor.omega_p(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+        }
+      }
+    }
+  }
+}
+
+
+
+
+
+
+

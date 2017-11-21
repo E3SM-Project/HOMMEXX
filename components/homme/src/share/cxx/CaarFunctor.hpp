@@ -103,9 +103,11 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
-   //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
    //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
    assign_zero_to_eta_dot_dpdn(kv);
+   //nullifies sdot_sum
+   assign_zero_to_sdot_sum(kv);
+   //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
    if(!m_data.rsplit){
       compute_eta_dot_dpdn_vertadv_euler(kv);
       preq_vertadv(kv);
@@ -188,6 +190,16 @@ struct CaarFunctor {
     kv.team_barrier();
   } // TRIVIAL
 
+  KOKKOS_INLINE_FUNCTION
+  void assign_zero_to_sdot_sum(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
+    });
+    kv.team_barrier();
+  } // TRIVIAL
 
   KOKKOS_INLINE_FUNCTION
   void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
