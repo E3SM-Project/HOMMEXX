@@ -268,6 +268,28 @@ sync_to_host(Source_T source, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar[NP][NP][NUM_LEV]>::value &&
+        host_view_mappable<Dest_T, Real[NUM_PHYSICAL_LEV][NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
+       ++vector_level) {
+    for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          dest(level, igp, jgp) =
+            source_mirror(igp, jgp, vector_level)[vector];
+        }
+      }
+    }
+  }
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [2][NP][NP][NUM_LEV]>::value &&
         host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value,
     void>::type
@@ -548,6 +570,23 @@ typename std::enable_if<Kokkos::is_view<ViewType>::value, void>::type
 genRandArray(ViewType view, rngAlg &engine, PDF &&pdf) {
   genRandArray(view, engine, pdf,
                [](typename ViewType::HostMirror) { return true; });
+}
+
+template <typename ViewType>
+KOKKOS_INLINE_FUNCTION typename std::enable_if<Kokkos::is_view<ViewType>::value,
+                                               void>::type
+setArray(ViewType view, const typename ViewType::value_type &val) {
+  auto mirror = Kokkos::create_mirror_view(view);
+  setArray(view.data(), mirror.size(), val);
+}
+
+template <typename ValueType>
+KOKKOS_INLINE_FUNCTION typename std::enable_if<
+    !Kokkos::is_view<ValueType>::value, void>::type
+setArray(ValueType *data, const int &length, const ValueType &val) {
+  for (int i = 0; i < length; ++i) {
+    data[i] = val;
+  }
 }
 
 template <typename FPType>
