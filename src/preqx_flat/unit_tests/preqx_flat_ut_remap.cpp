@@ -16,47 +16,6 @@
 #include <stdio.h>
 #include <random>
 
-//Documenting failures with opt. flags.
-
-/*test compute_ppm_grids (alg=1) finished. 
- * test compute_ppm_grids (alg=2) finished. 
- * -------------------------------------------------------------------------------
- *  Testing compute_ppm() with alg=1
- *  -------------------------------------------------------------------------------
- /home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:382
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.015625
-
--------------------------------------------------------------------------------
-Testing compute_ppm() with alg=2
--------------------------------------------------------------------------------
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:388
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.015625
-
-test remap_Q_ppm (alg=1) finished. 
--------------------------------------------------------------------------------
-Testing remap_Q_ppm() with alg=2
--------------------------------------------------------------------------------
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:400
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:361: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers( fortran_output[_i][_j][_k][_l], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.0
-*/
-
-
-
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
@@ -64,21 +23,16 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 // sort out const here
-void compute_ppm_grids_c_callable(const Real *dx,
-                                  Real *rslt,
-                                  const int &alg);
+void compute_ppm_grids_c_callable(const Real *dx, Real *rslt, const int &alg);
 
-void compute_ppm_c_callable(const Real *a, const Real *dx,
-                            Real *coefs, const int &alg);
-
-// F.o object files have only small letters in names
-void remap_q_ppm_c_callable(Real *Qdp, const int &nx,
-                            const int &qsize,
-                            const Real *dp1,
-                            const Real *dp2,
+void compute_ppm_c_callable(const Real *a, const Real *dx, Real *coefs,
                             const int &alg);
 
-};  // extern C
+// F.o object files have only small letters in names
+void remap_q_ppm_c_callable(Real *Qdp, const int &nx, const int &qsize,
+                            const Real *dp1, const Real *dp2, const int &alg);
+
+}; // extern C
 
 template <typename boundary_cond> class ppm_remap_functor_test {
   static_assert(std::is_base_of<PPM_Boundary_Conditions, boundary_cond>::value,
@@ -111,6 +65,41 @@ public:
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
     ExecSpace::fence();
+
+    const int remap_alg = boundary_cond::fortran_remap_alg;
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input("fortran dpo");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_result("fortra ppmdx");
+    for (int var = 0; var < num_remap; ++var) {
+      auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx[var]);
+      Kokkos::deep_copy(kokkos_result, remap.ppmdx[var]);
+      for (int ie = 0; ie < ne; ++ie) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Kokkos::deep_copy(f90_input,
+                              Homme::subview(remap.dpo[var], ie, igp, jgp));
+            for (int i = 0; i < f90_input.extent(0); ++i) {
+              printf("%d %d %d %d %d: % .16f\n", var, ie, igp, jgp, i,
+                     f90_input(i));
+            }
+            compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
+                                         remap_alg);
+            for (int k = 0; k < f90_result.extent(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent(1);
+                   ++stencil_idx) {
+                printf("%d %d %d %d %d %d: % .16f vs % .16f\n", var, ie, igp,
+                       jgp, k, stencil_idx, f90_result(k, stencil_idx),
+                       kokkos_result(ie, igp, jgp, k, stencil_idx));
+                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
+                REQUIRE(
+                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
+                REQUIRE(f90_result(k, stencil_idx) ==
+                        kokkos_result(ie, igp, jgp, k, stencil_idx));
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   void test_ppm() {
@@ -123,6 +112,38 @@ public:
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
     ExecSpace::fence();
+
+    const int remap_alg = boundary_cond::fortran_remap_alg;
+
+    HostViewManaged<Real * [NUM_PHYSICAL_LEV + 4]> f90_input_1("fortran a", ne);
+    HostViewManaged<Real * [NUM_PHYSICAL_LEV + 2][10]> f90_input_2(
+        "fortran ppmdx", ne);
+    HostViewManaged<Real * [NUM_PHYSICAL_LEV][3]> f90_result("fortra result",
+                                                             ne);
+    for (int var = 0; var < num_remap; ++var) {
+      auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx[var]);
+      Kokkos::deep_copy(kokkos_result, remap.ppmdx[var]);
+
+      for (int ie = 0; ie < ne; ++ie) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Kokkos::deep_copy(f90_input_1,
+                              Homme::subview(remap.ao[var], ie, igp, jgp));
+            Kokkos::deep_copy(f90_input_2,
+                              Homme::subview(remap.ppmdx[var], ie, igp, jgp));
+            compute_ppm_c_callable(
+                Homme::subview(f90_input_1, ie, igp, jgp).data(),
+                Homme::subview(f90_input_2, ie, igp, jgp).data(),
+                Homme::subview(f90_result, ie, igp, jgp).data(), remap_alg);
+            for (int k = 0; k < f90_result.extent(3); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent(4);
+                   ++stencil_idx) {
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   void test_remap() {
@@ -188,8 +209,8 @@ public:
 };
 
 TEST_CASE("ppm", "vertical remap") {
-  constexpr int remap_dim = 38;
-  constexpr int num_elems = 30;
+  constexpr int remap_dim = 3 + QSIZE_D;
+  constexpr int num_elems = 10;
   Control data;
   data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
