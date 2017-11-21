@@ -180,10 +180,13 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   KOKKOS_INLINE_FUNCTION
   void compute_ppm(
       KernelVariables &kv,
+      // input  views
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 2][10]> dx,
+      // buffer views
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2]> dma,
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 1]> ai,
+      // result view
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) const {
     for (int j : boundaries::ppm_indices_1()) {
       if ((cell_means(j + 2) - cell_means(j + 1)) *
