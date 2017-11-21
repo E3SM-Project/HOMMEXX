@@ -86,9 +86,6 @@ public:
             for (int k = 0; k < f90_result.extent(0); ++k) {
               for (int stencil_idx = 0; stencil_idx < f90_result.extent(1);
                    ++stencil_idx) {
-                printf("%d %d %d %d %d %d: % .16f vs % .16f\n", var, ie, igp,
-                       jgp, k, stencil_idx, f90_result(k, stencil_idx),
-                       kokkos_result(ie, igp, jgp, k, stencil_idx));
                 REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
                 REQUIRE(
                     !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
@@ -115,11 +112,10 @@ public:
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
 
-    HostViewManaged<Real * [NUM_PHYSICAL_LEV + 4]> f90_input_1("fortran a", ne);
-    HostViewManaged<Real * [NUM_PHYSICAL_LEV + 2][10]> f90_input_2(
-        "fortran ppmdx", ne);
-    HostViewManaged<Real * [NUM_PHYSICAL_LEV][3]> f90_result("fortra result",
-                                                             ne);
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input_1("fortran a", ne);
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_input_2("fortran ppmdx",
+                                                                ne);
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result", ne);
     for (int var = 0; var < num_remap; ++var) {
       auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx[var]);
       Kokkos::deep_copy(kokkos_result, remap.ppmdx[var]);
@@ -131,13 +127,16 @@ public:
                               Homme::subview(remap.ao[var], ie, igp, jgp));
             Kokkos::deep_copy(f90_input_2,
                               Homme::subview(remap.ppmdx[var], ie, igp, jgp));
-            compute_ppm_c_callable(
-                Homme::subview(f90_input_1, ie, igp, jgp).data(),
-                Homme::subview(f90_input_2, ie, igp, jgp).data(),
-                Homme::subview(f90_result, ie, igp, jgp).data(), remap_alg);
-            for (int k = 0; k < f90_result.extent(3); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent(4);
+            compute_ppm_c_callable(f90_input_1.data(), f90_input_2.data(),
+                                   f90_result.data(), remap_alg);
+            for (int k = 0; k < f90_result.extent(2); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent(3);
                    ++stencil_idx) {
+                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
+                REQUIRE(
+                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
+                REQUIRE(f90_result(k, stencil_idx) ==
+                        kokkos_result(ie, igp, jgp, k, stencil_idx));
               }
             }
           }
