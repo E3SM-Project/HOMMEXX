@@ -100,7 +100,12 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 
 void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
   init(num_elems);
+
+//OG why this min value?
   constexpr const Real min_value = 0.015625;
+
+//all vars are init-ed within the same range, is it ok?
+//and all are positive
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
 
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -183,6 +188,14 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
             h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = random_dist(engine);
           }
         }
+
+//do quiet_nan for the tail of eta_
+//are there any other fields that are on interfaces?
+       for (int ilevel = NUM_PHYSICAL_LEV+1; ilevel < NUM_LEV_P*VECTOR_SIZE; ilevel++){ 
+         int ilev = ilevel / VECTOR_SIZE;
+         int ivector = ilevel % VECTOR_SIZE;
+         h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = std::numeric_limits<Real>::quiet_NaN();
+       }
 
         Real determinant = 0.0;
         while (std::abs(determinant) < min_value) {
@@ -534,10 +547,10 @@ void Elements::BufferViews::init(int num_elems) {
   temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
       "Gradient of temperature", num_elems);
   omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Omega_P why two named the same thing???", num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+      "Omega_P = omega/pressure = (Dp/Dt)/pressure", num_elems);
+  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("(u,v)*dp", num_elems);
   div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Divergence of dp3d * u", num_elems);
+      "Divergence of dp3d * (u,v)", num_elems);
   ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
       "Kinetic Energy + Geopotential Energy", num_elems);
   energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(

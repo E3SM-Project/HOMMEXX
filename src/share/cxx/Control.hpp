@@ -65,12 +65,14 @@ struct Control {
   int np1;
 
   // Tracers timelevel, inclusive range of 0-1
+  // or time level for moist temp?
   int qn0;
 
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;
 
   // Time step
+  // OG for dynamics?
   Real dt;
 
   // Weight for eta_dot_dpdn mean flux
