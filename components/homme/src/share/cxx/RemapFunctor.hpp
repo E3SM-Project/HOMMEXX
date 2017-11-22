@@ -251,19 +251,29 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
             remap_vals) const {
     constexpr int gs = 2; // ghost cells
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV * NP * NP),
+        [&](const int &loop_idx) {
+          const int k = (loop_idx / NP) / NP;
+          const int igp = (loop_idx / NP) % NP;
+          const int jgp = loop_idx % NP;
+          int ilevel = k / VECTOR_SIZE;
+          int ivector = k % VECTOR_SIZE;
+          dpn(kv.ie, igp, jgp, k + 2) =
+              tgt_layer_thickness(igp, jgp, ilevel)[ivector];
+          dpo(kv.ie, igp, jgp, k + 2) =
+              src_layer_thickness(igp, jgp, ilevel)[ivector];
+        });
+    kv.team_barrier();
+
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       pin(kv.ie, igp, jgp, 0) = 0.0;
       pio(kv.ie, igp, jgp, 0) = 0.0;
+      // scan region
       for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
-        int ilevel = (k - 1) / VECTOR_SIZE;
-        int ivector = (k - 1) % VECTOR_SIZE;
-        dpn(kv.ie, igp, jgp, k + 1) =
-            tgt_layer_thickness(igp, jgp, ilevel)[ivector];
-        dpo(kv.ie, igp, jgp, k + 1) =
-            src_layer_thickness(igp, jgp, ilevel)[ivector];
         pin(kv.ie, igp, jgp, k) =
             pin(kv.ie, igp, jgp, k - 1) + dpn(kv.ie, igp, jgp, k + 1);
         pio(kv.ie, igp, jgp, k) =
@@ -282,16 +292,32 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       // either.
       pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
           pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
+    });
+    kv.team_barrier();
 
-      // Fill in the ghost regions with mirrored values.
-      // if vert_remap_q_alg is defined, this is of no
-      // consequence.
-      for (int k = 1; k <= gs; k++) {
-        dpo(kv.ie, igp, jgp, 1 - k + 1) = dpo(kv.ie, igp, jgp, k + 1);
-        dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
-            dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-      } // end k loop
+    // TODO: Move this above the previous region and verify to reduce
+    // team_barrier usage
+    //
+    // Fill in the ghost regions with mirrored values.
+    // if vert_remap_q_alg is defined, this is of no
+    // consequence.
+    // Note that the range of k makes this completely parallel,
+    // without any data dependencies
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, gs * NP * NP),
+                         [&](const int &loop_idx) {
+      const int k = (loop_idx / NP) / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
+      dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
+          dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k);
+    });
+    kv.team_barrier();
 
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
       // Compute remapping intervals once for all
       // tracers. Find the old grid cell index in which
       // the k-th new cell interface resides. Then
@@ -303,9 +329,11 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       // zero or close to dpo because of minimial
       // deformation. Numerous tests confirmed that the
       // bottom and top of the grids match to machine
-      // precision, so I set them equal to each other.
+      // precision, so set them equal to each other.
       for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
         int kk = k;
+        // This reduces the work required to find the index where this fails at,
+        // and is typically less than NUM_PHYSICAL_LEV^2
         while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k)) {
           kk++;
         }
@@ -330,7 +358,10 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       compute_grids(kv, point_dpo, point_ppmdx);
     });
     kv.team_barrier();
+    // Verified to here
 
+    // More parallelism than we need here, maybe break it up into a
+    // ThreadVectorRange as well?
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
                          [&](const int &loop_idx) {
       const int var = (loop_idx / NP) / NP;
@@ -359,6 +390,10 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
                   Homme::subview(dma[var], kv.ie, igp, jgp),
                   Homme::subview(ai[var], kv.ie, igp, jgp),
                   Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
+
+      if (kv.ie == 0 && var == 0 && igp == 0 && jgp == 0) {
+        for(int k = 0; k < NUM_PHYSICAL_LEV
+      }
 
       Real massn1 = 0.0;
 
