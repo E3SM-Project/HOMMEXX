@@ -186,6 +186,17 @@ public:
           ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap variable", ne);
       genRandArray(remap_vals[i], engine, dist);
     }
+
+    // This must be initialize before remap_vals is updated
+    HostViewManaged<Real * [num_remap][NUM_PHYSICAL_LEV][NP][NP]> f90_remap_qdp(
+        "fortran qdp", ne);
+    for (int var = 0; var < num_remap; ++var) {
+      for (int ie = 0; ie < ne; ++ie) {
+        sync_to_host(Homme::subview(remap_vals[var], ie),
+                     Homme::subview(f90_remap_qdp, ie, var));
+      }
+    }
+
     src_layer_thickness_kokkos = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
         "kokkos source layer thickness", ne);
     genRandArray(src_layer_thickness_kokkos, engine, dist);
@@ -206,9 +217,6 @@ public:
     HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
     f90_tgt_layer_thickness_input("fortran target layer thickness");
 
-    HostViewManaged<Real[num_remap][NUM_PHYSICAL_LEV][NP][NP]> f90_remap_qdp(
-        "fortran qdp");
-
     Kokkos::Array<HostViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
     kokkos_remapped;
     for (int var = 0; var < num_remap; ++var) {
@@ -222,13 +230,8 @@ public:
       sync_to_host(Homme::subview(tgt_layer_thickness_kokkos, ie),
                    f90_tgt_layer_thickness_input);
 
-      for (int var = 0; var < num_remap; ++var) {
-        sync_to_host(Homme::subview(remap_vals[var], ie),
-                     Homme::subview(f90_remap_qdp, var));
-      }
-
-      remap_q_ppm_c_callable(f90_remap_qdp.data(), np, qsize,
-                             f90_src_layer_thickness_input.data(),
+      remap_q_ppm_c_callable(Homme::subview(f90_remap_qdp, ie).data(), np,
+                             qsize, f90_src_layer_thickness_input.data(),
                              f90_tgt_layer_thickness_input.data(), remap_alg);
 
       for (int var = 0; var < num_remap; ++var) {
@@ -237,17 +240,16 @@ public:
             for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
               const int vector_level = k / VECTOR_SIZE;
               const int vector = k % VECTOR_SIZE;
-              printf("remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
-                     f90_remap_qdp(var, k, igp, jgp),
-                     kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
-              // REQUIRE(!std::isnan(f90_remap_qdp(var, k, igp, jgp)));
-              // REQUIRE(!std::isnan(kokkos_remapped[var](ie, igp, jgp,
-              //                                          vector_level)[vector]));
-              // REQUIRE(f90_remap_qdp(var, k, igp, jgp) ==
-              //         kokkos_remapped[var](ie, igp, jgp,
-              // vector_level)[vector]);
+              DEBUG_PRINT(
+                  "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
+                  f90_remap_qdp(ie, var, k, igp, jgp),
+                  kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+              REQUIRE(!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)));
+              REQUIRE(!std::isnan(kokkos_remapped[var](ie, igp, jgp,
+                                                       vector_level)[vector]));
+              REQUIRE(f90_remap_qdp(ie, var, k, igp, jgp) ==
+                      kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
             }
-            REQUIRE(false);
           }
         }
       }

@@ -374,6 +374,7 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         const int ivector = k % VECTOR_SIZE;
         ao[var](kv.ie, igp, jgp, k + 2) =
             remap_vals[var](igp, jgp, ilevel)[ivector];
+
         mass_o[var](kv.ie, igp, jgp, k + 1) =
             mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
         ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
@@ -390,10 +391,6 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
                   Homme::subview(dma[var], kv.ie, igp, jgp),
                   Homme::subview(ai[var], kv.ie, igp, jgp),
                   Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
-
-      if (kv.ie == 0 && var == 0 && igp == 0 && jgp == 0) {
-        for(int k = 0; k < NUM_PHYSICAL_LEV
-      }
 
       Real massn1 = 0.0;
 
