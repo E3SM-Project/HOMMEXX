@@ -122,33 +122,37 @@ public:
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
 
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input_1("fortran a", ne);
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_input_2("fortran ppmdx",
-                                                                ne);
-    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result", ne);
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_cellmeans_input(
+        "fortran cell means");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_dx_input(
+        "fortran ppmdx");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result");
     for (int var = 0; var < num_remap; ++var) {
-      auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx[var]);
-      Kokkos::deep_copy(kokkos_result, remap.ppmdx[var]);
+      auto kokkos_result =
+          Kokkos::create_mirror_view(remap.parabola_coeffs[var]);
+      Kokkos::deep_copy(kokkos_result, remap.parabola_coeffs[var]);
 
       for (int ie = 0; ie < ne; ++ie) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            Kokkos::deep_copy(f90_input_1,
+            Kokkos::deep_copy(f90_cellmeans_input,
                               Homme::subview(remap.ao[var], ie, igp, jgp));
-            Kokkos::deep_copy(f90_input_2,
+            Kokkos::deep_copy(f90_dx_input,
                               Homme::subview(remap.ppmdx[var], ie, igp, jgp));
-            compute_ppm_c_callable(f90_input_1.data(), f90_input_2.data(),
-                                   f90_result.data(), remap_alg);
-            for (int k = 0; k < f90_result.extent(2); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent(3);
+            compute_ppm_c_callable(f90_cellmeans_input.data(),
+                                   f90_dx_input.data(), f90_result.data(),
+                                   remap_alg);
+            for (int k = 0; k < f90_result.extent(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent(1);
                    ++stencil_idx) {
                 REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
                 REQUIRE(
                     !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
-                printf("%s results: %d %d %d %d %d %d -> % .17e vs % .17e\n",
-                       boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
-                       f90_result(k, stencil_idx),
-                       kokkos_result(ie, igp, jgp, k, stencil_idx));
+                DEBUG_PRINT(
+                    "%s results ppm: %d %d %d %d %d %d -> % .17e vs % .17e\n",
+                    boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
+                    f90_result(k, stencil_idx),
+                    kokkos_result(ie, igp, jgp, k, stencil_idx));
                 REQUIRE(f90_result(k, stencil_idx) ==
                         kokkos_result(ie, igp, jgp, k, stencil_idx));
               }
@@ -255,20 +259,14 @@ public:
 };
 
 TEST_CASE("ppm_mirrored", "vertical remap") {
-  constexpr int remap_dim = 3 + QSIZE_D;
-  constexpr int num_elems = 10;
+  constexpr int remap_dim = 1;
+  constexpr int num_elems = 1;
   Control data;
   data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
-  SECTION("grid test") {
-    remap_test_mirrored.test_grid();
-  }
-  SECTION("ppm test") {
-    remap_test_mirrored.test_ppm();
-  }
-  SECTION("remap test") {
-    remap_test_mirrored.test_remap();
-  }
+  SECTION("grid test") { remap_test_mirrored.test_grid(); }
+  SECTION("ppm test") { remap_test_mirrored.test_ppm(); }
+  SECTION("remap test") { remap_test_mirrored.test_remap(); }
 }
 
 TEST_CASE("ppm_fixed", "vertical remap") {
@@ -277,13 +275,7 @@ TEST_CASE("ppm_fixed", "vertical remap") {
   Control data;
   data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Fixed<remap_dim> > remap_test_fixed(data);
-  SECTION("grid test") {
-    remap_test_fixed.test_grid();
-  }
-  SECTION("ppm test") {
-    remap_test_fixed.test_ppm();
-  }
-  SECTION("remap test") {
-    remap_test_fixed.test_remap();
-  }
+  SECTION("grid test") { remap_test_fixed.test_grid(); }
+  SECTION("ppm test") { remap_test_fixed.test_ppm(); }
+  SECTION("remap test") { remap_test_fixed.test_remap(); }
 }
