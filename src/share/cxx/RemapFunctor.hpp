@@ -52,6 +52,8 @@ template <int _remap_dim> struct PPM_Mirrored : public PPM_Boundary_Conditions {
   static void apply_ppm_boundary(
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {}
+
+  static constexpr char *name() { return "Mirrored PPM"; }
 };
 
 // Corresponds to remap alg = 2
@@ -104,6 +106,8 @@ template <int _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
     parabola_coeffs(NUM_PHYSICAL_LEV - 2, 2) = 0.0;
     parabola_coeffs(NUM_PHYSICAL_LEV - 1, 2) = 0.0;
   }
+
+  static constexpr char *name() { return "Fixed PPM"; }
 };
 
 // Piecewise Parabolic Method stencil
@@ -195,10 +199,10 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         Real da =
             dx(j, 0) * (dx(j, 1) * (cell_means(j + 2) - cell_means(j + 1)) +
                         dx(j, 2) * (cell_means(j + 1) - cell_means(j)));
-        dma(j) =
-            fmin(fmin(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j))),
-                 2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
-            copysign(1.0, da);
+
+        dma(j) = min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
+                     2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
+                 copysign(1.0, da);
       } else {
         dma(j) = 0.0;
       }

@@ -481,15 +481,16 @@ sync_to_device(Source_T source, Dest_T dest) {
   Kokkos::deep_copy(dest, dest_mirror);
 }
 
-template <typename ValueType>
+template <typename FPType>
 KOKKOS_INLINE_FUNCTION
-ValueType min(const ValueType &v1, const ValueType &v2) {
-  if(v1 < v2) {
-    return v1;
-  }
-  else {
-    return v2;
-  }
+constexpr FPType min(const FPType &val_1, const FPType &val_2) {
+  return val_1 < val_2 ? val_1 : val_2;
+}
+
+template <typename FPType, typename... FPPack>
+KOKKOS_INLINE_FUNCTION
+constexpr FPType min(const FPType &val, FPPack... pack) {
+  return val < min(pack...) ? val : min(pack...);
 }
 
 template <typename ViewType>
