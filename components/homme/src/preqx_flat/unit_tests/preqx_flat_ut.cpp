@@ -646,7 +646,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
-        hybrid_a_mirror(0), test_functor.functor.m_data.ps0,
+        hybrid_ai_mirror(0), test_functor.functor.m_data.ps0,
         Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL).data(),
         pressure_f90.data());
@@ -964,45 +964,56 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
+  // on host first
   Elements &elements = Context::singleton().get_elements();
   //element fields (except buffers) are randomly init-ed
+  // will copy to device and randotm on device
   elements.random_init(num_elems, engine);
 
   //host or source? diff tests use diff. name convensions
+  //this is to randomize
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
+  //random init host views
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
+  //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
 
+  //define host view for F input/output
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> divdp_f90("divdp f90", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
+  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("sdot_sum f90", num_elems);
+  //copy random host C views to F views
+  //??? transposed or not?
+  deep_copy(divdp_f90, div_vdp);
+  deep_copy(sdot_sum_f90, sdot_sum);
 
-//need to finish this...
   TestType test_functor(elements);
-  sync_to_host(elements.buffers.div_vdp, divdp_f90);
-
-
-
-  //RUN subfunctor 
+  //RUN subfunctor, why does it run on device?
+  //will run on device
   test_functor.run_functor();
-  sync_to_host(elements.m_div_vdp, test_functor.omega_p);
+  //get C output from device to host to some var to store result
+  //why does it need copying? is there any other mechanism to copy elements views 
+  //than having external host views?
 
-  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
-  temperature_virt_cxx("virtual temperature cxx", num_elems);
+  //source dest 
+  sync_to_host(elements.buffers.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
-
-  HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
-      "virtual temperature f90");
+  //if one of results is buffer variable, it needs another copy of host view,
+  //see virt_temp for an example
 
   for (int ie = 0; ie < num_elems; ++ie) {
-    caar_compute_omega_p_c_int(test_functor.eta_ave_w,
-                               Kokkos::subview(source_omega_p, ie, Kokkos::ALL,
+//eta, sdot, divdp, hybi
+    caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
+                               Kokkos::subview(eta_dot_dpdn_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(omega_p_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL,
+                               Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL).data());
+                               Kokkos::subview(divdp_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
