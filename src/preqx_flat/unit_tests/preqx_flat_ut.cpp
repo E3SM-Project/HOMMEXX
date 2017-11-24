@@ -990,6 +990,23 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   deep_copy(divdp_f90, div_vdp);
   deep_copy(sdot_sum_f90, sdot_sum);
 
+//only hybi is used, should the rest be quiet_nans?
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+
+//here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
+//'tails'. check this.
+  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+                                   TestType::n0, TestType::np1, TestType::qn0,
+                                   TestType::dt, TestType::ps0, false,
+                                   TestType::eta_ave_w,
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bp_mirror.data());
+
   TestType test_functor(elements);
   //RUN subfunctor, why does it run on device?
   //will run on device
@@ -1005,21 +1022,22 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //see virt_temp for an example
 
   for (int ie = 0; ie < num_elems; ++ie) {
-//eta, sdot, divdp, hybi
+// input is eta, sdot, divdp, hybi
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
                                Kokkos::subview(eta_dot_dpdn_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL).data());
+                                               Kokkos::ALL).data(),
                                Kokkos::subview(divdp_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
+                               hybrid_bi_mirror(0));
 
-    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
-          const Real correct = omega_p_f90(ie, level, igp, jgp);
+          const Real correct = eta_dot_dpdn_f90(ie, level, igp, jgp);
           REQUIRE(!std::isnan(correct));
-          const Real computed = test_functor.omega_p(ie, level, igp, jgp);
+          const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
