@@ -34,12 +34,12 @@ void remap_q_ppm_c_callable(Real *Qdp, const int &nx, const int &qsize,
 
 }; // extern C
 
-template <typename boundary_cond> class ppm_remap_functor_test {
+template <typename boundary_cond, int _remap_dim> class ppm_remap_functor_test {
   static_assert(std::is_base_of<PPM_Boundary_Conditions, boundary_cond>::value,
                 "PPM Remap test must have a valid boundary condition");
 
 public:
-  static constexpr int num_remap = boundary_cond::remap_dim;
+  static constexpr int num_remap = _remap_dim;
 
   ppm_remap_functor_test(Control &data)
       : ne(data.num_elems), remap(data),
@@ -106,6 +106,8 @@ public:
   }
 
   void test_ppm() {
+    constexpr const Real rel_threshold =
+        std::numeric_limits<Real>::epsilon() * 128.0;
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
@@ -151,8 +153,10 @@ public:
                     boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
                     f90_result(k, stencil_idx),
                     kokkos_result(ie, igp, jgp, k, stencil_idx));
-                REQUIRE(f90_result(k, stencil_idx) ==
-                        kokkos_result(ie, igp, jgp, k, stencil_idx));
+                const Real rel_error = compare_answers(
+                    f90_result(k, stencil_idx),
+                    kokkos_result(ie, igp, jgp, k, stencil_idx));
+                REQUIRE(rel_threshold >= rel_error);
               }
             }
           }
@@ -225,7 +229,7 @@ public:
 
   void test_remap() {
     constexpr const Real rel_threshold =
-        std::numeric_limits<Real>::epsilon() * 128.0;
+        std::numeric_limits<Real>::epsilon() * 4096.0;
     std::random_device rd;
     rngAlg engine(rd());
     std::uniform_real_distribution<Real> dist(0.125, 1000.0);
@@ -319,7 +323,7 @@ public:
   }
 
   const int ne;
-  PPM_Vert_Remap<boundary_cond> remap;
+  PPM_Vert_Remap<boundary_cond, num_remap> remap;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness_kokkos;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness_kokkos;
   Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
@@ -328,10 +332,10 @@ public:
 
 TEST_CASE("ppm_mirrored", "vertical remap") {
   constexpr int remap_dim = 3;
-  constexpr int num_elems = 5;
+  constexpr int num_elems = 4;
   Control data;
   data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
+  ppm_remap_functor_test<PPM_Mirrored, remap_dim> remap_test_mirrored(data);
   SECTION("grid test") { remap_test_mirrored.test_grid(); }
   SECTION("ppm test") { remap_test_mirrored.test_ppm(); }
   SECTION("remap test") { remap_test_mirrored.test_remap(); }
@@ -339,10 +343,10 @@ TEST_CASE("ppm_mirrored", "vertical remap") {
 
 TEST_CASE("ppm_fixed", "vertical remap") {
   constexpr int remap_dim = 3;
-  constexpr int num_elems = 5;
+  constexpr int num_elems = 4;
   Control data;
   data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PPM_Fixed<remap_dim> > remap_test_fixed(data);
+  ppm_remap_functor_test<PPM_Fixed, remap_dim> remap_test_fixed(data);
   SECTION("grid test") { remap_test_fixed.test_grid(); }
   SECTION("ppm test") { remap_test_fixed.test_ppm(); }
   SECTION("remap test") { remap_test_fixed.test_remap(); }

@@ -19,8 +19,7 @@ struct Vert_Remap_Alg {};
 struct PPM_Boundary_Conditions {};
 
 // Corresponds to remap alg = 1
-template <int _remap_dim> struct PPM_Mirrored : public PPM_Boundary_Conditions {
-  static constexpr auto remap_dim = _remap_dim;
+struct PPM_Mirrored : public PPM_Boundary_Conditions {
   static constexpr int fortran_remap_alg = 1;
 
   KOKKOS_INLINE_FUNCTION
@@ -57,8 +56,7 @@ template <int _remap_dim> struct PPM_Mirrored : public PPM_Boundary_Conditions {
 };
 
 // Corresponds to remap alg = 2
-template <int _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
-  static constexpr auto remap_dim = _remap_dim;
+struct PPM_Fixed : public PPM_Boundary_Conditions {
   static constexpr int fortran_remap_alg = 2;
 
   KOKKOS_INLINE_FUNCTION
@@ -111,11 +109,11 @@ template <int _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
 };
 
 // Piecewise Parabolic Method stencil
-template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
+template <typename boundaries, int _remap_dim> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   static_assert(std::is_base_of<PPM_Boundary_Conditions, boundaries>::value,
                 "PPM_Vert_Remap requires a valid PPM "
                 "boundary condition");
-  static constexpr auto remap_dim = boundaries::remap_dim;
+  static constexpr auto remap_dim = _remap_dim;
 
   PPM_Vert_Remap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
