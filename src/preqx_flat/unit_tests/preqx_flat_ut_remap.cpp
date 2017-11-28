@@ -191,11 +191,22 @@ public:
               Host_View_Iterator<decltype(grid_slice)>::start(grid_slice);
           auto end = Host_View_Iterator<decltype(grid_slice)>::end(grid_slice);
           std::sort(start, end);
+          grid_slice(0)[0] = 0.0;
+          grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
+          for (int k = NUM_PHYSICAL_LEV - 1; k > 0; --k) {
+            const int vector_level = k / VECTOR_SIZE;
+            const int vector = k % VECTOR_SIZE;
+            const int lower_vector_level = (k - 1) / VECTOR_SIZE;
+            const int lower_vector = (k - 1) % VECTOR_SIZE;
+            grid_slice(vector_level)[vector] -=
+                grid_slice(lower_vector_level)[lower_vector];
+          }
         }
       }
     }
 
     ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> intervals(name, ne);
+    Kokkos::deep_copy(intervals, grid);
     return intervals;
   }
 
@@ -213,6 +224,8 @@ public:
   }
 
   void test_remap() {
+    constexpr const Real rel_threshold =
+        std::numeric_limits<Real>::epsilon() * 128.0;
     std::random_device rd;
     rngAlg engine(rd());
     std::uniform_real_distribution<Real> dist(0.125, 1000.0);
@@ -274,11 +287,17 @@ public:
                   "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
                   f90_remap_qdp(ie, var, k, igp, jgp),
                   kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
-              REQUIRE(!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)));
-              REQUIRE(!std::isnan(kokkos_remapped[var](ie, igp, jgp,
-                                                       vector_level)[vector]));
-              REQUIRE(f90_remap_qdp(ie, var, k, igp, jgp) ==
-                      kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+              // The fortran returns NaN's, so make certain we only return NaN's
+              // when the Fortran does
+              REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
+                      std::isnan(kokkos_remapped[var](ie, igp, jgp,
+                                                      vector_level)[vector]));
+              if (!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp))) {
+                Real rel_error = compare_answers(
+                    f90_remap_qdp(ie, var, k, igp, jgp),
+                    kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+                REQUIRE(rel_threshold >= rel_error);
+              }
             }
           }
         }
