@@ -702,7 +702,7 @@ public:
 
   using iterator_category = std::random_access_iterator_tag;
 
-  // Methods
+  // Static Methods
 
   // templating here is a hack to not instantiate these functions until they are
   // needed
@@ -733,6 +733,8 @@ public:
   static Host_View_Iterator end(const host_view view) {
     return Host_View_Iterator<host_view>(view, max_index(view));
   }
+
+  // Object Methods
 
   Host_View_Iterator(const host_view view, index_type index)
       : m_view(view), m_index(index) {
@@ -799,8 +801,6 @@ public:
   operator*() const {
     assert(m_index >= 0);
     assert(m_index < max_index(m_view));
-    printf("Accessing (%d -> %d, %d) / %d as a scalar value\n", m_index,
-           m_index / VECTOR_SIZE, m_index % VECTOR_SIZE, m_view.extent_int(0));
     return m_view(m_index / VECTOR_SIZE)[m_index % VECTOR_SIZE];
   }
 
@@ -811,8 +811,6 @@ public:
                    Scalar>::value == false,
       reference>::type
   operator*() const {
-    printf("Accessing %d / %d as a real value\n", m_index,
-           m_view.extent_int(0));
     return m_view(m_index);
   }
 
@@ -820,37 +818,31 @@ public:
 
   bool operator==(const Host_View_Iterator &other) const {
     assert(other.m_view == m_view);
-    printf("comparing %d == %d\n", m_index, other.m_index);
     return other.m_index == m_index;
   }
 
   bool operator!=(const Host_View_Iterator &other) {
     assert(other.m_view == m_view);
-    printf("comparing %d != %d\n", m_index, other.m_index);
     return m_index != other.m_index;
   }
 
   bool operator<(const Host_View_Iterator &other) const {
     assert(other.m_view == m_view);
-    printf("comparing %d < %d\n", m_index, other.m_index);
     return m_index < other.m_index;
   }
 
   bool operator<=(const Host_View_Iterator &other) const {
     assert(other.m_view == m_view);
-    printf("comparing %d <= %d\n", m_index, other.m_index);
     return m_index <= other.m_index;
   }
 
   bool operator>(const Host_View_Iterator &other) const {
     assert(other.m_view == m_view);
-    printf("comparing %d > %d\n", m_index, other.m_index);
     return m_index > other.m_index;
   }
 
   bool operator>=(const Host_View_Iterator &other) const {
     assert(other.m_view == m_view);
-    printf("comparing %d >= %d\n", m_index, other.m_index);
     return m_index >= other.m_index;
   }
 
