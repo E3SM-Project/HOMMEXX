@@ -300,11 +300,11 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
     // consequence.
     // Note that the range of k makes this completely parallel,
     // without any data dependencies
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, gs * NP * NP),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP * gs),
                          [&](const int &loop_idx) {
-      const int k = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
-      const int jgp = loop_idx % NP;
+      const int k = loop_idx % gs;
+      const int igp = (loop_idx / gs) % NP;
+      const int jgp = (loop_idx / gs) / NP;
       dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
       dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
           dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k);
@@ -336,11 +336,22 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         }
 
         kk--;
+        // This is to keep the indices in bounds.
+        // Top bounds match anyway, so doesn't matter what coefficients are used
         if (kk == NUM_PHYSICAL_LEV + 1) {
           kk = NUM_PHYSICAL_LEV;
         }
+        // kk is now the cell index we're integrating over.
+
+        // Save kk for reuse
         kid(kv.ie, igp, jgp, k - 1) = kk;
+        // This remapping assumes we're starting from the left interface of an
+        // old grid cell
+        // In fact, we're usually integrating very little or almost all of the
+        // cell in question
         z1(kv.ie, igp, jgp, k - 1) = -0.5;
+        // PPM interpolants are normalized to an independent coordinate domain
+        // [-0.5, 0.5].
         z2(kv.ie, igp, jgp, k - 1) =
             (pin(kv.ie, igp, jgp, k) -
              (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
@@ -357,14 +368,19 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
     kv.team_barrier();
     // Verified to here
 
-    // More parallelism than we need here, maybe break it up into a
-    // ThreadVectorRange as well?
+    // From here, we loop over tracers for only those portions which depend on
+    // tracer data, which includes PPM limiting and mass accumulation
+    // More parallelism than we need here, maybe break it up?
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
                          [&](const int &loop_idx) {
       const int var = (loop_idx / NP) / NP;
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
 
+      // Accumulate the old mass up to old grid cell interface locations to
+      // simplify integration during remapping. Also, divide out the grid
+      // spacing so we're working with actual tracer values and can conserve
+      // mass.
       mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
       for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
         const int ilevel = k / VECTOR_SIZE;
@@ -383,6 +399,7 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
             ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
       } // k loop
 
+      // Computes a monotonic and conservative PPM reconstruction
       compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
                   Homme::subview(ppmdx, kv.ie, igp, jgp),
                   Homme::subview(dma[var], kv.ie, igp, jgp),
@@ -393,6 +410,12 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
       // Maybe just recompute massn1 and double our work
       // to get significantly more threads?
+      //
+      // Compute tracer values on the new grid by integrating from the old cell
+      // bottom to the new cell interface to form a new grid mass accumulation.
+      // Taking the difference between accumulation at successive interfaces
+      // gives the mass inside each cell. Since Qdp is supposed to hold the full
+      // mass this needs no normalization.
       for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
         const int ilevel = k / VECTOR_SIZE;
         const int ivector = k % VECTOR_SIZE;
@@ -402,8 +425,7 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
                    a2 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2);
         const Real x1 = z1(kv.ie, igp, jgp, k);
         const Real x2 = z2(kv.ie, igp, jgp, k);
-        // to make this bfb with F,  divide by 2
-        // change F later
+
         const Real integrate_par = a0 * (x2 - x1) +
                                    a1 * (x2 * x2 - x1 * x1) / 2.0 +
                                    a2 * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
@@ -418,7 +440,9 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
                 remap_dim> ao;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]> dpo;
+  // pio corresponds to the points in each layer of the source layer thickness
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]> pio;
+  // pin corresponds to the points in each layer of the target layer thickness
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]> pin;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]> ppmdx;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z1;
