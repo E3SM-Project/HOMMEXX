@@ -53,7 +53,7 @@ template <int _remap_dim> struct PPM_Mirrored : public PPM_Boundary_Conditions {
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> cell_means,
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {}
 
-  static constexpr char *name() { return "Mirrored PPM"; }
+  static constexpr const char *name() { return "Mirrored PPM"; }
 };
 
 // Corresponds to remap alg = 2
@@ -107,7 +107,7 @@ template <int _remap_dim> struct PPM_Fixed : public PPM_Boundary_Conditions {
     parabola_coeffs(NUM_PHYSICAL_LEV - 1, 2) = 0.0;
   }
 
-  static constexpr char *name() { return "Fixed PPM"; }
+  static constexpr const char *name() { return "Fixed PPM"; }
 };
 
 // Piecewise Parabolic Method stencil
@@ -128,11 +128,11 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
             "pin", data.num_elems)),
         ppmdx(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]>(
             "ppmdx", data.num_elems)),
-        kid(ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]>("kid",
-                                                              data.num_elems)),
         z1(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z1",
                                                               data.num_elems)),
         z2(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z2",
+                                                              data.num_elems)),
+        kid(ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]>("kid",
                                                               data.num_elems)) {
     for (int i = 0; i < remap_dim; ++i) {
       ao[i] = ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
@@ -425,12 +425,12 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]> pio;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]> pin;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]> ppmdx;
-  Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
-                remap_dim> mass_o;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z1;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z2;
   ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]> kid;
 
+  Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
+                remap_dim> mass_o;
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>,
                 remap_dim> dma;
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>,
