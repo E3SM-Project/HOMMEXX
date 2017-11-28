@@ -12,6 +12,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <algorithm>
 #include <limits>
 #include <random>
 
@@ -41,7 +42,7 @@ public:
   static constexpr int num_remap = boundary_cond::remap_dim;
 
   ppm_remap_functor_test(Control &data)
-      : remap(data), ne(data.num_elems),
+      : ne(data.num_elems), remap(data),
         src_layer_thickness_kokkos("source layer thickness", ne),
         tgt_layer_thickness_kokkos("target layer thickness", ne) {
     for (int var = 0; var < num_remap; ++var) {
@@ -58,7 +59,7 @@ public:
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.dpo, engine,
-                 std::uniform_real_distribution<Real>(0.125, 0.875));
+                 std::uniform_real_distribution<Real>(0.125, 1000));
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
     ExecSpace::fence();
@@ -76,8 +77,8 @@ public:
                               Homme::subview(remap.dpo, ie, igp, jgp));
             compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
                                          remap_alg);
-            for (int k = 0; k < f90_result.extent(0); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent(1);
+            for (int k = 0; k < f90_result.extent_int(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
                    ++stencil_idx) {
                 REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
                 REQUIRE(
@@ -108,10 +109,10 @@ public:
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
-                 std::uniform_real_distribution<Real>(0.125, 0.875));
+                 std::uniform_real_distribution<Real>(0.125, 1000));
     for (int i = 0; i < num_remap; ++i) {
       genRandArray(remap.ao[i], engine,
-                   std::uniform_real_distribution<Real>(0.125, 0.875));
+                   std::uniform_real_distribution<Real>(0.125, 1000));
     }
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
@@ -139,8 +140,8 @@ public:
             compute_ppm_c_callable(f90_cellmeans_input.data(),
                                    f90_dx_input.data(), f90_result.data(),
                                    remap_alg);
-            for (int k = 0; k < f90_result.extent(0); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent(1);
+            for (int k = 0; k < f90_result.extent_int(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
                    ++stencil_idx) {
                 REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
                 REQUIRE(
@@ -177,10 +178,44 @@ public:
     });
   }
 
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+  generate_grid_intervals(rngAlg &engine, const Real &top, std::string name) {
+    HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
+    genRandArray(grid, engine,
+                 std::uniform_real_distribution<Real>(0.0625, top));
+    for (int ie = 0; ie < ne; ++ie) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          auto grid_slice = Homme::subview(grid, ie, igp, jgp);
+          auto start =
+              Host_View_Iterator<decltype(grid_slice)>::start(grid_slice);
+          auto end = Host_View_Iterator<decltype(grid_slice)>::end(grid_slice);
+          std::sort(start, end);
+        }
+      }
+    }
+
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> intervals(name, ne);
+    return intervals;
+  }
+
+  void initialize_layers(rngAlg &engine) {
+    // Note that these must have the property that
+    // sum(src_layer_thickness) = sum(tgt_layer_thickness)
+    // To do this, we generate two grids and compute the interval lengths
+
+    const Real top = std::uniform_real_distribution<Real>(1.0, 1024.0)(engine);
+
+    src_layer_thickness_kokkos =
+        generate_grid_intervals(engine, top, "kokkos source layer thickness");
+    tgt_layer_thickness_kokkos =
+        generate_grid_intervals(engine, top, "kokkos target layer thickness");
+  }
+
   void test_remap() {
     std::random_device rd;
     rngAlg engine(rd());
-    std::uniform_real_distribution<Real> dist(0.125, 0.875);
+    std::uniform_real_distribution<Real> dist(0.125, 1000.0);
     for (int i = 0; i < num_remap; ++i) {
       remap_vals[i] =
           ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap variable", ne);
@@ -197,12 +232,7 @@ public:
       }
     }
 
-    src_layer_thickness_kokkos = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-        "kokkos source layer thickness", ne);
-    genRandArray(src_layer_thickness_kokkos, engine, dist);
-    tgt_layer_thickness_kokkos = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-        "kokkos target layer thickness", ne);
-    genRandArray(tgt_layer_thickness_kokkos, engine, dist);
+    initialize_layers(engine);
 
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagRemapTest>(ne), *this);
@@ -278,8 +308,8 @@ public:
 };
 
 TEST_CASE("ppm_mirrored", "vertical remap") {
-  constexpr int remap_dim = 1;
-  constexpr int num_elems = 1;
+  constexpr int remap_dim = 3;
+  constexpr int num_elems = 5;
   Control data;
   data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Mirrored<remap_dim> > remap_test_mirrored(data);
@@ -289,8 +319,8 @@ TEST_CASE("ppm_mirrored", "vertical remap") {
 }
 
 TEST_CASE("ppm_fixed", "vertical remap") {
-  constexpr int remap_dim = 3 + QSIZE_D;
-  constexpr int num_elems = 10;
+  constexpr int remap_dim = 3;
+  constexpr int num_elems = 5;
   Control data;
   data.random_init(num_elems, std::random_device()());
   ppm_remap_functor_test<PPM_Fixed<remap_dim> > remap_test_fixed(data);

@@ -280,8 +280,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
-          dest(level, igp, jgp) =
-            source_mirror(igp, jgp, vector_level)[vector];
+          dest(level, igp, jgp) = source_mirror(igp, jgp, vector_level)[vector];
         }
       }
     }
@@ -482,14 +481,13 @@ sync_to_device(Source_T source, Dest_T dest) {
 }
 
 template <typename FPType>
-KOKKOS_INLINE_FUNCTION
-constexpr FPType min(const FPType &val_1, const FPType &val_2) {
+KOKKOS_INLINE_FUNCTION constexpr FPType min(const FPType &val_1,
+                                            const FPType &val_2) {
   return val_1 < val_2 ? val_1 : val_2;
 }
 
 template <typename FPType, typename... FPPack>
-KOKKOS_INLINE_FUNCTION
-constexpr FPType min(const FPType &val, FPPack... pack) {
+KOKKOS_INLINE_FUNCTION constexpr FPType min(const FPType &val, FPPack... pack) {
   return val < min(pack...) ? val : min(pack...);
 }
 
@@ -615,8 +613,7 @@ Kokkos::TeamPolicy<ExecSpace, Tag> get_default_team_policy(const int nelems) {
 // Used for iterating over a range of integers
 // With this, you can write
 // for(int i : int_range(start, end))
-template <typename ordered_iterable>
-class Loop_Range {
+template <typename ordered_iterable> class Loop_Range {
 
 public:
   class iterator {
@@ -665,6 +662,210 @@ public:
 private:
   iterator begin_;
   iterator end_;
+};
+
+// Host_View_Iterator implementation for non-Scalar types
+// template <typename host_view,
+//           typename std::enable_if<
+//               Kokkos::is_view<host_view>::value &&
+//               !std::is_same<typename std::remove_all_extents<
+//                                 typename host_view::scalar_array_type>::type,
+//                             Scalar>::value &&
+//               host_view_mappable<
+//                   host_view, typename host_view::scalar_array_type>::value &&
+//               host_view::Rank == 1>::type * = nullptr>
+// class Host_View_Iterator {
+// public:
+//   using array_type = typename host_view::scalar_array_type;
+//   using value_type = typename std::remove_all_extents<array_type>::type;
+
+//   static Host_View_Iterator start(const host_view view) {
+//     return Host_View_Iterator<host_view>(view, 0);
+//   }
+
+//   static Host_View_Iterator end(const host_view view) {
+//     return Host_View_Iterator<host_view>(view, view.extent(0));
+//   }
+
+//   Host_View_Iterator(const host_view view, int index)
+//       : m_view(view), m_index(index) {}
+
+//   Host_View_Iterator(const Host_View_Iterator &other)
+//       : m_view(other.m_view), m_index(other.m_index) {}
+
+//   Host_View_Iterator &operator=(const Host_View_Iterator &other) {
+//     m_view = other.m_view;
+//     m_index = other.m_index;
+//     return *this;
+//   }
+
+//   Host_View_Iterator &operator++() {
+//     ++m_index;
+//     return *this;
+//   }
+
+//   Host_View_Iterator &operator--() {
+//     --m_index;
+//     return *this;
+//   }
+
+//   Host_View_Iterator operator++(int) {
+//     Host_View_Iterator copy(*this);
+//     ++m_index;
+//     return copy;
+//   }
+
+//   value_type &operator*() const { return m_view(m_index); }
+
+//   value_type *operator->() const { return &(m_view(m_index)); }
+
+//   int operator-(const Host_View_Iterator &other) const {
+//     return m_index - other.m_index;
+//   }
+
+//   bool operator==(const Host_View_Iterator &other) const {
+//     bool same_views = other.m_view == m_view;
+//     bool same_index = other.m_index == m_index;
+//     return same_views && same_index;
+//   }
+
+//   bool operator!=(const Host_View_Iterator &other) { return !(*this ==
+// other); }
+
+//   bool operator<(const Host_View_Iterator &other) const {
+//     return m_index < other.m_index;
+//   }
+
+//   bool operator<=(const Host_View_Iterator &other) const {
+//     return m_index <= other.m_index;
+//   }
+
+//   bool operator>(const Host_View_Iterator &other) const {
+//     return m_index > other.m_index;
+//   }
+
+//   bool operator>=(const Host_View_Iterator &other) const {
+//     return m_index >= other.m_index;
+//   }
+
+// private:
+//   host_view m_view;
+//   int m_index;
+// };
+
+// Host_View_Iterator implementation for Scalar types
+template <
+    typename host_view,
+    typename std::enable_if<
+        // first verify we're actually working with a view
+        Kokkos::is_view<host_view>::value &&
+        // next verify that the primitive type is a Scalar
+        std::is_same<typename std::remove_all_extents<
+                         typename host_view::scalar_array_type>::type,
+                     Scalar>::value &&
+        // next verify the view is accessible from the host space
+        host_view_mappable<host_view, typename host_view::scalar_array_type>::
+            value &&host_view::Rank == 1>::type * = nullptr>
+class Host_View_Iterator : public std::iterator<Real, std::bidirectional_iterator_tag> {
+public:
+  using array_type = typename host_view::scalar_array_type;
+  using value_type = Real;
+
+  using pointer = value_type *;
+  using reference = value_type &;
+
+  using index_type = int;
+  using difference_type = int;
+
+  using iterator_category = std::bidirectional_iterator_tag;
+
+  static Host_View_Iterator start(const host_view view) {
+    return Host_View_Iterator<host_view>(view, 0);
+  }
+
+  static Host_View_Iterator end(const host_view view) {
+    return Host_View_Iterator<host_view>(view, view.extent(0) * VECTOR_SIZE);
+  }
+
+  Host_View_Iterator(const host_view view, index_type index)
+      : m_view(view), m_index(index) {}
+
+  Host_View_Iterator(const Host_View_Iterator &other)
+      : m_view(other.m_view), m_index(other.m_index) {}
+
+  Host_View_Iterator &operator=(const Host_View_Iterator &other) {
+    m_view = other.m_view;
+    m_index = other.m_index;
+    return *this;
+  }
+
+  Host_View_Iterator &operator++() {
+    ++m_index;
+    return *this;
+  }
+
+  Host_View_Iterator operator++(index_type) {
+    Host_View_Iterator copy(*this);
+    ++m_index;
+    return copy;
+  }
+
+  Host_View_Iterator operator+(difference_type offset) {
+    Host_View_Iterator copy(*this);
+    m_index += offset;
+    return copy;
+  }
+
+  Host_View_Iterator &operator--() {
+    --m_index;
+    return *this;
+  }
+
+  index_type operator-(difference_type distance) const {
+    return m_index - distance;
+  }
+
+  difference_type operator-(const Host_View_Iterator &other) const {
+    return m_index - other.m_index;
+  }
+
+  difference_type distance(const Host_View_Iterator &other) const {
+    return (*this) - other;
+  }
+
+  reference operator*() const {
+    return m_view(m_index / VECTOR_SIZE)[m_index % VECTOR_SIZE];
+  }
+
+  pointer *operator->() const { return &(*(*this)); }
+
+  bool operator==(const Host_View_Iterator &other) const {
+    bool same_views = other.m_view == m_view;
+    bool same_index = other.m_index == m_index;
+    return same_views && same_index;
+  }
+
+  bool operator!=(const Host_View_Iterator &other) { return !(*this == other); }
+
+  bool operator<(const Host_View_Iterator &other) const {
+    return m_index < other.m_index;
+  }
+
+  bool operator<=(const Host_View_Iterator &other) const {
+    return m_index <= other.m_index;
+  }
+
+  bool operator>(const Host_View_Iterator &other) const {
+    return m_index > other.m_index;
+  }
+
+  bool operator>=(const Host_View_Iterator &other) const {
+    return m_index >= other.m_index;
+  }
+
+private:
+  host_view m_view;
+  index_type m_index;
 };
 
 } // namespace Homme
