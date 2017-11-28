@@ -120,8 +120,6 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   PPM_Vert_Remap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
             "dpo", data.num_elems)),
-        dpn(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
-            "dpn", data.num_elems)),
         pio(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>(
             "pio", data.num_elems)),
         pin(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>(
@@ -251,6 +249,7 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
         Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
             remap_vals) const {
     constexpr int gs = 2; // ghost cells
+
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV * NP * NP),
         [&](const int &loop_idx) {
@@ -259,8 +258,6 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
           const int jgp = loop_idx % NP;
           int ilevel = k / VECTOR_SIZE;
           int ivector = k % VECTOR_SIZE;
-          dpn(kv.ie, igp, jgp, k + 2) =
-              tgt_layer_thickness(igp, jgp, ilevel)[ivector];
           dpo(kv.ie, igp, jgp, k + 2) =
               src_layer_thickness(igp, jgp, ilevel)[ivector];
         });
@@ -274,10 +271,14 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       pio(kv.ie, igp, jgp, 0) = 0.0;
       // scan region
       for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
+        const int layer_vlevel = (k - 1) / VECTOR_SIZE;
+        const int layer_vector = (k - 1) % VECTOR_SIZE;
         pin(kv.ie, igp, jgp, k) =
-            pin(kv.ie, igp, jgp, k - 1) + dpn(kv.ie, igp, jgp, k + 1);
+            pin(kv.ie, igp, jgp, k - 1) +
+            tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
         pio(kv.ie, igp, jgp, k) =
-            pio(kv.ie, igp, jgp, k - 1) + dpo(kv.ie, igp, jgp, k + 1);
+            pio(kv.ie, igp, jgp, k - 1) +
+            src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
       } // k loop
 
       // This is here to allow an entire block of k
@@ -293,11 +294,7 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
       pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
           pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
     });
-    kv.team_barrier();
 
-    // TODO: Move this above the previous region and verify to reduce
-    // team_barrier usage
-    //
     // Fill in the ghost regions with mirrored values.
     // if vert_remap_q_alg is defined, this is of no
     // consequence.
@@ -421,7 +418,6 @@ template <typename boundaries> struct PPM_Vert_Remap : public Vert_Remap_Alg {
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
                 remap_dim> ao;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]> dpo;
-  ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]> dpn;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]> pio;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]> pin;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]> ppmdx;
