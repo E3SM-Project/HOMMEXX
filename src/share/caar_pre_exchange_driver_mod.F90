@@ -50,6 +50,11 @@ module caar_pre_exchange_driver_mod
     end subroutine caar_pre_exchange_monolithic_c
   end interface
 
+  private
+  save
+
+  public :: caar_pull_data_c, caar_push_results_c, caar_pre_exchange_monolithic
+
 contains
 
   subroutine caar_pre_exchange_monolithic(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&

@@ -1254,7 +1254,7 @@ contains
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: applycamforcing, applycamforcing_dynamics
     use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
-    use prim_advection_mod, only: vertical_remap
+    use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
 
@@ -1392,7 +1392,7 @@ contains
     !compute timelevels for tracers (no longer the same as dynamics)
     ! note: time level update for fvm tracers takes place in fvm_mod
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
-    call vertical_remap(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
+    call vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! time step is complete.  update some diagnostic variables:
