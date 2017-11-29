@@ -263,6 +263,11 @@ contains
 #endif
   end subroutine caar_compute_divdp_c_int
 
+
+!OG this routine is not really used in F code? if so, it cannot be used as
+!a baseline for C code as well (it is not really verified except very implicitly
+!since total executable F flat = total executable C with bfb, so, this routine
+!must be ok. )
   subroutine caar_compute_pressure_c_int(hyai, ps0, dp, pressure) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
@@ -300,7 +305,6 @@ contains
 
     type(element_t), intent(in) :: elem
     type(derivative_t), intent(in) :: deriv
-
     real (kind=real_kind), intent(in) :: eta_ave_w
     real (kind=real_kind), intent(in) :: dp3d(np, np)
     real (kind=real_kind), intent(in) :: velocity(np, np, 2)
@@ -478,7 +482,7 @@ contains
     use dimensions_mod, only : np,nlev
     implicit none
 
-    real (kind=real_kind), intent(in) :: hybi
+    real (kind=real_kind), intent(in) :: hybi(nlev+1)
 ! halflevel vertical velocity on p-grid
     real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_dot_dpdn
     real (kind=real_kind), intent(in),    dimension(np,np,nlev)   :: divdp
