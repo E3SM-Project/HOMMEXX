@@ -89,7 +89,7 @@ module prim_advection_mod_base
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
   public :: prim_advec_tracers_fvm
-  public :: vertical_remap
+  public :: vertical_remap_interface
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
   type (ghostBuffer3D_t)   :: ghostbuf_tr
@@ -1998,9 +1998,84 @@ OMP_SIMD
   call t_stopf('advance_hypervis_scalar')
   end subroutine advance_hypervis_scalar
 
+#ifdef USE_KOKKOS_KERNELS
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use iso_c_binding,  only: c_ptr, c_loc
+    use control_mod, only: vert_remap_q_alg
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
 
+    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                elem_derived_phi, elem_derived_pecnd,           &
+                                elem_derived_omega_p, elem_derived_vn0,         &
+                                elem_derived_eta_dot_dpdn, elem_state_Qdp
 
+    use fvm_control_volume_mod, only : fvm_struct
 
+    use caar_pre_exchange_driver_mod, only : caar_pull_data_c, caar_push_results_c
+
+    implicit none
+
+    interface
+#ifdef USE_KOKKOS_KERNELS
+      subroutine vertical_remap_c(vert_remap_alg) bind(c)
+        use iso_c_binding, only : c_int
+        integer (kind=c_int), intent(in) :: vert_remap_alg
+      end subroutine vertical_remap_c
+#endif
+    end interface
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+
+    elem_state_v_ptr              = c_loc(elem_state_v)
+    elem_state_t_ptr              = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
+    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                           elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call vertical_remap_c(vert_remap_q_alg)
+  end subroutine vertical_remap_interface
+
+#else
+
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
+
+    use fvm_control_volume_mod, only : fvm_struct
+
+    implicit none
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  end subroutine vertical_remap_interface
+#endif ! USE_KOKKOS_KERNELS
 
   subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
 
