@@ -14,6 +14,9 @@
 
 namespace Homme {
 
+static constexpr int num_states_remap = 3;
+static constexpr int default_num_remap = num_states_remap + QSIZE_D;
+
 struct Vert_Remap_Alg {};
 
 struct PPM_Boundary_Conditions {};
@@ -109,7 +112,8 @@ struct PPM_Fixed : public PPM_Boundary_Conditions {
 };
 
 // Piecewise Parabolic Method stencil
-template <typename boundaries, int _remap_dim> struct PPM_Vert_Remap : public Vert_Remap_Alg {
+template <typename boundaries, int _remap_dim = default_num_remap>
+struct PPM_Vert_Remap : public Vert_Remap_Alg {
   static_assert(std::is_base_of<PPM_Boundary_Conditions, boundaries>::value,
                 "PPM_Vert_Remap requires a valid PPM "
                 "boundary condition");
@@ -460,7 +464,7 @@ template <typename boundaries, int _remap_dim> struct PPM_Vert_Remap : public Ve
 
 template <typename remap_type> struct Remap_Functor {
   static_assert(std::is_base_of<Vert_Remap_Alg, remap_type>::value,
-                "RemapFunctor not given a remap algorithm to use");
+                "Remap_Functor not given a remap algorithm to use");
 
   Control m_data;
   const Elements m_elements;
@@ -493,11 +497,10 @@ template <typename remap_type> struct Remap_Functor {
                   remap_type::remap_dim> remap_vals;
 
     // The states which need to be remapped
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, 3> state_remap{
-      { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
-        Homme::subview(m_elements.m_t, kv.ie, m_data.np1) }
-    };
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
+    state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
     if (m_data.rsplit == 0) {
       // No remapping here, just dpstar check
     } else {
@@ -605,6 +608,7 @@ template <typename remap_type> struct Remap_Functor {
     return KernelVariables::shmem_size(team_size);
   }
 };
+
 } // namespace Homme
 
 #endif // HOMMEXX_REMAP_FUNCTOR_HPP

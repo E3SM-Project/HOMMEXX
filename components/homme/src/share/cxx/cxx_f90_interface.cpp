@@ -9,11 +9,9 @@
 
 #include "profiling.hpp"
 
-namespace Homme
-{
+namespace Homme {
 
-extern "C"
-{
+extern "C" {
 
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
                           const int& nm1, const int& n0, const int& np1,
@@ -189,6 +187,36 @@ void advance_qdp_c()
   // Finalize
   ExecSpace::fence();
   profiling_pause();
+}
+
+} // extern "C"
+
+template <typename RemapAlg> void vertical_remap() {
+  Control &data = Context::singleton().get_control();
+  const int vectors_per_thread = 1;
+  const int threads_per_team = data.team_size;
+  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team,
+                                       vectors_per_thread);
+  policy.set_chunk_size(1);
+
+  Remap_Functor<RemapAlg> remap(data, Context::singleton().get_elements());
+
+  profiling_resume();
+  Kokkos::parallel_for("vertical remap", policy, remap);
+  ExecSpace::fence();
+  profiling_pause();
+}
+
+extern "C" {
+
+void vertical_remap_c(const int &remap_alg) {
+  if (remap_alg == PPM_Fixed::fortran_remap_alg) {
+    vertical_remap<PPM_Vert_Remap<PPM_Fixed> >();
+  } else if (remap_alg == PPM_Mirrored::fortran_remap_alg) {
+    vertical_remap<PPM_Vert_Remap<PPM_Mirrored> >();
+  } else {
+    MPI_Abort(0, -1);
+  }
 }
 
 } // extern "C"
