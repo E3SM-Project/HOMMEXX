@@ -74,7 +74,7 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
 void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn, 
                                                    Real *sdot_sum, 
                                                    const Real *divdp, 
-                                                   const Real &hybi);
+                                                   const Real *hybi);
 
 }  // extern C
 
@@ -611,17 +611,17 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
-
 //OG coefficients A and B increase is not taken into here...
 //probably, does not matter
+//this test takes in only ai, so other should be made quiet_nans
   genRandArray(hybrid_am_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_ai_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bm_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
 
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
@@ -632,7 +632,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
                                    hybrid_am_mirror.data(),
                                    hybrid_ai_mirror.data(),
                                    hybrid_bm_mirror.data(),
-                                   hybrid_bp_mirror.data());
+                                   hybrid_bi_mirror.data());
 
   test_functor.run_functor();
 
@@ -948,7 +948,7 @@ class eta_dot_dpdn_vertadv_euler_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
-    functor.compute_eta_dot_dp_deta_vertadv_euler(kv);
+    functor.compute_eta_dot_dpdn_vertadv_euler(kv);
   }
 };
 
@@ -979,6 +979,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
   //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
+
+//UNCOMMENT THIS LATER
+//source, dest
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
 
   //define host view for F input/output
@@ -990,14 +993,27 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   deep_copy(divdp_f90, div_vdp);
   deep_copy(sdot_sum_f90, sdot_sum);
 
-//only hybi is used, should the rest be quiet_nans?
+//only hybi is used, should the rest be quiet_nans? yes
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
+//OG coefficients A and B increase is not taken into here...
+//probably, does not matter
+  genRandArray(hybrid_am_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_ai_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bm_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bi_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
 //'tails'. check this.
+ 
+  TestType test_functor(elements);
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
                                    TestType::n0, TestType::np1, TestType::qn0,
                                    TestType::dt, TestType::ps0, false,
@@ -1005,9 +1021,8 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                    hybrid_am_mirror.data(),
                                    hybrid_ai_mirror.data(),
                                    hybrid_bm_mirror.data(),
-                                   hybrid_bp_mirror.data());
+                                   hybrid_bi_mirror.data());
 
-  TestType test_functor(elements);
   //RUN subfunctor, why does it run on device?
   //will run on device
   test_functor.run_functor();
@@ -1016,7 +1031,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //than having external host views?
 
   //source dest 
-  sync_to_host(elements.buffers.m_eta_dot_dpdn, test_functor.eta_dpdn);
+  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
   //if one of results is buffer variable, it needs another copy of host view,
   //see virt_temp for an example
@@ -1030,7 +1045,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                                Kokkos::ALL).data(),
                                Kokkos::subview(divdp_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
-                               hybrid_bi_mirror(0));
+                               hybrid_bi_mirror.data());
 
     for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
       for (int igp = 0; igp < NP; ++igp) {

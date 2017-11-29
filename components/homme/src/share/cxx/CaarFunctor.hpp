@@ -110,7 +110,7 @@ struct CaarFunctor {
    //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
    if(!m_data.rsplit){
       compute_eta_dot_dpdn_vertadv_euler(kv);
-      preq_vertadv(kv);
+      preq_vertadv_2(kv);
     };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
@@ -472,7 +472,7 @@ struct CaarFunctor {
 
 
   KOKKOS_INLINE_FUNCTION
-  void preq_vertadv_2(const TeamMember & kv){
+  void preq_vertadv_2(KernelVariables &kv) const {
 /*
     constexpr const int k_0 = 0;
     for (int j = 0; j < NP; ++j) {

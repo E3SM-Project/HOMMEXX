@@ -348,6 +348,28 @@ sync_to_device(Source_T source, Dest_T dest) {
   Kokkos::deep_copy(dest, dest_mirror);
 }
 
+
+//adding one for ie,np,np arrays, no vertical index
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Real * [NP][NP]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest) {
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        dest_mirror(ie, igp, jgp) = source(ie, igp, jgp);
+      }
+    }
+  }
+  Kokkos::deep_copy(dest, dest_mirror);
+}
+
+
+
+
 template <typename ViewType>
 typename std::enable_if<
     !std::is_same<typename ViewType::value_type, Scalar>::value, Real>::type
