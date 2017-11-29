@@ -980,7 +980,6 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
-//UNCOMMENT THIS LATER
 //source, dest
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
 
@@ -1030,6 +1029,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //why does it need copying? is there any other mechanism to copy elements views 
   //than having external host views?
 
+//in elements, m_eta_dot_dpdn should have a 'tail' of quiet nans,
+//not sure where to init them.
+
+//UNCOMMENT this later
   //source dest 
   sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 

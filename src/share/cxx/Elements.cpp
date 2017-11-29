@@ -194,7 +194,7 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
        for (int ilevel = NUM_PHYSICAL_LEV+1; ilevel < NUM_LEV_P*VECTOR_SIZE; ilevel++){ 
          int ilev = ilevel / VECTOR_SIZE;
          int ivector = ilevel % VECTOR_SIZE;
-         h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = std::numeric_limits<Real>::quiet_NaN();
+         h_eta_dot_dpdn(ie, igp, jgp, ilev)[ivector] = std::numeric_limits<Real>::quiet_NaN();
        }
 
         Real determinant = 0.0;
