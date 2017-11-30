@@ -567,6 +567,8 @@ void Elements::BufferViews::init(int num_elems) {
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
+  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum", num_elems);
+
   div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
                                                            num_elems);
   grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer",

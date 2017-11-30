@@ -489,6 +489,9 @@ contains
     real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
     integer :: k
 
+print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+print *, 'Befor anything SDOT_SUM', sdot_sum
+print *, 'Befor anything ETADOT', eta_dot_dpdn
     do k=1,nlev
     ! ==================================================
     ! add this term to PS equation so we exactly conserve dry mass
@@ -497,7 +500,17 @@ contains
        eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
        ! can this be replaced with
        ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k) ?
+
+if((k == 1).or.(k==2)) then
+print *, 'k=',k
+print *, 'sdot_sum(k)', sdot_sum(:,:)
+print *, 'eta_dot_dpdn(k+1)', eta_dot_dpdn(:,:,k+1)
+print *, 'divdp(k)', divdp(:,:,k)
+endif
     end do
+
+
+print *, 'IN F CODE FINAL RESULT IS', eta_dot_dpdn(:,:,:)
 
     ! ===========================================================
     ! at this point, eta_dot_dpdn contains integral_etatop^eta[ divdp ]
@@ -506,12 +519,14 @@ contains
     ! for reference: at mid layers we have:
     !    omega = v grad p  - integral_etatop^eta[ divdp ]
     ! ===========================================================
-    do k=1,nlev-1
-       eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
-    end do
 
-    eta_dot_dpdn(:,:,1     ) = 0.0D0
-    eta_dot_dpdn(:,:,nlev+1) = 0.0D0
+
+!    do k=1,nlev-1
+!       eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
+!    end do
+
+!    eta_dot_dpdn(:,:,1     ) = 0.0D0
+!    eta_dot_dpdn(:,:,nlev+1) = 0.0D0
 
   end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 
