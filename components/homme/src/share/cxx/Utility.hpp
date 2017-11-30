@@ -216,7 +216,7 @@ template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::
         value &&host_view_mappable<
-            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>::value,
+            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][2][NP][NP]>::value,
     void>::type
 sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
@@ -279,18 +279,22 @@ typename std::enable_if<
         value &&host_view_mappable< Dest_T, Real * [NUM_PHYSICAL_LEV+1][NP][NP]>::value,
     void>::type
 sync_to_host(Source_T source, Dest_T dest) {
+
   ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV+1]>::HostMirror
       source_mirror(Kokkos::create_mirror_view(source));
+
   Kokkos::deep_copy(source_mirror, source);
+
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-      for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-           ++vector_level) {
+      for (int vector_level = 0, level = 0; vector_level < NUM_LEV+1; ++vector_level) {
         for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
+
+if( igp==0  && jgp == 0)
+std::cout << "hey and level=" << level;
               if(level <  (NUM_PHYSICAL_LEV+1) )
-                dest(ie, level, igp, jgp) =
-                  source_mirror(ie, igp, jgp, vector_level)[vector];
+                dest(ie, level, igp, jgp) = source_mirror(ie, igp, jgp, vector_level)[vector];
             }
           }
         }

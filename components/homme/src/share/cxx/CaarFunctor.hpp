@@ -203,11 +203,16 @@ struct CaarFunctor {
 
   KOKKOS_INLINE_FUNCTION
   void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
+
+std::cout << "IN C CODE -----------------\n";
+
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
+
+// AAAAAAAAAAAAAAAAA
+//      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
 //do it without vectorization for now, like in Cuda space but without kokkos single
       for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
@@ -219,8 +224,21 @@ struct CaarFunctor {
            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
+
+if ( igp==0 && jgp==0  ){
+//if((k==0 )|| (k==1)){
+std::cout << "igp=" <<igp << " jgp="<<jgp <<" k="<<k << " ilev = " << ilev << " ivec=" <<ivec <<"\n";
+
+std::cout << "kp1=" << kp1 << " ilevp1="<<ilevp1 << " ivecp1="<<ivecp1 << "\n";
+std::cout << "sdot_sum=" << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
+std::cout << "eta_dpdn=" << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] << "\n";
+std::cout << "divdp=" << m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec] << "\n";
+//}
+}
+
       }
 
+/*
       //note that index starts from 1
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
@@ -235,6 +253,7 @@ struct CaarFunctor {
 
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0;
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
+*/
 
     });
   }//not tested

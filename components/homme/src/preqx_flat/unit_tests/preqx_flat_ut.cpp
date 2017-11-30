@@ -820,6 +820,7 @@ public:
   }
 };
 
+//is it meant moist?
 TEST_CASE("virtual temperature with tracers",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
@@ -955,13 +956,13 @@ public:
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
-
+  constexpr const int num_elems = 1;
+//std::cout << "here 1 \n;";
   std::random_device rd;
   rngAlg engine(rd());
-
+//std::cout << "here 1 \n;";
   using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
-
+//std::cout << "here 0 \n;";
   // This must be a reference to ensure the views are initialized in the
   // singleton
   // on host first
@@ -969,59 +970,56 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //element fields (except buffers) are randomly init-ed
   // will copy to device and randotm on device
   elements.random_init(num_elems, engine);
-
+//std::cout << "here 1 \n;";
   //host or source? diff tests use diff. name convensions
-  //this is to randomize
+  //this is to randomize buffer values, since Elements does not have a methiod fo rthis
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
+//std::cout << "here 2 \n";
   //random init host views
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
+
+//Actually we only run with sdot_sum=0 but i guess this makes a better test
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
+//std::cout << "here 3 \n;";
   //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
-
+//std::cout << "here 4 \n;";
 //source, dest
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
-
+//std::cout << "here 5 \n;";
   //define host view for F input/output
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> divdp_f90("divdp f90", num_elems);
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
-  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("sdot_sum f90", num_elems);
+//  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> divdp_f90("divdp f90", num_elems);
+//  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("sdot_sum f90", num_elems);
   //copy random host C views to F views
   //??? transposed or not?
-  deep_copy(divdp_f90, div_vdp);
-  deep_copy(sdot_sum_f90, sdot_sum);
-
+//  deep_copy(divdp_f90, div_vdp);
+//  deep_copy(sdot_sum_f90, sdot_sum);
+//  why not copy from elements?
 //only hybi is used, should the rest be quiet_nans? yes
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
-
 //OG coefficients A and B increase is not taken into here...
 //probably, does not matter
-  genRandArray(hybrid_am_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 10.0));
-  genRandArray(hybrid_ai_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 10.0));
-  genRandArray(hybrid_bm_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 10.0));
-  genRandArray(hybrid_bi_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_am_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_ai_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
 //'tails'. check this.
- 
   TestType test_functor(elements);
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-                                   TestType::n0, TestType::np1, TestType::qn0,
-                                   TestType::dt, TestType::ps0, false,
-                                   TestType::eta_ave_w,
-                                   hybrid_am_mirror.data(),
-                                   hybrid_ai_mirror.data(),
-                                   hybrid_bm_mirror.data(),
-                                   hybrid_bi_mirror.data());
+       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
+       TestType::eta_ave_w, hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
+       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
+
+//we will always set etadot=0 before calling vertadv, but this makes it a better test
+  deep_copy(eta_dot_dpdn_f90, test_functor.eta_dpdn);
   //RUN subfunctor, why does it run on device?
   //will run on device
   test_functor.run_functor();
@@ -1033,8 +1031,43 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //not sure where to init them.
 
 //UNCOMMENT this later
-  //source dest 
+  //source dest , copy C output to test_functor
+  //
+std::cout << "BEFOR ESYNC TO HOST \n";
+  for (int ie = 0; ie < num_elems; ++ie) {
+for (int level = 0; level < NUM_LEV+1; ++level) {
+for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
+//      for (int igp = 0; igp < NP; ++igp) {
+//        for (int jgp = 0; jgp < NP; ++jgp) {
+//std::cout << " ie, level, vec, igp, jgp = " << ie << " "<<level<<" "<<vec<<" "<<igp<<" "<<jgp<<"\n";
+//std::cout << "eta from elements:" << elements.m_eta_dot_dpdn(ie,igp,jgp,level)[vec]<<"\n";
+int igp = 0; int jgp = 0;
+std::cout << " ie, level, vec, igp, jgp = " << ie << " "<<level<<" "<<vec<<" "<<igp<<" "<<jgp<<"\n";
+std::cout << "eta from elements:" << elements.m_eta_dot_dpdn(ie,igp,jgp,level)[vec]<<"\n";
+//}}
+}}};
+
+
   sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+
+
+std::cout << "AFTER ESYNC TO HOST \n";
+  for (int ie = 0; ie < num_elems; ++ie) {
+for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
+//for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
+//      for (int igp = 0; igp < NP; ++igp) {
+//        for (int jgp = 0; jgp < NP; ++jgp) {
+//std::cout << " ie, level, vec, igp, jgp = " << ie << " "<<level<<" "<<vec<<" "<<igp<<" "<<jgp<<"\n";
+//std::cout << "eta from elements:" << elements.m_eta_dot_dpdn(ie,igp,jgp,level)[vec]<<"\n";
+int igp = 0; int jgp = 0;
+std::cout << " ie, level, igp, jgp = " << ie << " "<<level<<" "<<igp<<" "<<jgp<<"\n";
+std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n";
+//      //}}
+}};
+
+
+
+
 
   //if one of results is buffer variable, it needs another copy of host view,
   //see virt_temp for an example
@@ -1044,9 +1077,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
                                Kokkos::subview(eta_dot_dpdn_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
+                               Kokkos::subview(sdot_sum, ie, Kokkos::ALL,
                                                Kokkos::ALL).data(),
-                               Kokkos::subview(divdp_f90, ie, Kokkos::ALL,
+                               Kokkos::subview(div_vdp, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                hybrid_bi_mirror.data());
 
@@ -1057,6 +1090,11 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
           REQUIRE(!std::isnan(correct));
           const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
+
+if( igp == 0 && jgp == 0){
+std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+std::cout << " F = " << correct << " C = " << computed << "\n";
+}
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
         }
