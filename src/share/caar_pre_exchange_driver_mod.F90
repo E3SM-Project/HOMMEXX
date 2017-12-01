@@ -489,7 +489,8 @@ contains
     real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
     integer :: k
 
-!print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+print *, 'HYBRID', hybi
 !print *, 'Befor anything SDOT_SUM', sdot_sum
 !print *, 'Befor anything ETADOT', eta_dot_dpdn
     do k=1,nlev

@@ -87,10 +87,10 @@ struct Control {
   int rsplit;
 
   // hybrid coefficients
-  ExecViewManaged<Real[NUM_LEV_P]> hybrid_am;
-  ExecViewManaged<Real[NUM_LEV_P+1]> hybrid_ai;
-  ExecViewManaged<Real[NUM_LEV_P]> hybrid_bm;
-  ExecViewManaged<Real[NUM_LEV_P+1]> hybrid_bi;
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_am;
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_ai;
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_bm;
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_bi;
 
 };
 

@@ -206,6 +206,10 @@ struct CaarFunctor {
 
 std::cout << "IN C CODE -----------------\n";
 
+std::cout << "printing hybi! in FUNCTOR!!!!!!!!!!!!!! \n";
+for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
+std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
+
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -225,6 +229,7 @@ std::cout << "IN C CODE -----------------\n";
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
 
+/*
 if ( igp==0 && jgp==0  ){
 //if((k==0 )|| (k==1)){
 std::cout << "igp=" <<igp << " jgp="<<jgp <<" k="<<k << " ilev = " << ilev << " ivec=" <<ivec <<"\n";
@@ -235,6 +240,7 @@ std::cout << "eta_dpdn=" << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[i
 std::cout << "divdp=" << m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec] << "\n";
 //}
 }
+*/
       }//k loop
       //note that index starts from 1
       for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){

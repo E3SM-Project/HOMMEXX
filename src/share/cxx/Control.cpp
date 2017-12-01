@@ -23,23 +23,36 @@ void Control::init(const int nets_in, const int nete_in,
   ps0 = ps0_in;
   compute_diagonstics = compute_diagonstics_in;
   eta_ave_w = eta_ave_w_in;
-  hybrid_am = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
       "Hybrid coordinates; coefficient A_midpoints");
-  hybrid_ai = ExecViewManaged<Real[NUM_LEV_P+1]>(
+  hybrid_ai = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
       "Hybrid coordinates; coefficient A_interfaces");
-  hybrid_bm = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
       "Hybrid coordinates; coefficient B_midpoints");
-  hybrid_bi = ExecViewManaged<Real[NUM_LEV_P+1]>(
+  hybrid_bi = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
       "Hybrid coordinates; coefficient B_interfaces");
 
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_am(hybrid_am_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_ai(hybrid_ai_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_bm(hybrid_bm_ptr);
-  HostViewUnmanaged<const Real[NUM_LEV_P+1]> host_hybrid_bi(hybrid_bi_ptr);
+  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
+  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_ai(hybrid_ai_ptr);
+  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
+  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_bi(hybrid_bi_ptr);
+
+//dest, source
   Kokkos::deep_copy(hybrid_am, host_hybrid_am);
   Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
   Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
   Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
+
+
+std::cout << "printing hybi! in CONTROL!!!!!!!!!!!!!! \n";
+for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
+std::cout << "hybrid_bi " << ii << " " << hybrid_bi(ii) << "\n";
+
+
+std::cout << "printing host hybi! in CONTROL!!!!!!!!!!!!!! \n";
+for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
+std::cout << "HOST hybrid_bi " << ii << " " << host_hybrid_bi(ii) << "\n";
+
 
   set_team_size();
 }
