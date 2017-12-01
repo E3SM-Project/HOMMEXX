@@ -235,27 +235,46 @@ std::cout << "eta_dpdn=" << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[i
 std::cout << "divdp=" << m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec] << "\n";
 //}
 }
-
-      }
-
-/*
+      }//k loop
       //note that index starts from 1
-      for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
-        const int ilev = k / VECTOR_SIZE;
-        const int ivec = k % VECTOR_SIZE;
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] -= 
-           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
-      }
+      for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){
+        const int ilev = (k+1) / VECTOR_SIZE;
+        const int ivec = (k+1) % VECTOR_SIZE;
 
+if( igp==0 && jgp==0 ){
+std::cout << "BEFORE C In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";  
+std::cout << "hybi, sdot = "<<m_data.hybrid_bi(k+1) <<" " << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
+};
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] = 
+           m_data.hybrid_bi(k+1)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
+           m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec];
+
+
+if( igp==0 && jgp==0 ){
+std::cout << "RESULT In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";
+std::cout << " ilev, ivec = " << ilev << " " <<ivec << "\n"; 
+std::cout << "----------------------------------------------------\n";
+}
+
+
+      }//k loop
       constexpr const int Np1 = NUM_PHYSICAL_LEV;
       const int ilevNp1 = Np1 / VECTOR_SIZE;
       const int ivecNp1 = Np1 % VECTOR_SIZE;
-
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0;
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
-*/
 
-    });
+if( igp==0 && jgp==0 ){
+std::cout << "C CODE before exit eta\n";
+for(int k = 0; k < NUM_LEV; ++k){
+for(int kk = 0; kk<VECTOR_SIZE ; kk++)
+std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k)[kk] << "\n";
+}
+
+}
+
+
+    });//NP*NP loop
   }//not tested
 
 
