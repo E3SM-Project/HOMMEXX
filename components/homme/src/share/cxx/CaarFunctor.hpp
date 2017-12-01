@@ -103,12 +103,17 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
-   //this nullifies eta_dot_dpdn, needed for both rsplit>0 and 0
-   assign_zero_to_eta_dot_dpdn(kv);
-   //nullifies sdot_sum
+
+   //nullifies sdot_sum, needed for both vert Lagrangian and Eulerian,
+   //sdot_sum is used in energy diagnostics
    assign_zero_to_sdot_sum(kv);
-   //we can avoid this if if compute_eta_dpdn is templated wrt rsplit
-   if(!m_data.rsplit){
+
+   //vertical Lagrangian
+   if(m_data.rsplit){
+      assign_zero_to_eta_dot_dpdn(kv);
+     
+   //vertical Eulerian
+   }else{
       compute_eta_dot_dpdn_vertadv_euler(kv);
       preq_vertadv_2(kv);
     };
@@ -204,12 +209,12 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
 
+/*
 std::cout << "IN C CODE -----------------\n";
-
 std::cout << "printing hybi! in FUNCTOR!!!!!!!!!!!!!! \n";
 for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
 std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
-
+*/
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -243,25 +248,25 @@ std::cout << "divdp=" << m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec]
 */
       }//k loop
       //note that index starts from 1
-      for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){
-        const int ilev = (k+1) / VECTOR_SIZE;
-        const int ivec = (k+1) % VECTOR_SIZE;
-
+      for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+/*
 if( igp==0 && jgp==0 ){
 std::cout << "BEFORE C In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";  
 std::cout << "hybi, sdot = "<<m_data.hybrid_bi(k+1) <<" " << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
 };
+*/
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] = 
-           m_data.hybrid_bi(k+1)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
+           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
            m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec];
-
-
+/*
 if( igp==0 && jgp==0 ){
 std::cout << "RESULT In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";
 std::cout << " ilev, ivec = " << ilev << " " <<ivec << "\n"; 
 std::cout << "----------------------------------------------------\n";
 }
-
+*/
 
       }//k loop
       constexpr const int Np1 = NUM_PHYSICAL_LEV;
@@ -269,19 +274,15 @@ std::cout << "----------------------------------------------------\n";
       const int ivecNp1 = Np1 % VECTOR_SIZE;
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0;
       m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
-
+/*
 if( igp==0 && jgp==0 ){
 std::cout << "C CODE before exit eta\n";
 for(int k = 0; k < NUM_LEV; ++k){
 for(int kk = 0; kk<VECTOR_SIZE ; kk++)
 std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k)[kk] << "\n";
-}
-
-}
-
-
+}}*/
     });//NP*NP loop
-  }//not tested
+  }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
 
 
 //this impl avoids sdot_sum array, but noncrucial energy diagn needs it
