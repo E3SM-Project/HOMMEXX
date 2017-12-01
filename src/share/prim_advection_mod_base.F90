@@ -2018,12 +2018,10 @@ OMP_SIMD
     implicit none
 
     interface
-#ifdef USE_KOKKOS_KERNELS
       subroutine vertical_remap_c(vert_remap_alg) bind(c)
         use iso_c_binding, only : c_int
         integer (kind=c_int), intent(in) :: vert_remap_alg
       end subroutine vertical_remap_c
-#endif
     end interface
 
     type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
@@ -2052,7 +2050,13 @@ OMP_SIMD
                            elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                            elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_startf('total vertical remap time')
     call vertical_remap_c(vert_remap_q_alg)
+    call t_stopf('total vertical remap time')
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                              elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
   end subroutine vertical_remap_interface
 
 #else
@@ -2073,7 +2077,9 @@ OMP_SIMD
     real (kind=real_kind), intent(in) :: dt
     integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
 
+    call t_startf('total vertical remap time')
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call t_stopf('total vertical remap time')
   end subroutine vertical_remap_interface
 #endif ! USE_KOKKOS_KERNELS
 

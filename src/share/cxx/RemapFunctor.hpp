@@ -539,12 +539,12 @@ template <typename remap_type> struct Remap_Functor {
               (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
                   m_data.ps0 +
               (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
-                  ps_v(kv.ie, igp, jgp, ilevel);
+                  ps_v(kv.ie, igp, jgp);
 
           tgt_layer_thickness(kv.ie, igp, jgp, ilev) =
               (m_data.hybrid_a(ilev + 1) - m_data.hybrid_a(ilev) * m_data.ps0) +
               (m_data.hybrid_b(ilev + 1) - m_data.hybrid_b(ilev)) *
-                  ps_v(kv.ie, igp, jgp, ilev);
+                  ps_v(kv.ie, igp, jgp);
         });
       });
 

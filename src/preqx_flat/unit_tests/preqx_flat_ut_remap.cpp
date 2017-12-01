@@ -351,3 +351,18 @@ TEST_CASE("ppm_fixed", "vertical remap") {
   SECTION("ppm test") { remap_test_fixed.test_ppm(); }
   SECTION("remap test") { remap_test_fixed.test_remap(); }
 }
+
+TEST_CASE("interface_test", "vertical remap") {
+  constexpr int remap_dim = 3;
+  constexpr int num_elems = 4;
+  Elements elements;
+  std::random_device rd;
+  std::mt19937_64 rng(rd());
+  elements.random_init(num_elems, rng);
+  Control data;
+  data.random_init(num_elems, std::random_device()());
+  Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data, elements);
+  Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace>(num_elems),
+      remap);
+}
