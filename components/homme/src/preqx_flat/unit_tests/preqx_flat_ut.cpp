@@ -1019,6 +1019,12 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
        TestType::eta_ave_w, hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
+std::cout << "printing hybi!n the tEST BODY!!!!!!!!!!!!!! \n";
+for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
+std::cout << "hybi " << ii << " " << hybrid_bi_mirror(ii) << "\n";
+
+
+
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
 
 //we will always set etadot=0 before calling vertadv, but this makes it a better test
