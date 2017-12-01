@@ -489,8 +489,8 @@ contains
     real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
     integer :: k
 
-print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
-print *, 'HYBRID', hybi
+!print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+!print *, 'HYBRID', hybi
 !print *, 'Befor anything SDOT_SUM', sdot_sum
 !print *, 'Befor anything ETADOT', eta_dot_dpdn
     do k=1,nlev
@@ -520,17 +520,17 @@ print *, 'HYBRID', hybi
 
 
     do k=1,nlev-1
-print *, 'BEFORE in F', eta_dot_dpdn(1,1,k+1)
-print *, 'hybi, sdot = ', hybi(k+1), sdot_sum(1,1)
+!print *, 'BEFORE in F', eta_dot_dpdn(1,1,k+1)
+!print *, 'hybi, sdot = ', hybi(k+1), sdot_sum(1,1)
        eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
-print *, 'AFTER in F', eta_dot_dpdn(1,1,k+1)
-print *, '----------------------------------------'
+!print *, 'AFTER in F', eta_dot_dpdn(1,1,k+1)
+!print *, '----------------------------------------'
     end do
 
     eta_dot_dpdn(:,:,1     ) = 0.0D0
     eta_dot_dpdn(:,:,nlev+1) = 0.0D0
 
-print *, 'IN F CODE FINAL RESULT IS', eta_dot_dpdn(1,1,:)
+!print *, 'IN F CODE FINAL RESULT IS', eta_dot_dpdn(1,1,:)
 
   end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 

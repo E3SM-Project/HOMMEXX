@@ -1008,23 +1008,19 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
-
-
-
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
-//'tails'. check this.
+//'tails'. check this. Real arrays.
   TestType test_functor(elements);
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
        TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
        TestType::eta_ave_w, hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
+/*
 std::cout << "printing hybi!n the tEST BODY!!!!!!!!!!!!!! \n";
 for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
 std::cout << "hybi " << ii << " " << hybrid_bi_mirror(ii) << "\n";
-
-
-
+*/
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
 
 //we will always set etadot=0 before calling vertadv, but this makes it a better test
@@ -1100,11 +1096,10 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
           REQUIRE(!std::isnan(correct));
           const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
-
-if( igp == 0 && jgp == 0){
-std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-std::cout << " F = " << correct << " C = " << computed << "\n";
-}
+//if( igp == 0 && jgp == 0){
+//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+//std::cout << " F = " << correct << " C = " << computed << "\n";
+//}
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
         }
