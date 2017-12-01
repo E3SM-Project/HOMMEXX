@@ -1008,6 +1008,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
+
+
+
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
 //'tails'. check this.
   TestType test_functor(elements);
@@ -1033,6 +1036,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //UNCOMMENT this later
   //source dest , copy C output to test_functor
   //
+/*
 std::cout << "BEFOR ESYNC TO HOST \n";
   for (int ie = 0; ie < num_elems; ++ie) {
 for (int level = 0; level < NUM_LEV+1; ++level) {
@@ -1046,11 +1050,11 @@ std::cout << " ie, level, vec, igp, jgp = " << ie << " "<<level<<" "<<vec<<" "<<
 std::cout << "eta from elements:" << elements.m_eta_dot_dpdn(ie,igp,jgp,level)[vec]<<"\n";
 //}}
 }}};
-
+*/
 
   sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
-
+/*
 std::cout << "AFTER ESYNC TO HOST \n";
   for (int ie = 0; ie < num_elems; ++ie) {
 for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
@@ -1064,7 +1068,7 @@ std::cout << " ie, level, igp, jgp = " << ie << " "<<level<<" "<<igp<<" "<<jgp<<
 std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n";
 //      //}}
 }};
-
+*/
 
 
 
