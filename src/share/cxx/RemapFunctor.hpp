@@ -317,55 +317,60 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      // Compute remapping intervals once for all
-      // tracers. Find the old grid cell index in which
-      // the k-th new cell interface resides. Then
-      // integrate from the bottom of that old cell to
-      // the new interface location. In practice, the
-      // grid never deforms past one cell, so the search
-      // can be simplified by this. Also, the interval
-      // of integration is usually of magnitude close to
-      // zero or close to dpo because of minimial
-      // deformation. Numerous tests confirmed that the
-      // bottom and top of the grids match to machine
-      // precision, so set them equal to each other.
-      for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
-        int kk = k;
-        // This reduces the work required to find the index where this fails at,
-        // and is typically less than NUM_PHYSICAL_LEV^2
-        while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k)) {
-          kk++;
-        }
+      Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
+        // Compute remapping intervals once for all
+        // tracers. Find the old grid cell index in which
+        // the k-th new cell interface resides. Then
+        // integrate from the bottom of that old cell to
+        // the new interface location. In practice, the
+        // grid never deforms past one cell, so the search
+        // can be simplified by this. Also, the interval
+        // of integration is usually of magnitude close to
+        // zero or close to dpo because of minimial
+        // deformation. Numerous tests confirmed that the
+        // bottom and top of the grids match to machine
+        // precision, so set them equal to each other.
+        for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
+          int kk = k;
+          // This reduces the work required to find the index where this fails
+          // at,
+          // and is typically less than NUM_PHYSICAL_LEV^2
+          while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k)) {
+            kk++;
+          }
 
-        kk--;
-        // This is to keep the indices in bounds.
-        // Top bounds match anyway, so doesn't matter what coefficients are used
-        if (kk == NUM_PHYSICAL_LEV + 1) {
-          kk = NUM_PHYSICAL_LEV;
-        }
-        // kk is now the cell index we're integrating over.
+          kk--;
+          // This is to keep the indices in bounds.
+          // Top bounds match anyway, so doesn't matter what coefficients are
+          // used
+          if (kk == NUM_PHYSICAL_LEV + 1) {
+            kk = NUM_PHYSICAL_LEV;
+          }
+          // kk is now the cell index we're integrating over.
 
-        // Save kk for reuse
-        kid(kv.ie, igp, jgp, k - 1) = kk;
-        // This remapping assumes we're starting from the left interface of an
-        // old grid cell
-        // In fact, we're usually integrating very little or almost all of the
-        // cell in question
-        z1(kv.ie, igp, jgp, k - 1) = -0.5;
-        // PPM interpolants are normalized to an independent coordinate domain
-        // [-0.5, 0.5].
-        z2(kv.ie, igp, jgp, k - 1) =
-            (pin(kv.ie, igp, jgp, k) -
-             (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
-            dpo(kv.ie, igp, jgp, kk + 1);
-      } // k loop
+          // Save kk for reuse
+          kid(kv.ie, igp, jgp, k - 1) = kk;
+          // This remapping assumes we're starting from the left interface of an
+          // old grid cell
+          // In fact, we're usually integrating very little or almost all of the
+          // cell in question
+          z1(kv.ie, igp, jgp, k - 1) = -0.5;
+          // PPM interpolants are normalized to an independent coordinate domain
+          // [-0.5, 0.5].
+          z2(kv.ie, igp, jgp, k - 1) =
+              (pin(kv.ie, igp, jgp, k) -
+               (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) *
+                   0.5) /
+              dpo(kv.ie, igp, jgp, kk + 1);
+        } // k loop
 
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
-          Homme::subview(dpo, kv.ie, igp, jgp);
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
-          Homme::subview(ppmdx, kv.ie, igp, jgp);
+        ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
+            Homme::subview(dpo, kv.ie, igp, jgp);
+        ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
+            Homme::subview(ppmdx, kv.ie, igp, jgp);
 
-      compute_grids(kv, point_dpo, point_ppmdx);
+        compute_grids(kv, point_dpo, point_ppmdx);
+      });
     });
     kv.team_barrier();
     // Verified to here
@@ -465,6 +470,13 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
 template <typename remap_type> struct Remap_Functor {
   static_assert(std::is_base_of<Vert_Remap_Alg, remap_type>::value,
                 "Remap_Functor not given a remap algorithm to use");
+  static_assert(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                              remap_type::remap_dim>::size() ==
+                    remap_type::remap_dim,
+                "remap array not reporting the correct size");
+  static_assert(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                              num_states_remap>::size() == num_states_remap,
+                "state array not reporting the correct size");
 
   Control m_data;
   const Elements m_elements;
@@ -548,11 +560,10 @@ template <typename remap_type> struct Remap_Functor {
         });
       });
 
-      Kokkos::parallel_for(
-          Kokkos::TeamThreadRange(kv.team, state_remap.size()),
-          [&](const int &var) { remap_vals[var] = state_remap[var]; });
-
-      kv.team_barrier();
+      // Must use for loop for CUDA
+      for (int var = 0; var < state_remap.size(); ++var) {
+        remap_vals[var] = state_remap[var];
+      }
 
       Kokkos::parallel_for(Kokkos::TeamThreadRange(
                                kv.team, state_remap.size() * NP * NP * NUM_LEV),
@@ -569,13 +580,13 @@ template <typename remap_type> struct Remap_Functor {
 
     if (m_data.qsize > 0) {
       // remap_Q_ppm Qdp
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, m_data.qsize),
-                           [&](const int &i) {
+      // Must use for loop for CUDA
+      for (int i = 0; i < m_data.qsize; ++i) {
         // Need to verify this is the right tracer
         // timelevel
         remap_vals[num_remap + i] =
             Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, i);
-      });
+      }
       num_remap += m_data.qsize;
       kv.team_barrier();
     }

@@ -21,9 +21,9 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
   ps0 = ps0_in;
   compute_diagonstics = compute_diagonstics_in;
   eta_ave_w = eta_ave_w_in;
-  hybrid_a = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid a coordinates; translates between pressure and velocity");
-  hybrid_b = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b coordinates; translates between pressure and velocity");
 
   HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
@@ -43,9 +43,9 @@ void Control::set_team_size() {
 }
 
 void Control::random_init(int num_elems_in, int seed) {
-  hybrid_a = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid a coordinates; translates between pressure and velocity");
-  hybrid_b = ExecViewManaged<Real[NUM_LEV_P]>(
+  hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b coordinates; translates between pressure and velocity");
   num_elems = num_elems_in;
   std::mt19937_64 engine(seed);
