@@ -22,7 +22,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[NP][NP],MemSpace>
 subview(ViewType<ScalarType*[NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [NP][NP],MemSpace>(&v_in(ie,0,0));
+  return ViewUnmanaged<ScalarType [NP][NP],MemSpace>(&v_in.implementation_map().reference(ie,0,0));
 }
 
 // Here, usually, DIM1=DIM2=2 (D and DInv)
@@ -31,7 +31,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>(&v_in(ie,0,0,0,0));
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP],MemSpace>(&v_in.implementation_map().reference(ie,0,0,0,0));
 }
 
 // ================ Subviews of 3d views ======================= //
@@ -43,7 +43,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0));
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
@@ -51,7 +51,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0));
+  return ViewUnmanaged<ScalarType [DIM][NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM>
@@ -59,7 +59,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim)
 {
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim,0,0,0));
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,idim,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
@@ -67,7 +67,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie)
 {
-  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,0,0,0,0,0));
+  return ViewUnmanaged<ScalarType [DIM1][DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,0,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
@@ -75,7 +75,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1)
 {
-  return ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,0,0,0,0));
+  return ViewUnmanaged<ScalarType [DIM2][NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,idim1,0,0,0,0));
 }
 
 template<typename MemSpace, typename MemManagement, typename ScalarType, int DIM1, int DIM2>
@@ -83,7 +83,7 @@ KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>
 subview(ViewType<ScalarType*[DIM1][DIM2][NP][NP][NUM_LEV],MemSpace,MemManagement> v_in, int ie, int idim1, int idim2)
 {
-  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in(ie,idim1,idim2,0,0,0));
+  return ViewUnmanaged<ScalarType [NP][NP][NUM_LEV],MemSpace>(&v_in.implementation_map().reference(ie,idim1,idim2,0,0,0));
 }
 
 // Templates to verify at compile time that a view has the specified array type
