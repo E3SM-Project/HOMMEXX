@@ -81,6 +81,9 @@ public:
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
 
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
+    ExecViewManaged<Scalar* [NP][NP][NUM_LEV]> t_vadv_buf;
+
     ExecViewManaged<clock_t *> kernel_start_times;
     ExecViewManaged<clock_t *> kernel_end_times;
   } buffers;
