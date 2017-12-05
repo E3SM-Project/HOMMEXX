@@ -575,6 +575,10 @@ void Elements::BufferViews::init(int num_elems) {
                                                             num_elems);
   vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
                                                             num_elems);
+  v_vadv_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("v_vadv buffer",
+                                                            num_elems);
+  t_vadv_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("t_vadv buffer",
+                                                            num_elems);
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);

@@ -127,6 +127,8 @@ struct CaarFunctor {
     check_dp3d(kv);
   } // TRIVIAL
 
+
+
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
@@ -474,7 +476,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         // vgrad_t + kappa * T_v * omega_p
-        const Scalar ttens = -vgrad_t +
+        const Scalar ttens = m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) - vgrad_t +
                 PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
