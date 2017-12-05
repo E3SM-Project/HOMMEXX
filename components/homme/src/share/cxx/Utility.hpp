@@ -36,7 +36,8 @@ subview(ViewType<ScalarType * [DIM1][DIM2], MemSpace, MemManagement> v_in,
   assert(v_in.data() != nullptr);
   assert(ie < v_in.extent_int(0));
   assert(ie >= 0);
-  return ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>(&v_in(ie, 0, 0));
+  return ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>(
+      &v_in.implementation_map().reference(ie, 0, 0));
 }
 
 // Here, usually, DIM1=DIM2=2 (D and DInv)
