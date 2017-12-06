@@ -18,8 +18,11 @@ contains
 ! ==========================================================
 
 
+!here it is posssible to avoid an extra copy of _c_int routine, which reduces
+!chances for a bug
+
   subroutine preq_vertadv(T, v, eta_dot_dp_deta, rpdel, &
-       T_vadv, v_vadv)
+       T_vadv, v_vadv) bind(c)
     use kinds,              only : real_kind
     use dimensions_mod,     only : nlev, np, nlevp
     implicit none
@@ -95,7 +98,25 @@ contains
 
   end subroutine preq_vertadv
 
+!----------------------------------------------------------------------
 
+  subroutine preq_vertadv_c_int(T, v, eta_dot_dp_deta, rpdel, T_vadv, v_vadv) bind(c)
+    use kinds,              only : real_kind
+    use dimensions_mod,     only : nlev, np, nlevp
+    implicit none
+
+    real (kind=real_kind), intent(in) :: T(np,np,nlev)
+    real (kind=real_kind), intent(in) :: v(np,np,2,nlev)
+    real (kind=real_kind), intent(in) :: eta_dot_dp_deta(np,np,nlevp)
+    real (kind=real_kind), intent(in) :: rpdel(np,np,nlev)
+
+    real (kind=real_kind), intent(out) :: T_vadv(np,np,nlev)
+    real (kind=real_kind), intent(out) :: v_vadv(np,np,2,nlev)
+
+
+    call preq_vertadv(T, v, eta_dot_dp_deta, rpdel, T_vadv, v_vadv)
+
+  end subroutine preq_vertadv_c_int
 
 
 !-----------------------------------------------------------------------

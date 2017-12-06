@@ -225,8 +225,6 @@ std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-// AAAAAAAAAAAAAAAAA
-//      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
 //do it without vectorization for now, like in Cuda space but without kokkos single
       for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
@@ -287,47 +285,9 @@ for(int kk = 0; kk<VECTOR_SIZE ; kk++)
 std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k)[kk] << "\n";
 }}*/
     });//NP*NP loop
+    //BARRIER?
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
 
-
-//this impl avoids sdot_sum array, but noncrucial energy diagn needs it
-/*
-  KOKKOS_INLINE_FUNCTION
-  void compute_eta_dpdn_(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-//do it without vectorization for now, like in Cuda space but without kokkos single
-      for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
-        const int ilev = k / VECTOR_SIZE;
-        const int ivec = k % VECTOR_SIZE;
-        //should here be tmp.shift... ?
-        const int kp1 = k+1;
-        const int ilevp1 = kp1 / VECTOR_SIZE;
-        const int ivecp1 = kp1 % VECTOR_SIZE;
-        m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] = 
-           m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec]
-           + m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
-      }
-//better name for this index
-      constexprt const int Np1 = NUM_PHYSICAL_LEV;
-      const int ilevNp1 = Np1 / VECTOR_SIZE;
-      const int ivecNp1 = Np1 % VECTOR_SIZE;
-      Real sdot_sum = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilevNp1)[ivecNp1];
-     
-      for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
-        const int ilev = k / VECTOR_SIZE;
-        const int ivec = k % VECTOR_SIZE;
-        m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] -= hybrid_bi(k)*sdot_sum;
-      }
-
-      m_elements.eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0; 
-      m_elements.eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0; 
-
-    });
-  } // NOT TESTED
-*/
 
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
@@ -479,8 +439,8 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         // t_vadv + vgrad_t + kappa * T_v * omega_p
-        const Scalar ttens = - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) - vgrad_t +
-                PhysicalConstants::kappa *
+        const Scalar ttens = - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) - vgrad_t
+                  + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
 
@@ -521,47 +481,102 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
   } // TESTED 12
 
 
+//depends on eta_dot_dpdn, dp3d, T, v, modifies v_vadv, t_vadv
   KOKKOS_INLINE_FUNCTION
   void preq_vertadv_2(KernelVariables &kv) const {
-/*
-    constexpr const int k_0 = 0;
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
-        T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
-        }
-      }
-    }
-    constexpr const int k_f = NUM_LEV - 1;
-    for (int k = k_0 + 1; k < k_f; ++k) {
-      for (int j = 0; j < NP; ++j) {
-        for (int i = 0; i < NP; ++i) {
-          Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
-          Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
-          T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
-                            facm * (T(k, j, i) - T(k - 1, j, i));
-          for (int h = 0; h < 2; ++h) {
-            v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
-                                 facm * (v(k, h, j, i) - v(k - 1, h, j, i));
-          }
-        }
-      }
-    }
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
-        T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
-        }
-      }
-    }
-*/
-  } // UNTESTED 13A
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      
+      //first level
+      int k = 0;
+      int ilev = k / VECTOR_SIZE;
+      int ivec = k % VECTOR_SIZE;
+      const int kp1 = k+1;
+      const int ilevp1 = kp1 / VECTOR_SIZE;
+      const int ivecp1 = kp1 % VECTOR_SIZE;
 
-  // Computes the vertical advection of T and v
+//lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
+      Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                       * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
+      Real facm;
+      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] = 
+                  facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
+                          m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
+      m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+                  facp * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] - 
+                          m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
+      m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+                  facp * (m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
+                          m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
+
+//do it without vectorization for now, like in Cuda space but without kokkos single
+      for(int k = 1; k < NUM_PHYSICAL_LEV - 1; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        const int km1 = k-1;
+        const int ilevm1 = km1 / VECTOR_SIZE;
+        const int ivecm1 = km1 % VECTOR_SIZE;
+        const int kp1 = k+1;
+        const int ilevp1 = kp1 / VECTOR_SIZE;
+        const int ivecp1 = kp1 % VECTOR_SIZE; 
+        
+        facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                   * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
+        facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                   * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilev)[ivec];
+                 
+        m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
+                   facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
+                           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                   +
+                   facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+       
+        m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+                   facp * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
+                           m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                   +
+                   facm * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                           m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+
+        m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+                   facp * (m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
+                           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
+                   +
+                   facm * (m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+     }//k loop
+
+      k = NUM_PHYSICAL_LEV - 1;
+      ilev = k / VECTOR_SIZE;
+      ivec = k % VECTOR_SIZE;
+      const int km1 = k-1;
+      const int ilevm1 = km1 / VECTOR_SIZE;
+      const int ivecm1 = km1 % VECTOR_SIZE;     
+      //note the (), just to comply with F 
+      facm = (0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]) )
+           * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilev)[ivec];
+
+      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
+                  facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                          m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+
+      m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+                  facm * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                          m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+
+      m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+                  facm * (m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
+                          m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
+
+     });//NP*NP
+     //BARRIER?
+  } // UNTESTED 
+
+
+ // Computes the vertical advection of T and v
   //Part of code with rsplit=0
   KOKKOS_INLINE_FUNCTION
   void preq_vertadv(
