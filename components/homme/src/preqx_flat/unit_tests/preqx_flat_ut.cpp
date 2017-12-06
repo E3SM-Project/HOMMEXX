@@ -702,17 +702,22 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
   sync_to_device(omega_p, elements.buffers.omega_p);
 
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror t_vadv_f90("t_vadv", num_elems);
+  genRandArray(t_vadv_f90, engine, std::uniform_real_distribution<Real>(-100, 100));
+  sync_to_device(t_vadv_f90, elements.buffers.t_vadv_buf);
+
   TestType test_functor(elements);
   test_functor.run_functor();
 
   sync_to_host(elements.m_t, test_functor.temperature);
 
-  HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
-  for(int i = 0; i < NP; ++i) {
-    for(int j = 0; j < NP; ++j) {
-      temperature_vadv(i, j) = 0.0;
-    }
-  }
+//  HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
+//  for(int i = 0; i < NP; ++i) {
+//    for(int j = 0; j < NP; ++j) {
+//      temperature_vadv(i, j) = 0.0;
+//    }
+//  }
+
   HostViewManaged<Real [NP][NP]> temperature_f90("Temperature f90");
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
@@ -733,7 +738,8 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
                                                      Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(omega_p, ie, level,
                                                      Kokkos::ALL, Kokkos::ALL).data(),
-                                     temperature_vadv.data(),
+                                     Kokkos::subview(t_vadv_f90, ie, level, 
+                                                     Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(test_functor.temperature, ie,
                                                      test_functor.nm1, level, Kokkos::ALL,
                                                      Kokkos::ALL).data(),

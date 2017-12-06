@@ -110,7 +110,7 @@ struct CaarFunctor {
 
    //vertical Lagrangian
    if(m_data.rsplit){
-      assign_zero_to_eta_dot_dpdn(kv);
+      assign_zero_to_eta_dot_dpdn_and_vadv_bufs(kv);
      
    //vertical Eulerian
    }else{
@@ -185,13 +185,16 @@ struct CaarFunctor {
   // Make a templated subclass of an untemplated version of CaarFunctor
   // Specialize the templated subclass to implement these based on rsplit
   KOKKOS_INLINE_FUNCTION
-  void assign_zero_to_eta_dot_dpdn(KernelVariables &kv) const {
+  void assign_zero_to_eta_dot_dpdn_and_vadv_bufs(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
+        m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) = 0;
+        m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) = 0; 
+        m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev) = 0; 
       });
     });
     kv.team_barrier();
@@ -475,8 +478,8 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
-        // vgrad_t + kappa * T_v * omega_p
-        const Scalar ttens = m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) - vgrad_t +
+        // t_vadv + vgrad_t + kappa * T_v * omega_p
+        const Scalar ttens = - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) - vgrad_t +
                 PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
