@@ -128,8 +128,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
             "pin", data.num_elems)),
         ppmdx(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]>(
             "ppmdx", data.num_elems)),
-        z1(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z1",
-                                                              data.num_elems)),
         z2(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z2",
                                                               data.num_elems)),
         kid(ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]>("kid",
@@ -356,11 +354,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
         // Save kk for reuse
         kid(kv.ie, igp, jgp, k) = kk;
-        // This remapping assumes we're starting from the left interface of an
-        // old grid cell
-        // In fact, we're usually integrating very little or almost all of the
-        // cell in question
-        z1(kv.ie, igp, jgp, k) = -0.5;
         // PPM interpolants are normalized to an independent coordinate domain
         // [-0.5, 0.5].
         z2(kv.ie, igp, jgp, k) =
@@ -436,7 +429,11 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         const Real a0 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
                    a1 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
                    a2 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2);
-        const Real x1 = z1(kv.ie, igp, jgp, k);
+        // This remapping assumes we're starting from the left interface of an
+        // old grid cell
+        // In fact, we're usually integrating very little or almost all of the
+        // cell in question
+        const Real x1 = 0.5;
         const Real x2 = z2(kv.ie, igp, jgp, k);
 
         const Real integrate_par = a0 * (x2 - x1) +
@@ -458,7 +455,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
   // pin corresponds to the points in each layer of the target layer thickness
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]> pin;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]> ppmdx;
-  ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z1;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z2;
   ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]> kid;
 
