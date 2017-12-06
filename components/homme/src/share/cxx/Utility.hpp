@@ -425,16 +425,6 @@ Real compare_answers(FPType target, FPType computed, FPType relative_coeff = 1.0
   return std::fabs(target - computed) / denom;
 }
 
-template <typename ExecSpace, typename Tag=void>
-Kokkos::TeamPolicy<ExecSpace, Tag> get_default_team_policy(const int nelems) {
-  const int threads_per_team =
-    DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
-  const int vectors_per_thread =
-    DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  return Kokkos::TeamPolicy<ExecSpace, Tag>(
-    nelems, threads_per_team, vectors_per_thread);
-}
-
 } // namespace Homme
 
 #endif // HOMMEXX_UTILITY_HPP
