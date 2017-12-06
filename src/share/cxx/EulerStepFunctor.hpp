@@ -52,22 +52,14 @@ struct EulerStepFunctor
   }
 
   static void run() {
-    // Get control structure
     Control& data = Context::singleton().get_control();
-
-    // Create the functor
     EulerStepFunctor func(data);
 
     profiling_resume();
-#if 1
+    start_timer("esf run");
     Kokkos::parallel_for(get_policy<TagFused>(data), func);
-#else
-    Kokkos::parallel_for(get_policy<TagVstar>(data), func);
-    Kokkos::fence();
-    Kokkos::parallel_for(get_policy<TagDivUpdate>(data), func);
-#endif
+    stop_timer("esf run");
 
-    // Finalize
     ExecSpace::fence();
     profiling_pause();
   }
@@ -76,19 +68,14 @@ private:
 
   template <typename Tag>
   static Kokkos::TeamPolicy<ExecSpace, Tag> get_policy(const Control& data) {
-    const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-    //todo Need to rework threading setup.
-    const int threads_per_team   =
-      std::is_same<ExecSpace,Hommexx_Cuda>::value ?
-      DefaultThreadsDistribution<ExecSpace>::threads_per_team(1) :
-      std::max(1, (DefaultThreadsDistribution<ExecSpace>::threads_per_team(data.num_elems) /
-                   data.qsize));
-    Kokkos::TeamPolicy<ExecSpace, Tag> policy(data.num_elems * data.qsize,
-                                              threads_per_team,
-                                              vectors_per_thread);
-    policy.set_chunk_size(1);
-    return policy;
+    static bool first = true;
+    if (first) {
+      const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+        data.num_elems * data.qsize);
+      std::cout << "ESF pair " << tv.first << " " << tv.second << "\n";
+      first = false;
+    }
+    return Homme::get_default_team_policy<ExecSpace, Tag>(data.num_elems * data.qsize);
   }
 
   KOKKOS_INLINE_FUNCTION

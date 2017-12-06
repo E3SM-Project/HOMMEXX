@@ -43,8 +43,6 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
   control.qsize = qsize;
   control.dt    = dt;
-
-  control.set_team_size();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -141,31 +139,27 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
 
 void caar_pre_exchange_monolithic_c()
 {
-  // Get control structure
-  Control& data  = Context::singleton().get_control();
+  Control& data = Context::singleton().get_control();
 
-  // Retrieve the team size
-  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = data.team_size;
+  static bool first = true;
+  if (first) {
+    const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+      data.num_elems);
+    std::cout << "CAAR pair " << tv.first << " " << tv.second << "\n";
+    first = false;
+  }
 
-  // Setup the policy
-  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
-  policy.set_chunk_size(1);
-
-  // Create the functor
+  auto policy = Homme::get_default_team_policy<ExecSpace>(data.num_elems);
   CaarFunctor func(data, Context::singleton().get_elements(),
                    Context::singleton().get_derivative());
 
   profiling_resume();
-  // Dispatch parallel for
   Kokkos::parallel_for("main caar loop", policy, func);
 
-  // Finalize
   ExecSpace::fence();
   profiling_pause();
 }
 
-//todo move to EulerStepFunctor as a static function
 void advance_qdp_c()
 {
   EulerStepFunctor::run();
