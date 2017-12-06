@@ -235,6 +235,11 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
       // Computed these coefficients from the edge values
       // and cell mean in Maple. Assumes normalized
       // coordinates: xi=(x-x0)/dx
+
+      assert(parabola_coeffs.data() != nullptr);
+      assert(j - 1 < parabola_coeffs.extent_int(0));
+      assert(2 < parabola_coeffs.extent_int(1));
+
       parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
       parabola_coeffs(j - 1, 1) = ar - al;
       parabola_coeffs(j - 1, 2) = -6.0 * cell_means(j + 1) + 3.0 * (al + ar);
@@ -317,7 +322,8 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int k) {
         // Compute remapping intervals once for all
         // tracers. Find the old grid cell index in which
         // the k-th new cell interface resides. Then
@@ -330,50 +336,47 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // deformation. Numerous tests confirmed that the
         // bottom and top of the grids match to machine
         // precision, so set them equal to each other.
-        for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
-          int kk = k;
-          // This reduces the work required to find the index where this fails
-          // at,
-          // and is typically less than NUM_PHYSICAL_LEV^2
-          while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k)) {
-            kk++;
-          }
+        int kk = k + 1;
+        // This reduces the work required to find the index where this fails
+        // at, and is typically less than NUM_PHYSICAL_LEV^2
+        // Since the top bounds match anyway, the value of the coefficients
+        // don't matter, so enforcing kk <= NUM_PHYSICAL_LEV doesn't affect
+        // anything important
+        while (kk <= NUM_PHYSICAL_LEV &&
+               pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k + 1)) {
+          kk++;
+        }
 
-          kk--;
-          // This is to keep the indices in bounds.
-          // Top bounds match anyway, so doesn't matter what coefficients are
-          // used
-          if (kk == NUM_PHYSICAL_LEV + 1) {
-            kk = NUM_PHYSICAL_LEV;
-          }
-          // kk is now the cell index we're integrating over.
+        kk--;
+        // This is to keep the indices in bounds.
+        if (kk == NUM_PHYSICAL_LEV + 1) {
+          kk = NUM_PHYSICAL_LEV;
+        }
+        // kk is now the cell index we're integrating over.
 
-          // Save kk for reuse
-          kid(kv.ie, igp, jgp, k - 1) = kk;
-          // This remapping assumes we're starting from the left interface of an
-          // old grid cell
-          // In fact, we're usually integrating very little or almost all of the
-          // cell in question
-          z1(kv.ie, igp, jgp, k - 1) = -0.5;
-          // PPM interpolants are normalized to an independent coordinate domain
-          // [-0.5, 0.5].
-          z2(kv.ie, igp, jgp, k - 1) =
-              (pin(kv.ie, igp, jgp, k) -
-               (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) *
-                   0.5) /
-              dpo(kv.ie, igp, jgp, kk + 1);
-        } // k loop
-
+        // Save kk for reuse
+        kid(kv.ie, igp, jgp, k) = kk;
+        // This remapping assumes we're starting from the left interface of an
+        // old grid cell
+        // In fact, we're usually integrating very little or almost all of the
+        // cell in question
+        z1(kv.ie, igp, jgp, k) = -0.5;
+        // PPM interpolants are normalized to an independent coordinate domain
+        // [-0.5, 0.5].
+        z2(kv.ie, igp, jgp, k) =
+            (pin(kv.ie, igp, jgp, k + 1) -
+             (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
+            dpo(kv.ie, igp, jgp, kk + 1);
+      });
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
             Homme::subview(dpo, kv.ie, igp, jgp);
         ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
             Homme::subview(ppmdx, kv.ie, igp, jgp);
-
         compute_grids(kv, point_dpo, point_ppmdx);
       });
     });
     kv.team_barrier();
-    // Verified to here
 
     // From here, we loop over tracers for only those portions which depend on
     // tracer data, which includes PPM limiting and mass accumulation
@@ -427,6 +430,9 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         const int ilevel = k / VECTOR_SIZE;
         const int ivector = k % VECTOR_SIZE;
         const int kk = kid(kv.ie, igp, jgp, k);
+        assert(parabola_coeffs[var].data() != nullptr);
+        assert(kk - 1 >= 0);
+        assert(kk - 1 < parabola_coeffs[var].extent_int(3));
         const Real a0 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
                    a1 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
                    a2 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2);

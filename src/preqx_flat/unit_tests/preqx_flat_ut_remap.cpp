@@ -148,14 +148,16 @@ public:
                 REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
                 REQUIRE(
                     !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
-                DEBUG_PRINT(
-                    "%s results ppm: %d %d %d %d %d %d -> % .17e vs % .17e\n",
-                    boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
-                    f90_result(k, stencil_idx),
-                    kokkos_result(ie, igp, jgp, k, stencil_idx));
                 const Real rel_error = compare_answers(
                     f90_result(k, stencil_idx),
                     kokkos_result(ie, igp, jgp, k, stencil_idx));
+                if (rel_threshold < rel_error) {
+                  DEBUG_PRINT(
+                      "%s results ppm: %d %d %d %d %d %d -> % .17e vs % .17e\n",
+                      boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
+                      f90_result(k, stencil_idx),
+                      kokkos_result(ie, igp, jgp, k, stencil_idx));
+                }
                 REQUIRE(rel_threshold >= rel_error);
               }
             }
@@ -287,10 +289,6 @@ public:
             for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
               const int vector_level = k / VECTOR_SIZE;
               const int vector = k % VECTOR_SIZE;
-              DEBUG_PRINT(
-                  "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
-                  f90_remap_qdp(ie, var, k, igp, jgp),
-                  kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
               // The fortran returns NaN's, so make certain we only return NaN's
               // when the Fortran does
               REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
@@ -300,6 +298,12 @@ public:
                 Real rel_error = compare_answers(
                     f90_remap_qdp(ie, var, k, igp, jgp),
                     kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+                if (rel_threshold < rel_error) {
+                  DEBUG_PRINT(
+                      "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
+                      f90_remap_qdp(ie, var, k, igp, jgp),
+                      kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+                }
                 REQUIRE(rel_threshold >= rel_error);
               }
             }
@@ -362,7 +366,6 @@ TEST_CASE("interface_test", "vertical remap") {
   Control data;
   data.random_init(num_elems, std::random_device()());
   Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data, elements);
-  Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace>(num_elems),
-      remap);
+  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                       remap);
 }
