@@ -356,7 +356,7 @@ TEST_CASE("ppm_fixed", "vertical remap") {
   SECTION("remap test") { remap_test_fixed.test_remap(); }
 }
 
-TEST_CASE("interface_test", "vertical remap") {
+TEST_CASE("remap_interface", "vertical remap") {
   constexpr int remap_dim = 3;
   constexpr int num_elems = 4;
   Elements elements;
@@ -365,7 +365,37 @@ TEST_CASE("interface_test", "vertical remap") {
   elements.random_init(num_elems, rng);
   Control data;
   data.random_init(num_elems, std::random_device()());
-  Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data, elements);
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
-                       remap);
+  data.np1 = 0;
+  data.qn0 = 0;
+  ExecSpace::fence();
+  SECTION("states_only") {
+    constexpr int remap_dim = 3;
+    data.qsize = 0;
+    data.rsplit = 1;
+    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data,
+                                                                  elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+  SECTION("tracers_only") {
+    constexpr int remap_dim = 10;
+    constexpr int num_elems = 4;
+    data.qsize = QSIZE_D;
+    data.rsplit = 0;
+    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data,
+                                                                  elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+  SECTION("states_tracers") {
+    constexpr int remap_dim = 13;
+    constexpr int num_elems = 4;
+    data.qsize = QSIZE_D;
+    data.rsplit = 1;
+    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim> > remap(data,
+                                                                  elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+  ExecSpace::fence();
 }
