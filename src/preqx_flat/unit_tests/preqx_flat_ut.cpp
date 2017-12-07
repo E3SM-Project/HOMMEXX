@@ -962,7 +962,7 @@ public:
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 1;
+  constexpr const int num_elems = 10;
 //std::cout << "here 1 \n;";
   std::random_device rd;
   rngAlg engine(rd());
@@ -1112,10 +1112,80 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
       }
     }
   }
-}
+};//end of compute_eta_dot_dpdn_vertadv_euler test
 
 
+class preq_vertadv_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.preq_vertadv(kv);
+  }
+};
 
+//og: it would be good if each test that uses buffers init-ed vars for buffers 
+//the same way, but i don't thnk it is the case. or maybe it is?
+//all emelents m_vars have copies in the test_functor, to move it to host?
+//some buffer vars for C and F tests are inited as Real*, some are inited as Scalar*
+//in the test body (even those with midlevels values only). why?
+TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 1;
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<preq_vertadv_test>;
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  // on host first
+  Elements &elements = Context::singleton().get_elements();
+  elements.random_init(num_elems, engine);
+
+  //preq_vertadv depends on eta_dot_dpdn, dp3d, T, v (all in elements, randomized by random_init),
+  //modifies v_vadv, t_vadv (those are in buffers). 
+  //We will assign nans to the buffer values:
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
+
+//we need quiet nans, this is just to debug the test itself
+  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+
+  sync_to_device(div_vdp, elements.buffers.t_vadv_buf);
+  sync_to_device(div_vdp, elements.buffers.v_vadv_buf);
+
+//now set up F output and make sure it has the same vals for _vadv before we run
+//test_functor.
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
+
+//to from
+  deep_copy(t_vadv_f90, t_vadv);
+  deep_copy(v_vadv_f90, v_vadv);
+
+
+  TestType test_functor(elements);
+  sync_to_host(elements.m_v, test_functor.velocity); //???????
+  sync_to_host(elements.m_dp3d, test_functor.dp3d);
+  sync_to_host(elements.m_t, test_functor.temperature);
+  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+  //this test does not need m_data init?
+  test_functor.run_functor();
+
+  //now copy buffer vals back to test values
+  sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
+  sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+//         call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
+//                       eta_dot_dpdn,rdp,T_vadv,v_vadv)
+    preq_vertadv(
+      
+
+);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
 
 
 
