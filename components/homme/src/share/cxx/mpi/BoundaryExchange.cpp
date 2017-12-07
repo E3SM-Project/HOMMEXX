@@ -64,44 +64,6 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
   m_cleaned_up = true;
 }
 
-BoundaryExchange::BoundaryExchange(const BoundaryExchange& src)
- : m_2d_fields              (src.m_2d_fields)
- , m_3d_fields              (src.m_3d_fields)
- , m_send_2d_buffers        (src.m_send_2d_buffers)
- , m_recv_2d_buffers        (src.m_recv_2d_buffers)
- , m_send_3d_buffers        (src.m_send_3d_buffers)
- , m_recv_3d_buffers        (src.m_recv_3d_buffers)
- , m_num_2d_fields          (src.m_num_2d_fields)
- , m_num_3d_fields          (src.m_num_3d_fields)
- , m_registration_started   (src.m_registration_started)
- , m_registration_completed (src.m_registration_completed)
- , m_cleaned_up             (src.m_cleaned_up)
- , m_comm                   (src.m_comm)
- , m_connectivity           (src.m_connectivity)
- , m_num_elements           (src.m_num_elements)
- , m_mpi_send_buffer        (src.m_mpi_send_buffer)
- , m_mpi_recv_buffer        (src.m_mpi_recv_buffer)
- , m_send_buffer            (src.m_send_buffer)
- , m_recv_buffer            (src.m_recv_buffer)
- , m_local_buffer           (src.m_local_buffer)
- , m_blackhole_send         (src.m_blackhole_send)
- , m_blackhole_recv         (src.m_blackhole_recv)
-{
-  // Arrays cannot be initialized with an array, so we just fill this manually
-  m_elem_buf_size[etoi(ConnectionKind::CORNER)] = src.m_elem_buf_size[etoi(ConnectionKind::CORNER)];
-  m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = src.m_elem_buf_size[etoi(ConnectionKind::EDGE)];
-
-  // MPI structures need to be recreated, since there is no ref counting (like on Views),
-  // and we want to avoid MPI to delete the src object copy of them
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_dup(src.m_mpi_data_type[etoi(ConnectionKind::CORNER)], &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_dup(src.m_mpi_data_type[etoi(ConnectionKind::EDGE)],   &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
-
-  // Create my own requests (I want to OWN all the MPI objects)
-  build_requests ();
-}
-
 BoundaryExchange::~BoundaryExchange()
 {
   clean_up ();
@@ -258,37 +220,43 @@ void BoundaryExchange::registration_completed()
   Kokkos::deep_copy(all_send_buffers, h_all_send_buffers);
   Kokkos::deep_copy(all_recv_buffers, h_all_recv_buffers);
 
-  auto connections = m_connectivity.get_connections();
-  auto l_num_2d_fields = m_num_2d_fields;
-  auto l_send_2d_buffers = m_send_2d_buffers;
-  auto l_recv_2d_buffers = m_recv_2d_buffers;
-  auto l_num_3d_fields = m_num_3d_fields;
-  auto l_send_3d_buffers = m_send_3d_buffers;
-  auto l_recv_3d_buffers = m_recv_3d_buffers;
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,NUM_CONNECTIONS},{1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int iconn) {
-    const ConnectionInfo& info = connections(ie,iconn);
-    ConnectionHelpers helpers;
+  // This block is to limit the scope of the following automatic variables,
+  // which are only needed by the lambda function right after.
+  // NOTE: all of this is necessary because the issue of lambda function not
+  //       capturing the this pointer correctly on the device.
+  {
+    auto connections = m_connectivity.get_connections();
+    auto l_num_2d_fields = m_num_2d_fields;
+    auto l_send_2d_buffers = m_send_2d_buffers;
+    auto l_recv_2d_buffers = m_recv_2d_buffers;
+    auto l_num_3d_fields = m_num_3d_fields;
+    auto l_send_3d_buffers = m_send_3d_buffers;
+    auto l_recv_3d_buffers = m_recv_3d_buffers;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,NUM_CONNECTIONS},{1,1}),
+                         KOKKOS_LAMBDA(const int ie, const int iconn) {
+      const ConnectionInfo& info = connections(ie,iconn);
+      ConnectionHelpers helpers;
 
-    const LidPos& local  = info.local;
+      const LidPos& local  = info.local;
 
-    auto send_buffer = all_send_buffers[info.sharing];
-    auto recv_buffer = all_recv_buffers[info.sharing];
+      auto send_buffer = all_send_buffers[info.sharing];
+      auto recv_buffer = all_recv_buffers[info.sharing];
 
-    //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
-    //      would be the same as edges, and we would not need the if statements here (and later on)
+      //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
+      //      would be the same as edges, and we would not need the if statements here (and later on)
 
-    for (int ifield=0; ifield<l_num_2d_fields; ++ifield) {
-      l_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-      l_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-      buf_offset[info.sharing] += increment[info.kind];
-    }
-    for (int ifield=0; ifield<l_num_3d_fields; ++ifield) {
-      l_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-      l_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-      buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
-    }
-  });
+      for (int ifield=0; ifield<l_num_2d_fields; ++ifield) {
+        l_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+        l_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+        buf_offset[info.sharing] += increment[info.kind];
+      }
+      for (int ifield=0; ifield<l_num_3d_fields; ++ifield) {
+        l_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+        l_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+        buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
+      }
+    });
+  }
 
 #ifdef HOMMEXX_DEBUG
   // Sanity check
@@ -313,26 +281,11 @@ void BoundaryExchange::exchange ()
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_recv_requests.data()));
 
-  // Make sure the send requests are inactive (can't reuse buffers otherwise)
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),MPI_STATUSES_IGNORE));
+  //  ---- Pack and send ---- //
+  pack_and_send ();
 
-  auto connections = m_connectivity.get_connections();
-
-  //  ---- Pack ---- //
-  Kokkos::TeamPolicy<ExecSpace,TagPack> pack_policy(m_num_elements, NUM_CONNECTIONS, 1);
-  Kokkos::parallel_for("Pack", pack_policy, *this);
-
-  //  ---- Send ---- //
-  Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer); // Deep copy m_send_buffer into m_mpi_send_buffer (no op if MPI is on device)
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_send_requests.data())); // Fire off the sends
-
-  // ---- Recv ---- //
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),MPI_STATUSES_IGNORE)); // Wait for all data to arrive
-  Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer); // Deep copy m_mpi_recv_buffer into m_recv_buffer (no op if MPI is on device)
-
-  // ---- Unpack---- //
-  Kokkos::TeamPolicy<ExecSpace,TagUnpack> unpack_policy(m_num_elements, std::min(m_num_2d_fields,m_num_3d_fields), 1);
-  Kokkos::parallel_for("Unpack", unpack_policy, *this);
+  // ---- Recv and unpack ---- //
+  recv_and_unpack ();
 }
 
 void BoundaryExchange::build_requests()
@@ -368,117 +321,129 @@ void BoundaryExchange::build_requests()
   }
 }
 
-//void BoundaryExchange::pack_and_send()
-//{
-//  // Make sure the send requests are inactive (can't reuse buffers otherwise)
-//  //int done = 0;
-//  //do {
-//  //  HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),&done,MPI_STATUSES_IGNORE));
-//  //} while (done==0);
-//  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),MPI_STATUSES_IGNORE));
+void BoundaryExchange::pack_and_send()
+{
+  // Make sure the send requests are inactive (can't reuse buffers otherwise)
+  // TODO: figure out why MPI_Waitall does not work. If the requests are all inactive, MPI_Waitall
+  //       should return immediately.
+  int all_done = 0;
+  while (all_done==0) {
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),&all_done,MPI_STATUSES_IGNORE));
+  }
+  //HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_send_requests.data(),MPI_STATUSES_IGNORE));
 
-//  // When we pack, we copy data into the buffer views. We do not care whether the connection
-//  // is local or shared, since the process is the same. The difference is just in whether the
-//  // view's underlying pointer is pointing to an area of m_send_buffer or m_local_buffer.
+  // These copies are to overcome the issue of not being able to pass 'this' to the lambda
+  auto num_2d_fields = m_num_2d_fields;
+  auto num_3d_fields = m_num_3d_fields;
+  auto connectivity = m_connectivity;
+  auto send_2d_buffers = m_send_2d_buffers;
+  auto send_3d_buffers = m_send_3d_buffers;
+  auto fields_2d = m_2d_fields;
+  auto fields_3d = m_3d_fields;
 
-//  auto connections = m_connectivity.get_connections();
-//  Kokkos::TeamPolicy<ExecSpace>  policy(m_num_elements, NUM_CONNECTIONS);
-//  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team){
-//    const int ie = team.league_rank();
+  //  ---- Pack ---- //
+  Kokkos::TeamPolicy<ExecSpace> pack_policy(m_num_elements, NUM_CONNECTIONS, 1);
+  Kokkos::parallel_for("Pack", pack_policy,
+                       KOKKOS_LAMBDA(const TeamMember& team){
+    ConnectionHelpers helpers;
 
-//    // First, pack 2d fields...
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_2d_fields*NUM_CONNECTIONS),
-//                         KOKKOS_LAMBDA(const int idx){
-//      const int ifield = idx / NUM_CONNECTIONS;
-//      const int iconn  = idx % NUM_CONNECTIONS;
+    const int ie = team.league_rank();
 
-//      const ConnectionInfo& info = connections(ie,iconn);
-//      const LidPos& field_lpt  = info.local;
-//      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-//      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-//      // for local connections we need to manually copy on the remote element lid. We can do it here
-//      const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    // First, pack 2d fields...
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_2d_fields*NUM_CONNECTIONS),
+                         KOKKOS_LAMBDA(const int idx){
+      const int ifield = idx / NUM_CONNECTIONS;
+      const int iconn  = idx % NUM_CONNECTIONS;
 
-//      // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
-//      const auto& pts = CONNECTION_PTS[info.direction][field_lpt.pos];
-//      for (int k=0; k<CONNECTION_SIZE[info.kind]; ++k) {
+      const ConnectionInfo info = connectivity.get_connection(ie,iconn);
+      const LidPos field_lpt  = info.local;
+      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+      // for local connections we need to manually copy on the remote element lid. We can do it here
+      const LidPos buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-//        m_send_2d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k) = m_2d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp);
-//      }
-//    });
-//    // ...then pack 3d fields.
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
-//                         KOKKOS_LAMBDA(const int idx){
-//      const int ilev   =  idx % NUM_LEV;
-//      const int iconn  = (idx / NUM_LEV) % NUM_CONNECTIONS;
-//      const int ifield = (idx / NUM_LEV) / NUM_CONNECTIONS;
+      // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
+      const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
+      for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+        send_2d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k) = fields_2d(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp);
+      }
+    });
+    // ...then pack 3d fields.
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx){
+      const int ilev   =  idx % NUM_LEV;
+      const int iconn  = (idx / NUM_LEV) % NUM_CONNECTIONS;
+      const int ifield = (idx / NUM_LEV) / NUM_CONNECTIONS;
 
-//      const ConnectionInfo& info = connections(ie,iconn);
-//      const LidPos& field_lpt  = info.local;
-//      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-//      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-//      // for local connections we need to manually copy on the remote element lid. We can do it here
-//      const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+      const ConnectionInfo info = connectivity.get_connection(ie,iconn);
+      const LidPos field_lpt  = info.local;
+      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+      // for local connections we need to manually copy on the remote element lid. We can do it here
+      const LidPos buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-//      // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
-//      const auto& pts = CONNECTION_PTS[info.direction][field_lpt.pos];
-//      for (int k=0; k<CONNECTION_SIZE[info.kind]; ++k) {
-//        m_send_3d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k,ilev) = m_3d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
-//      }
-//    });
-//  });
+      // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
+      const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
+      for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+        send_3d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k,ilev) = fields_3d(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+      }
+    });
+  });
 
-//  // Deep copy m_send_buffer into m_mpi_send_buffer (no op if MPI is on device)
-//  Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer);
+  //  ---- Send ---- //
+  Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer); // Deep copy m_send_buffer into m_mpi_send_buffer (no op if MPI is on device)
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_send_requests.data())); // Fire off the sends
+}
 
-//  // Now we can fire off the sends
-//  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections(),m_send_requests.data()));
-//}
+void BoundaryExchange::recv_and_unpack()
+{
+  // ---- Recv ---- //
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer); // Deep copy m_mpi_recv_buffer into m_recv_buffer (no op if MPI is on device)
 
-//void BoundaryExchange::recv_and_unpack()
-//{
-//  // Wait for all data to arrive
-//  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections(),m_recv_requests.data(),MPI_STATUSES_IGNORE));
+  // These copies are to overcome the issue of not being able to pass 'this' to the lambda
+  auto num_2d_fields = m_num_2d_fields;
+  auto num_3d_fields = m_num_3d_fields;
+  auto connectivity = m_connectivity;
+  auto recv_2d_buffers = m_recv_2d_buffers;
+  auto recv_3d_buffers = m_recv_3d_buffers;
+  auto fields_2d = m_2d_fields;
+  auto fields_3d = m_3d_fields;
 
-//  // Deep copy m_mpi_recv_buffer into m_recv_buffer (no op if MPI is on device)
-//  Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer);
+  // ---- Unpack ---- //
+  Kokkos::TeamPolicy<ExecSpace> unpack_policy(m_num_elements, std::min(m_num_2d_fields,m_num_3d_fields), 1);
+  Kokkos::parallel_for("Unpack", unpack_policy,
+                       KOKKOS_LAMBDA(const TeamMember& team) {
+    ConnectionHelpers helpers;
 
-//  // Unpacking edges in the following order: S, N, W, E. For corners, order doesn't really matter
-//  // TODO: if it's ok to change unpack order, simply use CONNECTIONS_PTS_FWD
-//  constexpr std::array<int,NUM_EDGES>   EDGES_ORDER   = { etoi(ConnectionName::SOUTH), etoi(ConnectionName::NORTH), etoi(ConnectionName::WEST),  etoi(ConnectionName::EAST) };
-//  constexpr std::array<int,NUM_CORNERS> CORNERS_ORDER = {0, 1, 2, 3};
-
-//  //TODO: change unpacking deterministic order. Do all points of a connection before moving to the next one.
-//  //      This way we can have a single loop on the connection index, with inside a loop on the connection size.
-//  //      If you do this change, get rid of EDGE_PTS_FWD and CORNER_PTS
-//  Kokkos::TeamPolicy<ExecSpace>  policy(m_num_elements, Kokkos::AUTO());
-//  Kokkos::parallel_for(policy, [&](TeamMember team){
-//    const int ie = team.league_rank();
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
-//                         [&](const int ifield){
-//      for (int k=0; k<NP; ++k) {
-//        for (int iedge : EDGES_ORDER) {
-//          m_2d_fields(ie,ifield)(EDGE_PTS_FWD[iedge][k].ip,EDGE_PTS_FWD[iedge][k].jp) += m_recv_2d_buffers(ie,ifield,iedge)[k];
-//        }
-//      }
-//      for (int icorner : CORNERS_ORDER) {
-//        m_2d_fields(ie,ifield)(CORNER_PTS_FWD[icorner][0].ip,CORNER_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner+CORNERS_OFFSET)[0];
-//      }
-//    });
-//    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields*NUM_LEV),
-//                         [&](const int idx){
-//      const int ifield = idx / NUM_LEV;
-//      const int ilev   = idx % NUM_LEV;
-//      for (int k=0; k<NP; ++k) {
-//        for (int iedge : EDGES_ORDER) {
-//          m_3d_fields(ie,ifield)(EDGE_PTS_FWD[iedge][k].ip,EDGE_PTS_FWD[iedge][k].jp,ilev) += m_recv_3d_buffers(ie,ifield,iedge)(k,ilev);
-//        }
-//      }
-//      for (int icorner : CORNERS_ORDER) {
-//        m_3d_fields(ie,ifield)(CORNER_PTS_FWD[icorner][0].ip,CORNER_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner+CORNERS_OFFSET)(0,ilev);
-//      }
-//    });
-//  });
-//}
+    const int ie = team.league_rank();
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,num_2d_fields),
+                         [&](const int ifield){
+      for (int k=0; k<NP; ++k) {
+        for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+          fields_2d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += recv_2d_buffers(ie,ifield,iedge)[k];
+        }
+      }
+      for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+        if (recv_2d_buffers(ie,ifield,icorner).size() > 0)
+          fields_2d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += recv_2d_buffers(ie,ifield,icorner)[0];
+      }
+    });
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,num_3d_fields*NUM_LEV),
+                         [&](const int idx){
+      const int ifield = idx / NUM_LEV;
+      const int ilev   = idx % NUM_LEV;
+      for (int k=0; k<NP; ++k) {
+        for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+          fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+        }
+      }
+      for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+        if (recv_3d_buffers(ie,ifield,icorner).size() > 0)
+          fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+      }
+    });
+  });
+}
 
 } // namespace Homme

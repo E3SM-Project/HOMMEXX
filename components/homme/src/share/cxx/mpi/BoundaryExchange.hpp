@@ -21,12 +21,11 @@ class BoundaryExchange
 {
 public:
 
-  struct TagPack {};
-  struct TagUnpack {};
-
   BoundaryExchange();
   BoundaryExchange(const Connectivity& connectivity);
-  BoundaryExchange(const BoundaryExchange& src);
+
+  // Thou shall not copy this class
+  BoundaryExchange(const BoundaryExchange& src) = delete;
 
   ~BoundaryExchange();
 
@@ -62,10 +61,7 @@ public:
 
   void build_requests ();
 
-  KOKKOS_FORCEINLINE_FUNCTION
-  void operator() (const TagPack&, const TeamMember& team) const;
-  KOKKOS_FORCEINLINE_FUNCTION
-  void operator() (const TagUnpack&, const TeamMember& team) const;
+private:
 
   template<typename ptr_type,typename raw_type>
   struct Pointer {
@@ -78,13 +74,27 @@ public:
     ptr_type ptr;
   };
 
-private:
+  void pack_and_send   ();
+  void recv_and_unpack ();
 
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
+  // These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
+  ExecViewManaged<Real*>     m_send_buffer;
+  ExecViewManaged<Real*>     m_recv_buffer;
+  ExecViewManaged<Real*>     m_local_buffer;
+
+  // These are the raw buffers to be used in MPI calls
+  MPIViewManaged<Real*>     m_mpi_send_buffer;
+  MPIViewManaged<Real*>     m_mpi_recv_buffer;
+
+  // These are the dummy send/recv buffers used for missing connections
+  ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
+  ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_recv;
+
   // These views can look quite complicated. Basically, we want something like
-  // edge_buffer(ielem,ifield,iedge) to point to the right area of one of the
+  // send_buffer(ielem,ifield,iedge) to point to the right area of one of the
   // three buffers above. In particular, if it is a local connection, it will
   // point to m_local_buffer (on both send and recv views), while for shared
   // connection, it will point to the corresponding mpi buffer, and for missing
@@ -118,18 +128,6 @@ private:
 
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
-
-  // These are the raw buffers to be used in MPI calls
-  MPIViewManaged<Real*>     m_mpi_send_buffer;
-  MPIViewManaged<Real*>     m_mpi_recv_buffer;
-
-  // These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
-  ExecViewManaged<Real*>     m_send_buffer;
-  ExecViewManaged<Real*>     m_recv_buffer;
-  ExecViewManaged<Real*>     m_local_buffer;
-
-  ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
-  ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_recv;
 };
 
 // ============================ REGISTER METHODS ========================= //
@@ -243,90 +241,6 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Propert
   }
 
   ++m_num_3d_fields;
-}
-
-// ============================ FUNCTOR METHODS ========================= //
-
-KOKKOS_FORCEINLINE_FUNCTION
-void BoundaryExchange::operator() (const TagPack&, const TeamMember& team) const
-{
-  ConnectionHelpers helpers;
-
-  const int ie = team.league_rank();
-
-  // First, pack 2d fields...
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_2d_fields*NUM_CONNECTIONS),
-                       KOKKOS_LAMBDA(const int idx){
-    const int ifield = idx / NUM_CONNECTIONS;
-    const int iconn  = idx % NUM_CONNECTIONS;
-
-    const ConnectionInfo& info = m_connectivity.get_connection(ie,iconn);
-    const LidPos& field_lpt  = info.local;
-    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-    // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
-
-    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
-    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
-    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-      m_send_2d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k) = m_2d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp);
-    }
-  });
-  // ...then pack 3d fields.
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
-                       KOKKOS_LAMBDA(const int idx){
-    const int ilev   =  idx % NUM_LEV;
-    const int iconn  = (idx / NUM_LEV) % NUM_CONNECTIONS;
-    const int ifield = (idx / NUM_LEV) / NUM_CONNECTIONS;
-
-    const ConnectionInfo& info = m_connectivity.get_connection(ie,iconn);
-    const LidPos& field_lpt  = info.local;
-    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-    // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidPos& buffer_lpt = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
-
-    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lpt points backwards
-    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lpt.pos];
-    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-      m_send_3d_buffers(buffer_lpt.lid,ifield,buffer_lpt.pos)(k,ilev) = m_3d_fields(field_lpt.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
-    }
-  });
-}
-
-KOKKOS_FORCEINLINE_FUNCTION
-void BoundaryExchange::operator() (const TagUnpack&, const TeamMember& team) const
-{
-  ConnectionHelpers helpers;
-
-  const int ie = team.league_rank();
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
-                       [&](const int ifield){
-    for (int k=0; k<NP; ++k) {
-      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += m_recv_2d_buffers(ie,ifield,iedge)[k];
-      }
-    }
-    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-      if (m_recv_2d_buffers(ie,ifield,icorner).size() > 0)
-        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner)[0];
-    }
-  });
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields*NUM_LEV),
-                       [&](const int idx){
-    const int ifield = idx / NUM_LEV;
-    const int ilev   = idx % NUM_LEV;
-    for (int k=0; k<NP; ++k) {
-      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += m_recv_3d_buffers(ie,ifield,iedge)(k,ilev);
-      }
-    }
-    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-      if (m_recv_3d_buffers(ie,ifield,icorner).size() > 0)
-        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner)(0,ilev);
-    }
-  });
 }
 
 } // namespace Homme
