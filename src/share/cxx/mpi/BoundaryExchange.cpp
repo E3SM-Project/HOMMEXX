@@ -64,6 +64,44 @@ BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
   m_cleaned_up = true;
 }
 
+BoundaryExchange::BoundaryExchange(const BoundaryExchange& src)
+ : m_2d_fields              (src.m_2d_fields)
+ , m_3d_fields              (src.m_3d_fields)
+ , m_send_2d_buffers        (src.m_send_2d_buffers)
+ , m_recv_2d_buffers        (src.m_recv_2d_buffers)
+ , m_send_3d_buffers        (src.m_send_3d_buffers)
+ , m_recv_3d_buffers        (src.m_recv_3d_buffers)
+ , m_num_2d_fields          (src.m_num_2d_fields)
+ , m_num_3d_fields          (src.m_num_3d_fields)
+ , m_registration_started   (src.m_registration_started)
+ , m_registration_completed (src.m_registration_completed)
+ , m_cleaned_up             (src.m_cleaned_up)
+ , m_comm                   (src.m_comm)
+ , m_connectivity           (src.m_connectivity)
+ , m_num_elements           (src.m_num_elements)
+ , m_mpi_send_buffer        (src.m_mpi_send_buffer)
+ , m_mpi_recv_buffer        (src.m_mpi_recv_buffer)
+ , m_send_buffer            (src.m_send_buffer)
+ , m_recv_buffer            (src.m_recv_buffer)
+ , m_local_buffer           (src.m_local_buffer)
+ , m_blackhole_send         (src.m_blackhole_send)
+ , m_blackhole_recv         (src.m_blackhole_recv)
+{
+  // Arrays cannot be initialized with an array, so we just fill this manually
+  m_elem_buf_size[etoi(ConnectionKind::CORNER)] = src.m_elem_buf_size[etoi(ConnectionKind::CORNER)];
+  m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = src.m_elem_buf_size[etoi(ConnectionKind::EDGE)];
+
+  // MPI structures need to be recreated, since there is no ref counting (like on Views),
+  // and we want to avoid MPI to delete the src object copy of them
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_dup(src.m_mpi_data_type[etoi(ConnectionKind::CORNER)], &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_dup(src.m_mpi_data_type[etoi(ConnectionKind::EDGE)],   &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+
+  // Create my own requests (I want to OWN all the MPI objects)
+  build_requests ();
+}
+
 BoundaryExchange::~BoundaryExchange()
 {
   clean_up ();

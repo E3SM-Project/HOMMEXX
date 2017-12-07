@@ -26,6 +26,8 @@ public:
 
   BoundaryExchange();
   BoundaryExchange(const Connectivity& connectivity);
+  BoundaryExchange(const BoundaryExchange& src);
+
   ~BoundaryExchange();
 
   // These number refers to *scalar* fields. A 2-vector field counts as 2 fields.
