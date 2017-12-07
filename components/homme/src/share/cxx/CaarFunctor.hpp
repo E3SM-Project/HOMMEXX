@@ -115,7 +115,7 @@ struct CaarFunctor {
    //vertical Eulerian
    }else{
       compute_eta_dot_dpdn_vertadv_euler(kv);
-      preq_vertadv_2(kv);
+      preq_vertadv(kv);
     };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
@@ -483,7 +483,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
 
 //depends on eta_dot_dpdn, dp3d, T, v, modifies v_vadv, t_vadv
   KOKKOS_INLINE_FUNCTION
-  void preq_vertadv_2(KernelVariables &kv) const {
+  void preq_vertadv(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -577,6 +577,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
 
 
  // Computes the vertical advection of T and v
+/*
   //Part of code with rsplit=0
   KOKKOS_INLINE_FUNCTION
   void preq_vertadv(
@@ -622,6 +623,9 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       }
     }
   } // UNTESTED 13
+*/
+
+
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TeamMember& team) const {
