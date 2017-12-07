@@ -350,6 +350,9 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         if (kk == NUM_PHYSICAL_LEV + 1) {
           kk = NUM_PHYSICAL_LEV;
         }
+        if (kk == 0) {
+          kk = 1;
+        }
         // kk is now the cell index we're integrating over.
 
         // Save kk for reuse
