@@ -105,6 +105,10 @@ ELSE()
   MESSAGE (ABORT "Invalid choice for 'HOMMEXX_EXEC_SPACE'. Valid options (case insensitive) are 'Cuda', 'OpenMP', 'Threads', 'Serial', 'Default'")
 ENDIF()
 
+# Execution space parameters. Ideally, these will go away because they can be
+# queried at runtime.
+SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 4 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
+
 ##############################################################################
 # Options for floating point model.
 ##############################################################################
