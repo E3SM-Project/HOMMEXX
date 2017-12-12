@@ -367,7 +367,6 @@ TEST_CASE("remap_interface", "vertical remap") {
   data.random_init(num_elems, std::random_device()());
   data.np1 = 0;
   data.qn0 = 0;
-  ExecSpace::fence();
   SECTION("states_only") {
     constexpr int remap_dim = 3;
     data.qsize = 0;
@@ -397,5 +396,4 @@ TEST_CASE("remap_interface", "vertical remap") {
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
                          remap);
   }
-  ExecSpace::fence();
 }

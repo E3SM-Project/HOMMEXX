@@ -340,8 +340,16 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // Since the top bounds match anyway, the value of the coefficients
         // don't matter, so enforcing kk <= NUM_PHYSICAL_LEV doesn't affect
         // anything important
-        while (kk <= NUM_PHYSICAL_LEV &&
-               pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k + 1)) {
+        //
+        // Note that because we set
+        // pio(:, :, :, NUM_PHYSICAL_LEV + 1) = pio(:, :, :, NUM_PHYSICAL_LEV) +
+        // 1.0
+        // and pin(:, :, :, NUM_PHYSICAL_LEV) = pio(:, :, :, NUM_PHYSICAL_LEV)
+        // this loop ensures kk <= NUM_PHYSICAL_LEV + 2
+        // Furthermore, since we set
+        // pio(:, :, :, 0) = 0.0 and pin(:, :, :, 0) = 0.0
+        // kk must be incremented at least once
+        while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k + 1)) {
           kk++;
         }
 
@@ -349,9 +357,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // This is to keep the indices in bounds.
         if (kk == NUM_PHYSICAL_LEV + 1) {
           kk = NUM_PHYSICAL_LEV;
-        }
-        if (kk == 0) {
-          kk = 1;
         }
         // kk is now the cell index we're integrating over.
 
@@ -363,6 +368,11 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
             (pin(kv.ie, igp, jgp, k + 1) -
              (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
             dpo(kv.ie, igp, jgp, kk + 1);
+
+        if (kv.ie == 0 && igp == 0 && jgp == 0) {
+          DEBUG_PRINT("z2 %d c++ (%d): % .17e\n", k, kk,
+                      z2(kv.ie, igp, jgp, k));
+        }
       });
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
@@ -383,34 +393,42 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
 
-      // Accumulate the old mass up to old grid cell interface locations to
-      // simplify integration during remapping. Also, divide out the grid
-      // spacing so we're working with actual tracer values and can conserve
-      // mass.
-      mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
-      for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-        const int ilevel = k / VECTOR_SIZE;
-        const int ivector = k % VECTOR_SIZE;
-        ao[var](kv.ie, igp, jgp, k + 2) =
-            remap_vals[var](igp, jgp, ilevel)[ivector];
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        // Accumulate the old mass up to old grid cell interface locations to
+        // simplify integration during remapping. Also, divide out the grid
+        // spacing so we're working with actual tracer values and can conserve
+        // mass.
+        mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
+        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+          const int ilevel = k / VECTOR_SIZE;
+          const int ivector = k % VECTOR_SIZE;
 
-        mass_o[var](kv.ie, igp, jgp, k + 1) =
-            mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
-        ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
-      } // end k loop
+          ao[var](kv.ie, igp, jgp, k + 2) =
+              remap_vals[var](igp, jgp, ilevel)[ivector];
+          mass_o[var](kv.ie, igp, jgp, k + 1) =
+              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
+          ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
+          if (kv.ie == 0 && igp == 0 && jgp == 0) {
+            DEBUG_PRINT("ao %d c++: % .17e\n", k + 2,
+                        ao[var](kv.ie, igp, jgp, k + 2));
+            DEBUG_PRINT("mass_o %d c++: % .17e\n", k + 1,
+                        mass_o[var](kv.ie, igp, jgp, k + 1));
+          }
+        } // end k loop
 
-      for (int k = 1; k <= gs; k++) {
-        ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
-        ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
-            ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-      } // k loop
+        for (int k = 1; k <= gs; k++) {
+          ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
+          ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
+              ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
+        } // k loop
 
-      // Computes a monotonic and conservative PPM reconstruction
-      compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
-                  Homme::subview(ppmdx, kv.ie, igp, jgp),
-                  Homme::subview(dma[var], kv.ie, igp, jgp),
-                  Homme::subview(ai[var], kv.ie, igp, jgp),
-                  Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
+        // Computes a monotonic and conservative PPM reconstruction
+        compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
+                    Homme::subview(ppmdx, kv.ie, igp, jgp),
+                    Homme::subview(dma[var], kv.ie, igp, jgp),
+                    Homme::subview(ai[var], kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
+      });
 
       Real massn1 = 0.0;
 
@@ -422,32 +440,53 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
       // Taking the difference between accumulation at successive interfaces
       // gives the mass inside each cell. Since Qdp is supposed to hold the full
       // mass this needs no normalization.
-      for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-        const int ilevel = k / VECTOR_SIZE;
-        const int ivector = k % VECTOR_SIZE;
-        const int kk = kid(kv.ie, igp, jgp, k);
-        assert(parabola_coeffs[var].data() != nullptr);
-        assert(kk - 1 >= 0);
-        assert(kk - 1 < parabola_coeffs[var].extent_int(3));
-        const Real a0 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
-                   a1 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
-                   a2 = parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2);
-        // This remapping assumes we're starting from the left interface of an
-        // old grid cell
-        // In fact, we're usually integrating very little or almost all of the
-        // cell in question
-        const Real x1 = 0.5;
-        const Real x2 = z2(kv.ie, igp, jgp, k);
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+          const int ilevel = k / VECTOR_SIZE;
+          const int ivector = k % VECTOR_SIZE;
+          const int kk = kid(kv.ie, igp, jgp, k);
+          assert(parabola_coeffs[var].data() != nullptr);
+          assert(kk - 1 >= 0);
+          assert(kk - 1 < parabola_coeffs[var].extent_int(3));
+          // This remapping assumes we're starting from the left interface of an
+          // old grid cell
+          // In fact, we're usually integrating very little or almost all of the
+          // cell in question
+          const Real x1 = -0.5;
+          const Real x2 = z2(kv.ie, igp, jgp, k);
+          const Real integral = integrate_parabola(
+              Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp, kk - 1), x1,
+              x2);
 
-        const Real integrate_par = a0 * (x2 - x1) +
-                                   a1 * (x2 * x2 - x1 * x1) / 2.0 +
-                                   a2 * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
-        const Real massn2 = mass_o[var](kv.ie, igp, jgp, kk - 1) +
-                            integrate_par * dpo(kv.ie, igp, jgp, kk + 1);
-        remap_vals[var](igp, jgp, ilevel)[ivector] = massn2 - massn1;
-        massn1 = massn2;
-      } // k loop
+          const Real massn2 = mass_o[var](kv.ie, igp, jgp, kk - 1) +
+                              integral * dpo(kv.ie, igp, jgp, kk + 1);
+          remap_vals[var](igp, jgp, ilevel)[ivector] = massn2 - massn1;
+
+          if (kv.ie == 0 && igp == 0 && jgp == 0) {
+            DEBUG_PRINT("coeffs %d c++ (%d): % .17e % .17e % .17e\n", k, kk,
+                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
+                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
+                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2));
+            DEBUG_PRINT("integral %d c++ (%d): % .17e <- % .17e, % .17e\n", k, kk,
+                   integral, x1, x2);
+            DEBUG_PRINT("massn %d c++ (%d): % .17e <- % .17e\n", k, kk, massn2,
+                   massn1);
+          }
+
+          massn1 = massn2;
+        } // k loop
+      });
     }); // End team thread range
+  }
+
+  KOKKOS_INLINE_FUNCTION Real
+  integrate_parabola(ExecViewUnmanaged<Real[3]> coeffs, Real x1,
+                     Real x2) const {
+    const Real a0 = coeffs(0);
+    const Real a1 = coeffs(1);
+    const Real a2 = coeffs(2);
+    return a0 * (x2 - x1) + a1 * (x2 * x2 - x1 * x1) / 2.0 +
+           a2 * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
   }
 
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>,
