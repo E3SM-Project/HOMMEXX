@@ -106,6 +106,7 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
 
 //all vars are init-ed within the same range, is it ok?
 //and all are positive
+//positivity is not good except for density
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
 
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
