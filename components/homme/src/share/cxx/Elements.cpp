@@ -1,6 +1,7 @@
 #include "Elements.hpp"
 #include "Utility.hpp"
 
+#include <random>
 #include <assert.h>
 
 namespace Homme {
