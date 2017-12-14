@@ -497,6 +497,14 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       const int ilevp1 = kp1 / VECTOR_SIZE;
       const int ivecp1 = kp1 % VECTOR_SIZE;
 
+//if( igp==0 && jgp==0){
+//for (int k=0; k<NUM_LEV;k++)
+//for (int vec = 0; vec<VECTOR_SIZE; vec++)
+//std::cout << "In C k="<<k << ", vec= " <<vec <<", t_vadv="<<
+//m_elements.buffers.t_vadv_buf(kv.ie, igp,jgp,k)[vec]<<"\n";
+//}
+
+
 //lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                        * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
@@ -512,7 +520,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
                           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
 
 //do it without vectorization for now, like in Cuda space but without kokkos single
-      for(int k = 1; k < NUM_PHYSICAL_LEV - 1; ++k){
+      for(int k = 1; k < NUM_PHYSICAL_LEV-1 ; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
         const int km1 = k-1;
@@ -522,6 +530,8 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
         const int ilevp1 = kp1 / VECTOR_SIZE;
         const int ivecp1 = kp1 % VECTOR_SIZE; 
         
+//std::cout << "in C k level=" << k <<"\n";
+
         facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
         facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )

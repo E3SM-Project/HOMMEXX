@@ -68,6 +68,9 @@ contains
     ! ===========================================================
 
        do k=2,nlev-1
+
+!print *, 'in F', k
+
           do i=1,np
              facp            = (0.5_real_kind*rpdel(i,j,k))*eta_dot_dp_deta(i,j,k+1)
              facm            = (0.5_real_kind*rpdel(i,j,k))*eta_dot_dp_deta(i,j,k)
@@ -93,6 +96,7 @@ contains
           v_vadv(i,j,1,k) = facm*(v(i,j,1,k)- v(i,j,1,k-1))
           v_vadv(i,j,2,k) = facm*(v(i,j,2,k)- v(i,j,2,k-1))
        end do
+
 
     end do
 
