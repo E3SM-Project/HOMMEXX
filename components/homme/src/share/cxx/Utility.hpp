@@ -4,6 +4,8 @@
 #include "Types.hpp"
 #include "ExecSpaceDefs.hpp"
 
+#include <functional>
+
 #ifndef NDEBUG
 #define DEBUG_PRINT(...)                                                       \
   { printf(__VA_ARGS__); }
@@ -99,6 +101,24 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
   assert(jgp < v_in.extent_int(2));
   assert(jgp >= 0);
   return ViewUnmanaged<ScalarType[DIM3][DIM4], MemSpace>(
+      &v_in.implementation_map().reference(ie, igp, jgp, 0, 0));
+}
+
+template <typename MemSpace, typename MemManagement, typename ScalarType,
+          int DIM1, int DIM2, int DIM3, int DIM4>
+KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM4], MemSpace>
+subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
+            v_in, int ie, int tl, int igp, int jgp) {
+  assert(v_in.data() != nullptr);
+  assert(ie < v_in.extent_int(0));
+  assert(ie >= 0);
+  assert(tl < v_in.extent_int(1));
+  assert(tl >= 0);
+  assert(igp < v_in.extent_int(2));
+  assert(igp >= 0);
+  assert(jgp < v_in.extent_int(3));
+  assert(jgp >= 0);
+  return ViewUnmanaged<ScalarType[DIM4], MemSpace>(
       &v_in.implementation_map().reference(ie, igp, jgp, 0, 0));
 }
 

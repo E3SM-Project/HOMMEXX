@@ -1,6 +1,7 @@
 #include "Elements.hpp"
 #include "Utility.hpp"
 
+#include <limits>
 #include <random>
 #include <assert.h>
 
@@ -99,12 +100,13 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_dinv, h_dinv);
 }
 
-void Elements::random_init(const int num_elems) {
-  init(num_elems);
+void Elements::random_init(const int num_elems, const Real max_pressure) {
+  // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
+  init(num_elems);
   std::random_device rd;
   std::mt19937_64 engine(rd());
-  std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
+  std::uniform_real_distribution<Real> random_dist(min_value, 1.0 / min_value);
 
   genRandArray(m_fcor, engine, random_dist);
   genRandArray(m_spheremp, engine, random_dist);
@@ -121,36 +123,85 @@ void Elements::random_init(const int num_elems) {
   genRandArray(m_v, engine, random_dist);
   genRandArray(m_t, engine, random_dist);
 
-  genRandArray(m_dp3d, engine, random_dist);
-
   genRandArray(m_qdp, engine, random_dist);
   genRandArray(m_eta_dot_dpdn, engine, random_dist);
 
-  // d and dinv must follow certain invariants
+  // This ensures the pressure in a single column is monotonically increasing
+  // and has fixed upper and lower values
+  const auto transform_pressure = [=](
+      HostViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> pressure) {
+    for (int ie = 0; ie < pressure.extent_int(0); ++ie) {
+      for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            HostViewUnmanaged<Scalar[NUM_LEV]> pt_pressure =
+                Homme::subview(pressure, ie, tl, igp, jgp);
+            std::sort(reinterpret_cast<Real *>(pt_pressure.data()),
+                      reinterpret_cast<Real *>(pt_pressure.data() +
+                                               pt_pressure.size()));
+            pt_pressure(0)[0] = 0.0;
+            const int top_ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
+            const int top_vlev = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+            pt_pressure(top_ilev)[top_vlev] = max_pressure;
+            for (int e_vlev = top_vlev + 1; e_vlev < VECTOR_SIZE; ++e_vlev) {
+              pt_pressure(top_ilev)[e_vlev] =
+                  std::numeric_limits<Real>::quiet_NaN();
+            }
+          }
+        }
+      }
+    }
+    return true;
+  };
+
+  // Ensure that the pressure doesn't have duplicates of the top and bottom
+  std::uniform_real_distribution<Real> pressure_pdf(
+      min_value, max_pressure * (1.0 - std::numeric_limits<Real>::epsilon()));
+  genRandArray(m_dp3d, engine, pressure_pdf, transform_pressure);
+
+  // Lambdas used to constrain the metric tensor and its inverse
+  const auto compute_det = [](HostViewUnmanaged<Real[2][2]> mtx) {
+    return mtx(0, 0) * mtx(1, 1) - mtx(0, 1) * mtx(1, 0);
+  };
+
+  const auto constrain_det = [=](HostViewUnmanaged<Real[2][2]> mtx) {
+    Real determinant = compute_det(mtx);
+    // We want to ensure both the metric tensor and its inverse have reasonable
+    // determinants
+    if (determinant > min_value && determinant < 1.0 / min_value) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  // 2d tensors
+  // Generating lots of matrices with reasonable determinants can be difficult
+  // So instead of generating them all at once and verifying they're correct,
+  // generate them one at a time, verifying them individually
+  HostViewManaged<Real[2][2]> h_matrix("single host metric matrix");
+
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
       Kokkos::create_mirror_view(m_d);
-  Kokkos::deep_copy(h_d, m_d);
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
 
   for (int ie = 0; ie < m_num_elems; ++ie) {
+    // Because this constraint is difficult to satisfy for all of the tensors,
+    // incrementally generate the view
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-        Real determinant = 0.0;
-        while (std::abs(determinant) < min_value) {
-          // 2d tensors
-          for (int idim = 0; idim < 2; ++idim) {
-            for (int jdim = 0; jdim < 2; ++jdim) {
-              h_d(ie, idim, jdim, igp, jgp) = random_dist(engine);
-            }
+        genRandArray(h_matrix, engine, random_dist, constrain_det);
+        for (int i = 0; i < 2; ++i) {
+          for (int j = 0; j < 2; ++j) {
+            h_d(ie, i, j, igp, jgp) = h_matrix(i, j);
           }
-          determinant = h_d(ie, 0, 0, igp, jgp) * h_d(ie, 1, 1, igp, jgp) -
-                        h_d(ie, 0, 1, igp, jgp) * h_d(ie, 1, 0, igp, jgp);
-          h_dinv(ie, 0, 0, igp, jgp) = h_d(ie, 1, 1, igp, jgp) / determinant;
-          h_dinv(ie, 0, 1, igp, jgp) = -h_d(ie, 1, 0, igp, jgp) / determinant;
-          h_dinv(ie, 1, 0, igp, jgp) = -h_d(ie, 0, 1, igp, jgp) / determinant;
-          h_dinv(ie, 1, 1, igp, jgp) = h_d(ie, 0, 0, igp, jgp) / determinant;
         }
+        const Real determinant = compute_det(h_matrix);
+        h_dinv(ie, 0, 0, igp, jgp) = h_matrix(1, 1) / determinant;
+        h_dinv(ie, 0, 1, igp, jgp) = -h_matrix(1, 0) / determinant;
+        h_dinv(ie, 1, 0, igp, jgp) = -h_matrix(0, 1) / determinant;
+        h_dinv(ie, 1, 1, igp, jgp) = h_matrix(0, 0) / determinant;
       }
     }
   }
