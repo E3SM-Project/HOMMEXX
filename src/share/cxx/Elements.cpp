@@ -129,43 +129,48 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   // This ensures the pressure in a single column is monotonically increasing
   // and has fixed upper and lower values
   const auto make_pressure_partition = [=](
-      HostViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> pressure) {
-    for (int ie = 0; ie < pressure.extent_int(0); ++ie) {
-      for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            HostViewUnmanaged<Scalar[NUM_LEV]> pt_pressure =
-                Homme::subview(pressure, ie, tl, igp, jgp);
-            std::sort(reinterpret_cast<Real *>(pt_pressure.data()),
-                      reinterpret_cast<Real *>(pt_pressure.data() +
-                                               pt_pressure.size()));
-            pt_pressure(0)[0] = 0.0;
-            const int top_ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
-            const int top_vlev = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
-            pt_pressure(top_ilev)[top_vlev] = max_pressure;
-            for (int e_vlev = top_vlev + 1; e_vlev < VECTOR_SIZE; ++e_vlev) {
-              pt_pressure(top_ilev)[e_vlev] =
-                  std::numeric_limits<Real>::quiet_NaN();
-            }
-            for (int level = NUM_PHYSICAL_LEV - 1; level > 0; --level) {
-              const int prev_ilev = (level - 1) / VECTOR_SIZE;
-              const int prev_vlev = (level - 1) % VECTOR_SIZE;
-              const int cur_ilev = level / VECTOR_SIZE;
-              const int cur_vlev = level % VECTOR_SIZE;
-              pt_pressure(cur_ilev)[cur_vlev] -=
-                  pt_pressure(prev_ilev)[prev_vlev];
-            }
-          }
-        }
+      HostViewUnmanaged<Scalar[NUM_LEV]> pt_pressure) {
+    // Put in monotonic order
+    std::sort(
+        reinterpret_cast<Real *>(pt_pressure.data()),
+        reinterpret_cast<Real *>(pt_pressure.data() + pt_pressure.size()));
+    // Ensure none of the values are repeated
+    for (int level = NUM_PHYSICAL_LEV - 1; level > 0; --level) {
+      const int prev_ilev = (level - 1) / VECTOR_SIZE;
+      const int prev_vlev = (level - 1) % VECTOR_SIZE;
+      const int cur_ilev = level / VECTOR_SIZE;
+      const int cur_vlev = level % VECTOR_SIZE;
+      // Need to try again if these are the same or if the thickness is too
+      // small
+      if (pt_pressure(cur_ilev)[cur_vlev] <=
+          pt_pressure(prev_ilev)[prev_vlev] +
+              min_value * std::numeric_limits<Real>::epsilon()) {
+        return false;
       }
+    }
+    // We know the minimum thickness of a layer is min_value * epsilon
+    // (due to floating point), so set the bottom layer thickness to that,
+    // and subtract that from the top layer
+    // This ensures that the total sum is max_pressure
+    pt_pressure(0)[0] = min_value * std::numeric_limits<Real>::epsilon();
+    const int top_ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
+    const int top_vlev = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+    pt_pressure(top_ilev)[top_vlev] = max_pressure - pt_pressure(0)[0];
+    for (int e_vlev = top_vlev + 1; e_vlev < VECTOR_SIZE; ++e_vlev) {
+      pt_pressure(top_ilev)[e_vlev] = std::numeric_limits<Real>::quiet_NaN();
+    }
+    // Now compute the interval thicknesses
+    for (int level = NUM_PHYSICAL_LEV - 1; level > 0; --level) {
+      const int prev_ilev = (level - 1) / VECTOR_SIZE;
+      const int prev_vlev = (level - 1) % VECTOR_SIZE;
+      const int cur_ilev = level / VECTOR_SIZE;
+      const int cur_vlev = level % VECTOR_SIZE;
+      pt_pressure(cur_ilev)[cur_vlev] -= pt_pressure(prev_ilev)[prev_vlev];
     }
     return true;
   };
 
-  // Ensure that the pressure doesn't have duplicates of the top and bottom
-  std::uniform_real_distribution<Real> pressure_pdf(
-      min_value, max_pressure * (1.0 - std::numeric_limits<Real>::epsilon()));
-  genRandArray(m_dp3d, engine, pressure_pdf, make_pressure_partition);
+  std::uniform_real_distribution<Real> pressure_pdf(min_value, max_pressure);
 
   // Lambdas used to constrain the metric tensor and its inverse
   const auto compute_det = [](HostViewUnmanaged<Real[2][2]> mtx) {
@@ -199,6 +204,11 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
     // incrementally generate the view
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
+        for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
+          ExecViewUnmanaged<Scalar[NUM_LEV]> pt_dp3d =
+              Homme::subview(m_dp3d, ie, tl, igp, jgp);
+          genRandArray(pt_dp3d, engine, pressure_pdf, make_pressure_partition);
+        }
         genRandArray(h_matrix, engine, random_dist, constrain_det);
         for (int i = 0; i < 2; ++i) {
           for (int j = 0; j < 2; ++j) {

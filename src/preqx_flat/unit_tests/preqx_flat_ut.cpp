@@ -193,7 +193,7 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are
   // initialized in the singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
@@ -287,7 +287,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
@@ -358,7 +358,7 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
       "host virtual temperature", num_elems);
@@ -422,7 +422,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
@@ -489,7 +489,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
@@ -590,7 +590,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   TestType test_functor(elements);
@@ -658,7 +658,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
@@ -747,7 +747,7 @@ TEST_CASE("virtual temperature no tracers",
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
 
   TestType test_functor(elements);
   sync_to_host(elements.m_t, test_functor.temperature);
@@ -804,7 +804,7 @@ TEST_CASE("virtual temperature with tracers",
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
 
   TestType test_functor(elements);
   sync_to_host(elements.m_qdp, test_functor.qdp);
@@ -865,7 +865,7 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, 1.0);
+  elements.random_init(num_elems);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
       "source omega p", num_elems);
