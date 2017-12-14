@@ -6,8 +6,6 @@
 
 #include <Kokkos_Core.hpp>
 
-#include <random>
-
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
@@ -86,7 +84,7 @@ public:
 
   void init(const int num_elems);
 
-  void random_init(int num_elems, std::mt19937_64 &engine);
+  void random_init(int num_elems);
 
   int num_elems() const { return m_num_elems; }
 

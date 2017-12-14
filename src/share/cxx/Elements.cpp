@@ -98,95 +98,43 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_dinv, h_dinv);
 }
 
-void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
+void Elements::random_init(const int num_elems) {
   init(num_elems);
   constexpr const Real min_value = 0.015625;
+  std::random_device rd;
+  std::mt19937_64 engine(rd());
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0);
 
-  ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
-      Kokkos::create_mirror_view(m_fcor);
-  ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
-      Kokkos::create_mirror_view(m_spheremp);
-  ExecViewManaged<Real *[NP][NP]>::HostMirror h_metdet =
-      Kokkos::create_mirror_view(m_metdet);
-  ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
-      Kokkos::create_mirror_view(m_phis);
+  genRandArray(m_fcor, engine, random_dist);
+  genRandArray(m_spheremp, engine, random_dist);
+  genRandArray(m_metdet, engine, random_dist);
+  genRandArray(m_phis, engine, random_dist);
 
+  genRandArray(m_omega_p, engine, random_dist);
+  genRandArray(m_pecnd, engine, random_dist);
+  genRandArray(m_phi, engine, random_dist);
+  genRandArray(m_derived_un0, engine, random_dist);
+  genRandArray(m_derived_vn0, engine, random_dist);
+
+  genRandArray(m_u, engine, random_dist);
+  genRandArray(m_v, engine, random_dist);
+  genRandArray(m_t, engine, random_dist);
+
+  genRandArray(m_dp3d, engine, random_dist);
+
+  genRandArray(m_qdp, engine, random_dist);
+  genRandArray(m_eta_dot_dpdn, engine, random_dist);
+
+  // d and dinv must follow certain invariants
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
       Kokkos::create_mirror_view(m_d);
+  Kokkos::deep_copy(h_d, m_d);
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
-
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
-      Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
-      Kokkos::create_mirror_view(m_phi);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
-      Kokkos::create_mirror_view(m_derived_un0);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
-      Kokkos::create_mirror_view(m_derived_vn0);
-
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
-      Kokkos::create_mirror_view(m_v);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
-      Kokkos::create_mirror_view(m_t);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
-  h_dp3d = Kokkos::create_mirror_view(m_dp3d);
-
-  ExecViewManaged<
-      Scalar *[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::HostMirror h_qdp =
-      Kokkos::create_mirror_view(m_qdp);
-
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV_P]>::HostMirror h_eta_dot_dpdn =
-      Kokkos::create_mirror_view(m_eta_dot_dpdn);
 
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
-        // 2d scalars
-        h_fcor(ie, igp, jgp) = random_dist(engine);
-        h_spheremp(ie, igp, jgp) = random_dist(engine);
-        h_metdet(ie, igp, jgp) = random_dist(engine);
-        h_phis(ie, igp, jgp) = random_dist(engine);
-
-        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
-            // 3d scalars
-            h_omega_p(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            h_pecnd(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            h_phi(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            h_derived_un0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-            h_derived_vn0(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-
-            // 4d scalars
-            for (int timelevel = 0; timelevel < NUM_TIME_LEVELS; ++timelevel) {
-              h_u(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
-              h_v(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
-              h_t(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
-              h_dp3d(ie, timelevel, igp, jgp, ilev)[vec] = random_dist(engine);
-            }
-
-            for (int q_timelevel = 0; q_timelevel < Q_NUM_TIME_LEVELS;
-                 ++q_timelevel) {
-              for (int i_q = 0; i_q < QSIZE_D; ++i_q) {
-                h_qdp(ie, q_timelevel, i_q, igp, jgp, ilev)[vec] =
-                    random_dist(engine);
-              }
-            }
-          }
-        }
-
-        for (int ilev = 0; ilev < NUM_LEV_P; ++ilev) {
-          for (int vec = 0; vec < VECTOR_SIZE; ++vec) {
-            // 3d scalar at the interfaces of the levels
-            h_eta_dot_dpdn(ie, igp, jgp, ilev)[vec] = random_dist(engine);
-          }
-        }
-
         Real determinant = 0.0;
         while (std::abs(determinant) < min_value) {
           // 2d tensors
@@ -206,26 +154,8 @@ void Elements::random_init(const int num_elems, std::mt19937_64 &engine) {
     }
   }
 
-  Kokkos::deep_copy(m_fcor, h_fcor);
-  Kokkos::deep_copy(m_metdet, h_metdet);
-  Kokkos::deep_copy(m_spheremp, h_spheremp);
-  Kokkos::deep_copy(m_phis, h_phis);
-
   Kokkos::deep_copy(m_d, h_d);
   Kokkos::deep_copy(m_dinv, h_dinv);
-
-  Kokkos::deep_copy(m_omega_p, h_omega_p);
-  Kokkos::deep_copy(m_pecnd, h_pecnd);
-  Kokkos::deep_copy(m_phi, h_phi);
-  Kokkos::deep_copy(m_derived_un0, h_derived_un0);
-  Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
-
-  Kokkos::deep_copy(m_u, h_u);
-  Kokkos::deep_copy(m_v, h_v);
-  Kokkos::deep_copy(m_t, h_t);
-  Kokkos::deep_copy(m_dp3d, h_dp3d);
-
-  Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
   return;
 }
 
