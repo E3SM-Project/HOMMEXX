@@ -194,7 +194,7 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   // initialized in the singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_in("pressure input", num_elems);
@@ -288,7 +288,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
@@ -423,7 +423,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
@@ -490,7 +490,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
@@ -591,7 +591,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   TestType test_functor(elements);
 
@@ -659,7 +659,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
-  Context::singleton().get_derivative().random_init(engine);
+  Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
