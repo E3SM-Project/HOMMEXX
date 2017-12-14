@@ -119,7 +119,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
   assert(jgp < v_in.extent_int(3));
   assert(jgp >= 0);
   return ViewUnmanaged<ScalarType[DIM4], MemSpace>(
-      &v_in.implementation_map().reference(ie, igp, jgp, 0, 0));
+      &v_in.implementation_map().reference(ie, tl, igp, jgp, 0));
 }
 
 template <typename MemSpace, typename MemManagement, typename ScalarType,

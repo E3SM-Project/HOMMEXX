@@ -128,7 +128,7 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
 
   // This ensures the pressure in a single column is monotonically increasing
   // and has fixed upper and lower values
-  const auto transform_pressure = [=](
+  const auto make_pressure_partition = [=](
       HostViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> pressure) {
     for (int ie = 0; ie < pressure.extent_int(0); ++ie) {
       for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
@@ -147,6 +147,14 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
               pt_pressure(top_ilev)[e_vlev] =
                   std::numeric_limits<Real>::quiet_NaN();
             }
+            for (int level = NUM_PHYSICAL_LEV - 1; level > 0; --level) {
+              const int prev_ilev = (level - 1) / VECTOR_SIZE;
+              const int prev_vlev = (level - 1) % VECTOR_SIZE;
+              const int cur_ilev = level / VECTOR_SIZE;
+              const int cur_vlev = level % VECTOR_SIZE;
+              pt_pressure(cur_ilev)[cur_vlev] -=
+                  pt_pressure(prev_ilev)[prev_vlev];
+            }
           }
         }
       }
@@ -157,7 +165,7 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   // Ensure that the pressure doesn't have duplicates of the top and bottom
   std::uniform_real_distribution<Real> pressure_pdf(
       min_value, max_pressure * (1.0 - std::numeric_limits<Real>::epsilon()));
-  genRandArray(m_dp3d, engine, pressure_pdf, transform_pressure);
+  genRandArray(m_dp3d, engine, pressure_pdf, make_pressure_partition);
 
   // Lambdas used to constrain the metric tensor and its inverse
   const auto compute_det = [](HostViewUnmanaged<Real[2][2]> mtx) {
