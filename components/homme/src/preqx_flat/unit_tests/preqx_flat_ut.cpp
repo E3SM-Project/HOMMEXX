@@ -76,6 +76,11 @@ void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn,
                                                    const Real *divdp, 
                                                    const Real *hybi);
 
+void preq_vertadv(const Real *temperature, const Real *velocity,
+                  const Real *eta_dot_dpdn, const Real *recipr_density,
+                  Real *t_vadv, Real *v_vadv);
+
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -1152,8 +1157,8 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
   genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
 
-  sync_to_device(div_vdp, elements.buffers.t_vadv_buf);
-  sync_to_device(div_vdp, elements.buffers.v_vadv_buf);
+  sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
+  sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
 
 //now set up F output and make sure it has the same vals for _vadv before we run
 //test_functor.
@@ -1178,43 +1183,50 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
   sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
 
+std::cout << "in C NUM_PHYS_LEV="<< NUM_PHYSICAL_LEV << "\n";
+std::cout << "NUM_LEV, VECTOR_SIZE="<<NUM_LEV << ", " << VECTOR_SIZE << "\n";
+
   for (int ie = 0; ie < num_elems; ++ie) {
 //         call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
 //                       eta_dot_dpdn,rdp,T_vadv,v_vadv)
-    for (int level = 0; level < NUM_LEV; ++level) {
-      for (int v = 0; v < VECTOR_SIZE; ++v) {
-        int k = level*VECTOR_SIZE + v; // convert to phys. levels
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         for (int i = 0; i < NP; i++) {
           for (int j = 0; j < NP; j++) {
-            rdp_f90(k, i, j) = 1/test_functor.dp3d(ie, i, j, level)[v];
+            rdp_f90(level, i, j) = 1/test_functor.dp3d(ie, test_functor.n0, level, i, j);
           }
         }
-      }
     }//level loop
     preq_vertadv(
         Kokkos::subview(test_functor.temperature, ie, test_functor.n0, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.velocity, ie, test_functor.n0, level,
+        Kokkos::subview(test_functor.velocity, ie, test_functor.n0, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Kokkos::subview(test_functor.eta_dpdn, ie, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.eta_dpdn, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data(),
         rdp_f90.data(),
         Kokkos::subview(t_vadv_f90, ie, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(v_vadv_f90, ie, 
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos:ALL).data()
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data()
     );//preq vertadv call
 
-    for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           //errors for t_vadv
           const Real correct = t_vadv_f90(ie, level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           const Real computed = t_vadv(ie, level, igp, jgp);
+
+if( igp == 0 && jgp == 0){
+std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+std::cout << " F = " << correct << " C = " << computed << "\n";
+}
+
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
+
 
           for (int dim = 0; dim < 2; dim ++){
             const Real correct = v_vadv_f90(ie, level, dim, igp, jgp);
@@ -1224,6 +1236,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
             const Real rel_error = compare_answers(correct, computed);
             REQUIRE(rel_threshold >= rel_error);
           }//end of dim loop
+
         }
       }
     }//level loop
