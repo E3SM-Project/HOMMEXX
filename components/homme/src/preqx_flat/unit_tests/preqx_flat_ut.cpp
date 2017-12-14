@@ -1136,7 +1136,7 @@ public:
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 1;
+  constexpr const int num_elems = 10;
   std::random_device rd;
   rngAlg engine(rd());
 
@@ -1154,8 +1154,20 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
 
 //we need quiet nans, this is just to debug the test itself
-  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
-  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+//  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+//  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int i = 0; i < NP; i++) {
+        for (int j = 0; j < NP; j++) {
+          t_vadv(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
+          v_vadv(ie,level,0,i,j) = std::numeric_limits<Real>::quiet_NaN();
+          v_vadv(ie,level,1,i,j) = std::numeric_limits<Real>::quiet_NaN();
+        }
+      }
+    } //level loop
+  }//ie loop, end of assigning of quiet nans
 
   sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
   sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
@@ -1183,8 +1195,8 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
   sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
 
-std::cout << "in C NUM_PHYS_LEV="<< NUM_PHYSICAL_LEV << "\n";
-std::cout << "NUM_LEV, VECTOR_SIZE="<<NUM_LEV << ", " << VECTOR_SIZE << "\n";
+//std::cout << "in C NUM_PHYS_LEV="<< NUM_PHYSICAL_LEV << "\n";
+//std::cout << "NUM_LEV, VECTOR_SIZE="<<NUM_LEV << ", " << VECTOR_SIZE << "\n";
 
   for (int ie = 0; ie < num_elems; ++ie) {
 //         call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
@@ -1218,10 +1230,10 @@ std::cout << "NUM_LEV, VECTOR_SIZE="<<NUM_LEV << ", " << VECTOR_SIZE << "\n";
           REQUIRE(!std::isnan(correct));
           const Real computed = t_vadv(ie, level, igp, jgp);
 
-if( igp == 0 && jgp == 0){
-std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-std::cout << " F = " << correct << " C = " << computed << "\n";
-}
+//if( igp == 0 && jgp == 0){
+//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+//std::cout << " F = " << correct << " C = " << computed << "\n";
+//}
 
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
