@@ -9,7 +9,9 @@ module caar_pre_exchange_driver_mod
 
   interface
     subroutine init_control_caar_c (nets,nete,nelemd,nm1,n0,np1,qn0,dt2,ps0, &
-                               compute_diagnostics,eta_ave_w,hybrid_a_ptr) bind(c)
+                               compute_diagnostics,eta_ave_w, &
+                               hybrid_am_ptr, hybrid_ai_ptr, &
+                               hybrid_bm_ptr, hybrid_bi_ptr) bind(c)
       use kinds         , only : real_kind
       use iso_c_binding , only : c_ptr, c_int, c_bool
       !
@@ -18,7 +20,8 @@ module caar_pre_exchange_driver_mod
       integer (kind=c_int),  intent(in) :: np1,nm1,n0,qn0,nets,nete,nelemd
       logical,               intent(in) :: compute_diagnostics
       real (kind=real_kind), intent(in) :: dt2, ps0, eta_ave_w
-      type (c_ptr),          intent(in) :: hybrid_a_ptr
+      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
     end subroutine init_control_caar_c
     subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                                                elem_derived_phi_ptr,             &
@@ -77,7 +80,7 @@ contains
     type (c_ptr) :: elem_derived_phi_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-    type (c_ptr) :: hvcoord_a_ptr
+    type (c_ptr) :: hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr
 #else
     implicit none
 #endif
@@ -98,8 +101,13 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     call t_startf("caar_overhead")
 
-    hvcoord_a_ptr             = c_loc(hvcoord%hyai)
-    call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,hvcoord_a_ptr)
+    hvcoord_am_ptr             = c_loc(hvcoord%hyam)
+    hvcoord_ai_ptr             = c_loc(hvcoord%hyai)
+    hvcoord_bm_ptr             = c_loc(hvcoord%hybm)
+    hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
+    call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0, &
+         compute_diagnostics, eta_ave_w, &
+         hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
 
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
@@ -735,10 +743,15 @@ contains
          ! ===========================================================
          ! Compute vertical advection of T and v from eq. CCM2 (3.b.1)
          ! ==============================================
+
+print *, 'BEFORE PV'
+
+
          call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
               eta_dot_dpdn,rdp,T_vadv,v_vadv)
 
-!end of F function
+print *, 'AFTER PV'
+
 
       endif
 
