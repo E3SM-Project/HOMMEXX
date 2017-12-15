@@ -4,6 +4,8 @@
 #include "Types.hpp"
 #include "ExecSpaceDefs.hpp"
 
+#include <functional>
+
 #ifndef NDEBUG
 #define DEBUG_PRINT(...)                                                       \
   { printf(__VA_ARGS__); }
@@ -100,6 +102,24 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
   assert(jgp >= 0);
   return ViewUnmanaged<ScalarType[DIM3][DIM4], MemSpace>(
       &v_in.implementation_map().reference(ie, igp, jgp, 0, 0));
+}
+
+template <typename MemSpace, typename MemManagement, typename ScalarType,
+          int DIM1, int DIM2, int DIM3, int DIM4>
+KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM4], MemSpace>
+subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, MemManagement>
+            v_in, int ie, int tl, int igp, int jgp) {
+  assert(v_in.data() != nullptr);
+  assert(ie < v_in.extent_int(0));
+  assert(ie >= 0);
+  assert(tl < v_in.extent_int(1));
+  assert(tl >= 0);
+  assert(igp < v_in.extent_int(2));
+  assert(igp >= 0);
+  assert(jgp < v_in.extent_int(3));
+  assert(jgp >= 0);
+  return ViewUnmanaged<ScalarType[DIM4], MemSpace>(
+      &v_in.implementation_map().reference(ie, tl, igp, jgp, 0));
 }
 
 template <typename MemSpace, typename MemManagement, typename ScalarType,
@@ -208,7 +228,8 @@ sync_to_host(Source_T source, Dest_T dest) {
     for (int time = 0; time < NUM_TIME_LEVELS; ++time) {
       for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
            ++vector_level) {
-        for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV; ++vector, ++level) {
+        for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
+             ++vector, ++level) {
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
               dest(ie, time, level, igp, jgp) =
@@ -494,19 +515,33 @@ void genRandArray(Real *const x, int length, rngAlg &engine, PDF &&pdf) {
 template <typename rngAlg, typename PDF>
 void genRandArray(Scalar *const x, int length, rngAlg &engine, PDF &&pdf) {
   for (int i = 0; i < length; ++i) {
-    for(int j = 0; j < VECTOR_SIZE; ++j) {
+    for (int j = 0; j < VECTOR_SIZE; ++j) {
       x[i][j] = pdf(engine);
     }
   }
 }
 
 template <typename ViewType, typename rngAlg, typename PDF>
-void genRandArray(ViewType view, rngAlg &engine, PDF &&pdf) {
-  genRandArray(view.data(), view.size(), engine, pdf);
+typename std::enable_if<Kokkos::is_view<ViewType>::value, void>::type
+genRandArray(ViewType view, rngAlg &engine, PDF &&pdf,
+             std::function<bool(typename ViewType::HostMirror)> constraint) {
+  typename ViewType::HostMirror mirror = Kokkos::create_mirror_view(view);
+  do {
+    genRandArray(mirror.data(), view.size(), engine, pdf);
+  } while (constraint(mirror) == false);
+  Kokkos::deep_copy(view, mirror);
+}
+
+template <typename ViewType, typename rngAlg, typename PDF>
+typename std::enable_if<Kokkos::is_view<ViewType>::value, void>::type
+genRandArray(ViewType view, rngAlg &engine, PDF &&pdf) {
+  genRandArray(view, engine, pdf,
+               [](typename ViewType::HostMirror) { return true; });
 }
 
 template <typename FPType>
-Real compare_answers(FPType target, FPType computed, FPType relative_coeff = 1.0) {
+Real compare_answers(FPType target, FPType computed,
+                     FPType relative_coeff = 1.0) {
   Real denom = 1.0;
   if (relative_coeff > 0.0 && target != 0.0) {
     denom = relative_coeff * std::fabs(target);
@@ -515,14 +550,14 @@ Real compare_answers(FPType target, FPType computed, FPType relative_coeff = 1.0
   return std::fabs(target - computed) / denom;
 }
 
-template <typename ExecSpace, typename Tag=void>
+template <typename ExecSpace, typename Tag = void>
 Kokkos::TeamPolicy<ExecSpace, Tag> get_default_team_policy(const int nelems) {
   const int threads_per_team =
-    DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
+      DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
   const int vectors_per_thread =
-    DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  return Kokkos::TeamPolicy<ExecSpace, Tag>(
-    nelems, threads_per_team, vectors_per_thread);
+      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
+  return Kokkos::TeamPolicy<ExecSpace, Tag>(nelems, threads_per_team,
+                                            vectors_per_thread);
 }
 
 } // namespace Homme

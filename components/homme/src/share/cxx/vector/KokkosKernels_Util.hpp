@@ -4,7 +4,6 @@
 /// \author Kyungjoo Kim (kyukim@sandia.gov)
 
 #include <iomanip>
-#include <random>
 #include <string>
 
 #include <cmath>
