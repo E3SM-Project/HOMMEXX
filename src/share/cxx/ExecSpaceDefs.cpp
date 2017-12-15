@@ -96,21 +96,21 @@ team_num_threads_vectors (const int num_parallel_iterations,
   // fewer than 4 warps/thread block limits the thread occupancy to that
   // number/4. That seems to be in Cuda specs, but I don't know of a function
   // that provides this number. Use a configuration option that defaults to 4.
-  static const int min_num_warps = HOMMEXX_CUDA_MIN_WARP_PER_TEAM;
+  const int min_num_warps = HOMMEXX_CUDA_MIN_WARP_PER_TEAM;
 #ifdef KOKKOS_HAVE_CUDA
-  static const int num_warps_device = Kokkos::Impl::cuda_internal_maximum_concurrent_block_count();
-  static const int num_threads_warp = Kokkos::Impl::CudaTraits::WarpSize;
+  const int num_warps_device = Kokkos::Impl::cuda_internal_maximum_concurrent_block_count();
+  const int num_threads_warp = Kokkos::Impl::CudaTraits::WarpSize;
   // The number on P100 is 16, but for some reason
   // Kokkos::Impl::cuda_internal_maximum_grid_count() returns 8. I may be
   // misusing the function. I have an open issue with the Kokkos team to resolve
   // this. For now:
-  static const int max_num_warps = 16; //Kokkos::Impl::cuda_internal_maximum_grid_count());
+  const int max_num_warps = 16; //Kokkos::Impl::cuda_internal_maximum_grid_count());
 #else
   // I want thread-distribution rules to be unit-testable even when Cuda is
   // off. Thus, make up a P100-like machine:
-  static const int num_warps_device = 1792;
-  static const int num_threads_warp = 32;
-  static const int max_num_warps = 16;
+  const int num_warps_device = 1792;
+  const int num_threads_warp = 32;
+  const int max_num_warps = 16;
 #endif
 
   return Parallel::team_num_threads_vectors_for_gpu(
