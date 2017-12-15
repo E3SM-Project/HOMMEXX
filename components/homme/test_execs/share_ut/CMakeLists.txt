@@ -16,6 +16,7 @@ SET (SHARE_UT_SRCS
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/quadrature_mod.F90
+  ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
