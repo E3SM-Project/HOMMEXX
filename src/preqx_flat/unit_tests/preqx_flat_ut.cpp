@@ -118,7 +118,7 @@ public:
     Real hybrid_bi[NUM_LEV_P+1] = { 0 };
 
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
-                        qn0, ps0, dt, false, eta_ave_w, 
+                        qn0, ps0, dt, false, eta_ave_w, 0, //0 for rsplit for now 
                         hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
 
 //is this one random?
@@ -634,6 +634,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
                                    TestType::n0, TestType::np1, TestType::qn0,
                                    TestType::dt, TestType::ps0, false,
                                    TestType::eta_ave_w, 
+                                   0, //0 for rsplit
                                    hybrid_am_mirror.data(),
                                    hybrid_ai_mirror.data(),
                                    hybrid_bm_mirror.data(),
@@ -1024,7 +1025,8 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   TestType test_functor(elements);
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
        TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
-       TestType::eta_ave_w, hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
+       TestType::eta_ave_w, 0, //0 for rsplit
+       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
 /*
