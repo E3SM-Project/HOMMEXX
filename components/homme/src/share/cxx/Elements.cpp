@@ -155,6 +155,8 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
     pt_pressure(0)[0] = min_value * std::numeric_limits<Real>::epsilon();
     const int top_ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
     const int top_vlev = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+    // Note that this may not actually change the top level pressure
+    // This is okay, because we only need to approximately sum to max_pressure
     pt_pressure(top_ilev)[top_vlev] = max_pressure - pt_pressure(0)[0];
     for (int e_vlev = top_vlev + 1; e_vlev < VECTOR_SIZE; ++e_vlev) {
       pt_pressure(top_ilev)[e_vlev] = std::numeric_limits<Real>::quiet_NaN();
@@ -217,8 +219,8 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
         }
         const Real determinant = compute_det(h_matrix);
         h_dinv(ie, 0, 0, igp, jgp) = h_matrix(1, 1) / determinant;
-        h_dinv(ie, 0, 1, igp, jgp) = -h_matrix(1, 0) / determinant;
-        h_dinv(ie, 1, 0, igp, jgp) = -h_matrix(0, 1) / determinant;
+        h_dinv(ie, 1, 0, igp, jgp) = -h_matrix(1, 0) / determinant;
+        h_dinv(ie, 0, 1, igp, jgp) = -h_matrix(0, 1) / determinant;
         h_dinv(ie, 1, 1, igp, jgp) = h_matrix(0, 0) / determinant;
       }
     }
