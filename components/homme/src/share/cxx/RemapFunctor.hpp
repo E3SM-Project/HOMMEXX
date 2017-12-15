@@ -270,34 +270,38 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      pin(kv.ie, igp, jgp, 0) = 0.0;
-      pio(kv.ie, igp, jgp, 0) = 0.0;
-      // scan region
-      for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
-        const int layer_vlevel = (k - 1) / VECTOR_SIZE;
-        const int layer_vector = (k - 1) % VECTOR_SIZE;
-        pin(kv.ie, igp, jgp, k) =
-            pin(kv.ie, igp, jgp, k - 1) +
-            tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
-        pio(kv.ie, igp, jgp, k) =
-            pio(kv.ie, igp, jgp, k - 1) +
-            src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
-      } // k loop
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+        pin(kv.ie, igp, jgp, 0) = 0.0;
+        pio(kv.ie, igp, jgp, 0) = 0.0;
+        // scan region
+        for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
+          const int layer_vlevel = (k - 1) / VECTOR_SIZE;
+          const int layer_vector = (k - 1) % VECTOR_SIZE;
+          pin(kv.ie, igp, jgp, k) =
+              pin(kv.ie, igp, jgp, k - 1) +
+              tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
+          pio(kv.ie, igp, jgp, k) =
+              pio(kv.ie, igp, jgp, k - 1) +
+              src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
+        } // k loop
 
-      // This is here to allow an entire block of k
-      // threads to run in the remapping phase. It makes
-      // sure there's an old interface value below the
-      // domain that is larger.
-      pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1) =
-          pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) + 1.0;
+        // This is here to allow an entire block of k
+        // threads to run in the remapping phase. It makes
+        // sure there's an old interface value below the
+        // domain that is larger.
+        assert(fabs(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) -
+                    pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV)) < 1.0);
+        pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1) =
+            pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) + 1.0;
 
-      // The total mass in a column does not change.
-      // Therefore, the pressure of that mass cannot
-      // either.
-      pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
-          pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
+        // The total mass in a column does not change.
+        // Therefore, the pressure of that mass cannot
+        // either.
+        pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
+            pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
+      });
     });
 
     // Fill in the ghost regions with mirrored values.
@@ -349,8 +353,11 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // Furthermore, since we set
         // pio(:, :, :, 0) = 0.0 and pin(:, :, :, 0) = 0.0
         // kk must be incremented at least once
+        assert(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1) >
+               pin(kv.ie, igp, jgp, k + 1));
         while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k + 1)) {
           kk++;
+          assert(kk - 1 < pio.extent_int(3));
         }
 
         kk--;
@@ -364,15 +371,12 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         kid(kv.ie, igp, jgp, k) = kk;
         // PPM interpolants are normalized to an independent coordinate domain
         // [-0.5, 0.5].
+        assert(kk - 1 >= 0);
+        assert(kk < pio.extent_int(3));
         z2(kv.ie, igp, jgp, k) =
             (pin(kv.ie, igp, jgp, k + 1) -
              (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
             dpo(kv.ie, igp, jgp, kk + 1);
-
-        if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          DEBUG_PRINT("z2 %d c++ (%d): % .17e\n", k, kk,
-                      z2(kv.ie, igp, jgp, k));
-        }
       });
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
@@ -464,13 +468,13 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
           if (kv.ie == 0 && igp == 0 && jgp == 0) {
             DEBUG_PRINT("coeffs %d c++ (%d): % .17e % .17e % .17e\n", k, kk,
-                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
-                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
-                   parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2));
-            DEBUG_PRINT("integral %d c++ (%d): % .17e <- % .17e, % .17e\n", k, kk,
-                   integral, x1, x2);
+                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
+                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
+                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2));
+            DEBUG_PRINT("integral %d c++ (%d): % .17e <- % .17e, % .17e\n", k,
+                        kk, integral, x1, x2);
             DEBUG_PRINT("massn %d c++ (%d): % .17e <- % .17e\n", k, kk, massn2,
-                   massn1);
+                        massn1);
           }
 
           massn1 = massn2;
@@ -525,21 +529,36 @@ template <typename remap_type> struct Remap_Functor {
   Control m_data;
   const Elements m_elements;
 
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
 
   // Surface pressure
-  ExecViewManaged<Real * [NP][NP]> ps_v;
+  ExecViewManaged<Real * [NP][NP]> m_ps_v;
 
-  // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> dp;
+  // Source layer thickness
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_dp;
 
-  remap_type remap;
+  remap_type m_remap;
 
   Remap_Functor(const Control &data, const Elements &elements)
       : m_data(data), m_elements(elements),
-        tgt_layer_thickness("Target layer thickness", data.num_elems),
-        ps_v("Surface pressure", data.num_elems), dp("dp", data.num_elems),
-        remap(data) {}
+        m_tgt_layer_thickness("Target layer thickness", data.num_elems),
+        m_ps_v("Surface pressure", data.num_elems),
+        m_dp("m_dp", data.num_elems), m_remap(data) {}
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_m_ps_v(KernelVariables &kv,
+                      ExecViewUnmanaged<const Scalar[NUM_LEV]> m_dp3d,
+                      Real &m_ps_v) const {
+    Kokkos::parallel_reduce(
+        Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+        [&](const int &ilevel, Real &accumulator) {
+          const int ilev = ilevel / VECTOR_SIZE;
+          const int vec_lev = ilevel % VECTOR_SIZE;
+          accumulator += m_dp3d(ilev)[vec_lev];
+        },
+        m_ps_v);
+    m_ps_v += m_data.hybrid_a(0) * m_data.ps0;
+  }
 
   // Just implemented for CUDA until Kyungjoo's work is
   // finished
@@ -552,31 +571,33 @@ template <typename remap_type> struct Remap_Functor {
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;
 
+    // Aliased depending on whether the thicknesses need to be computed on the
+    // fly
+    // If rsplit is 0, this is computed from src_layer_thickness and the
+    // differences in eta_dot_dpdn
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness;
+
     // The states which need to be remapped
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
     state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
     if (m_data.rsplit == 0) {
-      // No remapping here, just dpstar check
+      // No remapping here, just m_dpstar check
+      tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     } else {
-      // Compute ps_v separately, as it requires a parallel
+      tgt_layer_thickness =
+          Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
+      // Compute m_ps_v separately, as it requires a parallel
       // reduce
       Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                            [&](const int &loop_idx) {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
 
-        Kokkos::parallel_reduce(
-            Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-            [&](const int &ilevel, Real &accumulator) {
-              const int ilev = ilevel / VECTOR_SIZE;
-              const int vec_lev = ilevel % VECTOR_SIZE;
-              accumulator +=
-                  m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vec_lev];
-            },
-            ps_v(kv.ie, igp, jgp));
-        ps_v(kv.ie, igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
+        compute_m_ps_v(
+            kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1, igp, jgp),
+            m_ps_v(kv.ie, igp, jgp));
       });
       kv.team_barrier();
 
@@ -585,23 +606,17 @@ template <typename remap_type> struct Remap_Functor {
         const int igp = idx / NP;
         const int jgp = idx % NP;
 
-        // Until Kyungjoo's vectorization works on CUDA
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
-                                                       NUM_PHYSICAL_LEV),
-                             [&](const int &ilevel) {
-          const int ilev = ilevel / VECTOR_SIZE;
-          const int vec_lev = ilevel % VECTOR_SIZE;
-          dp(kv.ie, igp, jgp, ilev)[vec_lev] =
-              (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
-                  m_data.ps0 +
-              (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
-                  ps_v(kv.ie, igp, jgp);
-
-          tgt_layer_thickness(kv.ie, igp, jgp, ilev) =
-              (m_data.hybrid_a(ilev + 1) - m_data.hybrid_a(ilev) * m_data.ps0) +
-              (m_data.hybrid_b(ilev + 1) - m_data.hybrid_b(ilev)) *
-                  ps_v(kv.ie, igp, jgp);
-        });
+        Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+            [&](const int &ilevel) {
+              const int ilev = ilevel / VECTOR_SIZE;
+              const int vec_lev = ilevel % VECTOR_SIZE;
+              m_dp(kv.ie, igp, jgp, ilev)[vec_lev] =
+                  (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
+                      m_data.ps0 +
+                  (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
+                      m_ps_v(kv.ie, igp, jgp);
+            });
       });
 
       // Must use for loop for CUDA
@@ -636,9 +651,9 @@ template <typename remap_type> struct Remap_Functor {
     }
 
     if (num_remap > 0) {
-      remap.remap(kv, num_remap,
-                  Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
-                  Homme::subview(tgt_layer_thickness, kv.ie), remap_vals);
+      m_remap.remap(kv, num_remap,
+                    Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+                    tgt_layer_thickness, remap_vals);
       kv.team_barrier();
     }
     if (m_data.rsplit != 0) {
@@ -650,7 +665,7 @@ template <typename remap_type> struct Remap_Functor {
             const int jgp = loop_idx % NP;
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                                  [&](const int &ilev) {
-              state_remap[var](igp, jgp, ilev) /= dp(kv.ie, igp, jgp, ilev);
+              state_remap[var](igp, jgp, ilev) /= m_dp(kv.ie, igp, jgp, ilev);
             });
           });
     }
