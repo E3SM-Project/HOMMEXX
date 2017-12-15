@@ -104,18 +104,18 @@ struct CaarFunctor {
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
 
-   //nullifies sdot_sum, needed for both vert Lagrangian and Eulerian,
-   //sdot_sum is used in energy diagnostics
-   assign_zero_to_sdot_sum(kv);
+    //nullifies sdot_sum, needed for both vert Lagrangian and Eulerian,
+    //sdot_sum is used in energy diagnostics
+    assign_zero_to_sdot_sum(kv);
 
-   //vertical Lagrangian
-   if(m_data.rsplit){
-      assign_zero_to_eta_dot_dpdn_and_vadv_bufs(kv);
+    //vertical Lagrangian
+    if(m_data.rsplit){
+       assign_zero_to_eta_dot_dpdn_and_vadv_bufs(kv);
      
-   //vertical Eulerian
-   }else{
-      compute_eta_dot_dpdn_vertadv_euler(kv);
-      preq_vertadv(kv);
+    //vertical Eulerian
+    }else{
+       compute_eta_dot_dpdn_vertadv_euler(kv);
+       preq_vertadv(kv);
     };
     compute_omega_p(kv);
     compute_temperature_np1(kv);
