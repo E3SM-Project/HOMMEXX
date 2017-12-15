@@ -192,10 +192,12 @@ struct CaarFunctor {
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
+      });//loop for eta_dot
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) = 0;
         m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) = 0; 
         m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev) = 0; 
-      });
+      });//loop for _vadv quantities
     });
     kv.team_barrier();
   } // TRIVIAL
