@@ -89,11 +89,11 @@ private:
         const int jgp = loop_idx % NP;
 
         const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-          qdp   = Kokkos::subview(m_elements.m_qdp, kv.ie, m_data.qn0, kv.iq, ALL, ALL, ALL);
+          qdp   = Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, kv.iq);
         const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-          q_buf = Kokkos::subview(m_elements.buffers.qtens, kv.ie, kv.iq, ALL, ALL, ALL);
+          q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
         const ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>
-          v_buf = Kokkos::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq, ALL, ALL, ALL, ALL);
+          v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
 
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
           v_buf(0,igp,jgp,ilev) = (m_elements.buffers.vstar(kv.ie, 0, igp, jgp, ilev) *
@@ -111,14 +111,14 @@ private:
     using Kokkos::ALL;
     const auto dvv = m_deriv.get_dvv();
     const ExecViewUnmanaged<const Real[NP][NP]>
-      metdet = Kokkos::subview(m_elements.m_metdet, kv.ie, ALL, ALL);
+      metdet = Homme::subview(m_elements.m_metdet, kv.ie);
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
-      dinv = Kokkos::subview(m_elements.m_dinv, kv.ie, ALL, ALL, ALL, ALL);
+      dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     divergence_sphere_update(
       kv, -m_data.dt, 1.0, dinv, metdet, dvv,
-      Kokkos::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq, ALL, ALL, ALL, ALL),
-      Kokkos::subview(m_elements.buffers.qwrk, kv.ie, kv.iq, ALL, ALL, ALL, ALL),
-      Kokkos::subview(m_elements.buffers.qtens, kv.ie, kv.iq, ALL, ALL, ALL));
+      Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
+      Homme::subview(m_elements.buffers.qwrk, kv.ie, kv.iq),
+      Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
   }
 
 };
