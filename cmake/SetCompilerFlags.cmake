@@ -249,7 +249,7 @@ ENDIF ()
 #   2) COLUMN_OPENMP OpenMP within an element (previously called ELEMENT_OPENMP)
 # COLUMN_OPENMP will be disabled by the openACC exectuables.
 #
-# HOMMEXX does not distinguish between the two because Kokkos does not used
+# HOMMEXX does not distinguish between the two because Kokkos does not use
 # nested OpenMP. Nested OpenMP is the reason the two are distinguished in the
 # Fortran code.
 ##############################################################################
