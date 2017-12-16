@@ -293,6 +293,7 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // domain that is larger.
         assert(fabs(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) -
                     pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV)) < 1.0);
+				assert(false);
         pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1) =
             pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) + 1.0;
 
