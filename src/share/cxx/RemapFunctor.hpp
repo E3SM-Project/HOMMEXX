@@ -285,6 +285,10 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
           pio(kv.ie, igp, jgp, k) =
               pio(kv.ie, igp, jgp, k - 1) +
               src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
+          if (igp == 0 && jgp == 0 && kv.ie == 0) {
+            DEBUG_PRINT("%d partition: % .17e vs % .17e\n", k,
+                        pio(kv.ie, igp, jgp, k), pin(kv.ie, igp, jgp, k));
+          }
         } // k loop
 
         // This is here to allow an entire block of k
@@ -293,7 +297,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
         // domain that is larger.
         assert(fabs(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) -
                     pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV)) < 1.0);
-				assert(false);
         pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1) =
             pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) + 1.0;
 
@@ -583,42 +586,66 @@ template <typename remap_type> struct Remap_Functor {
     state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
+
+    // Compute m_ps_v separately, as it requires a parallel
+    // reduce
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+
+          compute_m_ps_v(
+              kv,
+              Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1, igp, jgp),
+              m_ps_v(kv.ie, igp, jgp));
+        });
+    kv.team_barrier();
+
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &idx) {
+          const int igp = idx / NP;
+          const int jgp = idx % NP;
+
+          Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+              [&](const int &ilevel) {
+                const int ilev = ilevel / VECTOR_SIZE;
+                const int vec_lev = ilevel % VECTOR_SIZE;
+                m_dp(kv.ie, igp, jgp, ilev)[vec_lev] =
+                    (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
+                        m_data.ps0 +
+                    (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
+                        m_ps_v(kv.ie, igp, jgp);
+              });
+        });
+
     if (m_data.rsplit == 0) {
-      // No remapping here, just m_dpstar check
       tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
+      Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
+            const int igp = loop_idx / NP;
+            const int jgp = loop_idx % NP;
+            Kokkos::parallel_for(
+                Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                [&](const int &level) {
+                  const int ilev = level / VECTOR_SIZE;
+                  const int vlev = level % VECTOR_SIZE;
+                  const int next_ilev = (level + 1) / VECTOR_SIZE;
+                  const int next_vlev = (level + 1) % VECTOR_SIZE;
+                  const Real delta_dpdn =
+                      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp,
+                                                next_ilev)[next_vlev] -
+                      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
+									// TODO: Understand why we're getting the negative of m_dp
+                  tgt_layer_thickness(igp, jgp, level) =
+                      -m_dp(kv.ie, igp, jgp, level) + m_data.dt * delta_dpdn;
+                });
+          });
+      // dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1)
+      // - elem(ie)%derived%eta_dot_dpdn(:,:,k))
     } else {
       tgt_layer_thickness =
           Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
-      // Compute m_ps_v separately, as it requires a parallel
-      // reduce
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                           [&](const int &loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-
-        compute_m_ps_v(
-            kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1, igp, jgp),
-            m_ps_v(kv.ie, igp, jgp));
-      });
-      kv.team_barrier();
-
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                           [&](const int &idx) {
-        const int igp = idx / NP;
-        const int jgp = idx % NP;
-
-        Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-            [&](const int &ilevel) {
-              const int ilev = ilevel / VECTOR_SIZE;
-              const int vec_lev = ilevel % VECTOR_SIZE;
-              m_dp(kv.ie, igp, jgp, ilev)[vec_lev] =
-                  (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
-                      m_data.ps0 +
-                  (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
-                      m_ps_v(kv.ie, igp, jgp);
-            });
-      });
 
       // Must use for loop for CUDA
       for (int var = 0; var < state_remap.size(); ++var) {
@@ -627,14 +654,15 @@ template <typename remap_type> struct Remap_Functor {
 
       Kokkos::parallel_for(Kokkos::TeamThreadRange(
                                kv.team, state_remap.size() * NP * NP * NUM_LEV),
-                           [&](const int &loop_idx) {
-        const int var = ((loop_idx / NUM_LEV) / NP) / NP;
-        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-        const int jgp = (loop_idx / NUM_LEV) % NP;
-        const int ilev = loop_idx % NUM_LEV;
-        remap_vals[var](igp, jgp, ilev) *=
-            m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev);
-      });
+        [&](const int &loop_idx) {
+          const int var = ((loop_idx / NUM_LEV) / NP) / NP;
+          const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
+          const int jgp = (loop_idx / NUM_LEV) % NP;
+          const int ilev = loop_idx % NUM_LEV;
+          remap_vals[var](igp, jgp, ilev) *=
+              m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp,
+                                ilev);
+        });
       kv.team_barrier();
     } // rsplit == 0
 
