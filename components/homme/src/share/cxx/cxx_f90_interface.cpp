@@ -191,7 +191,7 @@ void advance_qdp_c()
 
 } // extern "C"
 
-template <typename RemapAlg> void vertical_remap() {
+template <typename RemapAlg, int rsplit> void vertical_remap() {
   Control &data = Context::singleton().get_control();
   const int vectors_per_thread = 1;
   const int threads_per_team = data.team_size;
@@ -199,7 +199,8 @@ template <typename RemapAlg> void vertical_remap() {
                                        vectors_per_thread);
   policy.set_chunk_size(1);
 
-  Remap_Functor<RemapAlg> remap(data, Context::singleton().get_elements());
+  Remap_Functor<RemapAlg, rsplit> remap(data,
+                                        Context::singleton().get_elements());
 
   profiling_resume();
   Kokkos::parallel_for("vertical remap", policy, remap);
@@ -210,10 +211,19 @@ template <typename RemapAlg> void vertical_remap() {
 extern "C" {
 
 void vertical_remap_c(const int &remap_alg) {
+	auto rsplit = Context::singleton().get_control().rsplit;
   if (remap_alg == PPM_Fixed::fortran_remap_alg) {
-    vertical_remap<PPM_Vert_Remap<PPM_Fixed> >();
+		if(rsplit != 0) {
+			vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>();
+		} else {
+			vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>();
+		}
   } else if (remap_alg == PPM_Mirrored::fortran_remap_alg) {
-    vertical_remap<PPM_Vert_Remap<PPM_Mirrored> >();
+		if(rsplit != 0) {
+			vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>();
+		} else {
+			vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>();
+		}
   } else {
     MPI_Abort(0, -1);
   }

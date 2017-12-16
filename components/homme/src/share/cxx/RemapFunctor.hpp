@@ -519,7 +519,7 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
                 remap_dim> parabola_coeffs;
 };
 
-template <typename remap_type> struct Remap_Functor {
+template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
   static_assert(std::is_base_of<Vert_Remap_Alg, remap_type>::value,
                 "Remap_Functor not given a remap algorithm to use");
   static_assert(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
@@ -533,35 +533,105 @@ template <typename remap_type> struct Remap_Functor {
   Control m_data;
   const Elements m_elements;
 
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
+	// TODO: Conditionally remove this member based on nonzero_rsplit
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+      m_tgt_layer_thickness;
 
-  // Surface pressure
+  // Surface pressure??
   ExecViewManaged<Real * [NP][NP]> m_ps_v;
 
-  // Source layer thickness
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_dp;
 
   remap_type m_remap;
 
   Remap_Functor(const Control &data, const Elements &elements)
       : m_data(data), m_elements(elements),
-        m_tgt_layer_thickness("Target layer thickness", data.num_elems),
         m_ps_v("Surface pressure", data.num_elems),
-        m_dp("m_dp", data.num_elems), m_remap(data) {}
+        m_dp("m_dp", data.num_elems), m_remap(data) {
+    if (nonzero_rsplit == false) {
+      m_tgt_layer_thickness = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+          "Target layer thickness", data.num_elems);
+    }
+  }
 
   KOKKOS_INLINE_FUNCTION
-  void compute_m_ps_v(KernelVariables &kv,
-                      ExecViewUnmanaged<const Scalar[NUM_LEV]> m_dp3d,
-                      Real &m_ps_v) const {
-    Kokkos::parallel_reduce(
-        Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-        [&](const int &ilevel, Real &accumulator) {
-          const int ilev = ilevel / VECTOR_SIZE;
-          const int vec_lev = ilevel % VECTOR_SIZE;
-          accumulator += m_dp3d(ilev)[vec_lev];
-        },
-        m_ps_v);
-    m_ps_v += m_data.hybrid_a(0) * m_data.ps0;
+  void compute_ps_v(KernelVariables &kv,
+                      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> dp3d,
+                      ExecViewUnmanaged<Real[NP][NP]> ps_v) const {
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          Kokkos::parallel_reduce(
+              Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+              [&](const int &ilevel, Real &accumulator) {
+                const int ilev = ilevel / VECTOR_SIZE;
+                const int vec_lev = ilevel % VECTOR_SIZE;
+                accumulator += dp3d(igp, jgp, ilev)[vec_lev];
+              },
+              ps_v(igp, jgp));
+          ps_v(igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
+        });
+    kv.team_barrier();
+  }
+
+  // This template is a hacky way of choosing which method to compile based on a
+  // class template parameter
+  template <bool nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION
+      typename std::enable_if<(nz_rsplit == false),
+                              ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>>::type
+      compute_target_thickness(KernelVariables &kv) const {
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness =
+        Homme::subview(m_tgt_layer_thickness, kv.ie);
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
+          const int igp = loop_idx / NP;
+          const int jgp = loop_idx % NP;
+          Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+              [&](const int &level) {
+                const int ilev = level / VECTOR_SIZE;
+                const int vlev = level % VECTOR_SIZE;
+                const int next_ilev = (level + 1) / VECTOR_SIZE;
+                const int next_vlev = (level + 1) % VECTOR_SIZE;
+                const Real delta_dpdn =
+                    m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp,
+                                              next_ilev)[next_vlev] -
+                    m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
+                // TODO: Understand why we're getting the negative of m_dp
+                // instead of dp_star(:,:,k) = dp(:,:,k) +
+                // dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1)
+                // - elem(ie)%derived%eta_dot_dpdn(:,:,k))
+                tgt_layer_thickness(igp, jgp, ilev)[vlev] =
+                    -m_dp(kv.ie, igp, jgp, ilev)[vlev] + m_data.dt * delta_dpdn;
+              });
+        });
+		return tgt_layer_thickness;
+  }
+
+  template <int nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION
+      typename std::enable_if<(nz_rsplit == true),
+                              ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>>::type
+      compute_target_thickness(KernelVariables &kv) const {
+    return Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
+  }
+
+  template <int nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), int>::type
+  build_remap_array(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                                  remap_type::remap_dim> &remap_vals) {
+    return m_data.qsize + 3;
+  }
+
+  template <int nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION
+      typename std::enable_if<(nz_rsplit == false), int>::type
+      build_remap_array(
+          Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                        remap_type::remap_dim> &remap_vals) {
+    return m_data.qsize;
   }
 
   // Just implemented for CUDA until Kyungjoo's work is
@@ -571,35 +641,8 @@ template <typename remap_type> struct Remap_Functor {
     start_timer("Remap functor");
     KernelVariables kv(team);
 
-    int num_remap = 0;
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                  remap_type::remap_dim> remap_vals;
-
-    // Aliased depending on whether the thicknesses need to be computed on the
-    // fly
-    // If rsplit is 0, this is computed from src_layer_thickness and the
-    // differences in eta_dot_dpdn
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness;
-
-    // The states which need to be remapped
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
-    state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
-                   Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
-                   Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
-
-    // Compute m_ps_v separately, as it requires a parallel
-    // reduce
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
-          const int igp = loop_idx / NP;
-          const int jgp = loop_idx % NP;
-
-          compute_m_ps_v(
-              kv,
-              Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1, igp, jgp),
-              m_ps_v(kv.ie, igp, jgp));
-        });
-    kv.team_barrier();
+    compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+                 Homme::subview(m_ps_v, kv.ie));
 
     Kokkos::parallel_for(
         Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &idx) {
@@ -619,34 +662,25 @@ template <typename remap_type> struct Remap_Functor {
               });
         });
 
-    if (m_data.rsplit == 0) {
-      tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-      Kokkos::parallel_for(
-          Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
-            const int igp = loop_idx / NP;
-            const int jgp = loop_idx % NP;
-            Kokkos::parallel_for(
-                Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                [&](const int &level) {
-                  const int ilev = level / VECTOR_SIZE;
-                  const int vlev = level % VECTOR_SIZE;
-                  const int next_ilev = (level + 1) / VECTOR_SIZE;
-                  const int next_vlev = (level + 1) % VECTOR_SIZE;
-                  const Real delta_dpdn =
-                      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp,
-                                                next_ilev)[next_vlev] -
-                      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
-									// TODO: Understand why we're getting the negative of m_dp
-                  tgt_layer_thickness(igp, jgp, level) =
-                      -m_dp(kv.ie, igp, jgp, level) + m_data.dt * delta_dpdn;
-                });
-          });
-      // dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1)
-      // - elem(ie)%derived%eta_dot_dpdn(:,:,k))
-    } else {
-      tgt_layer_thickness =
-          Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
+    // Aliased depending on whether the thicknesses need to be computed on the
+    // fly
+    // If rsplit is 0, this is computed from src_layer_thickness and the
+    // differences in eta_dot_dpdn
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness;
 
+		tgt_layer_thickness = compute_target_thickness(kv);
+
+    // The states which need to be remapped
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
+    state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
+
+    int num_remap = 0;
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                  remap_type::remap_dim> remap_vals;
+
+    if (m_data.rsplit != 0) {
       // Must use for loop for CUDA
       for (int var = 0; var < state_remap.size(); ++var) {
         remap_vals[var] = state_remap[var];
