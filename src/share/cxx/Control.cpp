@@ -43,15 +43,50 @@ void Control::set_team_size() {
 }
 
 void Control::random_init(int num_elems_in, int seed) {
+  const int min_value = std::numeric_limits<Real>::epsilon();
+  const int max_value = 1.0 - min_value;
   hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid a coordinates; translates between pressure and velocity");
   hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b coordinates; translates between pressure and velocity");
   num_elems = num_elems_in;
+  struct check_coords {
+    check_coords(bool reversed) : m_reversed(reversed) {}
+
+    bool operator()(HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) const {
+      // Enforce the boundaries
+      coords(0) = 0.0;
+      coords(1) = 1.0;
+      // Put them in order
+      std::sort(coords.data(), coords.data() + coords.size(), *this);
+      // Make certain they're all distinct
+      for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
+        if ((m_reversed == false &&
+             coords(i) <= coords(i - 1) *
+                              (1.0 - std::numeric_limits<Real>::epsilon())) ||
+            (m_reversed == true &&
+             coords(i) >= coords(i - 1) *
+                              (1.0 - std::numeric_limits<Real>::epsilon()))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    bool operator()(Real lhs, Real rhs) const {
+      if (m_reversed) {
+        return lhs > rhs;
+      } else {
+        return lhs < rhs;
+      }
+    }
+
+    const bool m_reversed;
+  };
   std::mt19937_64 engine(seed);
-  std::uniform_real_distribution<Real> pdf(0.125, 1.0);
-  genRandArray(hybrid_a, engine, pdf);
-  genRandArray(hybrid_b, engine, pdf);
+  std::uniform_real_distribution<Real> pdf(min_value, max_value);
+  genRandArray(hybrid_a, engine, pdf, check_coords(false));
+  genRandArray(hybrid_b, engine, pdf, check_coords(true));
 }
 
 } // namespace Homme
