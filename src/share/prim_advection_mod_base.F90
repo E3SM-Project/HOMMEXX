@@ -2148,12 +2148,15 @@ OMP_SIMD
      elem(ie)%state%ps_v(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
           sum(elem(ie)%state%dp3d(:,:,:,np1),3)
      do k=1,nlev
+        ! target layer thickness
         dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
              ( hvcoord%hybi(k+1) - hvcoord%hybi(k))*elem(ie)%state%ps_v(:,:,np1)
         if (rsplit==0) then
+           ! source layer thickness
            dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -&
                 elem(ie)%derived%eta_dot_dpdn(:,:,k))
         else
+           ! source layer thickness
            dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
         endif
      enddo
@@ -2173,17 +2176,14 @@ OMP_SIMD
 
      if (rsplit>0) then
         !  REMAP u,v,T from levels in dp3d() to REF levels
-#undef REMAP_TE
-#ifdef REMAP_TE
-        ! remap u,v and cp*T + .5 u^2
-        ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-             elem(ie)%state%t(:,:,:,np1)*cp
-#else
         ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1)
-#endif
         ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star
 
+        ! ttmp    Field to be remapped
+        ! np      Number of points ??? Why is this a parameter
+        ! 1       Number of fields to remap
+        ! dp_star Source layer thickness
+        ! dp      Target layer thickness
         call t_startf('vertical_remap1_1')
         call remap1(ttmp,np,1,dp_star,dp)
         call t_stopf('vertical_remap1_1')
@@ -2199,13 +2199,6 @@ OMP_SIMD
 
         elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)/dp
         elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)/dp
-
-#ifdef REMAP_TE
-        ! back out T from TE
-        elem(ie)%state%t(:,:,:,np1) = &
-             ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cp
-#endif
      endif
 
      ! remap the gll tracers from lagrangian levels (dp_star)  to REF levels dp
