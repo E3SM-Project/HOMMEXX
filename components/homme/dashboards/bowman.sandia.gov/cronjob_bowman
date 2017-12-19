@@ -1,6 +1,6 @@
 #this cronjob is run on bowman-lsm1 of bowman
 30 23 * * 1-7 cd /home/projects/hommexx/nightlyCDash; rm results_cuda; rm *txt
 35 23 * * 1-7 cd /home/projects/hommexx/nightlyCDash; bash -c -l "source ellis_modules.sh >& modules_ellis.out; bash nightly_cron_script_trilinos_checkout.sh; bash build_kokkos.sh >& build_kokkos.out"; sbatch run_all_openmp.batch
-01 06 * * 1-7  cd /home/projects/hommexx/nightlyCDash; bash send_email_ctest_openmp.sh
+00 06 * * 1-7  cd /home/projects/hommexx/nightlyCDash; bash send_email_ctest_openmp.sh
 05 06 * * 1-7 chgrp wg-cmdv-hommexx -R /home/projects/hommexx/*
 07 06 * * 1-7 chmod ug+rwX -R /home/projects/hommexx/*
