@@ -76,6 +76,9 @@ public:
     KOKKOS_FORCEINLINE_FUNCTION
     raw_type& operator[] (int i) { return ptr[i]; }
 
+    KOKKOS_FORCEINLINE_FUNCTION
+    ptr_type get() { return ptr; }
+
     ptr_type ptr;
   };
 

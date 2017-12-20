@@ -286,7 +286,7 @@ void BoundaryExchange::registration_completed()
   m_elem_buf_size[etoi(ConnectionKind::CORNER)] = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
   HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)], MPI_DOUBLE,   &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)],   MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
   HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
   HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
 
@@ -366,24 +366,24 @@ void BoundaryExchange::registration_completed()
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,NUM_CONNECTIONS},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn) {
       const ConnectionInfo& info = connections(ie,iconn);
+
+      // Note: resist the temptation of creating these helpers outside the pfor. By creating them inside,
+      //       we ensure the arrays in ConnectionHelpers are on the correct memory space!
       ConnectionHelpers helpers;
 
-      const LidPos& local  = info.local;
+      const LidPos local  = info.local;
 
       auto send_buffer = all_send_buffers[info.sharing];
       auto recv_buffer = all_recv_buffers[info.sharing];
 
-      //TODO: what about making corner buffers with data type, e.g. for 2d, Pointer<Real[NP]>**[NUM_CORNERS]? Their type
-      //      would be the same as edges, and we would not need the if statements here (and later on)
-
       for (int ifield=0; ifield<l_num_2d_fields; ++ifield) {
-        l_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&send_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
-        l_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(&recv_buffer[buf_offset[info.sharing]],helpers.CONNECTION_SIZE[info.kind]);
+        l_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(send_buffer.get() + buf_offset[info.sharing],helpers.CONNECTION_SIZE[info.kind]);
+        l_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(recv_buffer.get() + buf_offset[info.sharing],helpers.CONNECTION_SIZE[info.kind]);
         buf_offset[info.sharing] += increment[info.kind];
       }
       for (int ifield=0; ifield<l_num_3d_fields; ++ifield) {
-        l_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&send_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
-        l_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(&recv_buffer[buf_offset[info.sharing]]),helpers.CONNECTION_SIZE[info.kind]);
+        l_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(send_buffer.get() + buf_offset[info.sharing]),helpers.CONNECTION_SIZE[info.kind]);
+        l_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(recv_buffer.get() + buf_offset[info.sharing]),helpers.CONNECTION_SIZE[info.kind]);
         buf_offset[info.sharing] += increment[info.kind]*NUM_LEV*VECTOR_SIZE;
       }
     });
@@ -402,7 +402,7 @@ void BoundaryExchange::registration_completed()
 
   // Create the pack/unpack policies and functor
   m_pack_policy   = Kokkos::TeamPolicy<ExecSpace,TagPack>   (m_num_elements, NUM_CONNECTIONS, 1);
-  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,TagUnpack> (m_num_elements, std::min(m_num_2d_fields,m_num_3d_fields), 1);
+  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,TagUnpack> (m_num_elements, std::max(1,std::min(m_num_2d_fields,m_num_3d_fields)), 1);
   m_pack_unpack_functor.reset(new PackUnpackFunctor(*this));
 
   // Prohibit further registration of fields, and allow exchange
@@ -420,7 +420,7 @@ void BoundaryExchange::exchange ()
 
   // Make sure the send requests are inactive (can't reuse buffers otherwise)
   // TODO: figure out why MPI_Waitall does not work. If the requests are all inactive, MPI_Waitall
-  //       should return immediately.
+  //       should return immediately. Instead, it appears to hang.
   int all_done = 0;
   while (all_done==0) {
     HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),&all_done,MPI_STATUSES_IGNORE));
