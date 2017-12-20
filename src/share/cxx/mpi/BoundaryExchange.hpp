@@ -110,6 +110,17 @@ private:
 
   void build_requests ();
 
+  const Comm&               m_comm;
+  const Connectivity        m_connectivity;
+
+  int                       m_num_elements;
+
+  int                       m_elem_buf_size[2];
+  MPI_Datatype              m_mpi_data_type[2];
+
+  std::vector<MPI_Request>  m_send_requests;
+  std::vector<MPI_Request>  m_recv_requests;
+
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
@@ -153,19 +164,6 @@ private:
   bool        m_registration_started;
   bool        m_registration_completed;
   bool        m_cleaned_up;
-
-  const Comm&         m_comm;
-
-  const Connectivity  m_connectivity;
-
-  int                 m_num_elements;
-
-  int                       m_elem_buf_size[2];
-
-  MPI_Datatype              m_mpi_data_type[2];
-
-  std::vector<MPI_Request>  m_send_requests;
-  std::vector<MPI_Request>  m_recv_requests;
 };
 
 // ============================ REGISTER METHODS ========================= //

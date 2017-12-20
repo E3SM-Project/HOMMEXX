@@ -42,9 +42,9 @@ void PackUnpackFunctor::reset (const BoundaryExchange& be)
 BoundaryExchange::BoundaryExchange()
  : m_comm          (Context::singleton().get_connectivity().get_comm())
  , m_connectivity  (Context::singleton().get_connectivity())
- , m_num_elements  (m_connectivity.get_num_elements())
- , m_pack_policy   (0,0,1)
- , m_unpack_policy (0,0,1)
+ , m_num_elements  (Context::singleton().get_connectivity().get_num_elements())
+ , m_pack_policy   (0,1,1)
+ , m_unpack_policy (0,1,1)
 {
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -72,9 +72,9 @@ BoundaryExchange::BoundaryExchange()
 BoundaryExchange::BoundaryExchange(const Connectivity& connectivity)
  : m_comm          (connectivity.get_comm())
  , m_connectivity  (connectivity)
- , m_num_elements  (m_connectivity.get_num_elements())
- , m_pack_policy   (0,0,1)
- , m_unpack_policy (0,0,1)
+ , m_num_elements  (connectivity.get_num_elements())
+ , m_pack_policy   (0,1,1)
+ , m_unpack_policy (0,1,1)
 {
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
