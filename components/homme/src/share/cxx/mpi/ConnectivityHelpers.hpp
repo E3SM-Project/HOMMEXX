@@ -96,7 +96,7 @@ enum class ConnectionSharing : int {
   LOCAL   = 0,
   SHARED  = 1,
   MISSING = 2,  // Used to detect missing connections
-  ANY     = 3   // Used, kind of connection is not needed
+  ANY     = 3   // Used when the kind of connection is not needed
 };
 
 enum class ConnectionName : int {
