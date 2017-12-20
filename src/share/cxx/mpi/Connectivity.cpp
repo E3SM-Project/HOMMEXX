@@ -26,7 +26,7 @@ void Connectivity::set_num_elements (const int num_elements)
 
   // Initialize all connections to MISSING
   // Note: we still include local element/position, since we need that even for
-  //       missinc connections!
+  //       missing connections!
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
       ConnectionInfo& info = h_connections(ie,iconn);
