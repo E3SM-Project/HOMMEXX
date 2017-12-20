@@ -6,27 +6,33 @@
 namespace Homme
 {
 
-// ============================ IMPLEMENTATION ========================== //
+// ============================ PackUnpackFunctor ========================== //
+
+// Helper functor for packing/unpacking
+struct PackUnpackFunctor {
+  PackUnpackFunctor () = default;
+
+  PackUnpackFunctor (const BoundaryExchange& be);
+
+  KOKKOS_FORCEINLINE_FUNCTION
+  void operator()(const BoundaryExchange::TagPack&, const TeamMember& team) const;
+
+  KOKKOS_FORCEINLINE_FUNCTION
+  void operator()(const BoundaryExchange::TagUnpack&, const TeamMember& team) const;
+
+  int       m_num_2d_fields;
+  int       m_num_3d_fields;
+
+  Connectivity m_connectivity;
+  ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>            m_send_2d_buffers;
+  ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]> m_send_3d_buffers;
+  ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>            m_recv_2d_buffers;
+  ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]> m_recv_3d_buffers;
+  ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                        m_2d_fields;
+  ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>             m_3d_fields;
+};
 
 PackUnpackFunctor::PackUnpackFunctor (const BoundaryExchange& be)
-{
-  reset(be);
-}
-
-void PackUnpackFunctor::reset()
-{
-  m_num_2d_fields   = 0;
-  m_num_3d_fields   = 0;
-  m_connectivity    = Connectivity();
-  m_send_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>(0,0);
-  m_send_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>(0,0);
-  m_recv_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>(0,0);
-  m_recv_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>(0,0);
-  m_2d_fields       = ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>(0,0);
-  m_3d_fields       = ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>(0,0);
-}
-
-void PackUnpackFunctor::reset (const BoundaryExchange& be)
 {
   m_num_2d_fields   = be.m_num_2d_fields;
   m_num_3d_fields   = be.m_num_3d_fields;
@@ -38,6 +44,88 @@ void PackUnpackFunctor::reset (const BoundaryExchange& be)
   m_2d_fields       = be.m_2d_fields;
   m_3d_fields       = be.m_3d_fields;
 }
+
+void PackUnpackFunctor::operator() (const BoundaryExchange::TagPack&, const TeamMember& team) const
+{
+  ConnectionHelpers helpers;
+
+  const int ie = team.league_rank();
+
+  // First, pack 2d fields...
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_2d_fields*NUM_CONNECTIONS),
+                       KOKKOS_LAMBDA(const int idx){
+    const int ifield = idx / NUM_CONNECTIONS;
+    const int iconn  = idx % NUM_CONNECTIONS;
+
+    const ConnectionInfo info = m_connectivity.get_connection<ExecMemSpace>(ie,iconn);
+    const LidPos field_lidpos  = info.local;
+    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+    // for local connections we need to manually copy on the remote element lid. We can do it here
+    const LidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+
+    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
+    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+      m_send_2d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k) = m_2d_fields(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp);
+    }
+  });
+  // ...then pack 3d fields.
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+                       KOKKOS_LAMBDA(const int idx){
+    const int ilev   =  idx % NUM_LEV;
+    const int iconn  = (idx / NUM_LEV) % NUM_CONNECTIONS;
+    const int ifield = (idx / NUM_LEV) / NUM_CONNECTIONS;
+
+    const ConnectionInfo info = m_connectivity.get_connection<ExecMemSpace>(ie,iconn);
+    const LidPos field_lidpos  = info.local;
+    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+    // for local connections we need to manually copy on the remote element lid. We can do it here
+    const LidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+
+    // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
+    const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+    for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+      m_send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = m_3d_fields(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+    }
+  });
+}
+
+void PackUnpackFunctor::operator() (const BoundaryExchange::TagUnpack&, const TeamMember& team) const
+{
+  ConnectionHelpers helpers;
+
+  const int ie = team.league_rank();
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_2d_fields),
+                       KOKKOS_LAMBDA(const int ifield){
+    for (int k=0; k<NP; ++k) {
+      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += m_recv_2d_buffers(ie,ifield,iedge)[k];
+      }
+    }
+    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+      if (m_recv_2d_buffers(ie,ifield,icorner).size() > 0)
+        m_2d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += m_recv_2d_buffers(ie,ifield,icorner)[0];
+    }
+  });
+  Kokkos::parallel_for(Kokkos::TeamThreadRange(team,m_num_3d_fields*NUM_LEV),
+                       KOKKOS_LAMBDA(const int idx){
+    const int ifield = idx / NUM_LEV;
+    const int ilev   = idx % NUM_LEV;
+    for (int k=0; k<NP; ++k) {
+      for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += m_recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+      }
+    }
+    for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+      if (m_recv_3d_buffers(ie,ifield,icorner).size() > 0)
+        m_3d_fields(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += m_recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+    }
+  });
+}
+
+// ======================== BoundaryExchange ======================== //
 
 BoundaryExchange::BoundaryExchange()
  : m_comm          (Context::singleton().get_connectivity().get_comm())
@@ -178,9 +266,9 @@ void BoundaryExchange::clean_up()
   m_recv_requests.clear();
 
   // Invalidate the pack/unpack policies and functor
-  m_pack_policy   = Kokkos::TeamPolicy<ExecSpace,PackUnpackFunctor::TagPack>   (-1,-1,-1);
-  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,PackUnpackFunctor::TagUnpack> (-1,-1,-1);
-  m_pack_unpack_functor.reset(*this);
+  m_pack_policy   = Kokkos::TeamPolicy<ExecSpace,TagPack>   (0,1,1);
+  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,TagUnpack> (0,1,1);
+  m_pack_unpack_functor.reset();
 
   // Now we're all cleaned
   m_cleaned_up = true;
@@ -313,9 +401,9 @@ void BoundaryExchange::registration_completed()
   build_requests ();
 
   // Create the pack/unpack policies and functor
-  m_pack_policy   = Kokkos::TeamPolicy<ExecSpace,PackUnpackFunctor::TagPack>   (m_num_elements, NUM_CONNECTIONS, 1);
-  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,PackUnpackFunctor::TagUnpack> (m_num_elements, std::min(m_num_2d_fields,m_num_3d_fields), 1);
-  m_pack_unpack_functor.reset(*this);
+  m_pack_policy   = Kokkos::TeamPolicy<ExecSpace,TagPack>   (m_num_elements, NUM_CONNECTIONS, 1);
+  m_unpack_policy = Kokkos::TeamPolicy<ExecSpace,TagUnpack> (m_num_elements, std::min(m_num_2d_fields,m_num_3d_fields), 1);
+  m_pack_unpack_functor.reset(new PackUnpackFunctor(*this));
 
   // Prohibit further registration of fields, and allow exchange
   m_registration_started   = false;
@@ -340,7 +428,7 @@ void BoundaryExchange::exchange ()
   //HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE));
 
   // ---- Pack ---- //
-  Kokkos::parallel_for("Pack", m_pack_policy, m_pack_unpack_functor);
+  Kokkos::parallel_for("Pack", m_pack_policy, *m_pack_unpack_functor);
 
   // ---- Send ---- //
   Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer); // Deep copy m_send_buffer into m_mpi_send_buffer (no op if MPI is on device)
@@ -351,7 +439,7 @@ void BoundaryExchange::exchange ()
   Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer); // Deep copy m_mpi_recv_buffer into m_recv_buffer (no op if MPI is on device)
 
   // ---- Unpack ---- //
-  Kokkos::parallel_for("Unpack", m_unpack_policy, m_pack_unpack_functor);
+  Kokkos::parallel_for("Unpack", m_unpack_policy, *m_pack_unpack_functor);
 }
 
 void BoundaryExchange::build_requests()
