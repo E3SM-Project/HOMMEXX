@@ -52,8 +52,6 @@
 
 /* Vertical OpenMP (within elements) */
 #cmakedefine COLUMN_OPENMP
-#cmakedefine KOKKOS_COLUMN_THREAD_ONLY
-#cmakedefine KOKKOS_PARALLELIZE_ON_ELEMENTS
 
 /* Nested OpenMP (both horizontal and vertical) */
 #ifndef USE_KOKKOS_KERNELS

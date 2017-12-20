@@ -366,7 +366,7 @@ divergence_sphere_update(const KernelVariables &kv,
                          const ExecViewUnmanaged<const Real        [NP][NP]>          metdet,
                          const ExecViewUnmanaged<const Real        [NP][NP]>          dvv,
                          const ExecViewUnmanaged<const Scalar   [2][NP][NP][NUM_LEV]> v,
-                         const ExecViewUnmanaged<      Scalar*  [2][NP][NP][NUM_LEV]> gv,
+                         const ExecViewUnmanaged<      Scalar   [2][NP][NP][NUM_LEV]> gv,
                          const ExecViewUnmanaged<      Scalar      [NP][NP][NUM_LEV]> div_v)
 {
   constexpr int contra_iters = NP * NP;
@@ -375,10 +375,10 @@ divergence_sphere_update(const KernelVariables &kv,
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      gv(kv.ie, 0, igp, jgp, ilev) = (dinv(0,0,igp,jgp)*v(0, igp, jgp, ilev) +
-                                      dinv(1,0,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
-      gv(kv.ie, 1, igp, jgp, ilev) = (dinv(0,1,igp,jgp)*v(0, igp, jgp, ilev) +
-                                      dinv(1,1,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
+      gv(0, igp, jgp, ilev) = (dinv(0,0,igp,jgp)*v(0, igp, jgp, ilev) +
+                               dinv(1,0,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
+      gv(1, igp, jgp, ilev) = (dinv(0,1,igp,jgp)*v(0, igp, jgp, ilev) +
+                               dinv(1,1,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
     });
   });
   kv.team_barrier();
@@ -391,8 +391,8 @@ divergence_sphere_update(const KernelVariables &kv,
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
       Scalar dudx, dvdy;
       for (int kgp = 0; kgp < NP; ++kgp) {
-        dudx += dvv(jgp, kgp) * gv(kv.ie, 0, igp, kgp, ilev);
-        dvdy += dvv(igp, kgp) * gv(kv.ie, 1, kgp, jgp, ilev);
+        dudx += dvv(jgp, kgp) * gv(0, igp, kgp, ilev);
+        dvdy += dvv(igp, kgp) * gv(1, kgp, jgp, ilev);
       }
 
       div_v(igp,jgp,ilev) *= beta;
