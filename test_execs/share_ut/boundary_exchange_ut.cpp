@@ -135,13 +135,13 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int igp=0; igp<NP; ++igp) {
           for (int jgp=0; jgp<NP; ++jgp) {
-            if(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx(ie,itl,igp,jgp)) >= test_tolerance)
+            if(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx_host(ie,itl,igp,jgp)) >= test_tolerance)
             {
               std::cout << "rank,ie,itl,igp,jgp: " << rank << ", " << ie << ", " << itl << ", " << igp << ", " << jgp << "\n";
               std::cout << "f90: " << field_2d_f90(ie,itl,igp,jgp) << "\n";
-              std::cout << "cxx: " << field_2d_cxx(ie,itl,igp,jgp) << "\n";
+              std::cout << "cxx: " << field_2d_cxx_host(ie,itl,igp,jgp) << "\n";
             }
-            REQUIRE(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx(ie,itl,igp,jgp)) < test_tolerance);
+            REQUIRE(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx_host(ie,itl,igp,jgp)) < test_tolerance);
     }}}}
 
     for (int ie=0; ie<num_elements; ++ie) {
@@ -151,13 +151,13 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
           const int ivec = level % VECTOR_SIZE;
           for (int igp=0; igp<NP; ++igp) {
             for (int jgp=0; jgp<NP; ++jgp) {
-              if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance)
+              if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance)
               {
                 std::cout << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
                 std::cout << "f90: " << field_3d_f90(ie,itl,level,igp,jgp) << "\n";
-                std::cout << "cxx: " << field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec] << "\n";
+                std::cout << "cxx: " << field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec] << "\n";
               }
-              REQUIRE(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx(ie,itl,igp,jgp,ilev)[ivec]) < test_tolerance);
+              REQUIRE(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) < test_tolerance);
     }}}}}
 
     for (int ie=0; ie<num_elements; ++ie) {
@@ -168,13 +168,13 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
             const int ivec = level % VECTOR_SIZE;
             for (int igp=0; igp<NP; ++igp) {
               for (int jgp=0; jgp<NP; ++jgp) {
-                if(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec]) >= test_tolerance)
+                if(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) >= test_tolerance)
                 {
                   std::cout << "rank,ie,itl,idim,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << idim << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
                   std::cout << "f90: " << field_4d_f90(ie,itl,level,idim,igp,jgp) << "\n";
-                  std::cout << "cxx: " << field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec] << "\n";
+                  std::cout << "cxx: " << field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec] << "\n";
                 }
-                REQUIRE(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx(ie,itl,idim,igp,jgp,ilev)[ivec]) < test_tolerance);
+                REQUIRE(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) < test_tolerance);
     }}}}}}
   }
 
