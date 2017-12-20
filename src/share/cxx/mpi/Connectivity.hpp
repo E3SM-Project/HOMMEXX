@@ -66,20 +66,36 @@ public:
   //@name Getters
   //@{
 
+  // Get the view with all connections
   template<typename MemSpace>
   KOKKOS_INLINE_FUNCTION
-  ViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS],MemSpace> get_connections () const;
+  typename std::enable_if<std::is_same<MemSpace,HostMemSpace>::value,
+                 HostViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS]>>::type
+  get_connections () const { return h_connections; }
 
   template<typename MemSpace>
   KOKKOS_INLINE_FUNCTION
-  const ConnectionInfo& get_connection (const int ie, const int iconn) const;
+  typename std::enable_if<std::is_same<MemSpace,ExecMemSpace>::value && !std::is_same<ExecMemSpace,HostMemSpace>::value,
+                 ExecViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS]>>::type
+  get_connections () const { return m_connections; }
+
+  // Get a particular connection
+  template<typename MemSpace>
+  KOKKOS_INLINE_FUNCTION
+  const ConnectionInfo& get_connection (const int ie, const int iconn) const { return get_connections<MemSpace>()(ie,iconn); }
 
   // Get number of connections with given kind and sharing
   template<typename MemSpace>
   KOKKOS_INLINE_FUNCTION
-  int get_num_connections (const ConnectionSharing sharing, const ConnectionKind kind) const;
+  typename std::enable_if<std::is_same<MemSpace,HostMemSpace>::value,int>::type
+  get_num_connections (const ConnectionSharing sharing, const ConnectionKind kind) const { return h_num_connections(etoi(sharing), etoi(kind)); }
 
-  // Shortcuts for common sharing/kind pairs
+  template<typename MemSpace>
+  KOKKOS_INLINE_FUNCTION
+  typename std::enable_if<std::is_same<MemSpace,ExecMemSpace>::value && !std::is_same<ExecMemSpace,HostMemSpace>::value,int>::type
+  get_num_connections (const ConnectionSharing sharing, const ConnectionKind kind) const { return m_num_connections(etoi(sharing), etoi(kind)); }
+
+  // Shortcuts of the previous getter for common sharing/kind pairs
   template<typename MemSpace>
   KOKKOS_INLINE_FUNCTION
   int get_num_connections        () const { return get_num_connections<MemSpace>(ConnectionSharing::ANY,   ConnectionKind::ANY); }
@@ -112,27 +128,6 @@ private:
   ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>             m_connections;
   ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>::HostMirror h_connections;
 };
-
-template<>
-KOKKOS_INLINE_FUNCTION
-ViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS],ExecMemSpace> Connectivity::get_connections<ExecMemSpace> () const { return m_connections; }
-template<>
-KOKKOS_INLINE_FUNCTION
-ViewUnmanaged<const ConnectionInfo*[NUM_CONNECTIONS],HostMemSpace> Connectivity::get_connections<HostMemSpace> () const { return h_connections; }
-
-template<>
-KOKKOS_INLINE_FUNCTION
-const ConnectionInfo& Connectivity::get_connection<ExecMemSpace> (const int ie, const int iconn) const { return m_connections(ie,iconn); }
-template<>
-KOKKOS_INLINE_FUNCTION
-const ConnectionInfo& Connectivity::get_connection<HostMemSpace> (const int ie, const int iconn) const { return h_connections(ie,iconn); }
-
-template<>
-KOKKOS_INLINE_FUNCTION
-int Connectivity::get_num_connections<ExecMemSpace> (const ConnectionSharing sharing, const ConnectionKind kind) const { return m_num_connections(etoi(sharing), etoi(kind)); }
-template<>
-KOKKOS_INLINE_FUNCTION
-int Connectivity::get_num_connections<HostMemSpace> (const ConnectionSharing sharing, const ConnectionKind kind) const { return h_num_connections(etoi(sharing), etoi(kind)); }
 
 } // namespace Homme
 
