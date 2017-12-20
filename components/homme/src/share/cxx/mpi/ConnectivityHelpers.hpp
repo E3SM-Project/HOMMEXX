@@ -151,6 +151,8 @@ using ArrayGP = Kokkos::Array<GaussPoint,NP>;
 // and more.
 struct ConnectionHelpers {
 
+  ConnectionHelpers& operator= (const ConnectionHelpers& src) { return *this; }
+
   // Unpacking edges in the following order: S, N, W, E. For corners, order doesn't really matter
   const int UNPACK_EDGES_ORDER  [NUM_EDGES]   = { etoi(ConnectionName::SOUTH), etoi(ConnectionName::NORTH), etoi(ConnectionName::WEST),  etoi(ConnectionName::EAST) };
   const int UNPACK_CORNERS_ORDER[NUM_CORNERS] = { etoi(ConnectionName::SWEST), etoi(ConnectionName::SEAST), etoi(ConnectionName::NWEST), etoi(ConnectionName::NEAST)};
