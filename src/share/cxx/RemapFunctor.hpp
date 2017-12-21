@@ -641,6 +641,13 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
                            [&](const int &ilevel) {
         const int ilev = ilevel / VECTOR_SIZE;
         const int vec_lev = ilevel % VECTOR_SIZE;
+        if (kv.ie == 0 && igp == 0 && jgp == 0) {
+          DEBUG_PRINT(
+              "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid a: % .17e, "
+              "hybrid b: % .17e\n",
+              ilevel, ilev, vec_lev, m_data.ps0, m_ps_v(kv.ie, igp, jgp),
+              m_data.hybrid_a(ilevel), m_data.hybrid_b(ilevel));
+        }
         tgt_layer_thickness(igp, jgp, ilev)[vec_lev] =
             (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
                 m_data.ps0 +
@@ -652,19 +659,99 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     return tgt_layer_thickness;
   }
 
+  Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
+  remap_states_array() const {
+    // The states which need to be remapped
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
+    state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+                   Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
+    return state_remap
+  }
+
   template <int nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), int>::type
-  build_remap_array(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                                  remap_type::remap_dim> &remap_vals) {
-    return m_data.qsize + 3;
+  build_remap_array(
+      KernelVariables &kv,
+      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                    remap_type::remap_dim> &remap_vals) const {
+    const int num_states =
+        build_remap_array_states(kv, remap_vals, src_layer_thickness);
+    const int num_tracers =
+        build_remap_array_tracers(kv, num_states, remap_vals);
+    return num_tracers + num_states;
   }
 
   template <int nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
                                                  int>::type
-  build_remap_array(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                                  remap_type::remap_dim> &remap_vals) {
+  build_remap_array(
+      KernelVariables &kv,
+      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                    remap_type::remap_dim> &remap_vals) const {
+    return build_remap_array_tracers(kv, 0, remap_vals);
+  }
+
+  KOKKOS_INLINE_FUNCTION int build_remap_array_states(
+      KernelVariables &kv,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                    remap_type::remap_dim> &remap_vals,
+      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness) const {
+
+    auto state_remap = remap_states_array();
+
+    // This must be done for every thread
+    for (int state_idx = 0; state_idx < state_remap.size(); ++state_idx) {
+      remap_vals[state_idx] = state_remap[state_idx];
+    }
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
+                                                 state_remap.size() * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = (loop_idx / NP) / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                           [=](const int ilev) {
+        remap_vals[var](igp, jgp, ilev) *= src_layer_thickness(igp, jgp, ilev);
+      });
+    });
+    kv.team_barrier();
+    return state_remap.size();
+  }
+
+  KOKKOS_INLINE_FUNCTION int build_remap_array_tracers(
+      KernelVariables &kv, const int prev_filled,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                    remap_type::remap_dim> &remap_vals) {
+    for (int q = 0; q < m_data.qsize; ++q) {
+      remap_vals[prev_filled + q] =
+          Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
+    }
     return m_data.qsize;
+  }
+
+  template <int nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), void>::type
+  rescale_states(KernelVariables &kv) {}
+
+  template <int nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
+                                                 void>::type
+  rescale_states(KernelVariables &kv) {
+    auto state_remap = remap_states_array();
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
+                                                 state_remap.size() * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = (loop_idx / NP) / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                           [&](const int &ilev) {
+        state_remap[var](igp, jgp, ilev) /= tgt_layer_thickness(igp, jgp, ilev);
+      });
+    });
   }
 
   // Just implemented for CUDA until Kyungjoo's work is
@@ -683,66 +770,20 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
         compute_source_thickness(kv, tgt_layer_thickness);
 
-    // The states which need to be remapped
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
-    state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
-                   Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
-                   Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
-
     int num_remap = 0;
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;
 
-    if (m_data.rsplit != 0) {
-      // Must use for loop for CUDA
-      for (int var = 0; var < state_remap.size(); ++var) {
-        remap_vals[var] = state_remap[var];
-      }
-
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(
-                               kv.team, state_remap.size() * NP * NP * NUM_LEV),
-                           [&](const int &loop_idx) {
-        const int var = ((loop_idx / NUM_LEV) / NP) / NP;
-        const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-        const int jgp = (loop_idx / NUM_LEV) % NP;
-        const int ilev = loop_idx % NUM_LEV;
-        remap_vals[var](igp, jgp, ilev) *= src_layer_thickness(igp, jgp, ilev);
-      });
-      kv.team_barrier();
-    } // rsplit == 0
-
-    if (m_data.qsize > 0) {
-      // remap_Q_ppm Qdp
-      // Must use for loop for CUDA
-      for (int i = 0; i < m_data.qsize; ++i) {
-        // Need to verify this is the right tracer
-        // timelevel
-        remap_vals[num_remap + i] =
-            Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, i);
-      }
-      num_remap += m_data.qsize;
-      kv.team_barrier();
-    }
+    const int num_remap =
+        build_remap_array(kv, src_layer_thickness, remap_vals);
 
     if (num_remap > 0) {
       m_remap.remap(kv, num_remap, src_layer_thickness, tgt_layer_thickness,
                     remap_vals);
       kv.team_barrier();
     }
-    if (m_data.rsplit != 0) {
-      Kokkos::parallel_for(
-          Kokkos::TeamThreadRange(kv.team, state_remap.size() * NP * NP),
-          [&](const int &loop_idx) {
-            const int var = (loop_idx / NP) / NP;
-            const int igp = (loop_idx / NP) % NP;
-            const int jgp = loop_idx % NP;
-            Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-                                 [&](const int &ilev) {
-              state_remap[var](igp, jgp, ilev) /=
-                  tgt_layer_thickness(kv.ie, igp, jgp, ilev);
-            });
-          });
-    }
+
+    rescale_states(kv);
 
     stop_timer("Remap functor");
   }
