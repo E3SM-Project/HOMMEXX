@@ -17,7 +17,7 @@ public:
   ExecViewManaged<Real * [NP][NP]> m_spheremp;
   ExecViewManaged<Real * [NP][NP]> m_rspheremp;
   ExecViewManaged<Real * [NP][NP]> m_metdet;
-  // Prescrived surface geopotential height at eta = 1
+  // Prescribed surface geopotential height at eta = 1
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
   // Differential geometry tensors
@@ -69,6 +69,7 @@ public:
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
     ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
+    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens_biharmonic;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
 
