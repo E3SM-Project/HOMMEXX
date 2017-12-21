@@ -77,10 +77,11 @@ public:
     ptr_type ptr;
   };
 
-private:
-
   void pack_and_send ();
   void recv_and_unpack ();
+
+private:
+
   void build_requests ();
 
   const Comm&               m_comm;
