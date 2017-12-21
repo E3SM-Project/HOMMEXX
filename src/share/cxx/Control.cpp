@@ -50,43 +50,42 @@ void Control::random_init(int num_elems_in, int seed) {
   hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b coordinates; translates between pressure and velocity");
   num_elems = num_elems_in;
-  struct check_coords {
-    check_coords(bool reversed) : m_reversed(reversed) {}
 
-    bool operator()(HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) const {
-      // Enforce the boundaries
-      coords(0) = 0.0;
-      coords(1) = 1.0;
-      // Put them in order
-      std::sort(coords.data(), coords.data() + coords.size(), *this);
-      // Make certain they're all distinct
-      for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
-        if ((m_reversed == false &&
-             coords(i) <= coords(i - 1) *
-                              (1.0 - std::numeric_limits<Real>::epsilon())) ||
-            (m_reversed == true &&
-             coords(i) >= coords(i - 1) *
-                              (1.0 - std::numeric_limits<Real>::epsilon()))) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    bool operator()(Real lhs, Real rhs) const {
-      if (m_reversed) {
-        return lhs > rhs;
-      } else {
-        return lhs < rhs;
-      }
-    }
-
-    const bool m_reversed;
-  };
   std::mt19937_64 engine(seed);
-  std::uniform_real_distribution<Real> pdf(min_value, max_value);
-  genRandArray(hybrid_a, engine, pdf, check_coords(false));
-  genRandArray(hybrid_b, engine, pdf, check_coords(true));
+  ps0 = 1.0;
+
+  // hybrid_a can technically range from 0 to 1 like hybrid_b,
+  // but doing so makes enforcing the monotonicity of p = a + b difficult
+  // So only go to 0.25
+  genRandArray(hybrid_a, engine, std::uniform_real_distribution<Real>(
+                                     min_value, max_value / 4.0));
+
+  // p = a + b must be monotonically increasing
+  const auto check_coords = [=](
+      HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) {
+    // Enforce the boundaries
+    coords(0) = 0.0;
+    coords(1) = 1.0;
+    // Put them in order
+    std::sort(coords.data(), coords.data() + coords.size());
+    Real p_prev = hybrid_a(0) + coords(0);
+    // Make certain they're all distinct
+    for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
+      if (coords(i) <=
+          coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
+        return false;
+      }
+      Real p_cur = coords(i) + hybrid_a(i);
+      if (p_cur <= p_prev) {
+        return false;
+      }
+      p_prev = p_cur;
+    }
+    return true;
+  };
+  genRandArray(hybrid_b, engine,
+               std::uniform_real_distribution<Real>(min_value, max_value),
+               check_coords);
 }
 
 } // namespace Homme
