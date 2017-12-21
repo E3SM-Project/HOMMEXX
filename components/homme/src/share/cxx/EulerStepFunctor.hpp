@@ -14,15 +14,15 @@ struct EulerStepFunctor
   Control           m_data;
   const Elements    m_elements;
   const Derivative  m_deriv;
+  const int m_rhs_viss, m_limiter_option;
 
-  struct TagVstar {};
-  struct TagDivUpdate {};
   struct TagFused {};
 
-  EulerStepFunctor (const Control& data)
+  EulerStepFunctor (const Control& data, const int rhs_viss, const int limiter_option)
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
+   , m_rhs_viss(rhs_viss), m_limiter_option(limiter_option)
   {}
 
   KOKKOS_INLINE_FUNCTION
@@ -31,29 +31,21 @@ struct EulerStepFunctor
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TagVstar&, const TeamMember& team) const {
-    KernelVariables kv(team, m_data.qsize);
-    compute_vstar_qdp(kv);
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const TagDivUpdate&, const TeamMember& team) const {
-    KernelVariables kv(team, m_data.qsize);
-    compute_qtens(kv);
-  }
-
-  KOKKOS_INLINE_FUNCTION
   void operator() (const TagFused&, const TeamMember& team) const {
     start_timer("esf compute");
     KernelVariables kv(team, m_data.qsize);
     compute_vstar_qdp(kv);
     compute_qtens(kv);
+    if (m_rhs_viss != 0)
+      add_hyperviscosity(kv);
+    limit(kv);
+    apply_mass_matrix(kv);
     stop_timer("esf compute");
   }
 
-  static void run() {
+  static void run(const int rhs_viss, const int limiter_option) {
     Control& data = Context::singleton().get_control();
-    EulerStepFunctor func(data);
+    EulerStepFunctor func(data, rhs_viss, limiter_option);
 
     profiling_resume();
     start_timer("esf run");
@@ -114,6 +106,17 @@ private:
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
   }
 
+  KOKKOS_INLINE_FUNCTION
+  void add_hyperviscosity (const KernelVariables& kv) const {
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void limit (const KernelVariables& kv) const {
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void apply_mass_matrix (const KernelVariables& kv) const {
+  }
 };
 
 } // namespace Homme
