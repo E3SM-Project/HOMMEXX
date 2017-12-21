@@ -20,15 +20,10 @@ namespace Homme
 // Forward declarations
 class BoundaryExchange;
 
-// Helper functor for packing/unpacking (pimpl idiom, defined in cpp file)
-struct PackUnpackFunctor;
-
 // The main class, handling the pack/exchange/unpack process
 class BoundaryExchange
 {
 public:
-  struct TagPack   {};
-  struct TagUnpack {};
 
   BoundaryExchange();
   BoundaryExchange(const Connectivity& connectivity);
@@ -82,10 +77,10 @@ public:
     ptr_type ptr;
   };
 
-  friend struct PackUnpackFunctor;
-
 private:
 
+  void pack_and_send ();
+  void recv_and_unpack ();
   void build_requests ();
 
   const Comm&               m_comm;
@@ -127,11 +122,6 @@ private:
 
   ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>    m_send_3d_buffers;
   ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>    m_recv_3d_buffers;
-
-  // Policies and functor used for pack/unpack phases
-  Kokkos::TeamPolicy<ExecSpace,TagPack>       m_pack_policy;
-  Kokkos::TeamPolicy<ExecSpace,TagUnpack>     m_unpack_policy;
-  std::shared_ptr<PackUnpackFunctor>          m_pack_unpack_functor;
 
   // The number of registered fields
   int         m_num_2d_fields;
