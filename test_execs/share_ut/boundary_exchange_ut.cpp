@@ -30,7 +30,6 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   //std::random_device rd;
   std::random_device rd;
   using rngAlg = std::mt19937_64;
-  //rngAlg engine(1984);
   rngAlg engine(rd());
   std::uniform_real_distribution<Real> dreal(-1.0, 1.0);
 
@@ -72,14 +71,14 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   ExecViewManaged<Scalar*[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror field_3d_cxx_host;
   field_3d_cxx_host = Kokkos::create_mirror_view(field_3d_cxx);
 
-  HostViewManaged<Real*[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][DIM][NP][NP]> field_4d_f90 ("", num_elements);
+  HostViewManaged<Real*[NUM_TIME_LEVELS][DIM][NUM_PHYSICAL_LEV][NP][NP]> field_4d_f90 ("", num_elements);
   ExecViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]> field_4d_cxx ("", num_elements);
   ExecViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]>::HostMirror field_4d_cxx_host;
   field_4d_cxx_host = Kokkos::create_mirror_view(field_4d_cxx);
 
   // Create boundary exchange
   BoundaryExchange be(connectivity);
-  be.set_num_fields(1,3);
+  be.set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);
   be.register_field(field_2d_cxx,1,field_2d_idim);
   be.register_field(field_3d_cxx,1,field_3d_idim);
   be.register_field(field_4d_cxx,  field_4d_outer_idim,DIM,0);
@@ -118,25 +117,23 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
             const int ivec = level % VECTOR_SIZE;
             for (int igp=0; igp<NP; ++igp) {
               for (int jgp=0; jgp<NP; ++jgp) {
-                field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec] = field_4d_f90(ie,itl,level,idim,igp,jgp);
+                field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec] = field_4d_f90(ie,itl,idim,level,igp,jgp);
     }}}}}}
     Kokkos::deep_copy(field_4d_cxx, field_4d_cxx_host);
 
     // Perform boundary exchange
+    boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
     be.exchange();
     Kokkos::deep_copy(field_2d_cxx_host, field_2d_cxx);
     Kokkos::deep_copy(field_3d_cxx_host, field_3d_cxx);
     Kokkos::deep_copy(field_4d_cxx_host, field_4d_cxx);
-
-    boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
 
     // Compare answers
     for (int ie=0; ie<num_elements; ++ie) {
       for (int itl=0; itl<NUM_TIME_LEVELS; ++itl) {
         for (int igp=0; igp<NP; ++igp) {
           for (int jgp=0; jgp<NP; ++jgp) {
-            if(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx_host(ie,itl,igp,jgp)) >= test_tolerance)
-            {
+            if(compare_answers(field_2d_f90(ie,itl,igp,jgp),field_2d_cxx_host(ie,itl,igp,jgp)) >= test_tolerance) {
               std::cout << "rank,ie,itl,igp,jgp: " << rank << ", " << ie << ", " << itl << ", " << igp << ", " << jgp << "\n";
               std::cout << "f90: " << field_2d_f90(ie,itl,igp,jgp) << "\n";
               std::cout << "cxx: " << field_2d_cxx_host(ie,itl,igp,jgp) << "\n";
@@ -151,11 +148,10 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
           const int ivec = level % VECTOR_SIZE;
           for (int igp=0; igp<NP; ++igp) {
             for (int jgp=0; jgp<NP; ++jgp) {
-              if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance)
-              {
-                std::cout << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
-                std::cout << "f90: " << field_3d_f90(ie,itl,level,igp,jgp) << "\n";
-                std::cout << "cxx: " << field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec] << "\n";
+              if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance) {
+                std::cout << std::setprecision(17) << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
+                std::cout << std::setprecision(17) << "f90: " << field_3d_f90(ie,itl,level,igp,jgp) << "\n";
+                std::cout << std::setprecision(17) << "cxx: " << field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec] << "\n";
               }
               REQUIRE(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) < test_tolerance);
     }}}}}
@@ -168,13 +164,12 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
             const int ivec = level % VECTOR_SIZE;
             for (int igp=0; igp<NP; ++igp) {
               for (int jgp=0; jgp<NP; ++jgp) {
-                if(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) >= test_tolerance)
-                {
-                  std::cout << "rank,ie,itl,idim,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << idim << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
-                  std::cout << "f90: " << field_4d_f90(ie,itl,level,idim,igp,jgp) << "\n";
-                  std::cout << "cxx: " << field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec] << "\n";
+                if(compare_answers(field_4d_f90(ie,itl,idim,level,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) >= test_tolerance) {
+                  std::cout << std::setprecision(17) << "rank,ie,itl,idim,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << idim << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
+                  std::cout << std::setprecision(17) << "f90: " << field_4d_f90(ie,itl,idim,level,igp,jgp) << "\n";
+                  std::cout << std::setprecision(17) << "cxx: " << field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec] << "\n";
                 }
-                REQUIRE(compare_answers(field_4d_f90(ie,itl,level,idim,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) < test_tolerance);
+                REQUIRE(compare_answers(field_4d_f90(ie,itl,idim,level,igp,jgp),field_4d_cxx_host(ie,itl,idim,igp,jgp,ilev)[ivec]) < test_tolerance);
     }}}}}}
   }
 
