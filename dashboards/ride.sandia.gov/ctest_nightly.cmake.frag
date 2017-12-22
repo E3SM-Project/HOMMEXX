@@ -227,7 +227,7 @@ if (BUILD_HOMMEXX_CUDA)
   
   set (CONFIGURE_OPTIONS
     "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
-    "-DUSE_NUM_PROCS=16"
+    "-DUSE_NUM_PROCS=1"
     "-DUSE_TRILINOS=FALSE"
     "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline_P100/build" 
     "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
@@ -303,6 +303,7 @@ if (BUILD_HOMMEXX_CUDA)
   set (CTEST_TEST_TIMEOUT 1200)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
+    EXCLUDE "r0"
     RETURN_VALUE HAD_ERROR)
 
   if (CTEST_DO_SUBMIT)

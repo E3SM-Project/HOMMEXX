@@ -15,4 +15,4 @@ SET(NC_OUTPUT_FILES
   jw_baroclinic2.nc)
 
 # For GPU testbeds, for now.
-SET(TIMEOUT 60)
+SET(TIMEOUT 240)
