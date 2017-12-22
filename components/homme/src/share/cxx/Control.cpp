@@ -54,13 +54,6 @@ for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
 std::cout << "HOST hybrid_bi " << ii << " " << host_hybrid_bi(ii) << "\n";
 */
 
-  set_team_size();
-}
-
-void Control::set_team_size()
-{
-  // If the size requested at the beginning
-  team_size = std::max(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), default_team_size);
 }
 
 } // namespace Homme

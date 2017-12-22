@@ -248,6 +248,10 @@ ENDIF ()
 #   1) HORIZ_OPENMP OpenMP over elements (standard OPENMP)
 #   2) COLUMN_OPENMP OpenMP within an element (previously called ELEMENT_OPENMP)
 # COLUMN_OPENMP will be disabled by the openACC exectuables.
+#
+# HOMMEXX does not distinguish between the two because Kokkos does not use
+# nested OpenMP. Nested OpenMP is the reason the two are distinguished in the
+# Fortran code.
 ##############################################################################
 OPTION(ENABLE_OPENMP "OpenMP across elements" TRUE)
 OPTION(ENABLE_HORIZ_OPENMP "OpenMP across elements" TRUE)
@@ -298,11 +302,6 @@ IF (ENABLE_HORIZ_OPENMP OR ENABLE_COLUMN_OPENMP)
    # Set this as global so it can be picked up by all executables
 #   SET(COLUMN_OPENMP TRUE CACHE BOOL "Threading in the vertical direction")
    SET(COLUMN_OPENMP TRUE BOOL "Threading in the vertical direction")
-   IF (${NO_HORIZ_THREADS})
-     SET(KOKKOS_COLUMN_THREAD_ONLY "Threading in the vertical direction without horizontal threading in C++")
-   ELSE ()
-     SET(KOKKOS_PARALLELIZE_ON_ELEMENTS "Threading first in the horizontal direction, and then in the vertical with leftover threads in C++")
-   ENDIF ()
    MESSAGE(STATUS "  Using COLUMN_OPENMP")
  ENDIF ()
 ENDIF ()

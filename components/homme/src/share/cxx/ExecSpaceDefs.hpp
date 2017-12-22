@@ -2,7 +2,8 @@
 #define HOMMEXX_EXEC_SPACE_DEFS_HPP
 
 #include <Kokkos_Core.hpp>
-#include <Hommexx_config.h>
+
+#include "Hommexx_config.h"
 
 namespace Homme
 {
@@ -33,8 +34,6 @@ using Hommexx_Serial = Kokkos::Serial;
 using Hommexx_Serial = void;
 #endif
 
-using Hommexx_DefaultExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
-
 // Selecting the execution space. If no specific request, use Kokkos default
 // exec space
 #if defined(HOMMEXX_CUDA_SPACE)
@@ -46,68 +45,97 @@ using ExecSpace = Hommexx_Threads;
 #elif defined(HOMMEXX_SERIAL_SPACE)
 using ExecSpace = Hommexx_Serial;
 #elif defined(HOMMEXX_DEFAULT_SPACE)
-using ExecSpace = Hommexx_DefaultExecSpace;
+using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #else
-#error "No valid execution space choice"
+# error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
 
-static_assert (!std::is_same<ExecSpace,void>::value, "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
+static_assert (!std::is_same<ExecSpace,void>::value,
+               "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
 
+// What follows provides utilities to parameterize the parallel machine (CPU/KNL
+// cores within a rank, GPU attached to a rank) optimally. The parameterization
+// is a nontrivial function of available resources, number of parallel
+// iterations to be performed, and kernel-specific preferences regarding team
+// and vector dimensions of parallelization.
+//   So far, we are able to hide the details inside a call like this:
+//     Homme::get_default_team_policy<ExecSpace>(data.num_elems * data.qsize);
+// thus, all that follows except the function get_default_team_policy may not
+// need to be used except in the implementation of get_default_team_policy.
+//   If that remains true forever, we can move all of this code to
+// ExecSpaceDefs.cpp.
+
+// Preferences to guide distribution of physical threads among team and vector
+// dimensions. Default values are sensible.
+struct ThreadPreferences {
+  // Max number of threads a kernel can use. Default: NP*NP.
+  int max_threads_usable;
+  // Max number of vectors a kernel can use. Default: NUM_PHYSICAL_LEV.
+  int max_vectors_usable;
+  // Prefer threads to vectors? Default: true.
+  bool prefer_threads;
+
+  ThreadPreferences();
+};
+
+namespace Parallel {
+// Previous (inclusive) power of 2. E.g., prevpow2(4) -> 4, prevpow2(5) -> 4.
+unsigned short prevpow2(unsigned short n);
+
+// Determine (#threads, #vectors) as a function of a pool of threads provided to
+// the process and the number of parallel iterations to perform.
+std::pair<int, int>
+team_num_threads_vectors_from_pool(
+  const int pool_size, const int num_parallel_iterations,
+  const ThreadPreferences tp = ThreadPreferences());
+
+// Determine (#threads, #vectors) as a function of a pool of warps provided to
+// the process, the number of threads per warp, the maximum number of warps a
+// team can use, and the number of parallel iterations to perform.
+std::pair<int, int>
+team_num_threads_vectors_for_gpu(
+  const int num_warps_total, const int num_threads_per_warp,
+  const int min_num_warps, const int max_num_warps,
+  const int num_parallel_iterations,
+  const ThreadPreferences tp = ThreadPreferences());
+} // namespace Parallel
+
+// Device-dependent distribution of physical threads over teams and vectors. The
+// general case is for a machine with a pool of threads, like KNL and CPU.
 template <typename ExecSpaceType>
 struct DefaultThreadsDistribution {
-
-  static constexpr int vectors_per_thread () { return vectors_per_thread_impl<ExecSpaceType>(); }
-
-  static int threads_per_team(const int num_elems) { return threads_per_team_impl<ExecSpaceType>(num_elems); }
-
-private:
-  template <typename ArgExecSpace>
-  static constexpr
-  typename std::enable_if<!std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  vectors_per_thread_impl() { return 1; }
-
-  template <typename ArgExecSpace>
-  static constexpr
-  typename std::enable_if<std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  vectors_per_thread_impl() { return 16 /*8*/; }
-
-  template <typename ArgExecSpace>
-  static
-  typename std::enable_if<!std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  threads_per_team_impl(const int num_elems) {
-#ifdef KOKKOS_COLUMN_THREAD_ONLY
-    (void) num_elems;
-    return ExecSpace::thread_pool_size();
-#else
-#ifdef KOKKOS_PARALLELIZE_ON_ELEMENTS
-    if (Max_Threads_Per_Team >= num_elems) {
-      return Max_Threads_Per_Team / num_elems;
-    } else {
-      return 1;
-    }
-#else
-    return 1;
-#endif // KOKKOS_PARALLELIZE_ON_ELEMENTS
-#endif // KOKKOS_COLUMN_THREAD_ONLY
+  static std::pair<int, int>
+  team_num_threads_vectors(const int num_parallel_iterations,
+                           const ThreadPreferences tp = ThreadPreferences()) {
+    return Parallel::team_num_threads_vectors_from_pool(
+      ExecSpaceType::thread_pool_size(), num_parallel_iterations, tp);
   }
-
-  template <typename ArgExecSpace>
-  static
-  typename std::enable_if<std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  threads_per_team_impl(const int /*num_elems*/) {
-    return max_threads_per_team<ExecSpaceType>();
-  }
-
-  template <typename ArgExecSpace>
-  static
-  typename std::enable_if<std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  max_threads_per_team () { return 16; }
-
-  template <typename ArgExecSpace>
-  static
-  typename std::enable_if<!std::is_same<ArgExecSpace,Hommexx_Cuda>::value,int>::type
-  max_threads_per_team () { return ArgExecSpace::thread_pool_size(); }
 };
+
+// Specialization for a GPU, where threads can't be viewed as existing simply in
+// a pool.
+template <>
+struct DefaultThreadsDistribution<Hommexx_Cuda> {
+  static std::pair<int, int>
+  team_num_threads_vectors(const int num_parallel_iterations,
+                           const ThreadPreferences tp = ThreadPreferences());
+};
+
+// Return a TeamPolicy using defaults that, so far, have been good for all use
+// cases. Use of this function means you don't have to use
+// DefaultThreadsDistribution.
+template <typename ExecSpace, typename Tag=void>
+Kokkos::TeamPolicy<ExecSpace, Tag>
+get_default_team_policy(const int num_parallel_iterations) {
+  const auto threads_vectors =
+    DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+      num_parallel_iterations);
+  auto policy = Kokkos::TeamPolicy<ExecSpace, Tag>(num_parallel_iterations,
+                                                   threads_vectors.first,
+                                                   threads_vectors.second);
+  policy.set_chunk_size(1);
+  return policy;
+}
 
 } // namespace Homme
 

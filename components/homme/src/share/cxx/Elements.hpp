@@ -6,8 +6,6 @@
 
 #include <Kokkos_Core.hpp>
 
-#include <random>
-
 namespace Homme {
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
@@ -72,6 +70,7 @@ public:
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
     ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
+    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
@@ -92,7 +91,7 @@ public:
 
   void init(const int num_elems);
 
-  void random_init(int num_elems, std::mt19937_64 &engine);
+  void random_init(int num_elems, Real max_pressure = 1.0);
 
   int num_elems() const { return m_num_elems; }
 
