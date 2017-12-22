@@ -114,7 +114,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_phis, engine, random_dist);
 
   genRandArray(m_omega_p, engine, random_dist);
-  genRandArray(m_pecnd, engine, random_dist);
   genRandArray(m_phi, engine, random_dist);
   genRandArray(m_derived_un0, engine, random_dist);
   genRandArray(m_derived_vn0, engine, random_dist);
