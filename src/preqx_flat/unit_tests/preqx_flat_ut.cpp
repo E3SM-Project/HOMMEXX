@@ -981,7 +981,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   //element fields (except buffers) are randomly init-ed
   // will copy to device and randotm on device
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems);
 //std::cout << "here 1 \n;";
   //host or source? diff tests use diff. name convensions
   //this is to randomize buffer values, since Elements does not have a methiod fo rthis
@@ -1147,7 +1147,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   // singleton
   // on host first
   Elements &elements = Context::singleton().get_elements();
-  elements.random_init(num_elems, engine);
+  elements.random_init(num_elems);
 
   //preq_vertadv depends on eta_dot_dpdn, dp3d, T, v (all in elements, randomized by random_init),
   //modifies v_vadv, t_vadv (those are in buffers). 
