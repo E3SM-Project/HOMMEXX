@@ -22,6 +22,9 @@
 // Whether the MPI operations have to be performed directly on the device
 #cmakedefine HOMMEXX_MPI_ON_DEVICE
 
+// Minimum number of warps to get 100% occoupancy on GPU
+#cmakedefine HOMMEXX_CUDA_MIN_WARP_PER_TEAM ${HOMMEXX_CUDA_MIN_WARP_PER_TEAM}
+
 // The version of AVX available on the host
 #define AVX_VERSION ${AVX_VERSION}
 

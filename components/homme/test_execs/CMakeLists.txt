@@ -211,9 +211,9 @@ INCLUDE(${HOMME_SOURCE_DIR}/test/reg_test/run_tests/test-list.cmake)
 #  replaceBaselineResults target
 SET(TEST_DIR_LIST "")
 
-createTests(HOMME_TESTS)
+createTests(HOMME_TESTS ${HOMME_TESTING_PROFILE})
 
-CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST)
+CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST ${HOMME_TESTING_PROFILE})
 
 IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
   # add a test dependency here:

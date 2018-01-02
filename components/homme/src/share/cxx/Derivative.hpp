@@ -11,15 +11,15 @@ public:
 
   void init(CF90Ptr &dvv);
 
-  void random_init(const int seed);
+  void random_init();
 
   void dvv(Real *dvv);
 
   KOKKOS_INLINE_FUNCTION
-  ExecViewUnmanaged<const Real[NP][NP]> get_dvv() const { return m_dvv_exec; }
+  ExecViewUnmanaged<const Real[NP][NP]> get_dvv() const { return m_dvv; }
 
 private:
-  ExecViewManaged<Real[NP][NP]> m_dvv_exec;
+  ExecViewManaged<Real[NP][NP]> m_dvv;
 };
 
 } // namespace Homme

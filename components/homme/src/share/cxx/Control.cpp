@@ -14,8 +14,6 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
 
   HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
   Kokkos::deep_copy(hybrid_a, host_hybrid_a);
-
-  set_team_size();
 }
 
 void Control::set_rk_stage_data(const int nm1_in, const int n0_in, const int np1_in,
@@ -29,12 +27,6 @@ void Control::set_rk_stage_data(const int nm1_in, const int n0_in, const int np1
   dt = dt_in;
   eta_ave_w = eta_ave_w_in;
   compute_diagonstics = compute_diagonstics_in;
-}
-
-void Control::set_team_size()
-{
-  // If the size requested at the beginning
-  team_size = std::max(DefaultThreadsDistribution<ExecSpace>::threads_per_team(nete - nets), default_team_size);
 }
 
 } // namespace Homme
