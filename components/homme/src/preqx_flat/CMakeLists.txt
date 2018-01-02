@@ -172,13 +172,18 @@ IF (${USE_KOKKOS_KERNELS})
 ENDIF ()
 SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 
-SET(PREQX_FLAT_UT_SRCS
+SET(PREQX_FLAT_UT_F90_SRCS
+  ${TARGET_F90}
+  ${PREQX_FLAT_DEPS_F90}
+)
+SET(PREQX_FLAT_UT_CXX_SRCS
   ${UNIT_TEST_DIR}/preqx_flat_ut.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_remap.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_sl.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_ml.cpp
   ${UNIT_TEST_DIR}/remap.cpp
-  ${PREQX_FLAT_DEPS}
+  ${PREQX_FLAT_DEPS_C}
+  ${PREQX_FLAT_DEPS_CXX}
 )
 
 SET(PREQX_FLAT_INCLUDE_DIRS

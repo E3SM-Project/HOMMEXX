@@ -1,8 +1,8 @@
 
 SET(UNITTESTER_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 
-macro(cxx_unit_test target_name target_srcs include_dirs config_defines NUM_CPUS)
-  ADD_EXECUTABLE(${target_name} ${UNITTESTER_DIR}/tester.cpp ${target_srcs})
+macro(cxx_unit_test target_name target_f90_srcs target_cxx_srcs include_dirs config_defines NUM_CPUS)
+  ADD_EXECUTABLE(${target_name} ${UNITTESTER_DIR}/tester.cpp ${target_f90_srcs} ${target_cxx_srcs})
   IF (${NUM_CPUS} EQUAL 1)
     ADD_TEST(${target_name}_test ${target_name})
   ELSE()
@@ -23,9 +23,11 @@ macro(cxx_unit_test target_name target_srcs include_dirs config_defines NUM_CPUS
 
   link_to_trilinos(${target_name})
 
-  # Fortran modules
-  SET(MODULE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${target_name}_modules)
-  SET_TARGET_PROPERTIES(${target_name} PROPERTIES Fortran_MODULE_DIRECTORY ${MODULE_DIR})
+  IF (NOT "${target_f90_srcs}" EQUAL "")
+    # Fortran modules
+    SET(MODULE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${target_name}_modules)
+    SET_TARGET_PROPERTIES(${target_name} PROPERTIES Fortran_MODULE_DIRECTORY ${MODULE_DIR})
+  ENDIF()
 
   # Compile definitions and flags
   SET_TARGET_PROPERTIES(${target_name} PROPERTIES COMPILE_DEFINITIONS "${config_defines}")
