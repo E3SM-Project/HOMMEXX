@@ -1,18 +1,19 @@
 #include "Derivative.hpp"
+#include "Utility.hpp"
 
 #include <random>
 
 namespace Homme {
 
 Derivative::Derivative()
-    : m_dvv_exec("dvv")
+    : m_dvv("dvv")
 {
   // Nothing to be done here
 }
 
 void Derivative::init(CF90Ptr &dvv_ptr) {
   ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host =
-      Kokkos::create_mirror_view(m_dvv_exec);
+      Kokkos::create_mirror_view(m_dvv);
 
   int k_dvv = 0;
   for (int igp = 0; igp < NP; ++igp) {
@@ -21,25 +22,19 @@ void Derivative::init(CF90Ptr &dvv_ptr) {
     }
   }
 
-  Kokkos::deep_copy(m_dvv_exec, dvv_host);
+  Kokkos::deep_copy(m_dvv, dvv_host);
 }
 
-void Derivative::random_init(const int seed) {
-  std::mt19937_64 engine(seed);
+void Derivative::random_init() {
+  std::random_device rd;
+  std::mt19937_64 engine(rd());
   std::uniform_real_distribution<Real> random_dist(16.0, 8192.0);
-  ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host =
-      Kokkos::create_mirror_view(m_dvv_exec);
-  for (int igp = 0; igp < NP; ++igp) {
-    for (int jgp = 0; jgp < NP; ++jgp) {
-      dvv_host(igp, jgp) = random_dist(engine);
-    }
-  }
-  Kokkos::deep_copy(m_dvv_exec, dvv_host);
+  genRandArray(m_dvv, engine, random_dist);
 }
 
 void Derivative::dvv(Real *dvv_ptr) {
   ExecViewManaged<Real[NP][NP]>::HostMirror dvv_f90(dvv_ptr);
-  Kokkos::deep_copy(dvv_f90, m_dvv_exec);
+  Kokkos::deep_copy(dvv_f90, m_dvv);
 }
 
 } // namespace Homme

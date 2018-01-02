@@ -153,6 +153,7 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/mpi_cxx_f90_interface.cpp
+  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
 )
 
 # If the user specified a file for custom compiler options use those

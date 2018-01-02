@@ -1,2 +1,0 @@
-00 16 * * 1-7 cd /home/ikalash/bowmanHOMMEXXCDash; rm -rf *; scp ikalash@bowman.sandia.gov:/home/ikalash/nightlyHOMMEXXCDash/nightly_log_bowmanHOMMEXXopenmp.txt .; scp ikalash@bowman.sandia.gov:/home/ikalash/nightlyHOMMEXXCDash/results_hommexx_openmp .; scp ikalash@bowman.sandia.gov:/home/ikalash/nightlyHOMMEXXCDash/send_email_ctest_openmp.sh .; bash send_email_ctest_openmp.sh
-

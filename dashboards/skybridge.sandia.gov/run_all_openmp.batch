@@ -1,7 +1,8 @@
 #!/bin/bash
 
+#SBATCH --partition=short 
 #SBATCH --nodes=1                    # Number of nodes - all cores per node are allocated to the job
-#SBATCH --time=01:00:00              # Wall clock time (HH:MM:SS) - once the job exceeds this time, the job will be terminated (default is 5 minutes)
+#SBATCH --time=02:00:00              # Wall clock time (HH:MM:SS) - once the job exceeds this time, the job will be terminated (default is 5 minutes)
 #SBATCH --account=FY140228           # WC ID
 #SBATCH --job-name=OpenMPHOMMEXX     # Name of job
 
@@ -10,9 +11,8 @@ cores=16                             # Number MPI processes to run on each node 
                                      # TLCC2 has 16 cores per node
 
 
-cd /home/ikalash/nightlyHOMMEXXCDash 
-#bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash nightly_cron_script_trilinos_skybridge_openmp.sh"
-bash -c -l "source skybridge_modules_gcc.sh >& modules_hommexx.out; bash nightly_cron_script_hommexx_skybridge_openmp.sh"
+cd /projects/hommexx/nightlyHOMMEXXCDash 
+bash -c -l "source skybridge_modules_gcc.sh >& modules_openmp.out; source skybridge_openmp_env.sh >& env_openmp.out; bash nightly_cron_script_hommexx_skybridge_openmp.sh" 
 bash process_results_ctest_openmp.sh
 bash send_email_ctest_openmp.sh
  

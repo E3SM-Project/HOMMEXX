@@ -223,8 +223,9 @@ if (BUILD_HOMMEXX_SERIAL)
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
-    "-DTRILINOS_INSTALL_DIR:FILEPATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstall"
-    "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
+    "-DUSE_TRILINOS=FALSE"
+    "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
+    "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild")
@@ -293,9 +294,10 @@ if (BUILD_HOMMEXX_SERIAL)
   # Run HOMMEXX tests
   #
 
-  set (CTEST_TEST_TIMEOUT 200)
+  set (CTEST_TEST_TIMEOUT 1200)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
+    EXCLUDE "r0"
     RETURN_VALUE HAD_ERROR)
 
   if (CTEST_DO_SUBMIT)
@@ -412,9 +414,10 @@ if (BUILD_HOMMEXX_OPENMP)
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
-    "-DUSE_NUM_PROCS=16"
-    "-DTRILINOS_INSTALL_DIR:FILEPATH=${CTEST_BINARY_DIRECTORY}/TrilinosInstallOpenMP"
-    "-DHOMME_BASELINE_DIR=/home/ikalash/HOMMEXX_baseline/build" 
+    "-DUSE_NUM_PROCS=8"
+    "-DUSE_TRILINOS=FALSE"
+    "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstallOpenMP"
+    "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP")
@@ -483,9 +486,10 @@ if (BUILD_HOMMEXX_OPENMP)
   # Run HOMMEXX tests
   #
 
-  set (CTEST_TEST_TIMEOUT 200)
+  set (CTEST_TEST_TIMEOUT 1200)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP"
+    EXCLUDE "r0"
     RETURN_VALUE HAD_ERROR)
 
   if (CTEST_DO_SUBMIT)

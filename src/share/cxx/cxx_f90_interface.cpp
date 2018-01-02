@@ -38,8 +38,6 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
   control.qsize = qsize;
   control.dt    = dt;
-
-  control.set_team_size();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -165,15 +163,20 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   Elements& elements = Context::singleton().get_elements();
 
   // Retrieve the team size
-  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = data.team_size;
+  static bool first = true;
+  if (first) {
+    const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+      data.num_elems);
+    std::cout << "CAAR pair " << tv.first << " " << tv.second << "\n";
+    first = false;
+  }
+
+  // Setup the policies
+  auto policy_pre = Homme::get_default_team_policy<ExecSpace>(data.num_elems);
+  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
 
   // Create the functor
   CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
-
-  // Setup the policies
-  Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre  (data.num_elems, threads_per_team, vectors_per_thread);
-  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
 
   // Setup the boundary exchange
   BoundaryExchange* be[NUM_TIME_LEVELS];
@@ -231,27 +234,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
 void advance_qdp_c()
 {
-  // Get control structure
-  Control& data = Context::singleton().get_control();
-
-  // Retrieve the team size
-  const int vectors_per_thread = DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team   = data.team_size;
-
-  // Setup the policy
-  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, threads_per_team, vectors_per_thread);
-  policy.set_chunk_size(1);
-
-  // Create the functor
-  EulerStepFunctor func(data);
-
-  profiling_resume();
-  // Dispatch parallel for
-  Kokkos::parallel_for(policy, func);
-
-  // Finalize
-  ExecSpace::fence();
-  profiling_pause();
+  EulerStepFunctor::run();
 }
 
 } // extern "C"

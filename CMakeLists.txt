@@ -23,6 +23,7 @@ ENDIF ()
 
 # For testing
 ENABLE_TESTING()
+SET (HOMME_TESTING_PROFILE "nightly" CACHE STRING "Determine how long/pervasive the testing is. Currently available options: 'dev', 'short', 'nightly'.")
 
 # Add the cmake/CMakeLists.txt file
 SET (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -103,6 +104,10 @@ ELSEIF (${HOMMEXX_EXEC_SPACE_UPPER} STREQUAL "DEFAULT")
 ELSE()
   MESSAGE (ABORT "Invalid choice for 'HOMMEXX_EXEC_SPACE'. Valid options (case insensitive) are 'Cuda', 'OpenMP', 'Threads', 'Serial', 'Default'")
 ENDIF()
+
+# Execution space parameters. Ideally, these will go away because they can be
+# queried at runtime.
+SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 4 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
 
 ##############################################################################
 # Options for floating point model.

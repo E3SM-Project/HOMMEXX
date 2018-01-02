@@ -2,7 +2,7 @@ SET(CONFIG_DIR       ${CMAKE_BINARY_DIR}/src)
 SET(SRC_SHARE_DIR    ${HOMME_SOURCE_DIR}/src/share)
 SET(SRC_PREQX_DIR    ${HOMME_SOURCE_DIR}/src/preqx_flat)
 SET(SHARE_UT_DIR     ${CMAKE_CURRENT_SOURCE_DIR})
-SET(TIMING_DIR       ${HOMME_SOURCE_DIR}/utils/timing)
+SET(UTILS_TIMING_DIR ${HOMME_SOURCE_DIR}/utils/timing)
 
 ### Sphere operators unit test ###
 
@@ -19,9 +19,11 @@ SET (SPHERE_OPERATORS_UT_SRCS
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/quadrature_mod.F90
-  ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
@@ -36,7 +38,7 @@ SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS
   ${SRC_SHARE_DIR}/cxx
   ${SRC_SHARE_DIR}/cxx/mpi
   ${SHARE_UT_DIR}
-  ${TIMING_DIR}
+  ${UTILS_TIMING_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 cxx_unit_test (sphere_operators_ut "${SPHERE_OPERATORS_UT_SRCS}" "${SPHERE_OPERATORS_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}")
@@ -76,8 +78,8 @@ SET (BOUNDARY_EXCHANGE_UT_SRCS
   ${SRC_PREQX_DIR}/edge_mod.F90
   ${SHARE_UT_DIR}/boundary_exchange_ut.F90
   ${SHARE_UT_DIR}/boundary_exchange_ut.cpp
-  ${TIMING_DIR}/perf_mod.F90
-  ${TIMING_DIR}/perf_utils.F90
+  ${UTILS_TIMING_DIR}/perf_mod.F90
+  ${UTILS_TIMING_DIR}/perf_utils.F90
 )
 
 SET (CONFIG_DEFINES NP=4 NC=4 PLEV=16 QSIZE_D=4 _MPI=1 HOMMEXX_MPI_TEST)
@@ -87,7 +89,7 @@ SET (BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS
   ${SRC_SHARE_DIR}/cxx
   ${SRC_SHARE_DIR}/cxx/mpi
   ${SHARE_UT_DIR}
-  ${TIMING_DIR}
+  ${UTILS_TIMING_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_SRCS}" "${BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}")
