@@ -21,9 +21,8 @@ struct CaarFunctor {
   const Elements    m_elements;
   const Derivative  m_deriv;
 
-  // Tags for pre/post exchange loops
+  // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
-  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),

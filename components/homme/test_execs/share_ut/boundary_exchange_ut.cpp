@@ -6,6 +6,7 @@
 #include "Utility.hpp"
 #include "Types.hpp"
 
+#include <random>
 #include <iomanip>
 
 using namespace Homme;
