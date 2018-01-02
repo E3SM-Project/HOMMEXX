@@ -17,9 +17,6 @@
 namespace Homme
 {
 
-// Forward declarations
-class BoundaryExchange;
-
 // The main class, handling the pack/exchange/unpack process
 class BoundaryExchange
 {
@@ -57,7 +54,7 @@ public:
   template<typename... Properties>
   void register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Properties...> field);
 
-  // Initialize the window, the buffers, and the MPI data types
+  // Initialize the buffers, and the MPI data types
   void registration_completed();
 
   // Exchange all registered fields
