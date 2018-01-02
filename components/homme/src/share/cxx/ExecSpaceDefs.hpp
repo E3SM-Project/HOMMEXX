@@ -47,7 +47,7 @@ using ExecSpace = Hommexx_Serial;
 #elif defined(HOMMEXX_DEFAULT_SPACE)
 using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 #else
-#error "No valid execution space choice"
+# error "No valid execution space choice"
 #endif // HOMMEXX_EXEC_SPACE
 
 static_assert (!std::is_same<ExecSpace,void>::value,
@@ -136,18 +136,6 @@ get_default_team_policy(const int num_parallel_iterations) {
   policy.set_chunk_size(1);
   return policy;
 }
-
-// A templated typedef for MD range policy (used in RK stages)
-template<typename ExecutionSpace, int Rank>
-using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
-                          < ExecutionSpace,
-                            Kokkos::Experimental::Rank
-                              < Rank,
-                                Kokkos::Experimental::Iterate::Right,
-                                Kokkos::Experimental::Iterate::Right
-                              >,
-                            Kokkos::IndexType<int>
-                          >;
 
 } // namespace Homme
 

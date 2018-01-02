@@ -3,8 +3,6 @@
 #include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
-#include "Connectivity.hpp"
-#include "BoundaryExchange.hpp"
 
 namespace Homme {
 
@@ -30,31 +28,10 @@ Derivative& Context::get_derivative() {
   return *derivative_;
 }
 
-Connectivity& Context::get_connectivity() {
-  if ( ! connectivity_) connectivity_.reset(new Connectivity());
-  return *connectivity_;
-}
-
-Context::BEMap& Context::get_boundary_exchanges() {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  return *boundary_exchanges_;
-}
-
-BoundaryExchange& Context::get_boundary_exchange(const std::string& name) {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  // Todo: should we accept a bool param 'must_already_exist'
-  //       to make sure we are not creating a new BE?
-  return (*boundary_exchanges_)[name];
-}
-
 void Context::clear() {
   control_ = nullptr;
   elements_ = nullptr;
   derivative_ = nullptr;
-  connectivity_ = nullptr;
-  boundary_exchanges_ = nullptr;
 }
 
 Context& Context::singleton() {

@@ -14,7 +14,6 @@ void Elements::init(const int num_elems) {
 
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
   m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
-  m_rspheremp = ExecViewManaged<Real * [NP][NP]>("RSPHEREMP", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
@@ -48,8 +47,8 @@ void Elements::init(const int num_elems) {
                                                                  m_num_elems);
 }
 
-void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
-                       CF90Ptr &rspheremp, CF90Ptr &metdet, CF90Ptr &phis) {
+void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+                       CF90Ptr &spheremp, CF90Ptr &metdet, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -58,8 +57,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &sphere
       Kokkos::create_mirror_view(m_metdet);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
       Kokkos::create_mirror_view(m_spheremp);
-  ExecViewManaged<Real *[NP][NP]>::HostMirror h_rspheremp =
-      Kokkos::create_mirror_view(m_rspheremp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
@@ -74,7 +71,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &sphere
       for (int jgp = 0; jgp < NP; ++jgp, ++k_scalars) {
         h_fcor(ie, igp, jgp) = fcor[k_scalars];
         h_spheremp(ie, igp, jgp) = spheremp[k_scalars];
-        h_rspheremp(ie, igp, jgp) = rspheremp[k_scalars];
         h_metdet(ie, igp, jgp) = metdet[k_scalars];
         h_phis(ie, igp, jgp) = phis[k_scalars];
       }
@@ -98,7 +94,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &sphere
   Kokkos::deep_copy(m_fcor, h_fcor);
   Kokkos::deep_copy(m_metdet, h_metdet);
   Kokkos::deep_copy(m_spheremp, h_spheremp);
-  Kokkos::deep_copy(m_rspheremp, h_rspheremp);
   Kokkos::deep_copy(m_phis, h_phis);
 
   Kokkos::deep_copy(m_d, h_d);
@@ -115,7 +110,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
 
   genRandArray(m_fcor, engine, random_dist);
   genRandArray(m_spheremp, engine, random_dist);
-  genRandArray(m_rspheremp, engine, random_dist);
   genRandArray(m_metdet, engine, random_dist);
   genRandArray(m_phis, engine, random_dist);
 

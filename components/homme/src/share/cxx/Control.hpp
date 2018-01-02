@@ -9,15 +9,15 @@ namespace Homme {
 
 struct Control {
 
-  Control () = default;
+  Control ()
+  {}
 
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
-             const int qn0,  const Real ps0, CRCPtr hybrid_a_ptr);
-
-  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
-                          const Real dt, const Real eta_ave_w,
-                          const bool compute_diagonstics);
+             const int nm1,  const int n0,   const int np1,
+             const int qn0,  const Real dt2, const Real ps0,
+             const bool compute_diagonstics, const Real eta_ave_w,
+             CRCPtr hybrid_a_ptr);
 
   // Range of element indices to be handled by this thread is [nets,nete)
   int nets;

@@ -7,7 +7,136 @@ module caar_pre_exchange_driver_mod
 
   implicit none
 
+  interface
+    subroutine init_control_caar_c (nets,nete,nelemd,nm1,n0,np1,qn0,dt2,ps0, &
+                               compute_diagnostics,eta_ave_w,hybrid_a_ptr) bind(c)
+      use kinds         , only : real_kind
+      use iso_c_binding , only : c_ptr, c_int, c_bool
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: np1,nm1,n0,qn0,nets,nete,nelemd
+      logical,               intent(in) :: compute_diagnostics
+      real (kind=real_kind), intent(in) :: dt2, ps0, eta_ave_w
+      type (c_ptr),          intent(in) :: hybrid_a_ptr
+    end subroutine init_control_caar_c
+    subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                               elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    end subroutine caar_pull_data_c
+    subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                               elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+      type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+      type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    end subroutine caar_push_results_c
+    subroutine caar_pre_exchange_monolithic_c () bind(c)
+    end subroutine caar_pre_exchange_monolithic_c
+  end interface
+
 contains
+
+  subroutine caar_pre_exchange_monolithic(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                          deriv,nets,nete,compute_diagnostics,eta_ave_w)
+    use kinds          , only : real_kind
+    use dimensions_mod , only : np, nc, nlev, ntrac
+    use element_mod    , only : element_t
+    use derivative_mod , only : derivative_t
+    use control_mod    , only : moisture, qsplit, use_cpstar, rsplit, swest
+    use hybvcoord_mod  , only : hvcoord_t
+    use hybrid_mod     , only : hybrid_t
+    use perf_mod       , only : t_startf, t_stopf
+
+#ifdef USE_KOKKOS_KERNELS
+    use dimensions_mod , only : nelemd
+    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                elem_derived_phi, elem_derived_pecnd,           &
+                                elem_derived_omega_p, elem_derived_vn0,         &
+                                elem_derived_eta_dot_dpdn, elem_state_Qdp
+    use iso_c_binding  , only : c_ptr, c_loc
+
+    implicit none
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_a_ptr
+#else
+    implicit none
+#endif
+
+    !
+    ! Inputs
+    !
+    integer, intent(in) :: np1,nm1,n0,qn0,nets,nete
+    real*8,  intent(in) :: dt2
+    logical, intent(in) :: compute_diagnostics
+
+    type (hvcoord_t)     , intent(in)   , target :: hvcoord
+    type (hybrid_t)      , intent(in)            :: hybrid
+    type (element_t)     , intent(inout), target :: elem(:)
+    type (derivative_t)  , intent(in)            :: deriv
+    real (kind=real_kind), intent(in)            :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+
+#ifdef USE_KOKKOS_KERNELS
+    call t_startf("caar_overhead")
+
+    hvcoord_a_ptr             = c_loc(hvcoord%hyai)
+    call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0,compute_diagnostics,eta_ave_w,hvcoord_a_ptr)
+
+    elem_state_v_ptr              = c_loc(elem_state_v)
+    elem_state_t_ptr              = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
+    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                         elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                         elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                         elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar_overhead")
+#endif
+    !og disabling this for now to keep # of timers low
+    call t_startf("caar_pre_exchange")
+#ifdef USE_KOKKOS_KERNELS
+    call caar_pre_exchange_monolithic_c ()
+#else
+    call caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                          deriv,nets,nete,compute_diagnostics,eta_ave_w)
+#endif
+    !og disabling this for now to keep # of timers low
+    call t_stopf("caar_pre_exchange")
+
+#ifdef USE_KOKKOS_KERNELS
+    call t_startf("caar_overhead")
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                         elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                         elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                         elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call t_stopf("caar_overhead")
+#endif
+
+  end subroutine caar_pre_exchange_monolithic
 
   ! An interface to enable access from C/C++
   subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, tvirt, press, press_grad, vtemp) bind(c)
