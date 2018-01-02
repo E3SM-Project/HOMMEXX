@@ -4,7 +4,6 @@
 #include <iostream>
 
 #include "Types.hpp"
-#include "FortranArrayUtils.hpp"
 #include "Derivative.hpp"
 #include "SphereOperators.hpp"
 #include "KernelVariables.hpp"
@@ -28,111 +27,6 @@ void vorticity_sphere_c_callable(const Real *vector, const Real *dvv,
                                  Real *scalar);
 
 } // extern "C"
-
-// ================================= TESTS ============================ //
-
-TEST_CASE("flip_arrays", "flip arrays routines") {
-  constexpr int N1 = 2;
-  constexpr int N2 = 3;
-  constexpr int N3 = 4;
-  constexpr int N4 = 5;
-
-  Real *A = new Real[N1 * N2];
-  Real *B = new Real[N1 * N2 * N3];
-  Real *C = new Real[N1 * N2 * N3 * N4];
-
-  std::random_device rd;
-  using rngAlg = std::mt19937_64;
-  rngAlg engine(rd());
-  std::uniform_real_distribution<Real> dreal(0, 1);
-
-  constexpr int num_rand_test = 10;
-
-  SECTION("f90->cxx") {
-    // Same 'mathematical' shape. Simply change f90->cxx ordering
-
-    genRandArray(A, N1 * N2, engine, dreal);
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-
-    HostViewManaged<Real[N1][N2]> A_cxx("A");
-    HostViewManaged<Real[N1][N2][N3]> B_cxx("B");
-
-    flip_f90_array_2d_12<N1, N2>(A, A_cxx);
-    flip_f90_array_3d_123<N1, N2, N3>(B, B_cxx);
-
-    int iter2d = 0;
-    int iter3d = 0;
-    for (int j = 0; j < N2; ++j) {
-      for (int i = 0; i < N1; ++i, ++iter2d) {
-        REQUIRE(compare_answers(A_cxx(i, j), A[iter2d]) == 0);
-      }
-    }
-
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter3d) {
-          REQUIRE(compare_answers(B_cxx(i, j, k), B[iter3d]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_213") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N2][N1][N3]> B_cxx("B");
-    flip_f90_array_3d_213<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(j, i, k), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_312") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N3][N1][N2]> B_cxx("B");
-    flip_f90_array_3d_312<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(k, i, j), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_4d_3412") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(C, N1 * N2 * N3 * N4, engine, dreal);
-
-    HostViewManaged<Real[N3][N4][N1][N2]> C_cxx("C");
-    flip_f90_array_4d_3412<N1, N2, N3, N4>(C, C_cxx);
-
-    int iter = 0;
-    for (int l = 0; l < N4; ++l) {
-      for (int k = 0; k < N3; ++k) {
-        for (int j = 0; j < N2; ++j) {
-          for (int i = 0; i < N1; ++i, ++iter) {
-            REQUIRE(compare_answers(C_cxx(k, l, i, j), C[iter]) == 0);
-          }
-        }
-      }
-    }
-  }
-
-  // Cleanup
-  delete[] A;
-  delete[] B;
-  delete[] C;
-}
 
 // ====================== RANDOM INITIALIZATION ====================== //
 
@@ -233,6 +127,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   ExecViewManaged<Real[NP][NP]> dvv_exec("dvv_exec");
   Kokkos::deep_copy(dvv_exec, dvv_h);
 
+  // Execution policy
   auto policy = Homme::get_default_team_policy<ExecSpace>(nelems);
 
   SECTION("gradient sphere") {
@@ -589,7 +484,7 @@ TEST_CASE("ExecSpaceDefs",
   const auto test_basics = [=] (const ThreadPreferences& tp,
                                 const std::pair<int, int>& tv) {
     REQUIRE(tv.first >= 1);
-    REQUIRE(tv.second >= 1);    
+    REQUIRE(tv.second >= 1);
     if (tp.prefer_threads)
       REQUIRE((tv.first == tp.max_threads_usable || tv.second == 1));
     else
