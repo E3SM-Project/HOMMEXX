@@ -1,9 +1,13 @@
 
 SET(UNITTESTER_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 
-macro(cxx_unit_test target_name target_srcs include_dirs config_defines)
+macro(cxx_unit_test target_name target_srcs include_dirs config_defines NUM_CPUS)
   ADD_EXECUTABLE(${target_name} ${UNITTESTER_DIR}/tester.cpp ${target_srcs})
-  ADD_TEST(${target_name}_test ${target_name})
+  IF (${NUM_CPUS} EQUAL 1)
+    ADD_TEST(${target_name}_test ${target_name})
+  ELSE()
+    ADD_TEST(${target_name}_test mpiexec -np ${NUM_CPUS} ${target_name})
+  ENDIF()
   SET_TESTS_PROPERTIES(${target_name}_test PROPERTIES LABELS "unit")
 
   TARGET_LINK_LIBRARIES(${target_name} pio timing ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
