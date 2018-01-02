@@ -72,7 +72,7 @@ subview(ViewType<ScalarType * [DIM2][DIM3], MemSpace, Properties...> v_in,
       &v_in.implementation_map().reference(ie, idim1, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace>
@@ -85,7 +85,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, 0, 0, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
@@ -100,7 +100,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, idim1, 0, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM3][DIM4], MemSpace>
@@ -117,7 +117,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, idim1, idim2, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM4], MemSpace>
@@ -136,7 +136,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, idim1, idim2, idim3, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4][DIM5], MemSpace>
@@ -149,7 +149,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4][DIM5], MemSpace, Properti
       &v_in.implementation_map().reference(ie, 0, 0, 0, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
 ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4][DIM5], MemSpace>
@@ -164,12 +164,12 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4][DIM5], MemSpace, Properti
       &v_in.implementation_map().reference(ie, idim1, 0, 0, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5
+template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4, int DIM5,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
-ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4][DIM5], MemSpace>
+ViewUnmanaged<ScalarType[DIM3][DIM4][DIM5], MemSpace>
 subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4][DIM5], MemSpace, Properties...>
-            v_in, int ie, int idim1) {
+            v_in, int ie, int idim1, int idim2) {
   assert(v_in.data() != nullptr);
   assert(ie < v_in.extent_int(0));
   assert(ie >= 0);

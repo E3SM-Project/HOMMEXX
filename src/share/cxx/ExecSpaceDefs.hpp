@@ -137,6 +137,18 @@ get_default_team_policy(const int num_parallel_iterations) {
   return policy;
 }
 
+// A templated typedef for MD range policy (used in RK stages)
+template<typename ExecutionSpace, int Rank>
+using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
+                          < ExecutionSpace,
+                            Kokkos::Experimental::Rank
+                              < Rank,
+                                Kokkos::Experimental::Iterate::Right,
+                                Kokkos::Experimental::Iterate::Right
+                              >,
+                            Kokkos::IndexType<int>
+                          >;
+
 } // namespace Homme
 
 #endif // HOMMEXX_EXEC_SPACE_DEFS_HPP

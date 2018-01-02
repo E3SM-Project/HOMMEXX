@@ -128,12 +128,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   Kokkos::deep_copy(dvv_exec, dvv_h);
 
   // Execution policy
-  const int threads_per_team =
-      DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
-  const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
-                                       vectors_per_thread);
+  auto policy = Homme::get_default_team_policy<ExecSpace>(nelems);
 
   SECTION("gradient sphere") {
     // Initialize input(s)
