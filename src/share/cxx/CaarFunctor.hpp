@@ -287,7 +287,7 @@ for(int kk = 0; kk<VECTOR_SIZE ; kk++)
 std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k)[kk] << "\n";
 }}*/
     });//NP*NP loop
-    //BARRIER?
+    kv.team_barrier();
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
 
 
@@ -586,8 +586,8 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
                           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
 
      });//NP*NP
-     //BARRIER?
-  } // UNTESTED 
+     kv.team_barrier();
+  } // TESTED against preq_vertadv 
 
 
  // Computes the vertical advection of T and v
