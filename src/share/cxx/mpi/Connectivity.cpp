@@ -56,7 +56,7 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
   // Here, we only need to store them once
   if (first_elem_pid==m_comm.m_rank)
   {
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
     // There is no edge-to-corner connection. Either the elements share a corner or an edge.
     assert (m_helpers.CONNECTION_KIND[first_elem_pos]==m_helpers.CONNECTION_KIND[second_elem_pos]);
 #endif
@@ -98,13 +98,13 @@ void Connectivity::finalize()
   constexpr int corners[NUM_CORNERS] = { etoi(ConnectionName::SWEST), etoi(ConnectionName::SEAST), etoi(ConnectionName::NWEST), etoi(ConnectionName::NEAST)};
 
   for (int ie=0; ie<m_num_elements; ++ie) {
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
     bool missing[NUM_CORNERS] = {false, false, false, false};
 #endif
 
     for (int ic : corners) {
       if (h_connections(ie,ic).kind == etoi(ConnectionKind::MISSING)) {
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
         missing[ic] = true;
 #endif
 
