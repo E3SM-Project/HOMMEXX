@@ -53,6 +53,9 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 static_assert (!std::is_same<ExecSpace,void>::value,
                "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
 
+// Call this instead of Kokkos::initialize.
+void initialize_kokkos();
+
 // What follows provides utilities to parameterize the parallel machine (CPU/KNL
 // cores within a rank, GPU attached to a rank) optimally. The parameterization
 // is a nontrivial function of available resources, number of parallel
