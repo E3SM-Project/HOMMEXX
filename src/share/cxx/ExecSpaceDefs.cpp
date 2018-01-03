@@ -58,7 +58,7 @@ team_num_threads_vectors_for_gpu (
   assert(num_warps_total > 0 && num_threads_per_warp > 0 && min_num_warps > 0);
   assert(num_parallel_iterations >= 0);
   assert(min_num_warps <= max_num_warps);
-  assert(max_num_warps >= num_warps_total);
+  assert(num_warps_total >= max_num_warps);
   assert(tp.max_threads_usable >= 1 && tp.max_vectors_usable >= 1);
 
   const int num_warps =
