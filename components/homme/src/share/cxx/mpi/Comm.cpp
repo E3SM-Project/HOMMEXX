@@ -5,6 +5,10 @@
 #endif
 #include "Hommexx_config.h"
 
+#ifdef CAM
+#error "Error! We have not yet implemented the interface with CAM.\n"
+#endif
+
 namespace Homme
 {
 
@@ -22,13 +26,17 @@ Comm::Comm(MPI_Comm mpi_comm)
   MPI_Comm_size(m_mpi_comm,&m_size);
   MPI_Comm_rank(m_mpi_comm,&m_rank);
 
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
   MPI_Comm_set_errhandler(m_mpi_comm,MPI_ERRORS_RETURN);
 #endif
 }
 
 void Comm::init ()
 {
+  if (m_mpi_comm!=MPI_COMM_NULL) {
+    std::cerr << "Error! You cannot call 'init' if the Comm was constructed from a given MPI_Comm.\n";
+    MPI_Abort(m_mpi_comm,1);
+  }
   int flag;
   MPI_Initialized (&flag);
   if (!flag)
@@ -39,16 +47,12 @@ void Comm::init ()
     MPI_Init (nullptr, nullptr);
   }
 
-#ifdef CAM
-  #error "Error! Add the code for cam!\n"
-#else
   m_mpi_comm = MPI_COMM_WORLD;
-#endif
 
   MPI_Comm_size(m_mpi_comm,&m_size);
   MPI_Comm_rank(m_mpi_comm,&m_rank);
 
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
   MPI_Comm_set_errhandler(m_mpi_comm,MPI_ERRORS_RETURN);
 #endif
 }

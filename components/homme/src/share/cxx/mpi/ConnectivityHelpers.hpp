@@ -4,10 +4,6 @@
 #include "Dimensions.hpp"
 #include "Types.hpp"
 
-#ifdef HOMMEXX_DEBUG
-#include <assert.h>
-#endif
-
 #include <Kokkos_Array.hpp>
 
 namespace Homme

@@ -254,11 +254,11 @@ void BoundaryExchange::registration_completed()
   Kokkos::deep_copy(m_recv_2d_buffers,h_recv_2d_buffers);
   Kokkos::deep_copy(m_recv_3d_buffers,h_recv_3d_buffers);
 
-#ifdef HOMMEXX_DEBUG
+#ifndef NDEBUG
   // Sanity check
   assert (h_buf_offset[etoi(ConnectionSharing::LOCAL)]==local_buffer_size);
   assert (h_buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
-#endif // HOMMEXX_DEBUG
+#endif // NDEBUG
 
   // Create persistend send/recv requests, to reuse over and over
   build_requests ();
