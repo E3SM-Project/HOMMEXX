@@ -70,11 +70,6 @@ program prim_main
 
   logical :: dir_e ! boolean existence of directory where output netcdf goes
 
-#ifdef USE_KOKKOS_KERNELS
-  ! Kokkos has to be initialized before it is used, and before fortran initializes anything in OpenMP
-  call initialize_hommexx_session()
-#endif
-
   ! =====================================================
   ! Begin executable code set distributed memory world...
   ! =====================================================
@@ -128,6 +123,10 @@ program prim_main
 #if (defined HORIZ_OPENMP)
   !$OMP END CRITICAL
   !$OMP END PARALLEL
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+  call initialize_hommexx_session()
 #endif
 
   ! setup fake threading so we can call routines that require 'hybrid'
