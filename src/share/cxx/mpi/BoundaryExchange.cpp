@@ -106,7 +106,7 @@ void BoundaryExchange::clean_up()
   }
 
   // Make sure the data has been sent before we cleanup this class
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_comm.m_mpi_comm);
 
   // Free buffers
   m_send_buffer  = ExecViewManaged<Real*>("send buffer", 0);
@@ -114,8 +114,8 @@ void BoundaryExchange::clean_up()
   m_local_buffer = ExecViewManaged<Real*>("local buffer",0);
 
   // Free MPI data types
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_comm.m_mpi_comm);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_comm.m_mpi_comm);
 
   // Clear stored fields
   m_2d_fields = ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>(0,0);
@@ -136,8 +136,8 @@ void BoundaryExchange::clean_up()
 
   // Clean requests
   for (int i=0; i<m_connectivity.get_num_shared_connections<HostMemSpace>(); ++i) {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]));
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]),m_comm.m_mpi_comm);
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]),m_comm.m_mpi_comm);
   }
   m_send_requests.clear();
   m_recv_requests.clear();
@@ -157,10 +157,10 @@ void BoundaryExchange::registration_completed()
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
   m_elem_buf_size[etoi(ConnectionKind::CORNER)] = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)],   MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_comm.m_mpi_comm);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)],   MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_comm.m_mpi_comm);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_comm.m_mpi_comm);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_comm.m_mpi_comm);
 
   // Compute the buffers sizes and allocating
   size_t mpi_buffer_size = 0;
@@ -274,16 +274,16 @@ void BoundaryExchange::exchange ()
   assert (m_registration_completed);
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_comm.m_mpi_comm);
 
   // Make sure the send requests are inactive (can't reuse buffers otherwise)
   // TODO: figure out why MPI_Waitall does not work. If the requests are all inactive, MPI_Waitall
   //       should return immediately. Instead, it appears to hang.
   int all_done = 0;
   while (all_done==0) {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),&all_done,MPI_STATUSES_IGNORE));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),&all_done,MPI_STATUSES_IGNORE),m_comm.m_mpi_comm);
   }
-  //HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE));
+  //HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_comm.m_mpi_comm);
 
   // ---- Pack and send ---- //
   pack_and_send ();
@@ -316,8 +316,8 @@ void BoundaryExchange::build_requests()
       buf_offset += m_elem_buf_size[info.kind];
 
       // Create the persistent requests
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[irequest]));
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[irequest]));
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,send_tag,m_comm.m_mpi_comm,&m_send_requests[irequest]),m_comm.m_mpi_comm);
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,recv_tag,m_comm.m_mpi_comm,&m_recv_requests[irequest]),m_comm.m_mpi_comm);
 
       // Increment the request counter;
       ++irequest;
@@ -376,13 +376,13 @@ void BoundaryExchange::pack_and_send ()
 
   // ---- Send ---- //
   Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer); // Deep copy m_send_buffer into m_mpi_send_buffer (no op if MPI is on device)
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data())); // Fire off the sends
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_comm.m_mpi_comm); // Fire off the sends
 }
 
 void BoundaryExchange::recv_and_unpack ()
 {
   // ---- Recv ---- //
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity.get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_comm.m_mpi_comm); // Wait for all data to arrive
   Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer); // Deep copy m_mpi_recv_buffer into m_recv_buffer (no op if MPI is on device)
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
