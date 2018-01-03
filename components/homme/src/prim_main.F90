@@ -126,7 +126,6 @@ program prim_main
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-  ! Kokkos has to be initialized before it is used, and before fortran initializes anything in OpenMP
   call initialize_hommexx_session()
 #endif
 
