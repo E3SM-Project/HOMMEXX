@@ -145,7 +145,6 @@ void caar_pre_exchange_monolithic_c()
   if (first) {
     const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
       data.num_elems);
-    std::cout << "CAAR pair " << tv.first << " " << tv.second << "\n";
     first = false;
   }
 
