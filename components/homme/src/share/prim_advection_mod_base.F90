@@ -1742,6 +1742,15 @@ OMP_SIMD
   call t_stopf("advance_qdp")
 #endif
 
+!here is a good place to compare tracers
+ie = 1
+k = 1
+#ifdef USE_KOKKOS_KERNELS
+print *, 'C CODE qtens for k=1', Qtens(:,:,k,1,ie)
+#else
+print *, 'F CODE qtens for k=1', Qtens(:,:,k,1,ie)
+#endif
+
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,dp_star)
@@ -1775,6 +1784,18 @@ OMP_SIMD
       call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
     enddo
   enddo ! ie loop
+
+print *, 'before BE'
+ie = 1
+k = 1
+#ifdef USE_KOKKOS_KERNELS
+print *, 'C CODE Qdp for k=1', elem(ie)%state%Qdp(:,:,k,1,np1_qdp)
+print *, 'also, np1_qdp', np1_qdp
+#else
+print *, 'F CODE Qdp for k=1', elem(ie)%state%Qdp(:,:,k,1,np1_qdp)
+print *, 'also, np1_qdp', np1_qdp
+#endif
+
 
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
