@@ -64,7 +64,6 @@ struct CaarFunctor {
             m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
 
         // Kinetic energy + PHI (geopotential energy) +
-        // PECND (potential energy?)
         Scalar k_energy =
             0.5 * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
                        m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) +
@@ -106,10 +105,13 @@ struct CaarFunctor {
 
     //nullifies sdot_sum, needed for both vert Lagrangian and Eulerian,
     //sdot_sum is used in energy diagnostics
+
+    //redundant
     assign_zero_to_sdot_sum(kv);
 
     //vertical Lagrangian
     if(m_data.rsplit){
+       //redundant
        assign_zero_to_eta_dot_dpdn_and_vadv_bufs(kv);
      
     //vertical Eulerian
@@ -152,14 +154,17 @@ struct CaarFunctor {
             m_elements.m_fcor(kv.ie, igp, jgp);
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
+
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, igp, jgp,
-                                                  ilev) *
+            - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
+
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            /* v_vadv(igp, jgp) + */ -m_elements.m_u(kv.ie, m_data.n0, igp, jgp,
-                                                   ilev) *
+            - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev) -
+            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
@@ -202,6 +207,8 @@ struct CaarFunctor {
     kv.team_barrier();
   } // TRIVIAL
 
+
+//Is this needed? views are inited to zero
   KOKKOS_INLINE_FUNCTION
   void assign_zero_to_sdot_sum(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -320,6 +327,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
     preq_omega_ps(kv);
   } // TRIVIAL
 
+//should be renamed, instead of no tracer should be dry
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_no_tracers_helper(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -334,6 +342,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
     kv.team_barrier();
   } // TESTED 6
 
+//should be renamed
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_tracers_helper(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -341,6 +350,8 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+//is there ever a check for moist kokkos runs to ake sure qsize >0?
+//or is it in namelist mod?
         Scalar Qt = m_elements.m_qdp(kv.ie, m_data.qn0, 0, igp, jgp, ilev) /
                     m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
         Qt *= (PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0);

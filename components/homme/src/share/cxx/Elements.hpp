@@ -44,10 +44,9 @@ public:
 
   // q is the specific humidity
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
-  // eta is the vertical coordinate
-  // eta dot is the flux through the vertical level interface
+  // eta=$\eta$ is the vertical coordinate
+  // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$ 
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
-  // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
 //OG what is logic to put smth in buffers or not?
@@ -74,12 +73,18 @@ public:
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
+    // sdot_sum is used in case rsplit=0 and in energy diagnostics
+    // (not yet coded).
     ExecViewManaged<Real* [NP][NP]> sdot_sum;
     // Buffers for spherical operators
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
 
+    // Buffers for vertical advection terms in V and T for case
+    // of Eulerian advection, rsplit=0. These buffers are used in both 
+    // cases, rsplit>0 and =0, but we rely on fact that views are init-ed to zero
+    // at construction.
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
     ExecViewManaged<Scalar* [NP][NP][NUM_LEV]> t_vadv_buf;
 

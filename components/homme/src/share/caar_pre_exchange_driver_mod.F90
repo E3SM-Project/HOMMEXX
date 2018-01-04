@@ -105,6 +105,8 @@ contains
     hvcoord_ai_ptr             = c_loc(hvcoord%hyai)
     hvcoord_bm_ptr             = c_loc(hvcoord%hybm)
     hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
+
+print *, 'qn0 that is sent to C', qn0
     call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0, &
          compute_diagnostics, eta_ave_w, rsplit, &
          hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
@@ -169,6 +171,7 @@ contains
 
     call caar_compute_energy_grad(deriv, Dinv, phi, v, vtemp)
 
+!why are these lines here in presumably a wrapper function-interface for c?
     do i=1,np
       do j=1,np
         vtemp(i,j,1) = vtemp(i,j,1) + Rgas*(tvirt(i,j)/press(i,j))*press_grad(i,j,1)
@@ -614,6 +617,9 @@ contains
     real (kind=real_kind) ::  glnps1,glnps2,gpterm
     integer :: h,i,j,k,kptr,ie
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
+
+
+print *, 'qn0 in caar_mono', qn0
 
     do ie=nets,nete
       !ps => elem(ie)%state%ps_v(:,:,n0)
