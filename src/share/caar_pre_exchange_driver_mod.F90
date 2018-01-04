@@ -679,6 +679,9 @@ print *, 'qn0 in caar_mono', qn0
 
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
+
+print *, 'use_cpstar', use_cpstar
+
       if (qn0 == -1 ) then
         call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
