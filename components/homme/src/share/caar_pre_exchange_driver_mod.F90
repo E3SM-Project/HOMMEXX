@@ -546,6 +546,25 @@ print *, 'qn0 that is sent to C', qn0
   end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 
 
+  subroutine caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,eta_accum,eta)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np,nlev
+    implicit none
+
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_accum
+    real (kind=real_kind), intent(in),    dimension(np,np,nlev+1) :: eta
+    real (kind=real_kind), intent(in)                             :: eta_ave_w
+    integer :: k
+
+#if (defined COLUMN_OPENMP)
+       !$omp parallel do private(k)
+#endif
+    do k=1,nlev+1  !  Loop index added (AAM)
+       eta_accum(:,:,k) = eta_accum(:,:,k) + eta_ave_w*eta(:,:,k)
+    enddo
+  end subroutine caar_adjust_eta_dot_dpdn_c_int
+
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -619,7 +638,7 @@ print *, 'qn0 that is sent to C', qn0
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
 
 
-print *, 'qn0 in caar_mono', qn0
+!print *, 'qn0 in caar_mono', qn0
 
     do ie=nets,nete
       !ps => elem(ie)%state%ps_v(:,:,n0)
@@ -680,7 +699,7 @@ print *, 'qn0 in caar_mono', qn0
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
 
-print *, 'use_cpstar', use_cpstar
+!print *, 'use_cpstar', use_cpstar
 
       if (qn0 == -1 ) then
         call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
@@ -763,24 +782,18 @@ print *, 'use_cpstar', use_cpstar
       ! ================================
       call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
 
-if(ie == 1) then
-print *, 'ETA derived in F code'
-print *, elem(ie)%derived%eta_dot_dpdn(1,1,:)
-endif
-
-#if (defined COLUMN_OPENMP)
-       !$omp parallel do private(k)
-#endif
-
-!      call caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,elem(ie)%derived%eta_dot_dpdn)
+      call caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,elem(ie)%derived%eta_dot_dpdn,eta_dot_dpdn)
 !THIS WAS NOT CONVERTED TO C --------------------------------
-      do k=1,nlev  !  Loop index added (AAM)
+!#if (defined COLUMN_OPENMP)
+!       !$omp parallel do private(k)
+!#endif
+!      do k=1,nlev  !  Loop index added (AAM)
 !is derived eta not zero here?
-         elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
-              elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
-      enddo
-      elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
-           elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
+!         elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
+!              elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
+!      enddo
+!      elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
+!           elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
 ! -----------------------------------------------------------
 
 
