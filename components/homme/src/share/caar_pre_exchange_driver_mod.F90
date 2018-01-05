@@ -762,17 +762,26 @@ print *, 'use_cpstar', use_cpstar
       ! accumulate mean vertical flux:
       ! ================================
       call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
+
+if(ie == 1) then
+print *, 'ETA derived in F code'
+print *, elem(ie)%derived%eta_dot_dpdn(1,1,:)
+endif
+
 #if (defined COLUMN_OPENMP)
        !$omp parallel do private(k)
 #endif
+
+!      call caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,elem(ie)%derived%eta_dot_dpdn)
+!THIS WAS NOT CONVERTED TO C --------------------------------
       do k=1,nlev  !  Loop index added (AAM)
+!is derived eta not zero here?
          elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
               elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
       enddo
       elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
            elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
-
-
+! -----------------------------------------------------------
 
 
 
