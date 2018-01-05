@@ -87,6 +87,7 @@ public:
     // at construction.
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
     ExecViewManaged<Scalar* [NP][NP][NUM_LEV]> t_vadv_buf;
+    ExecViewManaged<Scalar* [NP][NP][NUM_LEV_P]> eta_dot_dpdn_buf;
 
     ExecViewManaged<clock_t *> kernel_start_times;
     ExecViewManaged<clock_t *> kernel_end_times;

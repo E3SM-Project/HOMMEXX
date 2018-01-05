@@ -120,6 +120,12 @@ struct CaarFunctor {
        preq_vertadv(kv);
     };
     compute_omega_p(kv);
+
+//this accumulates weighted buffer eta_dot to elements m_eta_dot
+//the accumulated value is used in remap to compute dp_star for rsplit=0.
+//this, should this be wrapped into if (!rsplit) or derived%eta_dot is
+//used somewhere else? energy? fortran computes it unconditionally.
+    accumulate_eta_dot_dpdn(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     // Note this is dependent on eta_dot_dpdn from other levels and will cause
@@ -196,7 +202,7 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
+        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev) = 0;
       });//loop for eta_dot
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) = 0;
@@ -206,6 +212,24 @@ struct CaarFunctor {
     });
     kv.team_barrier();
   } // TRIVIAL
+
+
+
+//needs to be for the buffer
+  KOKKOS_INLINE_FUNCTION
+  void accumulate_eta_dot_dpdn(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      for(int k = 0; k < NUM_LEV_P; ++k){
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) += 
+           m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k); 
+      }//k loop
+    });
+    kv.team_barrier();
+  } // not tested yet, should be tested against caar_adjust_eta_dot_dpdn_c_int
+
 
 
 //Is this needed? views are inited to zero
@@ -243,7 +267,7 @@ std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
         const int ivecp1 = kp1 % VECTOR_SIZE;
         m_elements.buffers.sdot_sum(kv.ie, igp, jgp) += 
            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] =
+        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
 
 /*
@@ -269,9 +293,9 @@ std::cout << "BEFORE C In the last assignment k=" << k << "and etaC= " << m_elem
 std::cout << "hybi, sdot = "<<m_data.hybrid_bi(k+1) <<" " << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
 };
 */
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] = 
+        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] = 
            m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
-           m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec];
+           m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
 /*
 if( igp==0 && jgp==0 ){
 std::cout << "RESULT In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";
@@ -284,8 +308,8 @@ std::cout << "----------------------------------------------------\n";
       constexpr const int Np1 = NUM_PHYSICAL_LEV;
       const int ilevNp1 = Np1 / VECTOR_SIZE;
       const int ivecNp1 = Np1 % VECTOR_SIZE;
-      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, 0)[0] = 0.0;
-      m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
+      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
+      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
 /*
 if( igp==0 && jgp==0 ){
 std::cout << "C CODE before exit eta\n";
@@ -475,16 +499,16 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        Scalar tmp = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev);
+        Scalar tmp = m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
         tmp.shift_left(1);
         tmp[VECTOR_SIZE - 1] =
           (ilev + 1 < NUM_LEV) ?
-          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0] :
-          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, NUM_LEV_P-1)[(NUM_INTERFACE_LEV-1) % VECTOR_SIZE];
+          m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
+          m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, NUM_LEV_P-1)[(NUM_INTERFACE_LEV-1) % VECTOR_SIZE];
         // Add div_vdp before subtracting the previous value to eta_dot_dpdn
         // This will hopefully reduce numeric error
         tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
-        tmp -= m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev);
+        tmp -= m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
         tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
               tmp * m_data.dt;
 
@@ -522,7 +546,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
 
 //lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                       * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
+                       * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
       Real facm;
       m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] = 
                   facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
@@ -548,9 +572,9 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
 //std::cout << "in C k level=" << k <<"\n";
 
         facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                   * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilevp1)[ivecp1];
+                   * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
         facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                   * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilev)[ivec];
+                   * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
                  
         m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
@@ -582,7 +606,7 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       const int ivecm1 = km1 % VECTOR_SIZE;     
       //note the (), just to comply with F 
       facm = (0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]) )
-           * m_elements.m_eta_dot_dpdn(kv.ie , igp, jgp, ilev)[ivec];
+           * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
 
       m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                   facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
