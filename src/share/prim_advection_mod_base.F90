@@ -1512,23 +1512,6 @@ end subroutine ALE_parametric_coords
   type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
 #endif
 
-
-print *, 'beginning of Euler step'
-ie = 1
-k = 1
-#ifdef USE_KOKKOS_KERNELS
-print *, 'C CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'C CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#else
-print *, 'F CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'F CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#endif
-
-
-
-
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
 OMP_SIMD
   do k = 1 , nlev
@@ -1759,15 +1742,6 @@ OMP_SIMD
   call t_stopf("advance_qdp")
 #endif
 
-!here is a good place to compare tracers
-ie = 1
-k = 1
-#ifdef USE_KOKKOS_KERNELS
-print *, 'C CODE qtens for k=1', Qtens(1,1,:,1,ie)
-#else
-print *, 'F CODE qtens for k=1', Qtens(1,1,:,1,ie)
-#endif
-
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,dp_star)
@@ -1802,20 +1776,6 @@ print *, 'F CODE qtens for k=1', Qtens(1,1,:,1,ie)
     enddo
   enddo ! ie loop
 
-print *, 'before BE'
-ie = 1
-k = 1
-#ifdef USE_KOKKOS_KERNELS
-print *, 'C CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'C CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#else
-print *, 'F CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'F CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#endif
-
-
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
   call t_stopf('eus_bexchV')
@@ -1848,21 +1808,6 @@ OMP_SIMD
 #endif
   call t_stopf('eus_2d_advec')
 !pw call t_stopf('euler_step')
-
-
-print *, 'end of Euler step'
-ie = 1
-k = 1
-#ifdef USE_KOKKOS_KERNELS
-print *, 'C CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'C CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#else
-print *, 'F CODE Qdp for ind=1', elem(ie)%state%Qdp(1,1,:,1,1)
-print *, 'F CODE Qdp for ind=2', elem(ie)%state%Qdp(1,1,:,1,2)
-print *, 'also, np1_qdp', np1_qdp
-#endif
-
 
   end subroutine euler_step
 !-----------------------------------------------------------------------------
@@ -2132,25 +2077,6 @@ print *, 'also, np1_qdp', np1_qdp
            dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
         endif
      enddo
-
-if( ie==1) then
-k=1
-print *, 'DEFINING ETA_DOT_DERIVED...'
-#ifdef USE_KOKKOS_KERNELS
-print *, 'C code'
-print *, 'dp_star', dp_star(1,1,:)
-print *, 'eta', elem(ie)%derived%eta_dot_dpdn(1,1,:)
-!print *, 'dp', dp(:,:,k)
-!print *, 'ps_v', elem(ie)%state%ps_v(:,:,np1)
-#else
-print *, 'F code'
-print *, 'dp_star', dp_star(1,1,:)
-print *, 'eta', elem(ie)%derived%eta_dot_dpdn(1,1,:)
-!print *, 'dp', dp(:,:,k)
-!print *, 'ps_v', elem(ie)%state%ps_v(:,:,np1)
-#endif
-endif
-
 
      if (minval(dp_star)<0) then
         do k=1,nlev
