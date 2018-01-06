@@ -109,7 +109,8 @@ public:
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), 
         dvv("dvv"), nets(1),
-        nete(elements.num_elems()) {
+        nete(elements.num_elems(),
+        rsplit(0)) {
 
 //make these random
     Real hybrid_am[NUM_LEV_P] = { 0 };
@@ -190,6 +191,19 @@ public:
   static constexpr Real ps0 = 1.0;
   static constexpr Real dt = 1.0;
   static constexpr Real eta_ave_w = 1.0;
+
+private:
+  int rsplit;
+
+public:
+  int return_rsplit(){
+    return rsplit;
+  }
+
+  void set_rsplit(int _rsplit){
+    assert(_rsplit >= 0);
+    rsplit = _rsplit;
+  };
 };
 
 class compute_energy_grad_test {
@@ -967,6 +981,7 @@ public:
 
 
 // computing eta_dot_dpdn: (eta_dot, divdp, sdot_sum) --> (eta_dot, sdot_sum)
+// affects only buf value of eta
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
@@ -1030,9 +1045,12 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
 //  const int rsplit = 0;
   TestType test_functor(elements);
+  const int rsplit = 0;
+  test_functor.set_rsplit(rsplit);
+
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
        TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
-       TestType::eta_ave_w, TestType::rsplit, //0 for rsplit
+       TestType::eta_ave_w, test_functor.return_rsplit(), 
        hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
@@ -1081,8 +1099,12 @@ std::cout << "eta from elements:" << elements.m_eta_dot_dpdn(ie,igp,jgp,level)[v
 }}};
 */
 
-  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
+//m values only
+//  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+//
+//
+//
 /*
 std::cout << "AFTER ESYNC TO HOST \n";
   for (int ie = 0; ie < num_elems; ++ie) {
@@ -1108,7 +1130,7 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
   for (int ie = 0; ie < num_elems; ++ie) {
 // input is eta, sdot, divdp, hybi
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
-                               Kokkos::subview(eta_dot_dpdn_f90, ie, Kokkos::ALL,
+                               Kokkos::subview(eta_dot, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                Kokkos::subview(sdot_sum, ie, Kokkos::ALL,
                                                Kokkos::ALL).data(),
@@ -1116,10 +1138,12 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                hybrid_bi_mirror.data());
 
+
+//should be checking sdot_sum too!!!!!
     for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
-          const Real correct = eta_dot_dpdn_f90(ie, level, igp, jgp);
+          const Real correct = eta_dot(ie, level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
@@ -1144,6 +1168,10 @@ public:
   }
 };
 
+
+
+
+//DONE
 //og: it would be good if each test that uses buffers init-ed vars for buffers 
 //the same way, but i don't thnk it is the case. or maybe it is?
 //all emelents m_vars have copies in the test_functor, to move it to host?
@@ -1152,6 +1180,7 @@ public:
 //
 //
 //preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
+//takes in only buf value of eta
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
