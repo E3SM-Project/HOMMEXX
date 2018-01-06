@@ -1152,6 +1152,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   //preq_vertadv depends on eta_dot_dpdn, dp3d, T, v (all in elements, randomized by random_init),
   //modifies v_vadv, t_vadv (those are in buffers). 
   //We will assign nans to the buffer values:
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
 
@@ -1163,37 +1164,44 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int i = 0; i < NP; i++) {
         for (int j = 0; j < NP; j++) {
+          eta_dot(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
           t_vadv(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
           v_vadv(ie,level,0,i,j) = std::numeric_limits<Real>::quiet_NaN();
           v_vadv(ie,level,1,i,j) = std::numeric_limits<Real>::quiet_NaN();
         }
       }
     } //level loop
+    for (int i = 0; i < NP; i++) {
+      for (int j = 0; j < NP; j++) {
+        eta_dot(ie,NUM_PHYSICAL_LEV,i,j) = std::numeric_limits<Real>::quiet_NaN();
+      }
+    }// i j loop for the last eta level
   }//ie loop, end of assigning of quiet nans
 
+//do we have this function for nlev+1 levels?
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
   sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
 
 //now set up F output and make sure it has the same vals for _vadv before we run
 //test_functor.
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
   HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
 
 //to from
+  deep_copy(eta_dot_f90, eta_dot);
   deep_copy(t_vadv_f90, t_vadv);
   deep_copy(v_vadv_f90, v_vadv);
 
   TestType test_functor(elements);
-//  sync_to_host(elements.m_v, test_functor.velocity); //???????
-//  sync_to_host(elements.m_dp3d, test_functor.dp3d);
-//  sync_to_host(elements.m_t, test_functor.temperature);
-//  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
   //this test does not need m_data init?
-  //this test will change t_vadv, v_vadv
+  //this test will change t_vadv_buf, v_vadv_buf, eta_dot_dpdn_buf
   test_functor.run_functor();
 
   //now copy buffer vals back to test values
+  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
   sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
   sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
 
@@ -1215,7 +1223,9 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(test_functor.velocity, ie, test_functor.n0, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.eta_dpdn, ie, 
+//        Kokkos::subview(test_functor.eta_dpdn, ie, 
+//                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(), //if test takes m_value
+        Kokkos::subview(eta_dot_f90, ie, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         rdp_f90.data(),
         Kokkos::subview(t_vadv_f90, ie, 
