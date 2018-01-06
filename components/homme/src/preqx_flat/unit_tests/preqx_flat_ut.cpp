@@ -965,6 +965,8 @@ public:
   }
 };
 
+
+// computing eta_dot_dpdn: (eta_dot, divdp, sdot_sum) --> (eta_dot, sdot_sum)
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
@@ -984,18 +986,21 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems);
 //std::cout << "here 1 \n;";
   //host or source? diff tests use diff. name convensions
-  //this is to randomize buffer values, since Elements does not have a methiod fo rthis
+  //this is to randomize buffer values, since Elements does not have a methiod for this
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
 //std::cout << "here 2 \n";
   //random init host views
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
 
 //Actually we only run with sdot_sum=0 but i guess this makes a better test
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
 //std::cout << "here 3 \n;";
   //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
 //std::cout << "here 4 \n;";
 //source, dest
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
@@ -1022,10 +1027,12 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
 //'tails'. check this. Real arrays.
+
+//  const int rsplit = 0;
   TestType test_functor(elements);
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
        TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
-       TestType::eta_ave_w, 0, //0 for rsplit
+       TestType::eta_ave_w, TestType::rsplit, //0 for rsplit
        hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
@@ -1034,10 +1041,17 @@ std::cout << "printing hybi!n the tEST BODY!!!!!!!!!!!!!! \n";
 for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
 std::cout << "hybi " << ii << " " << hybrid_bi_mirror(ii) << "\n";
 */
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
+
+// m value
+//  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
+//
 
 //we will always set etadot=0 before calling vertadv, but this makes it a better test
-  deep_copy(eta_dot_dpdn_f90, test_functor.eta_dpdn);
+// m value
+//  deep_copy(eta_dot_dpdn_f90, test_functor.eta_dpdn);
+//
+
+
   //RUN subfunctor, why does it run on device?
   //will run on device
   test_functor.run_functor();
@@ -1135,6 +1149,9 @@ public:
 //all emelents m_vars have copies in the test_functor, to move it to host?
 //some buffer vars for C and F tests are inited as Real*, some are inited as Scalar*
 //in the test body (even those with midlevels values only). why?
+//
+//
+//preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
@@ -1159,23 +1176,18 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
 //we need quiet nans, this is just to debug the test itself
 //  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
 //  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
 
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int i = 0; i < NP; i++) {
         for (int j = 0; j < NP; j++) {
-          eta_dot(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
           t_vadv(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
           v_vadv(ie,level,0,i,j) = std::numeric_limits<Real>::quiet_NaN();
           v_vadv(ie,level,1,i,j) = std::numeric_limits<Real>::quiet_NaN();
         }
       }
     } //level loop
-    for (int i = 0; i < NP; i++) {
-      for (int j = 0; j < NP; j++) {
-        eta_dot(ie,NUM_PHYSICAL_LEV,i,j) = std::numeric_limits<Real>::quiet_NaN();
-      }
-    }// i j loop for the last eta level
   }//ie loop, end of assigning of quiet nans
 
 //do we have this function for nlev+1 levels?
@@ -1242,10 +1254,10 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
           REQUIRE(!std::isnan(correct));
           const Real computed = t_vadv(ie, level, igp, jgp);
 
-//if( igp == 0 && jgp == 0){
-//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-//std::cout << " F = " << correct << " C = " << computed << "\n";
-//}
+if( igp == 0 && jgp == 0){
+std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+std::cout << " F = " << correct << " C = " << computed << "\n";
+}
 
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
