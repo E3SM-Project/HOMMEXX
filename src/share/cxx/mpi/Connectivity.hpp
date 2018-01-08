@@ -19,6 +19,9 @@ struct LidGidPos
   int pos;
 };
 
+// An invalid id
+constexpr int INVALID_ID = -1;
+
 // A simple struct, storing a connection info. In addition to LidGidPos (on both local and
 // remote element), it stores also whether the ordering is the same on both the element
 // (relevant only for edge-type connections), and the process id of the remote element,
@@ -37,7 +40,7 @@ struct ConnectionInfo
   int direction;  //0=forward, 1=backward
 
   // This is only needed if the neighboring element is owned by a different process
-  int remote_pid; // Process id owning the other sied of the connection
+  int remote_pid; // Process id owning the other side of the connection
 };
 
 // The connectivity class. It stores two lists of ConnectionInfo objects, one for
