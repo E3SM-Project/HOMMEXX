@@ -1,6 +1,6 @@
 #include "Hommexx_Session.hpp"
 
-#include <ExecSpaceDefs.hpp>
+#include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"
 
@@ -16,7 +16,7 @@ void initialize_hommexx_session ()
 
   /* Set Environment variables to control how many
    * threads/processors Kokkos uses */
-  Kokkos::initialize();
+  initialize_kokkos();
 
   ExecSpace::print_configuration(std::cout, true);
 

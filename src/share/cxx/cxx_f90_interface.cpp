@@ -167,7 +167,6 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   if (first) {
     const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
       data.num_elems);
-    std::cout << "CAAR pair " << tv.first << " " << tv.second << "\n";
     first = false;
   }
 
