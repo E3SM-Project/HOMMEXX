@@ -1,9 +1,57 @@
 #include <cassert>
 
+#include <sstream>
+
 #include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
 
+#ifdef KOKKOS_HAVE_CUDA
+# include <cuda.h>
+#endif
+
 namespace Homme {
+
+// Since we're initializing from inside a Fortran code and don't have access to
+// char** args to pass to Kokkos::initialize, we need to do some work on our
+// own. As a side benefit, we'll end up running on GPU platforms optimally
+// without having to specify --kokkos-ndevices on the command line.
+void initialize_kokkos () {
+#ifdef KOKKOS_HAVE_CUDA
+  int nd;
+  const auto ret = cudaGetDeviceCount(&nd);
+  if (ret != cudaSuccess) {
+    // It isn't a big deal if we can't get the device count.
+    nd = 1;
+  }
+  // This may seem hacky for multiple reasons.
+  //   First, it's the only way to get the round-robin rank assignment
+  // Kokkos provides, as that algorithm is hardcoded in
+  // Kokkos::initialize(int& narg, char* arg[]).
+  //   Second, the string stuff is a bit hacky. It's to get around the
+  // fact that the second arg to initialize is char*[], not const
+  // char*[], even though the second is almost surely the intent (they
+  // want to modify args, not args[i]). I *could* const_cast
+  // ss.str().c_str(), but instead I make a vector<char> whose data
+  // could in principle be modified.
+  //   By the way, if for some reason we're running on a GPU platform,
+  // have Cuda enabled, but are using a different execution space,
+  // this initialization is still OK. The rank gets a GPU assigned and
+  // simply will ignore it.
+  {
+    std::stringstream ss;
+    ss << "--kokkos-ndevices=" << nd;
+    const auto key = ss.str();
+    std::vector<char> str(key.size()+1);
+    std::copy(key.begin(), key.end(), str.begin());
+    str.back() = 0;
+    char* args[] = {str.data()};
+    int narg = 1;
+    Kokkos::initialize(narg, args);
+  }
+#else
+  Kokkos::initialize();
+#endif
+}
 
 ThreadPreferences::ThreadPreferences ()
   : max_threads_usable(NP*NP),
@@ -58,7 +106,7 @@ team_num_threads_vectors_for_gpu (
   assert(num_warps_total > 0 && num_threads_per_warp > 0 && min_num_warps > 0);
   assert(num_parallel_iterations >= 0);
   assert(min_num_warps <= max_num_warps);
-  assert(max_num_warps >= num_warps_total);
+  assert(num_warps_total >= max_num_warps);
   assert(tp.max_threads_usable >= 1 && tp.max_vectors_usable >= 1);
 
   const int num_warps =
