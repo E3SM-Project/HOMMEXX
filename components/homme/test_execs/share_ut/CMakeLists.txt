@@ -138,6 +138,7 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Control.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
