@@ -37,10 +37,10 @@ void Connectivity::set_num_elements (const int num_elements)
       info.local.lid = ie;
       info.local.pos = iconn;
 
-      info.local.gid  = -1;
-      info.remote.lid = -1;
-      info.remote.gid = -1;
-      info.remote.pos = -1;
+      info.local.gid  = INVALID_ID;
+      info.remote.lid = INVALID_ID;
+      info.remote.gid = INVALID_ID;
+      info.remote.pos = INVALID_ID;
     }
   }
 
