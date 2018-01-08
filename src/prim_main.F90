@@ -79,6 +79,11 @@ program prim_main
   ! =====================================================
   par=initmp()
 
+#ifdef USE_KOKKOS_KERNELS
+  ! Do this right away, but AFTER MPI initialization
+  call initialize_hommexx_session()
+#endif
+
   ! =====================================
   ! Set number of threads...
   ! =====================================
@@ -127,10 +132,6 @@ program prim_main
 #if (defined HORIZ_OPENMP)
   !$OMP END CRITICAL
   !$OMP END PARALLEL
-#endif
-
-#ifdef USE_KOKKOS_KERNELS
-  call initialize_hommexx_session()
 #endif
 
   ! setup fake threading so we can call routines that require 'hybrid'
