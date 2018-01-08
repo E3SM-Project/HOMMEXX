@@ -539,7 +539,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
   // TODO: Conditionally remove this member based on nonzero_rsplit
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_src_layer_thickness;
 
-  // Surface pressure??
+  // Surface pressure
   ExecViewManaged<Real * [NP][NP]> m_ps_v;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
@@ -619,7 +619,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     return src_layer_thickness;
   }
 
-  template <int nz_rsplit = nonzero_rsplit>
+  template <bool nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       (nz_rsplit == true),
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> >::type
@@ -660,20 +660,20 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
   }
 
   Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
-  remap_states_array() const {
+  remap_states_array(KernelVariables &kv) const {
     // The states which need to be remapped
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
     state_remap{ { Homme::subview(m_elements.m_u, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
                    Homme::subview(m_elements.m_t, kv.ie, m_data.np1) } };
-    return state_remap
+    return state_remap;
   }
 
-  template <int nz_rsplit = nonzero_rsplit>
+  template <bool nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), int>::type
   build_remap_array(
       KernelVariables &kv,
-      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                     remap_type::remap_dim> &remap_vals) const {
     const int num_states =
@@ -683,12 +683,12 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     return num_tracers + num_states;
   }
 
-  template <int nz_rsplit = nonzero_rsplit>
+  template <bool nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
                                                  int>::type
   build_remap_array(
       KernelVariables &kv,
-      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                     remap_type::remap_dim> &remap_vals) const {
     return build_remap_array_tracers(kv, 0, remap_vals);
@@ -698,9 +698,10 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       KernelVariables &kv,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                     remap_type::remap_dim> &remap_vals,
-      ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness) const {
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
+      const {
 
-    auto state_remap = remap_states_array();
+    auto state_remap = remap_states_array(kv);
 
     // This must be done for every thread
     for (int state_idx = 0; state_idx < state_remap.size(); ++state_idx) {
@@ -724,7 +725,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
   KOKKOS_INLINE_FUNCTION int build_remap_array_tracers(
       KernelVariables &kv, const int prev_filled,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                    remap_type::remap_dim> &remap_vals) {
+                    remap_type::remap_dim> &remap_vals) const {
     for (int q = 0; q < m_data.qsize; ++q) {
       remap_vals[prev_filled + q] =
           Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
@@ -732,15 +733,20 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     return m_data.qsize;
   }
 
-  template <int nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), void>::type
-  rescale_states(KernelVariables &kv) {}
+  template <bool nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true),
+                                                 void>::type
+  rescale_states(KernelVariables &kv,
+                 ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
+                     tgt_layer_thickness) const {}
 
-  template <int nz_rsplit = nonzero_rsplit>
+  template <bool nz_rsplit = nonzero_rsplit>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
                                                  void>::type
-  rescale_states(KernelVariables &kv) {
-    auto state_remap = remap_states_array();
+  rescale_states(KernelVariables &kv,
+                 ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
+                     tgt_layer_thickness) const {
+    auto state_remap = remap_states_array(kv);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
                                                  state_remap.size() * NP * NP),
                          [&](const int &loop_idx) {
@@ -770,7 +776,6 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
         compute_source_thickness(kv, tgt_layer_thickness);
 
-    int num_remap = 0;
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;
 
@@ -783,7 +788,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       kv.team_barrier();
     }
 
-    rescale_states(kv);
+    rescale_states(kv, tgt_layer_thickness);
 
     stop_timer("Remap functor");
   }
