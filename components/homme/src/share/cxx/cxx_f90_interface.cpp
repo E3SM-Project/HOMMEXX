@@ -5,6 +5,9 @@
 
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
+#include "BoundaryExchange.hpp"
+
+#include "Utility.hpp"
 
 #include "profiling.hpp"
 
@@ -15,21 +18,13 @@ extern "C"
 {
 
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& nm1, const int& n0, const int& np1,
-                          const int& qn0, const Real& dt2, const Real& ps0,
-                          const bool& compute_diagonstics, const Real& eta_ave_w,
-                          CRCPtr& hybrid_a_ptr)
+                          const int& qn0, const Real& ps0, const int& rsplit, CRCPtr& hybrid_a_ptr)
 {
   Control& control = Context::singleton().get_control ();
 
-  // Adjust indices
-  int nets_c = nets-1;
-  int nete_c = nete;  // F90 ranges are closed, c ranges are open on the right
-  int n0_c = n0-1;
-  int nm1_c = nm1-1;
-  int qn0_c = qn0==-1 ? qn0 : qn0-1;  // the -1 index has a special meaning, and -2 is not even contemplated
-  int np1_c = np1-1;
-  control.init(nets_c, nete_c, num_elems, nm1_c, n0_c, np1_c, qn0_c, dt2, ps0, compute_diagonstics, eta_ave_w, hybrid_a_ptr);
+  control.init(nets, nete, num_elems, qn0, ps0, hybrid_a_ptr);
+
+  control.rsplit = rsplit;
 }
 
 void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
@@ -52,11 +47,11 @@ void init_derivative_c (CF90Ptr& dvv)
 }
 
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
-                       CF90Ptr& spheremp, CF90Ptr& metdet, CF90Ptr& phis)
+                         CF90Ptr& spheremp, CF90Ptr& rspheremp, CF90Ptr& metdet, CF90Ptr& phis)
 {
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems);
-  r.init_2d(D,Dinv,fcor,spheremp,metdet,phis);
+  r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
@@ -137,10 +132,37 @@ void euler_push_results_c (F90Ptr& qtens_ptr)
   }
 }
 
-void caar_pre_exchange_monolithic_c()
+void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
+                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
+                       MDRangePolicy<ExecSpace,4> policy_post)
 {
-  Control& data = Context::singleton().get_control();
+  // --- Pre boundary exchange
+  profiling_resume();
+  Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
+  ExecSpace::fence();
+  profiling_pause();
 
+  // Do the boundary exchange
+  start_timer("caar_bexchV");
+  be.exchange();
+
+  // --- Post boundary echange
+  profiling_resume();
+  Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
+  ExecSpace::fence();
+  profiling_pause();
+  stop_timer("caar_bexchV");
+}
+
+void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
+                          const Real& dt, const Real& eta_ave_w,
+                          const bool& compute_diagonstics)
+{
+  // Get control and elements structures
+  Control& data  = Context::singleton().get_control();
+  Elements& elements = Context::singleton().get_elements();
+
+  // Retrieve the team size
   static bool first = true;
   if (first) {
     const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
@@ -148,15 +170,65 @@ void caar_pre_exchange_monolithic_c()
     first = false;
   }
 
-  auto policy = Homme::get_default_team_policy<ExecSpace>(data.num_elems);
-  CaarFunctor func(data, Context::singleton().get_elements(),
-                   Context::singleton().get_derivative());
+  // Setup the policies
+  auto policy_pre = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(data.num_elems);
+  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
 
-  profiling_resume();
-  Kokkos::parallel_for("main caar loop", policy, func);
+  // Create the functor
+  CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
 
+  // Setup the boundary exchange
+  BoundaryExchange* be[NUM_TIME_LEVELS];
+  for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
+    std::stringstream ss;
+    ss << "caar tl " << tl;
+    be[tl] = &Context::singleton().get_boundary_exchange(ss.str());
+
+    // Set the views of this time level into this time level's boundary exchange
+    if (!be[tl]->is_registration_completed())
+    {
+      be[tl]->set_num_fields(0,4);
+      be[tl]->register_field(elements.m_u,1,tl);
+      be[tl]->register_field(elements.m_v,1,tl);
+      be[tl]->register_field(elements.m_t,1,tl);
+      be[tl]->register_field(elements.m_dp3d,1,tl);
+
+      be[tl]->registration_completed();
+    }
+  }
+
+  // ===================== RK STAGES ===================== //
+
+  // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
+  functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagonstics);
+  caar_monolithic_c(elements,functor,*be[nm1],policy_pre,policy_post);
+
+  // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
+  functor.set_rk_stage_data(n0,nm1,np1,dt/5.0,0.0,false);
+  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+
+  // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
+  functor.set_rk_stage_data(n0,np1,np1,dt/3.0,0.0,false);
+  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+
+  // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
+  functor.set_rk_stage_data(n0,np1,np1,2.0*dt/3.0,0.0,false);
+  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+
+  // Compute (5u1-u0)/4 and store it in timelevel nm1
+  Kokkos::Experimental::md_parallel_for(
+    policy_post,
+    KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
+       elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
+       elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
+       elements.m_v(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,igp,jgp,ilev)-elements.m_v(ie,n0,igp,jgp,ilev))/4.0;
+       elements.m_dp3d(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_dp3d(ie,nm1,igp,jgp,ilev)-elements.m_dp3d(ie,n0,igp,jgp,ilev))/4.0;
+  });
   ExecSpace::fence();
-  profiling_pause();
+
+  // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
+  functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
+  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
 void advance_qdp_c()

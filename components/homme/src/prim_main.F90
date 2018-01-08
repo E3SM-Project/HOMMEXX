@@ -28,6 +28,10 @@ program prim_main
   use fvm_control_volume_mod, only: fvm_struct
   use fvm_control_volume_mod, only: n0_fvm
 
+#ifdef USE_KOKKOS_KERNELS
+  use prim_cxx_driver_mod, only: cleanup_cxx_structures
+#endif
+
 #ifdef _REFSOLN
   use prim_state_mod, only : prim_printstate_par
 #endif
@@ -308,15 +312,8 @@ program prim_main
   if(par%masterproc) print *,"calling t_finalizef"
   call t_finalizef()
 #ifdef USE_KOKKOS_KERNELS
+  call cleanup_cxx_structures ()
   call finalize_hommexx_session()
 #endif
   call haltmp("exiting program...")
 end program prim_main
-
-
-
-
-
-
-
-
