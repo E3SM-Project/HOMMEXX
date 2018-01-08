@@ -9,24 +9,25 @@
 
 namespace Homme
 {
-// A simple struct to store, for a connection between elements, the local id of the element
-// the position, meaning which neighbor this connection refers to (W/E/S/N/SW/SE/NW/NE)
-// Much like std::pair, but with more verbose members' names
-struct LidPos
+// A simple struct to store, for a connection between elements, the local/global id of the element
+// and the position, meaning which neighbor this connection refers to (W/E/S/N/SW/SE/NW/NE)
+// Much like std::tuple, but with more verbose members' names
+struct LidGidPos
 {
   int lid;
+  int gid;
   int pos;
 };
 
-// A simple struct, storing a connection info. In addition to LidPos (on both local and
+// A simple struct, storing a connection info. In addition to LidGidPos (on both local and
 // remote element), it stores also whether the ordering is the same on both the element
 // (relevant only for edge-type connections), and the process id of the remote element,
 // which is only used if  the remote element is on a different process.
 // Note: we store kind, sharing and direction already converted to ints
 struct ConnectionInfo
 {
-  LidPos local;
-  LidPos remote;
+  LidGidPos local;
+  LidGidPos remote;
 
   int kind;     // etoi(ConnectionKind::EDGE)=0, etoi(ConnectionKind::CORNER)=1,  etoi(ConnectionSharing::MISSING)=2
   int sharing;  // etoi(ConnectionSharing::LOCAL)=0, etoi(ConnectionSharing::SHARED)=1, etoi(ConnectionSharing::MISSING)=2
@@ -36,7 +37,7 @@ struct ConnectionInfo
   int direction;  //0=forward, 1=backward
 
   // This is only needed if the neighboring element is owned by a different process
-  int remote_pid;
+  int remote_pid; // Process id owning the other sied of the connection
 };
 
 // The connectivity class. It stores two lists of ConnectionInfo objects, one for
@@ -55,8 +56,8 @@ public:
 
   void set_num_elements (const int num_elements);
 
-  void add_connection (const int first_elem_lid,  const int first_elem_pos,  const int first_elem_pid,
-                       const int second_elem_lid, const int second_elem_pos, const int second_elem_pid);
+  void add_connection (const int first_elem_lid,  const int first_elem_gid,  const int first_elem_pos,  const int first_elem_pid,
+                       const int second_elem_lid, const int second_elem_gid, const int second_elem_pos, const int second_elem_pid);
 
   void finalize ();
 
