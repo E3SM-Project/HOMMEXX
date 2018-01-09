@@ -99,18 +99,20 @@ module prim_advection_mod_base
   integer,parameter :: DSSdiv_vdp_ave = 3
   integer,parameter :: DSSno_var = -1
 
-  real(kind=real_kind), allocatable :: qmin(:,:,:), qmax(:,:,:)
+  real(kind=real_kind), allocatable, target :: qmin(:,:,:), qmax(:,:,:)
 
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr) bind(c)
+    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
+         qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       use kinds, only : real_kind
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
+           qmin_ptr, qmax_ptr, dpdissk_ptr
     end subroutine euler_pull_data_c
     subroutine euler_push_results_c(elem_state_Qdp_ptr) bind(c)
       use iso_c_binding, only : c_ptr
@@ -1501,7 +1503,7 @@ end subroutine ALE_parametric_coords
   ! local
   real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
   real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete)               :: dpdissk
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target       :: dpdissk
   real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
   real(kind=real_kind), dimension(np,np,2)                            :: gradQ
   real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
@@ -1511,7 +1513,8 @@ end subroutine ALE_parametric_coords
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr
+  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+       qmin_ptr, qmax_ptr, dpdissk_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1733,8 +1736,13 @@ OMP_SIMD
   Vstar_ptr = c_loc(Vstar)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
   Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option)
-  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr)
+  qmin_ptr = c_loc(qmin)
+  qmax_ptr = c_loc(qmax)
+  dpdissk_ptr = c_loc(dpdissk)
+  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
+       np1_qdp, rhs_viss, limiter_option)
+  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
+       qmin_ptr, qmax_ptr, dpdissk_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")

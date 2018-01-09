@@ -72,6 +72,8 @@ public:
     ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens_biharmonic;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
+    ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
+    ExecViewManaged<Scalar* [QSIZE_D][2]        [NUM_LEV]>  qlim; // qmin, qmax
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
     // Buffers for spherical operators

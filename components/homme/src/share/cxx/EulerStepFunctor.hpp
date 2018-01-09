@@ -125,6 +125,7 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
+    
   }
 
   /*
