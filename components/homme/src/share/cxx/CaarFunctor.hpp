@@ -21,7 +21,8 @@ struct CaarFunctor {
   const Elements    m_elements;
   const Derivative  m_deriv;
 
-  static constexpr Kokkos::Impl::ALL_t ALL = Kokkos::ALL;
+  // Tag for pre exchange loop
+  struct TagPreExchange {};   // CAAR routine up to boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
@@ -38,6 +39,12 @@ struct CaarFunctor {
       m_deriv(derivative)
   {
     // Nothing to be done here
+  }
+
+  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
+                          const Real dt, const Real eta_ave_w,
+                          const bool compute_diagonstics) {
+    m_data.set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagonstics);
   }
 
   // Depends on PHI (after preq_hydrostatic), PECND
@@ -78,9 +85,9 @@ struct CaarFunctor {
 
     gradient_sphere_update(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.ephi, kv.ie, ALL, ALL, ALL),
-        m_elements.buffers.grad_buf, Kokkos::subview(m_elements.buffers.energy_grad,
-                                                   kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.ephi, kv.ie),
+        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
 
 #ifdef NDEBUG
@@ -121,10 +128,10 @@ struct CaarFunctor {
 
     vorticity_sphere(
         kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.m_u, kv.ie, m_data.n0, ALL, ALL, ALL),
-        Kokkos::subview(m_elements.m_v, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Homme::subview(m_elements.m_u, kv.ie, m_data.n0),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
         m_elements.buffers.vort_buf,
-        Kokkos::subview(m_elements.buffers.vorticity, kv.ie, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -285,9 +292,9 @@ struct CaarFunctor {
 
     divergence_sphere(
         kv, m_elements.m_dinv, m_elements.m_metdet, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.vdp, kv.ie, ALL, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.vdp, kv.ie),
         m_elements.buffers.div_buf,
-        Kokkos::subview(m_elements.buffers.div_vdp, kv.ie, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -295,7 +302,7 @@ struct CaarFunctor {
   // Might depend on QDP, DP3D_current
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_div_vdp(KernelVariables &kv) const {
-    if (m_data.qn0 == -1) {
+    if (m_data.qn0 < 0) {
       compute_temperature_no_tracers_helper(kv);
     } else {
       compute_temperature_tracers_helper(kv);
@@ -326,10 +333,9 @@ struct CaarFunctor {
 
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.m_t, kv.ie, m_data.n0, ALL, ALL, ALL),
+        Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.temperature_grad, kv.ie, ALL, ALL, ALL,
-                        ALL));
+        Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
@@ -370,7 +376,9 @@ struct CaarFunctor {
         Scalar tmp = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev);
         tmp.shift_left(1);
         tmp[VECTOR_SIZE - 1] =
-            m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0];
+          (ilev + 1 < NUM_LEV) ?
+          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0] :
+          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, NUM_LEV_P-1)[(NUM_INTERFACE_LEV-1) % VECTOR_SIZE];
         // Add div_vdp before subtracting the previous value to eta_dot_dpdn
         // This will hopefully reduce numeric error
         tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
@@ -433,7 +441,7 @@ struct CaarFunctor {
   } // UNTESTED 13
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TeamMember& team) const {
+  void operator()(const TagPreExchange&, const TeamMember& team) const {
     start_timer("caar compute");
     KernelVariables kv(team);
 
@@ -445,6 +453,16 @@ struct CaarFunctor {
 
     compute_phase_3(kv);
     stop_timer("caar compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const int ie, const int igp, const int jgp, const int ilev) const {
+
+    // Rescaling tendencies by inverse mass matrix on sphere
+    m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_v(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -579,8 +597,7 @@ private:
       const int jgp = loop_idx % NP;
 
       // Use a currently unused buffer to store one column of data.
-      const auto rgas_tv_dp_over_p = Kokkos::subview(
-        m_elements.buffers.vstar, kv.ie, 0, igp, jgp, Kokkos::ALL());
+      const auto rgas_tv_dp_over_p = Homme::subview(m_elements.buffers.vstar, kv.ie, 0, igp, jgp);
 
       // Precompute this product as a SIMD-like operation.
       Kokkos::parallel_for(
@@ -631,9 +648,9 @@ private:
     });
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.pressure, kv.ie),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -675,9 +692,9 @@ private:
   preq_omega_ps_impl(KernelVariables &kv) const {
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
-        Kokkos::subview(m_elements.buffers.pressure, kv.ie, ALL, ALL, ALL),
+        Homme::subview(m_elements.buffers.pressure, kv.ie),
         m_elements.buffers.grad_buf,
-        Kokkos::subview(m_elements.buffers.pressure_grad, kv.ie, ALL, ALL, ALL, ALL));
+        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {

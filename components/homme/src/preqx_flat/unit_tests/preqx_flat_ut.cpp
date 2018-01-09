@@ -100,8 +100,9 @@ public:
         nete(elements.num_elems()) {
     Real hybrid_a[NUM_LEV_P] = { 0 };
     Real hybrid_b[NUM_LEV_P] = { 0 };
-    functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
-                        qn0, ps0, dt, false, eta_ave_w, hybrid_a, hybrid_b);
+    functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
+                        qn0, ps0, 1, hybrid_a, hybrid_b);
+    functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
     Context::singleton().get_derivative().dvv(dvv.data());
 
@@ -601,11 +602,12 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_b_mirror("hybrid_a_host");
   genRandArray(hybrid_b_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-                                   TestType::n0, TestType::np1, TestType::qn0,
-                                   TestType::dt, TestType::ps0, false,
-                                   TestType::eta_ave_w, hybrid_a_mirror.data(),
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0, 1, hybrid_a_mirror.data(),
                                    hybrid_b_mirror.data());
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0,
+                                                TestType::np1, TestType::dt,
+                                                TestType::eta_ave_w, false);
 
   test_functor.run_functor();
 
