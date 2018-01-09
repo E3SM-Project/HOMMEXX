@@ -108,6 +108,21 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void add_hyperviscosity (const KernelVariables& kv) const {
+    using Kokkos::ALL;
+    const auto NP2 = NP * NP;
+    auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP2),
+      [&] (const int loop_idx) {
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& ilev) {
+            qtens(igp, jgp, ilev) += qtens_biharmonic(igp, jgp, ilev);
+          });
+      });
   }
 
   KOKKOS_INLINE_FUNCTION
