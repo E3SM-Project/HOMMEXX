@@ -85,6 +85,21 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, 0, 0, 0, 0));
 }
 
+template <typename ScalarType, int DIM1, int DIM2, int DIM3,
+          typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM2][DIM3], MemSpace>
+subview(ViewType<ScalarType * [DIM1][DIM2][DIM3], MemSpace, Properties...>
+            v_in, int ie, int idim1) {
+  assert(v_in.data() != nullptr);
+  assert(ie < v_in.extent_int(0));
+  assert(ie >= 0);
+  assert(idim1 < v_in.extent_int(1));
+  assert(idim1 >= 0);
+  return ViewUnmanaged<ScalarType[DIM2][DIM3], MemSpace>(
+      &v_in.implementation_map().reference(ie, idim1, 0, 0));
+}
+
 template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
@@ -425,7 +440,7 @@ sync_to_device(Source_T source, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
-    host_view_mappable<Source_T, Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>::value &&
+    host_view_mappable<Source_T, Real**[NUM_PHYSICAL_LEV][NP][NP]>::value &&
     exec_view_mappable<Dest_T, Scalar*[QSIZE_D][NP][NP][NUM_LEV]>::value, void>::type
 sync_to_device(Source_T source, Dest_T dest) {
   typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
@@ -465,7 +480,7 @@ sync_to_device(Source_T source, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
-  host_view_mappable<Source_T, const Real*[QSIZE_D][NUM_PHYSICAL_LEV]>::value &&
+  host_view_mappable<Source_T, const Real**[NUM_PHYSICAL_LEV]>::value &&
   exec_view_mappable<Dest_T, Scalar*[QSIZE_D][2][NUM_LEV]>::value, void>::type
 sync_to_device(Source_T source0, Source_T source1, Dest_T dest) {
   typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);

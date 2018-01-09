@@ -112,23 +112,23 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
   }
   Kokkos::deep_copy(vstar_exec, vstar_host);
 
-  sync_to_device(ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(
-                   Qtens_biharmonic_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV, NP, NP),
+  sync_to_device(ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
+                   Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.qtens_biharmonic);
   sync_to_device(ExecViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.dpdissk);
-  sync_to_device(ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV]>(
-                   qmin_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV),
-                 ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV]>(
-                   qmax_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV),
+  sync_to_device(ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+                 ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                  r.buffers.qlim);
 }
 
 void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr)
 {
   Elements& r = Context::singleton().get_elements();
-  r.pull_qdp(elem_state_Qdp_ptr);
+  r.push_qdp(elem_state_Qdp_ptr);
 }
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,

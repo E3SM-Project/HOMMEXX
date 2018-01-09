@@ -64,7 +64,6 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void compute_vstar_qdp (const KernelVariables& kv) const {
-    using Kokkos::ALL;
     const auto NP2 = NP * NP;
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP2),
@@ -92,7 +91,6 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void compute_qtens (const KernelVariables& kv) const {
-    using Kokkos::ALL;
     const auto dvv = m_deriv.get_dvv();
     const ExecViewUnmanaged<const Real[NP][NP]>
       metdet = Homme::subview(m_elements.m_metdet, kv.ie);
@@ -107,9 +105,8 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void add_hyperviscosity (const KernelVariables& kv) const {
-    using Kokkos::ALL;
-    auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),
       [&] (const int loop_idx) {
@@ -125,20 +122,107 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
-    
+    const int NP2 = NP * NP;
+    const int maxiter = NP2-1;
+    const Real tol_limiter = 5e-14;
+
+    const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
+    const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
+    const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
+
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV),
+      [&] (const int ilev) {
+        const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
+
+        const auto tvr = Kokkos::ThreadVectorRange(kv.team, NP2);
+        using Kokkos::parallel_for;
+        using Kokkos::parallel_reduce;
+
+        Real x[NP2], c[NP2];
+        parallel_for(tvr, [&] (const int& k) {
+            // This div-mod line is *purposely* the reverse of usual. HOMMEXX
+            // carries the transpose of the GLL points, for historical (?)
+            // reasons. But to get BFB in the reductions below, I have to carry
+            // them out in the Fortran orientation. I get that by reversing the
+            // usual i,j here.
+            const int i = k % NP, j = k / NP;
+            const auto& dpm = dpmass(i,j,vpi)[vsi];
+            c[k] = sphweights(i,j)*dpm;
+            x[k] = ptens(i,j,vpi)[vsi]/dpm;
+          });
+
+        Real sumc = 0;
+        parallel_reduce(tvr, [&] (const int& k, Real& isumc) { isumc += c[k]; }, sumc);
+        if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
+        Real mass = 0;
+        parallel_reduce(tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
+
+        Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
+        //! relax constraints to ensure limiter has a solution:
+        //! This is only needed if running with the SSP CFL>1 or
+        //! due to roundoff errors
+        if (mass < minp*sumc)
+          minp = qlim(0,vpi)[vsi] = mass/sumc;
+        if (mass > maxp*sumc)
+          maxp = qlim(1,vpi)[vsi] = mass/sumc;
+
+        for (int iter = 0; iter < maxiter; ++iter) {
+          Real addmass = 0;
+          parallel_reduce(tvr, [&] (const int& k, Real& iaddmass) {
+              if (x[k] > maxp) {
+                iaddmass += (x[k] - maxp)*c[k];
+                x[k] = maxp;
+              } else if (x[k] < minp) {
+                iaddmass += (x[k] - minp)*c[k];
+                x[k] = minp;
+              }
+            }, addmass);
+
+          if (std::abs(addmass) <= tol_limiter*std::abs(mass))
+            break;
+
+          Real weightssum = 0;
+          if (addmass > 0) {
+            parallel_reduce(tvr, [&] (const int& k, Real& iweightssum) {
+                if (x[k] < maxp)
+                  iweightssum += c[k];
+              }, weightssum);
+            const auto adw = addmass/weightssum;
+            parallel_for(tvr, [&] (const int& k) {
+                if (x[k] < maxp)
+                  x[k] += adw;
+              });
+          } else {
+            parallel_reduce(tvr, [&] (const int& k, Real& iweightssum) {
+                if (x[k] > minp)
+                  iweightssum += c[k];
+              }, weightssum);
+            const auto adw = addmass/weightssum;
+            parallel_for(tvr, [&] (const int& k) {
+                if (x[k] > minp)
+                  x[k] += adw;
+              });
+          }
+        }
+
+        parallel_for(tvr, [&] (const int& k) {
+            // *Purposely* reverse of usual HOMMEXX convention.
+            const int i = k % NP, j = k / NP;
+            ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
+          });        
+      });
   }
 
-  /*
-    ! apply mass matrix, overwrite np1 with solution:
-    ! dont do this earlier, since we allow np1_qdp == n0_qdp
-    ! and we dont want to overwrite n0_qdp until we are done using it
-  */
+  //! apply mass matrix, overwrite np1 with solution:
+  //! dont do this earlier, since we allow np1_qdp == n0_qdp
+  //! and we dont want to overwrite n0_qdp until we are done using it
   KOKKOS_INLINE_FUNCTION
   void apply_mass_matrix (const KernelVariables& kv) const {
-    using Kokkos::ALL;
-    auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
+    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
+    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),
       [&] (const int loop_idx) {
@@ -147,7 +231,7 @@ private:
         Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
           [&] (const int& ilev) {
-            qdp(igp, jgp, ilev) *= spheremp(igp, jgp);
+            qdp(igp, jgp, ilev) = spheremp(igp, jgp) * qtens(igp, jgp, ilev);
           });
       });
   }

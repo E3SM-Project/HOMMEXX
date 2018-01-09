@@ -2982,7 +2982,7 @@ end do
        mass=sum(c*x)
 
        ! relax constraints to ensure limiter has a solution:
-       ! This is only needed if runnign with the SSP CFL>1 or
+       ! This is only needed if running with the SSP CFL>1 or
        ! due to roundoff errors
        if( mass < minp(k)*sumc ) then
           minp(k) = mass / sumc
