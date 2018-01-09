@@ -27,7 +27,7 @@ class BuffersManager;
  */
 class Context {
 public:
-  using BEMap = std::map<std::string,BoundaryExchange>;
+  using BEMap = std::map<std::string,std::shared_ptr<BoundaryExchange>>;
 
 private:
   // Note: using uniqe_ptr disables copy construction
@@ -54,7 +54,7 @@ public:
   std::shared_ptr<BuffersManager> get_buffers_manager();
   std::shared_ptr<Connectivity> get_connectivity();
   BEMap& get_boundary_exchanges();
-  BoundaryExchange& get_boundary_exchange(const std::string& name);
+  std::shared_ptr<BoundaryExchange> get_boundary_exchange(const std::string& name);
 
   // Exactly one singleton.
   static Context& singleton();
