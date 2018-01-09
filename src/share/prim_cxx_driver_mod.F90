@@ -6,6 +6,8 @@
 
 module prim_cxx_driver_mod
 
+  use iso_c_binding, only: c_int
+
   implicit none
 
   public :: init_cxx_mpi_structures
@@ -14,6 +16,13 @@ module prim_cxx_driver_mod
   private :: generate_global_to_local
   private :: init_c_connectivity
 
+  ! The following are the number of 2d and 3d fields that need to be
+  ! SIMULTANEOUSLY processed during a call to boundary exchange
+  ! TODO: replace constants with config-dependent values
+  integer(kind=c_int), parameter :: num_2d_fields = 0
+  integer(kind=c_int), parameter :: num_3d_fields = 4 + QSIZE_D
+
+  private :: num_2d_fields, num_3d_fields
 #include <mpif.h>
 
 contains
@@ -23,6 +32,18 @@ contains
     use gridgraph_mod,  only : GridEdge_t
     use metagraph_mod,  only : MetaVertex_t
     use parallel_mod,   only : parallel_t, abortmp, MPI_INTEGER
+    !
+    ! Interfaces
+    !
+    interface
+      subroutine setup_buffer_manager (num_2d_fields, num_3d_fields) bind(c)
+        use iso_c_binding, only: c_int
+        !
+        ! Inputs
+        !
+        integer (kind=c_int), intent(in) :: num_2d_fields, num_3d_fields
+      end subroutine setup_buffer_manager
+    end interface
     !
     ! Inputs
     !
@@ -37,6 +58,8 @@ contains
     call generate_global_to_local(MetaVertex,Global2Local)
 
     call init_c_connectivity (nelemd, Global2Local, Gridedge)
+
+    call setup_buffer_manager (num_2d_fields, num_3d_fields)
 
   end subroutine init_cxx_mpi_structures
 
