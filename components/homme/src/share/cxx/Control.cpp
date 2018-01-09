@@ -47,6 +47,9 @@ void Control::random_init(int num_elems_in, int seed) {
   genRandArray(hybrid_a, engine, std::uniform_real_distribution<Real>(
                                      min_value, max_value / 4.0));
 
+  HostViewManaged<Real[NUM_INTERFACE_LEV]> host_hybrid_a("Host hybrid a coordinates");
+  Kokkos::deep_copy(host_hybrid_a, hybrid_a);
+
   // p = a + b must be monotonically increasing
   const auto check_coords = [=](
       HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) {
@@ -55,14 +58,14 @@ void Control::random_init(int num_elems_in, int seed) {
     coords(1) = 1.0;
     // Put them in order
     std::sort(coords.data(), coords.data() + coords.size());
-    Real p_prev = hybrid_a(0) + coords(0);
+    Real p_prev = host_hybrid_a(0) + coords(0);
     // Make certain they're all distinct
     for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
       if (coords(i) <=
           coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
         return false;
       }
-      Real p_cur = coords(i) + hybrid_a(i);
+      Real p_cur = coords(i) + host_hybrid_a(i);
       if (p_cur <= p_prev) {
         return false;
       }
