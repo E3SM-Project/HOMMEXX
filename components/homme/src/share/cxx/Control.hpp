@@ -33,6 +33,11 @@ struct Control {
 
   // Tracers timelevel, inclusive range of 0-1
   int qn0;
+  int np1_qdp;
+
+  // Tracers options;
+  int rhs_viss;
+  int limiter_option; // we handle = 8
 
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;

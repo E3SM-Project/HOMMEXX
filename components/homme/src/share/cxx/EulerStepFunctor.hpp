@@ -14,15 +14,13 @@ struct EulerStepFunctor
   Control           m_data;
   const Elements    m_elements;
   const Derivative  m_deriv;
-  const int m_rhs_viss, m_limiter_option;
 
   struct TagFused {};
 
-  EulerStepFunctor (const Control& data, const int rhs_viss, const int limiter_option)
+  EulerStepFunctor (const Control& data)
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
-   , m_rhs_viss(rhs_viss), m_limiter_option(limiter_option)
   {}
 
   KOKKOS_INLINE_FUNCTION
@@ -36,16 +34,17 @@ struct EulerStepFunctor
     KernelVariables kv(team, m_data.qsize);
     compute_vstar_qdp(kv);
     compute_qtens(kv);
-    if (m_rhs_viss != 0)
+    if (m_data.rhs_viss != 0)
       add_hyperviscosity(kv);
-    limit(kv);
+    if (m_data.limiter_option == 8)
+      limiter_optim_iter_full(kv);
     apply_mass_matrix(kv);
     stop_timer("esf compute");
   }
 
-  static void run(const int rhs_viss, const int limiter_option) {
+  static void run() {
     Control& data = Context::singleton().get_control();
-    EulerStepFunctor func(data, rhs_viss, limiter_option);
+    EulerStepFunctor func(data);
 
     profiling_resume();
     start_timer("esf run");
@@ -109,11 +108,10 @@ private:
   KOKKOS_INLINE_FUNCTION
   void add_hyperviscosity (const KernelVariables& kv) const {
     using Kokkos::ALL;
-    const auto NP2 = NP * NP;
     auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
     Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team, NP2),
+      Kokkos::TeamThreadRange(kv.team, NP * NP),
       [&] (const int loop_idx) {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
@@ -126,11 +124,31 @@ private:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void limit (const KernelVariables& kv) const {
+  void limiter_optim_iter_full (const KernelVariables& kv) const {
   }
 
+  /*
+    ! apply mass matrix, overwrite np1 with solution:
+    ! dont do this earlier, since we allow np1_qdp == n0_qdp
+    ! and we dont want to overwrite n0_qdp until we are done using it
+  */
   KOKKOS_INLINE_FUNCTION
   void apply_mass_matrix (const KernelVariables& kv) const {
+    using Kokkos::ALL;
+    auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
+    auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP * NP),
+      [&] (const int loop_idx) {
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& ilev) {
+            qdp(igp, jgp, ilev) *= spheremp(igp, jgp);
+          });
+      });
   }
 };
 

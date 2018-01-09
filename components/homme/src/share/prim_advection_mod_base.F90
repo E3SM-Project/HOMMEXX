@@ -119,9 +119,8 @@ module prim_advection_mod_base
       !
       type (c_ptr), intent(in) :: elem_state_Qdp_ptr
     end subroutine euler_push_results_c
-    subroutine advance_qdp_c(rhs_viss, limiter_option) bind(c)
+    subroutine advance_qdp_c() bind(c)
       use iso_c_binding, only : c_int
-      integer (kind=c_int), intent(in) :: rhs_viss, limiter_option
     end subroutine advance_qdp_c
   end interface
 
@@ -1477,13 +1476,13 @@ end subroutine ALE_parametric_coords
   implicit none
 
   interface
-    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt) bind(c)
+    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize
+      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
       real (kind=c_double), intent(in) :: dt
     end subroutine init_control_euler_c
   end interface
@@ -1734,10 +1733,10 @@ OMP_SIMD
   Vstar_ptr = c_loc(Vstar)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
   Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt)
+  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option)
   call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr)
   call t_startf("advance_qdp")
-  call advance_qdp_c(rhs_viss, limiter_option)
+  call advance_qdp_c()
   call t_stopf("advance_qdp")
   call euler_push_results_c(elem_state_Qdp_ptr)
 

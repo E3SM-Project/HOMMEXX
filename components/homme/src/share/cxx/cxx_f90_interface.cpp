@@ -27,7 +27,8 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
   control.rsplit = rsplit;
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
+void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt,
+                           const int& np1_qdp, const int& rhs_viss, const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
 
@@ -38,6 +39,10 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
   control.qsize = qsize;
   control.dt    = dt;
+
+  control.np1_qdp = np1_qdp-1;
+  control.rhs_viss = rhs_viss;
+  control.limiter_option = limiter_option;
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -208,9 +213,9 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c(int rhs_viss, int limiter_option)
+void advance_qdp_c()
 {
-  EulerStepFunctor::run(rhs_viss, limiter_option);
+  EulerStepFunctor::run();
 }
 
 } // extern "C"
