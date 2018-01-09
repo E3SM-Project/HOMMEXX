@@ -504,6 +504,9 @@ print *, 'qn0 that is sent to C', qn0
 !print *, 'HYBRID', hybi
 !print *, 'Befor anything SDOT_SUM', sdot_sum
 !print *, 'Befor anything ETADOT', eta_dot_dpdn
+!print *, 'Befor anything DIVDP', eta_dot_dpdn
+
+
     do k=1,nlev
     ! ==================================================
     ! add this term to PS equation so we exactly conserve dry mass
