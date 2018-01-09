@@ -240,7 +240,7 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
 
       parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
       parabola_coeffs(j - 1, 1) = ar - al;
-      parabola_coeffs(j - 1, 2) = -6.0 * cell_means(j + 1) + 3.0 * (al + ar);
+      parabola_coeffs(j - 1, 2) = 3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
     }
 
     boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
@@ -285,13 +285,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
           pin(kv.ie, igp, jgp, k) =
               pin(kv.ie, igp, jgp, k - 1) +
               tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
-          if (igp == 0 && jgp == 0 && kv.ie == 0) {
-            DEBUG_PRINT(
-                "%d partition: % .17e vs % .17e, from % .17e vs % .17e\n", k,
-                pio(kv.ie, igp, jgp, k), pin(kv.ie, igp, jgp, k),
-                src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector],
-                tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector]);
-          }
         } // k loop
 
         // This is here to allow an entire block of k
@@ -419,19 +412,13 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
           mass_o[var](kv.ie, igp, jgp, k + 1) =
               mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
           ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
-          if (kv.ie == 0 && igp == 0 && jgp == 0) {
-            DEBUG_PRINT("ao %d c++: % .17e\n", k + 2,
-                        ao[var](kv.ie, igp, jgp, k + 2));
-            DEBUG_PRINT("mass_o %d c++: % .17e\n", k + 1,
-                        mass_o[var](kv.ie, igp, jgp, k + 1));
-          }
         } // end k loop
 
         for (int k = 1; k <= gs; k++) {
           ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
           ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
               ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-        } // k loop
+        } // end ghost cell loop
 
         // Computes a monotonic and conservative PPM reconstruction
         compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
@@ -472,18 +459,6 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
           const Real massn2 = mass_o[var](kv.ie, igp, jgp, kk - 1) +
                               integral * dpo(kv.ie, igp, jgp, kk + 1);
           remap_vals[var](igp, jgp, ilevel)[ivector] = massn2 - massn1;
-
-          if (kv.ie == 0 && igp == 0 && jgp == 0) {
-            DEBUG_PRINT("coeffs %d c++ (%d): % .17e % .17e % .17e\n", k, kk,
-                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 0),
-                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 1),
-                        parabola_coeffs[var](kv.ie, igp, jgp, kk - 1, 2));
-            DEBUG_PRINT("integral %d c++ (%d): % .17e <- % .17e, % .17e\n", k,
-                        kk, integral, x1, x2);
-            DEBUG_PRINT("massn %d c++ (%d): % .17e <- % .17e\n", k, kk, massn2,
-                        massn1);
-          }
-
           massn1 = massn2;
         } // k loop
       });
@@ -496,7 +471,7 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
     const Real a0 = coeffs(0);
     const Real a1 = coeffs(1);
     const Real a2 = coeffs(2);
-    return a0 * (x2 - x1) + a1 * (x2 * x2 - x1 * x1) / 2.0 +
+    return (a0 * (x2 - x1) + a1 * (x2 * x2 - x1 * x1) / 2.0) +
            a2 * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
   }
 
@@ -659,6 +634,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     return tgt_layer_thickness;
   }
 
+  KOKKOS_INLINE_FUNCTION
   Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
   remap_states_array(KernelVariables &kv) const {
     // The states which need to be remapped
@@ -738,13 +714,6 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
                                                  void>::type
   rescale_states(KernelVariables &kv,
                  ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-                     tgt_layer_thickness) const {}
-
-  template <bool nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
-                                                 void>::type
-  rescale_states(KernelVariables &kv,
-                 ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
                      tgt_layer_thickness) const {
     auto state_remap = remap_states_array(kv);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
@@ -759,6 +728,13 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       });
     });
   }
+
+  template <bool nz_rsplit = nonzero_rsplit>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
+                                                 void>::type
+  rescale_states(KernelVariables &kv,
+                 ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
+                     tgt_layer_thickness) const {}
 
   // Just implemented for CUDA until Kyungjoo's work is
   // finished
