@@ -13,6 +13,7 @@ SET (INFRASTRUCTURE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/infrastructure_ut.cpp
@@ -42,6 +43,7 @@ SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/infrastructure_ut.cpp
@@ -86,6 +88,7 @@ SET (SPHERE_OPERATORS_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.cpp
@@ -141,6 +144,7 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/mpi_cxx_f90_interface.cpp
