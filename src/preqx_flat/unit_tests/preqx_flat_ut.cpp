@@ -109,8 +109,8 @@ public:
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), 
         dvv("dvv"), nets(1),
-        nete(elements.num_elems(),
-        rsplit(0)) {
+        nete(elements.num_elems()),
+        rsplit(0) {
 
 //make these random
     Real hybrid_am[NUM_LEV_P] = { 0 };
@@ -981,7 +981,7 @@ public:
 
 
 // computing eta_dot_dpdn: (eta_dot, divdp, sdot_sum) --> (eta_dot, sdot_sum)
-// affects only buf value of eta
+// affects only buf value of eta, sdot
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
@@ -1007,11 +1007,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
 //std::cout << "here 2 \n";
   //random init host views
-  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
-  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(0.1, 1000.0));
-
+  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
 //Actually we only run with sdot_sum=0 but i guess this makes a better test
-  genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(100.0, 1000.0));
+  genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
 //std::cout << "here 3 \n;";
   //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
@@ -1040,6 +1039,17 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
+
+//we need these copies because vals test_functor will be modified
+//now set up F output and make sure it has the same vals for _vadv before we run
+////test_functor.
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
+  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("tavd f90", num_elems);
+
+//to from
+  deep_copy(eta_dot_f90, eta_dot);
+  deep_copy(sdot_sum_f90, sdot_sum);
+//
 //here is confusion, are hya(b)m(i) arrays templated on Scalars? then int arrays have
 //'tails'. check this. Real arrays.
 
@@ -1122,17 +1132,22 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
 */
 
 
+//save these in host values for comparison
+  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
+  sync_to_host(elements.buffers.sdot_sum, sdot_sum);
 
 
   //if one of results is buffer variable, it needs another copy of host view,
   //see virt_temp for an example
 
+
+//FORGOT TO CHECK SDOT!
   for (int ie = 0; ie < num_elems; ++ie) {
 // input is eta, sdot, divdp, hybi
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
-                               Kokkos::subview(eta_dot, ie, Kokkos::ALL,
+                               Kokkos::subview(eta_dot_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(sdot_sum, ie, Kokkos::ALL,
+                               Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL).data(),
                                Kokkos::subview(div_vdp, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
@@ -1143,14 +1158,14 @@ std::cout << "eta from functor:" << test_functor.eta_dpdn(ie,level,igp,jgp)<<"\n
     for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
-          const Real correct = eta_dot(ie, level, igp, jgp);
+          const Real correct = eta_dot_f90(ie, level, igp, jgp);
           REQUIRE(!std::isnan(correct));
-          const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
+          const Real computed = eta_dot(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
-//if( igp == 0 && jgp == 0){
-//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-//std::cout << " F = " << correct << " C = " << computed << "\n";
-//}
+if( igp == 0 && jgp == 0){
+std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+std::cout << " F = " << correct << " C = " << computed << "\n";
+}
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
         }
@@ -1180,7 +1195,7 @@ public:
 //
 //
 //preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
-//takes in only buf value of eta
+//takes in only buf value of eta, m values T, v, dp3d
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
@@ -1283,10 +1298,10 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
           REQUIRE(!std::isnan(correct));
           const Real computed = t_vadv(ie, level, igp, jgp);
 
-if( igp == 0 && jgp == 0){
-std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-std::cout << " F = " << correct << " C = " << computed << "\n";
-}
+//if( igp == 0 && jgp == 0){
+//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
+//std::cout << " F = " << correct << " C = " << computed << "\n";
+//}
 
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);

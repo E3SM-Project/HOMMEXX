@@ -266,6 +266,27 @@ sync_to_host(Source_T source, Dest_T dest) {
   }
 }
 
+
+//this is for sdot =  ExecViewManaged<Real* [NP][NP]> 
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Real * [NP][NP]>::value &&
+        host_view_mappable<Dest_T, Real * [NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Real * [NP][NP]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        dest(ie, igp, jgp) = source_mirror(ie, igp, jgp);
+      }
+    }
+  }
+}
+
+
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [2][NP][NP][NUM_LEV]>::value &&
