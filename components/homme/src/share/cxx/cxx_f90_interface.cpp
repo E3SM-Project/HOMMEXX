@@ -187,6 +187,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
     // Set the views of this time level into this time level's boundary exchange
     if (!be[tl]->is_registration_completed())
     {
+      be[tl]->set_buffers_manager(Context::singleton().get_buffers_manager());
       be[tl]->set_num_fields(0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
