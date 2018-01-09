@@ -84,7 +84,8 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr)
+  void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
+                          CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -114,6 +115,14 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr
   sync_to_device(ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(
                    Qtens_biharmonic_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.qtens_biharmonic);
+  sync_to_device(ExecViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
+                 r.buffers.dpdissk);
+  sync_to_device(ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV]>(
+                   qmin_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV),
+                 ExecViewUnmanaged<const Real*[QSIZE_D][NUM_PHYSICAL_LEV]>(
+                   qmax_ptr, data.num_elems, QSIZE_D, NUM_PHYSICAL_LEV),
+                 r.buffers.qlim);
 }
 
 void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr)
