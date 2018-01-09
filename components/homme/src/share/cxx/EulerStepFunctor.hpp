@@ -68,12 +68,6 @@ private:
 
   template <typename Tag>
   static Kokkos::TeamPolicy<ExecSpace, Tag> get_policy(const Control& data) {
-    static bool first = true;
-    if (first) {
-      const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
-        data.num_elems * data.qsize);
-      first = false;
-    }
     return Homme::get_default_team_policy<ExecSpace, Tag>(data.num_elems * data.qsize);
   }
 

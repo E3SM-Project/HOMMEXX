@@ -162,14 +162,6 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   Control& data  = Context::singleton().get_control();
   Elements& elements = Context::singleton().get_elements();
 
-  // Retrieve the team size
-  static bool first = true;
-  if (first) {
-    const auto tv = DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
-      data.num_elems);
-    first = false;
-  }
-
   // Setup the policies
   auto policy_pre = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(data.num_elems);
   MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
