@@ -29,9 +29,7 @@ public:
 
   // Deep copy the send/recv buffer to/from the mpi_send/recv buffer
   // Note: these are no-ops if MPIMemSpace=ExecMemSpace
-  KOKKOS_FORCEINLINE_FUNCTION
   void sync_send_buffer ();
-  KOKKOS_FORCEINLINE_FUNCTION
   void sync_recv_buffer ();
 
   ExecViewManaged<Real*> get_send_buffer           () const { return m_send_buffer;           }
@@ -65,14 +63,12 @@ private:
   ExecViewManaged<Real*>  m_blackhole_recv_buffer;
 };
 
-KOKKOS_FORCEINLINE_FUNCTION
-void BuffersManager::sync_send_buffer ()
+inline void BuffersManager::sync_send_buffer ()
 {
   Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer);
 }
 
-KOKKOS_FORCEINLINE_FUNCTION
-void BuffersManager::sync_recv_buffer ()
+inline void BuffersManager::sync_recv_buffer ()
 {
   Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer);
 }
