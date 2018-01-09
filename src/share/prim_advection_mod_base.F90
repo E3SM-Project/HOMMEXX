@@ -2013,8 +2013,6 @@ OMP_SIMD
 
     use fvm_control_volume_mod, only : fvm_struct
 
-    use caar_pre_exchange_driver_mod, only : caar_pull_data_c, caar_push_results_c
-
     implicit none
 
     interface
@@ -2022,6 +2020,34 @@ OMP_SIMD
         use iso_c_binding, only : c_int
         integer (kind=c_int), intent(in) :: vert_remap_alg
       end subroutine vertical_remap_c
+
+      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                   elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_pull_data_c
+
+      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                      elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_push_results_c
     end interface
 
     type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
