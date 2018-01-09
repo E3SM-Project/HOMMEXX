@@ -1,6 +1,7 @@
 #ifndef HOMMEXX_BOUNDARY_EXCHANGE_HPP
 #define HOMMEXX_BOUNDARY_EXCHANGE_HPP
 
+#include "BuffersManager.hpp"
 #include "Connectivity.hpp"
 #include "ConnectivityHelpers.hpp"
 
@@ -23,15 +24,21 @@ class BoundaryExchange
 public:
 
   BoundaryExchange();
-  BoundaryExchange(const Connectivity& connectivity);
+  explicit BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
 
   // Thou shall not copy this class
   BoundaryExchange(const BoundaryExchange& src) = delete;
 
   ~BoundaryExchange();
 
+  // Set the connectivity if default constructor was used
+  void set_connectivity (std::shared_ptr<Connectivity> connectivity);
+
   // These number refers to *scalar* fields. A 2-vector field counts as 2 fields.
   void set_num_fields (int num_3d_fields, int num_2d_fields);
+
+  // Set the buffers manager (registration must not be completed)
+  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
 
   // Clean up MPI stuff and registered fields
   void clean_up ();
@@ -81,10 +88,7 @@ private:
 
   void build_requests ();
 
-  const Comm&               m_comm;
-  const Connectivity        m_connectivity;
-
-  int                       m_num_elements;
+  std::shared_ptr<Connectivity>   m_connectivity;
 
   int                       m_elem_buf_size[2];
   MPI_Datatype              m_mpi_data_type[2];
@@ -95,14 +99,19 @@ private:
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
-  // These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
-  ExecViewManaged<Real*>     m_send_buffer;
-  ExecViewManaged<Real*>     m_recv_buffer;
-  ExecViewManaged<Real*>     m_local_buffer;
+  // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
+  // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
+  // and the blackhole buffers (used for missing connections)
+  std::shared_ptr<BuffersManager> m_buffers_manager;
+
+  //// These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
+  //ExecViewManaged<Real*>     m_send_buffer;
+  //ExecViewManaged<Real*>     m_recv_buffer;
+  //ExecViewManaged<Real*>     m_local_buffer;
 
   // These are the raw buffers to be used in MPI calls
-  MPIViewManaged<Real*>     m_mpi_send_buffer;
-  MPIViewManaged<Real*>     m_mpi_recv_buffer;
+  //MPIViewManaged<Real*>     m_mpi_send_buffer;
+  //MPIViewManaged<Real*>     m_mpi_recv_buffer;
 
   // These are the dummy send/recv buffers used for missing connections
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
@@ -148,7 +157,7 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP],Properties...
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_2d_fields(ie,l_num_2d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL);
     });
@@ -171,7 +180,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV],Pr
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL,ALL);
     });
@@ -194,7 +203,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,outer_dim,start_dim+idim,ALL,ALL,ALL);
     });
@@ -215,7 +224,7 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP],Properties...> fie
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_connectivity->get_num_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_2d_fields(ie,l_num_2d_fields) = Kokkos::subview(field,ie,ALL,ALL);
     });
@@ -236,7 +245,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Propert
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_connectivity->get_num_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_3d_fields(ie,l_num_3d_fields) = Kokkos::subview(field,ie,ALL,ALL,ALL);
     });
