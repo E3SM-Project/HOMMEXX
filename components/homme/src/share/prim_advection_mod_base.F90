@@ -1513,7 +1513,7 @@ end subroutine ALE_parametric_coords
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+  type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, dpdissk_ptr
 #endif
 
@@ -1733,14 +1733,14 @@ OMP_SIMD
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
 
-  Vstar_ptr = c_loc(Vstar)
+  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
+       np1_qdp, rhs_viss, limiter_option)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+  Vstar_ptr = c_loc(Vstar)
   Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
   dpdissk_ptr = c_loc(dpdissk)
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
-       np1_qdp, rhs_viss, limiter_option)
   call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, dpdissk_ptr)
   call t_startf("advance_qdp")
