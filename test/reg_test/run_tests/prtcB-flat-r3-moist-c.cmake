@@ -16,4 +16,4 @@ SET(NC_OUTPUT_FILES
 # For GPU testbeds, for now. This particular TIMEOUT should not be required; the
 # test should pass. But set it until we figure out why it's not. Seems to have
 # something to do with MPI.
-SET(TIMEOUT 60)
+SET(TIMEOUT 240)

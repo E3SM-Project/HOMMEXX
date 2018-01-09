@@ -4,7 +4,6 @@
 #include <iostream>
 
 #include "Types.hpp"
-#include "FortranArrayUtils.hpp"
 #include "Derivative.hpp"
 #include "SphereOperators.hpp"
 #include "KernelVariables.hpp"
@@ -28,111 +27,6 @@ void vorticity_sphere_c_callable(const Real *vector, const Real *dvv,
                                  Real *scalar);
 
 } // extern "C"
-
-// ================================= TESTS ============================ //
-
-TEST_CASE("flip_arrays", "flip arrays routines") {
-  constexpr int N1 = 2;
-  constexpr int N2 = 3;
-  constexpr int N3 = 4;
-  constexpr int N4 = 5;
-
-  Real *A = new Real[N1 * N2];
-  Real *B = new Real[N1 * N2 * N3];
-  Real *C = new Real[N1 * N2 * N3 * N4];
-
-  std::random_device rd;
-  using rngAlg = std::mt19937_64;
-  rngAlg engine(rd());
-  std::uniform_real_distribution<Real> dreal(0, 1);
-
-  constexpr int num_rand_test = 10;
-
-  SECTION("f90->cxx") {
-    // Same 'mathematical' shape. Simply change f90->cxx ordering
-
-    genRandArray(A, N1 * N2, engine, dreal);
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-
-    HostViewManaged<Real[N1][N2]> A_cxx("A");
-    HostViewManaged<Real[N1][N2][N3]> B_cxx("B");
-
-    flip_f90_array_2d_12<N1, N2>(A, A_cxx);
-    flip_f90_array_3d_123<N1, N2, N3>(B, B_cxx);
-
-    int iter2d = 0;
-    int iter3d = 0;
-    for (int j = 0; j < N2; ++j) {
-      for (int i = 0; i < N1; ++i, ++iter2d) {
-        REQUIRE(compare_answers(A_cxx(i, j), A[iter2d]) == 0);
-      }
-    }
-
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter3d) {
-          REQUIRE(compare_answers(B_cxx(i, j, k), B[iter3d]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_213") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N2][N1][N3]> B_cxx("B");
-    flip_f90_array_3d_213<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(j, i, k), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_3d_312") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(B, N1 * N2 * N3, engine, dreal);
-    HostViewManaged<Real[N3][N1][N2]> B_cxx("B");
-    flip_f90_array_3d_312<N1, N2, N3>(B, B_cxx);
-
-    int iter = 0;
-    for (int k = 0; k < N3; ++k) {
-      for (int j = 0; j < N2; ++j) {
-        for (int i = 0; i < N1; ++i, ++iter) {
-          REQUIRE(compare_answers(B_cxx(k, i, j), B[iter]) == 0);
-        }
-      }
-    }
-  }
-
-  SECTION("flip_f90_array_4d_3412") {
-    // Change f90->cxx odering and swap some dimensions
-    genRandArray(C, N1 * N2 * N3 * N4, engine, dreal);
-
-    HostViewManaged<Real[N3][N4][N1][N2]> C_cxx("C");
-    flip_f90_array_4d_3412<N1, N2, N3, N4>(C, C_cxx);
-
-    int iter = 0;
-    for (int l = 0; l < N4; ++l) {
-      for (int k = 0; k < N3; ++k) {
-        for (int j = 0; j < N2; ++j) {
-          for (int i = 0; i < N1; ++i, ++iter) {
-            REQUIRE(compare_answers(C_cxx(k, l, i, j), C[iter]) == 0);
-          }
-        }
-      }
-    }
-  }
-
-  // Cleanup
-  delete[] A;
-  delete[] B;
-  delete[] C;
-}
 
 // ====================== RANDOM INITIALIZATION ====================== //
 
@@ -234,12 +128,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
   Kokkos::deep_copy(dvv_exec, dvv_h);
 
   // Execution policy
-  const int threads_per_team =
-      DefaultThreadsDistribution<ExecSpace>::threads_per_team(nelems);
-  const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
-                                       vectors_per_thread);
+  auto policy = Homme::get_default_team_policy<ExecSpace>(nelems);
 
   SECTION("gradient sphere") {
     // Initialize input(s)
@@ -441,13 +330,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
   Derivative deriv;
   deriv.init(dvv_h.data());
 
-  // Execution policy
-  const int vectors_per_thread =
-      DefaultThreadsDistribution<ExecSpace>::vectors_per_thread();
-  const int threads_per_team = 1;
-  Kokkos::TeamPolicy<ExecSpace> policy(nelems, threads_per_team,
-                                       vectors_per_thread);
-  policy.set_chunk_size(1);
+  auto policy = Homme::get_default_team_policy<ExecSpace>(nelems);
 
   SECTION("gradient sphere single level") {
     for (int itest = 0; itest < num_rand_test; ++itest) {
@@ -590,6 +473,110 @@ TEST_CASE("Single_Level_Sphere_Operators",
           }
         }
       }
+    }
+  }
+}
+
+TEST_CASE("ExecSpaceDefs",
+          "Test parallel machine parameterization.") {
+  const int plev = 72;
+
+  const auto test_basics = [=] (const ThreadPreferences& tp,
+                                const std::pair<int, int>& tv) {
+    REQUIRE(tv.first >= 1);
+    REQUIRE(tv.second >= 1);
+    if (tp.prefer_threads)
+      REQUIRE((tv.first == tp.max_threads_usable || tv.second == 1));
+    else
+      REQUIRE((tv.first == 1 || tv.second > 1));
+    if (tv.first * tv.second <= tp.max_threads_usable * tp.max_vectors_usable) {
+      REQUIRE(tv.first <= tp.max_threads_usable);
+      REQUIRE(tv.second <= tp.max_vectors_usable);
+    }
+  };
+
+  SECTION("CPU/KNL") {
+    for (int num_elem = 0; num_elem <= 3; ++num_elem) {
+      for (int qsize = 1; qsize <= 30; ++qsize) {
+        for (int pool = 1; pool <= 64; ++pool) {
+          for (bool prefer_threads : {true, false}) {
+            Homme::ThreadPreferences tp;
+            tp.max_vectors_usable = plev;
+            tp.prefer_threads = prefer_threads;
+            const int npi = num_elem*qsize;
+            const auto tv = Homme::Parallel::team_num_threads_vectors_from_pool(
+              pool, npi, tp);
+            // Correctness tests.
+            test_basics(tp, tv);
+            REQUIRE(tv.first * tv.second <= pool);
+            // Tests for good behavior.
+            if (npi >= pool)
+              REQUIRE(tv.first * tv.second == 1);
+          }
+        }
+      }
+    }
+    // Spot check some cases. Numbers are
+    //     {#elem, qsize, pool, prefer_threads, #thread, #vector}.
+    static const int cases[][6] = {{1, 1, 8, 1, 8, 1},
+                                   {1, 30, 8, 1, 1, 1},
+                                   {1, 1, 32, 1, 16, 2},
+                                   {1, 1, 32, 0, 2, 16}};
+    for (unsigned int i = 0; i < sizeof(cases)/sizeof(*cases); ++i) {
+      const auto& c = cases[i];
+      Homme::ThreadPreferences tp;
+      tp.max_vectors_usable = plev/2;
+      tp.prefer_threads = c[3];
+      const auto tv = Homme::Parallel::team_num_threads_vectors_from_pool(
+        c[2], c[0]*c[1], tp);
+      REQUIRE(tv.first == c[4]);
+      REQUIRE(tv.second == c[5]);
+    }
+  }
+
+  SECTION("GPU") {
+    static const int num_device_warps = 1792;
+    static const int min_warps_per_team = 4, max_warps_per_team = 16;
+    static const int num_threads_per_warp = 32;
+    for (int num_elem = 0; num_elem <= 10000; num_elem += 10) {
+      for (int qsize = 1; qsize <= 30; ++qsize) {
+        for (bool prefer_threads : {true, false}) {
+          Homme::ThreadPreferences tp;
+          tp.prefer_threads = prefer_threads;
+          tp.max_vectors_usable = plev;
+          const int npi = num_elem*qsize;
+          const auto tv = Homme::Parallel::team_num_threads_vectors_for_gpu(
+            num_device_warps, num_threads_per_warp,
+            min_warps_per_team, max_warps_per_team,
+            npi, tp);
+          // Correctness tests.
+          test_basics(tp, tv);
+          REQUIRE(Homme::Parallel::prevpow2(tv.second) == tv.second);
+          REQUIRE(tv.first * tv.second >= num_threads_per_warp*min_warps_per_team);
+          REQUIRE(tv.first * tv.second <= num_threads_per_warp*max_warps_per_team);
+          // Tests for good behavior.
+          REQUIRE(tv.first * tv.second >= min_warps_per_team * num_threads_per_warp);
+          if (npi >= num_device_warps*num_threads_per_warp)
+            REQUIRE(tv.first * tv.second == min_warps_per_team * num_threads_per_warp);
+        }
+      }
+    }
+    // Numbers are
+    //     {#elem, qsize, prefer_threads, #thread, #vector}.
+    static const int cases[][5] = {{1, 1, 1, 16, 32},
+                                   {96, 30, 1, 16, 8},
+                                   {96, 30, 0, 4, 32}};
+    for (unsigned int i = 0; i < sizeof(cases)/sizeof(*cases); ++i) {
+      const auto& c = cases[i];
+      Homme::ThreadPreferences tp;
+      tp.max_vectors_usable = plev/2;
+      tp.prefer_threads = c[2];
+      const auto tv = Homme::Parallel::team_num_threads_vectors_for_gpu(
+        num_device_warps, num_threads_per_warp,
+        min_warps_per_team, max_warps_per_team,
+        c[0]*c[1], tp);
+      REQUIRE(tv.first == c[3]);
+      REQUIRE(tv.second == c[4]);
     }
   }
 }
