@@ -601,6 +601,18 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
   compute_source_thickness(KernelVariables &kv,
                            ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
                                tgt_layer_thickness) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int vlev = level % VECTOR_SIZE;
+        assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] >=
+               0.0);
+      });
+    });
     return Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
   }
 
