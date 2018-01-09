@@ -26,7 +26,7 @@ void Connectivity::set_num_elements (const int num_elements)
 
   // Initialize all connections to MISSING
   // Note: we still include local element/position, since we need that even for
-  //       missing connections!
+  //       missing connections! Everything else is set to invalid numbers (for safety)
   for (int ie=0; ie<m_num_elements; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
       ConnectionInfo& info = h_connections(ie,iconn);
@@ -36,6 +36,11 @@ void Connectivity::set_num_elements (const int num_elements)
 
       info.local.lid = ie;
       info.local.pos = iconn;
+
+      info.local.gid  = INVALID_ID;
+      info.remote.lid = INVALID_ID;
+      info.remote.gid = INVALID_ID;
+      info.remote.pos = INVALID_ID;
     }
   }
 
@@ -43,8 +48,8 @@ void Connectivity::set_num_elements (const int num_elements)
   Kokkos::deep_copy (h_num_connections,0);
 }
 
-void Connectivity::add_connection (const int first_elem_lid,  const int first_elem_pos,  const int first_elem_pid,
-                                   const int second_elem_lid, const int second_elem_pos, const int second_elem_pid)
+void Connectivity::add_connection (const int first_elem_lid,  const int first_elem_gid,  const int first_elem_pos,  const int first_elem_pid,
+                                   const int second_elem_lid, const int second_elem_gid, const int second_elem_pos, const int second_elem_pid)
 {
   if (m_finalized)
   {
@@ -59,16 +64,21 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
 #ifndef NDEBUG
     // There is no edge-to-corner connection. Either the elements share a corner or an edge.
     assert (m_helpers.CONNECTION_KIND[first_elem_pos]==m_helpers.CONNECTION_KIND[second_elem_pos]);
+
+    // The elem lid on the local side must be valid!
+    assert (first_elem_lid>=0);
 #endif
 
     ConnectionInfo& info = h_connections(first_elem_lid,first_elem_pos);
-    LidPos& local  = info.local;
-    LidPos& remote = info.remote;
+    LidGidPos& local  = info.local;
+    LidGidPos& remote = info.remote;
 
     // Local and remote elements lid and connection position
     local.lid  = first_elem_lid;
+    local.gid  = first_elem_gid;
     local.pos  = first_elem_pos;
     remote.lid = second_elem_lid;
+    remote.gid = second_elem_gid;
     remote.pos = second_elem_pos;
 
     // Kind

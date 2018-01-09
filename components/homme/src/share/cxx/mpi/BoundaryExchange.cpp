@@ -232,7 +232,7 @@ void BoundaryExchange::registration_completed()
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
       const ConnectionInfo& info = h_connections(ie,iconn);
 
-      const LidPos local  = info.local;
+      const LidGidPos local  = info.local;
 
       auto send_buffer = h_all_send_buffers[info.sharing];
       auto recv_buffer = h_all_recv_buffers[info.sharing];
@@ -305,10 +305,10 @@ void BoundaryExchange::build_requests()
         continue;
       }
 
-      // We build a tag that has info about the sender's element lid and connection position.
-      // Since there are 8 neighbors, an easy way is to set tag=lid*8+pos
-      int send_tag = info.local.lid*NUM_CONNECTIONS + info.local.pos;
-      int recv_tag = info.remote.lid*NUM_CONNECTIONS + info.remote.pos;
+      // We build a tag that has info about the sender's element gid and connection position.
+      // Since there are 8 neighbors, an easy way is to set tag=gid*8+pos
+      int send_tag = info.local.gid*NUM_CONNECTIONS + info.local.pos;
+      int recv_tag = info.remote.gid*NUM_CONNECTIONS + info.remote.pos;
 
       // Reserve the area in the buffers and update the offset
       MPIViewManaged<Real*>::pointer_type send_ptr = m_mpi_send_buffer.data() + buf_offset;
@@ -342,11 +342,11 @@ void BoundaryExchange::pack_and_send ()
     ConnectionHelpers helpers;
 
     const ConnectionInfo info = connections(ie,iconn);
-    const LidPos field_lidpos  = info.local;
+    const LidGidPos field_lidpos  = info.local;
     // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
     // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
     // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
     // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
     const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
@@ -360,11 +360,11 @@ void BoundaryExchange::pack_and_send ()
     ConnectionHelpers helpers;
 
     const ConnectionInfo info = connections(ie,iconn);
-    const LidPos field_lidpos  = info.local;
+    const LidGidPos field_lidpos  = info.local;
     // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
     // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
     // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
     // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
     const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];

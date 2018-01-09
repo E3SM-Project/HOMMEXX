@@ -332,7 +332,7 @@ contains
     call genEdgeSched(elem,iam,Schedule(1),MetaVertex(1))
 
 #ifdef USE_KOKKOS_KERNELS
-    call init_cxx_mpi_structures (nelemd, par, GridEdge, MetaVertex(1))
+    call init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex(1))
 #endif
 
     allocate(global_shared_buf(nelemd,nrepro_vars))
