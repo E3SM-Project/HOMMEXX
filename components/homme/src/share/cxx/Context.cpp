@@ -57,7 +57,7 @@ Context::BEMap& Context::get_boundary_exchanges() {
   return *boundary_exchanges_;
 }
 
-BoundaryExchange& Context::get_boundary_exchange(const std::string& name) {
+std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::string& name) {
   if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
 
   // Todo: should we accept a bool param 'must_already_exist'
