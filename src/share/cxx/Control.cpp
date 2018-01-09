@@ -19,10 +19,13 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
   hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b coordinates; translates between pressure and velocity");
 
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_a(hybrid_a_ptr);
+  assert(hybrid_a_ptr != nullptr);
+  assert(hybrid_b_ptr != nullptr);
+
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_a(hybrid_a_ptr);
   Kokkos::deep_copy(hybrid_a, host_hybrid_a);
 
-  HostViewUnmanaged<const Real[NUM_LEV_P]> host_hybrid_b(hybrid_b_ptr);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_b(hybrid_b_ptr);
   Kokkos::deep_copy(hybrid_b, host_hybrid_b);
 }
 
