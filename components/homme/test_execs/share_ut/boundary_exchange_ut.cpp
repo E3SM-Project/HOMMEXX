@@ -53,13 +53,18 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   // Create cube geometry
   init_cube_geometry_f90(ne);
 
-  //// Create connectivity
+  // Create connectivity
   init_connectivity_f90(num_scalar_fields_2d, num_scalar_fields_3d, num_vector_fields_3d, DIM);
-  Connectivity& connectivity = Context::singleton().get_connectivity();
+  std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+
+  // Initialize the buffers manager
+  std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+  buffers_manager->request_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+num_vector_fields_3d*DIM);
+  buffers_manager->allocate_buffers(connectivity);
 
   // Retrieve local number of elements
-  int num_elements = connectivity.get_num_elements();
-  int rank = connectivity.get_comm().m_rank;
+  int num_elements = connectivity->get_num_elements();
+  int rank = connectivity->get_comm().m_rank;
 
   // Create input data arrays
   HostViewManaged<Real*[NUM_TIME_LEVELS][NP][NP]> field_2d_f90("", num_elements);
@@ -78,7 +83,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   field_4d_cxx_host = Kokkos::create_mirror_view(field_4d_cxx);
 
   // Create boundary exchange
-  BoundaryExchange be(connectivity);
+  BoundaryExchange be(connectivity,buffers_manager);
   be.set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);
   be.register_field(field_2d_cxx,1,field_2d_idim);
   be.register_field(field_3d_cxx,1,field_3d_idim);
