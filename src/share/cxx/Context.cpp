@@ -1,8 +1,10 @@
 #include "Context.hpp"
 
+#include "Comm.hpp"
 #include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
+#include "BuffersManager.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
 
@@ -11,6 +13,15 @@ namespace Homme {
 Context::Context() {}
 
 Context::~Context() {}
+
+Comm& Context::get_comm() {
+  //if ( ! control_) control_ = std::make_shared<Control>();
+  if ( ! comm_) {
+    comm_.reset(new Comm());
+    comm_->init();
+  }
+  return *comm_;
+}
 
 Control& Context::get_control() {
   //if ( ! control_) control_ = std::make_shared<Control>();
@@ -30,9 +41,14 @@ Derivative& Context::get_derivative() {
   return *derivative_;
 }
 
-Connectivity& Context::get_connectivity() {
+std::shared_ptr<BuffersManager> Context::get_buffers_manager() {
+  if ( ! buffers_manager_) buffers_manager_.reset(new BuffersManager());
+  return buffers_manager_;
+}
+
+std::shared_ptr<Connectivity> Context::get_connectivity() {
   if ( ! connectivity_) connectivity_.reset(new Connectivity());
-  return *connectivity_;
+  return connectivity_;
 }
 
 Context::BEMap& Context::get_boundary_exchanges() {
