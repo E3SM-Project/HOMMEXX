@@ -20,6 +20,9 @@ public:
   BuffersManager ();
   BuffersManager (std::shared_ptr<Connectivity> connectivity);
 
+  // I'm not sure copying this class is a good idea.
+  BuffersManager& operator= (const BuffersManager&) = delete;
+
   // Checks whether the connectivity is already set
   bool is_connectivity_set () const { return m_connectivity!=nullptr; }
 
