@@ -6,16 +6,20 @@
 #include "Control.hpp"
 #include "SphereOperators.hpp"
 
-namespace Homme
-{
+namespace Homme {
 
-struct EulerStepFunctor
-{
+class EulerStepFunctor {
   Control           m_data;
   const Elements    m_elements;
   const Derivative  m_deriv;
 
-  struct TagFused {};
+  enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
+
+public:
+
+  size_t team_shmem_size (const int team_size) const {
+    return team_size * m_mem_per_team;
+  }
 
   EulerStepFunctor (const Control& data)
    : m_data    (data)
@@ -24,12 +28,7 @@ struct EulerStepFunctor
   {}
 
   KOKKOS_INLINE_FUNCTION
-  static size_t shmem_size(int /*team_size*/) {
-    return 0;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const TagFused&, const TeamMember& team) const {
+  void operator() (const TeamMember& team) const {
     start_timer("esf compute");
     KernelVariables kv(team, m_data.qsize);
     compute_vstar_qdp(kv);
@@ -47,13 +46,13 @@ struct EulerStepFunctor
     stop_timer("esf compute");
   }
 
-  static void run() {
+  static void run () {
     Control& data = Context::singleton().get_control();
     EulerStepFunctor func(data);
 
     profiling_resume();
     start_timer("esf run");
-    Kokkos::parallel_for(get_policy<TagFused>(data), func);
+    Kokkos::parallel_for(get_policy(data), func);
     stop_timer("esf run");
 
     ExecSpace::fence();
@@ -62,9 +61,8 @@ struct EulerStepFunctor
 
 private:
 
-  template <typename Tag>
-  static Kokkos::TeamPolicy<ExecSpace, Tag> get_policy(const Control& data) {
-    return Homme::get_default_team_policy<ExecSpace, Tag>(data.num_elems * data.qsize);
+  static Kokkos::TeamPolicy<ExecSpace, void> get_policy(const Control& data) {
+    return Homme::get_default_team_policy<ExecSpace>(data.num_elems * data.qsize);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -136,6 +134,10 @@ private:
     const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
 
+    // Size doesn't matter; just need to get a pointer to the start of the
+    // shared memory.
+    Real* const team_data = Memory<ExecSpace>::get_shmem<Real>(kv);
+
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV),
       [&] (const int ilev) {
@@ -145,7 +147,11 @@ private:
         using Kokkos::parallel_for;
         using Kokkos::parallel_reduce;
 
-        Real x[NP2], c[NP2];
+        Real* const data = team_data ?
+          team_data + m_mem_per_team * kv.team.team_rank() :
+          nullptr;
+        Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
+
         parallel_for(tvr, [&] (const int& k) {
 #ifdef REBASELINE
             const int i = k / NP, j = k % NP;
@@ -167,6 +173,8 @@ private:
         //! relax constraints to ensure limiter has a solution:
         //! This is only needed if running with the SSP CFL>1 or
         //! due to roundoff errors
+        // This is technically a write race condition, but the same value is
+        // being written, so it doesn't matter.
         if (mass < minp*sumc)
           minp = qlim(0,vpi)[vsi] = mass/sumc;
         if (mass > maxp*sumc)
