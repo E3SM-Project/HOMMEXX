@@ -500,13 +500,6 @@ print *, 'qn0 that is sent to C', qn0
     real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
     integer :: k
 
-!print *, 'IN F CODE FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
-!print *, 'HYBRID', hybi
-!print *, 'Befor anything SDOT_SUM', sdot_sum
-!print *, 'Befor anything ETADOT', eta_dot_dpdn
-!print *, 'Befor anything DIVDP', eta_dot_dpdn
-
-
     do k=1,nlev
     ! ==================================================
     ! add this term to PS equation so we exactly conserve dry mass
@@ -515,13 +508,6 @@ print *, 'qn0 that is sent to C', qn0
        eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
        ! can this be replaced with
        ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k) ?
-
-!if((k == 1).or.(k==2)) then
-!print *, 'k=',k
-!print *, 'sdot_sum(k)', sdot_sum(:,:)
-!print *, 'eta_dot_dpdn(k+1)', eta_dot_dpdn(:,:,k+1)
-!print *, 'divdp(k)', divdp(:,:,k)
-!endif
     end do
 
     ! ===========================================================
@@ -534,17 +520,11 @@ print *, 'qn0 that is sent to C', qn0
 
 
     do k=1,nlev-1
-!print *, 'BEFORE in F', eta_dot_dpdn(1,1,k+1)
-!print *, 'hybi, sdot = ', hybi(k+1), sdot_sum(1,1)
        eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
-!print *, 'AFTER in F', eta_dot_dpdn(1,1,k+1)
-!print *, '----------------------------------------'
     end do
 
     eta_dot_dpdn(:,:,1     ) = 0.0D0
     eta_dot_dpdn(:,:,nlev+1) = 0.0D0
-
-!print *, 'IN F CODE FINAL RESULT IS', eta_dot_dpdn(1,1,:)
 
   end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 
@@ -556,7 +536,7 @@ print *, 'qn0 that is sent to C', qn0
 
     real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_accum
     real (kind=real_kind), intent(in),    dimension(np,np,nlev+1) :: eta
-    real (kind=real_kind), intent(in)                             :: eta_ave_w
+    real (kind=real_kind), value, intent(in)                      :: eta_ave_w
     integer :: k
 
 #if (defined COLUMN_OPENMP)

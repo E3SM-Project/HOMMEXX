@@ -1005,13 +1005,18 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   TestType test_functor(elements);
 
 //check rsplit in m_data init!!! set to zero?
-
 //wahts going on with eta_ave_w? should be random
+//zeored, we don't need them in this test
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+
   test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
        TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
        TestType::eta_ave_w, test_functor.return_rsplit(),
-       NULL, NULL,
-       NULL, NULL);
+       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
+       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_host(elements.m_eta_dot_dpdn, eta_dot_total_f90);
