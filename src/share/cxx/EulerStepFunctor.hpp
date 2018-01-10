@@ -34,10 +34,15 @@ struct EulerStepFunctor
     KernelVariables kv(team, m_data.qsize);
     compute_vstar_qdp(kv);
     compute_qtens(kv);
-    if (m_data.rhs_viss != 0)
+    kv.team_barrier();
+    if (m_data.rhs_viss != 0) {
       add_hyperviscosity(kv);
-    if (m_data.limiter_option == 8)
+      kv.team_barrier();
+    }
+    if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
+      kv.team_barrier();
+    }
     apply_mass_matrix(kv);
     stop_timer("esf compute");
   }
