@@ -535,6 +535,18 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
     }
   }
 
+  // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
+  // This method only updates the np1 timelevel
+  void update_fortran_ps_v(Real *fort_ps_v_ptr) {
+    assert(fort_ps_v_ptr != nullptr);
+    HostViewUnmanaged<Real * [NUM_TIME_LEVELS][NP][NP]> fort_ps_v(
+        fort_ps_v_ptr, m_data.num_elems);
+    for (int ie = 0; ie < m_data.num_elems; ++ie) {
+      Kokkos::deep_copy(Homme::subview(fort_ps_v, ie, m_data.np1),
+                        Homme::subview(m_ps_v, ie));
+    }
+  }
+
   KOKKOS_INLINE_FUNCTION
   void compute_ps_v(KernelVariables &kv,
                     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> dp3d,
@@ -543,14 +555,21 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      Kokkos::parallel_reduce(
-          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-          [&](const int &ilevel, Real &accumulator) {
-            const int ilev = ilevel / VECTOR_SIZE;
-            const int vec_lev = ilevel % VECTOR_SIZE;
-            accumulator += dp3d(igp, jgp, ilev)[vec_lev];
-          },
-          ps_v(igp, jgp));
+      ps_v(igp, jgp) = 0.0;
+      // This doesn't work - possibly because of aggressive vectorization in Kokkos
+      // Kokkos::parallel_reduce(
+      //     Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+      //     [&](const int &ilevel, Real &accumulator) {
+      //       const int ilev = ilevel / VECTOR_SIZE;
+      //       const int vec_lev = ilevel % VECTOR_SIZE;
+      //       accumulator += dp3d(igp, jgp, ilev)[vec_lev];
+      //     },
+      //     ps_v(igp, jgp));
+      for(int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int vlev = level % VECTOR_SIZE;
+        ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
+      }
       ps_v(igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
     });
     kv.team_barrier();

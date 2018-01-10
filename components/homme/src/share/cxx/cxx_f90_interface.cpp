@@ -237,10 +237,9 @@ void advance_qdp_c()
 
 } // extern "C"
 
-template <typename RemapAlg, int rsplit> void vertical_remap() {
+template <typename RemapAlg, bool rsplit> void vertical_remap(Real *fort_ps_v) {
   Control &data = Context::singleton().get_control();
-  Kokkos::TeamPolicy<ExecSpace, void> policy =
-      Homme::get_default_team_policy<ExecSpace>(data.num_elems);
+  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, ExecSpace::thread_pool_size(), 1);
 
   Remap_Functor<RemapAlg, rsplit> remap(data,
                                         Context::singleton().get_elements());
@@ -249,23 +248,31 @@ template <typename RemapAlg, int rsplit> void vertical_remap() {
   Kokkos::parallel_for("vertical remap", policy, remap);
   ExecSpace::fence();
   profiling_pause();
+
+  remap.update_fortran_ps_v(fort_ps_v);
 }
 
 extern "C" {
 
-void vertical_remap_c(const int &remap_alg) {
-  auto rsplit = Context::singleton().get_control().rsplit;
+// fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
+void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
+                      const Real &dt, Real *fort_ps_v) {
+  Control &sim_state = Context::singleton().get_control();
+  sim_state.np1 = np1;
+  sim_state.qn0 = np1_qdp;
+  sim_state.dt = dt;
+  const auto rsplit = sim_state.rsplit;
   if (remap_alg == PPM_Fixed::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>();
+      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>(fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>();
+      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>(fort_ps_v);
     }
   } else if (remap_alg == PPM_Mirrored::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>();
+      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>(fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>();
+      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>(fort_ps_v);
     }
   } else {
     MPI_Abort(0, -1);
