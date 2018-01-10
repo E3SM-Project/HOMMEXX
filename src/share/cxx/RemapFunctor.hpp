@@ -6,6 +6,8 @@
 
 #include <Kokkos_Array.hpp>
 
+#include <mpi.h>
+
 #include "Control.hpp"
 #include "Elements.hpp"
 #include "Types.hpp"
@@ -607,7 +609,9 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
                       vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
                       tgt_layer_thickness(igp, jgp, ilev)[vlev]);
         }
-        assert(src_layer_thickness(igp, jgp, ilev)[vlev] >= 0.0);
+        if (m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] < 0.0) {
+          MPI_Abort(MPI_COMM_WORLD, 1);
+        }
       });
     });
     kv.team_barrier();
@@ -629,8 +633,9 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
                            [&](const int level) {
         const int ilev = level / VECTOR_SIZE;
         const int vlev = level % VECTOR_SIZE;
-        assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] >=
-               0.0);
+        if (m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] < 0.0) {
+          MPI_Abort(MPI_COMM_WORLD, 1);
+        }
       });
     });
     return Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
