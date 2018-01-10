@@ -6,6 +6,8 @@
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "BoundaryExchange.hpp"
+#include "BoundaryExchangeHelpers.hpp"
+#include "BuffersManager.hpp"
 
 #include "Utility.hpp"
 
@@ -178,24 +180,37 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
 
   // Setup the boundary exchange
-  BoundaryExchange* be[NUM_TIME_LEVELS];
+  std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];
+  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be_map = Context::singleton().get_boundary_exchanges();
   for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
     std::stringstream ss;
     ss << "caar tl " << tl;
-    be[tl] = &Context::singleton().get_boundary_exchange(ss.str());
+    be[tl] = be_map[ss.str()];
 
-    // Set the views of this time level into this time level's boundary exchange
-    if (!be[tl]->is_registration_completed())
-    {
-      be[tl]->set_connectivity(Context::singleton().get_connectivity());
-      be[tl]->set_buffers_manager(Context::singleton().get_buffers_manager());
+    // If it was not yet created, create it and set it up
+    if (!be[tl]) {
+      std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+      if (!buffers_manager->is_connectivity_set()) {
+        // TODO: should we do this inside the get_buffers_manager in Context?
+        buffers_manager->set_connectivity(connectivity);
+      }
+
+      // Set the views of this time level into this time level's boundary exchange
+      be[tl] = std::make_shared<BoundaryExchange>(connectivity);
+
+      // Perform the 'provider-customer registration' (register one into each other)
+      create_buffers_provider_customer_relationship(buffers_manager, be[tl]);
+
+      // Setup the boundary exchange
       be[tl]->set_num_fields(0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
-
       be[tl]->registration_completed();
+
+      be_map[ss.str()] = be[tl];
     }
   }
 

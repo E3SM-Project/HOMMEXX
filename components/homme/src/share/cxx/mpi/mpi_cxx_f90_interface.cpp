@@ -10,11 +10,12 @@ namespace Homme
 extern "C"
 {
 
-void setup_buffer_manager (const int& num_2d_fields, const int& num_3d_fields)
+void setup_buffer_manager (const int& /*num_2d_fields*/,
+                           const int& /*num_3d_fields*/)
 {
-  BuffersManager& buffers_manager = *Context::singleton().get_buffers_manager();
-  buffers_manager.request_num_fields (num_2d_fields, num_3d_fields);
-  buffers_manager.allocate_buffers(Context::singleton().get_connectivity());
+  //BuffersManager& buffers_manager = *Context::singleton().get_buffers_manager();
+  //buffers_manager.request_num_fields (num_2d_fields, num_3d_fields);
+  //buffers_manager.allocate_buffers(Context::singleton().get_connectivity());
 }
 
 void init_connectivity (const int& num_local_elems)
@@ -51,9 +52,9 @@ void finalize_connectivity ()
 
 void cleanup_mpi_structures ()
 {
-  std::map<std::string,BoundaryExchange>& be = Context::singleton().get_boundary_exchanges ();
+  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be = Context::singleton().get_boundary_exchanges ();
   for (auto& it : be) {
-    it.second.clean_up();
+    it.second.reset();
   }
 }
 

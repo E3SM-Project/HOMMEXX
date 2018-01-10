@@ -9,45 +9,75 @@
 namespace Homme
 {
 
-// Forward declaration
+// Forward declarations
 class Connectivity;
+class BoundaryExchange;
 
 class BuffersManager
 {
 public:
 
   BuffersManager ();
+  BuffersManager (std::shared_ptr<Connectivity> connectivity);
 
-  // Request enough storage to hold the required number of fields. Does not allocate views
-  void request_num_fields (const int num_2d_fields, const int num_3d_fields);
+  // Adds the given BoundaryExchange to the list of 'customers' of this class
+  // Note: does not update storage requirements yet. Need to call check_for_reallocation for that
+  void add_customer (std::shared_ptr<BoundaryExchange> be);
 
-  // Allocate views. Prohibits further calls to request_buffers_sizes
-  void allocate_buffers (std::shared_ptr<Connectivity> connectivity);
+  // Checks whether the connectivity is already set
+  bool is_connectivity_set () const { return m_connectivity!=nullptr; }
 
-  // Check that the allocated views have at least the required size
+  // Set the connectivity class
+  void set_connectivity (std::shared_ptr<Connectivity> connectivity);
+
+  // Ask the manager to re-check whether there is enough storage for all the BE's
+  void check_for_reallocation ();
+
+  // Check that the allocated views can handle the requested number of 2d/3d fields
   bool check_views_capacity (const int num_2d_fields,  const int num_3d_fields) const;
+
+  // Allocate the buffers (overwriting possibly already allocated ones if needed)
+  void allocate_buffers ();
 
   // Deep copy the send/recv buffer to/from the mpi_send/recv buffer
   // Note: these are no-ops if MPIMemSpace=ExecMemSpace
   void sync_send_buffer ();
   void sync_recv_buffer ();
 
-  ExecViewManaged<Real*> get_send_buffer           () const { return m_send_buffer;           }
-  ExecViewManaged<Real*> get_recv_buffer           () const { return m_recv_buffer;           }
-  ExecViewManaged<Real*> get_local_buffer          () const { return m_local_buffer;          }
-  MPIViewManaged<Real*>  get_mpi_send_buffer       () const { return m_mpi_send_buffer;       }
-  MPIViewManaged<Real*>  get_mpi_recv_buffer       () const { return m_mpi_recv_buffer;       }
-  ExecViewManaged<Real*> get_blackhole_send_buffer () const { return m_blackhole_send_buffer; }
-  ExecViewManaged<Real*> get_blackhole_recv_buffer () const { return m_blackhole_recv_buffer; }
+  ExecViewManaged<Real*> get_send_buffer           () const;
+  ExecViewManaged<Real*> get_recv_buffer           () const;
+  ExecViewManaged<Real*> get_local_buffer          () const;
+  MPIViewManaged<Real*>  get_mpi_send_buffer       () const;
+  MPIViewManaged<Real*>  get_mpi_recv_buffer       () const;
+  ExecViewManaged<Real*> get_blackhole_send_buffer () const;
+  ExecViewManaged<Real*> get_blackhole_recv_buffer () const;
 
 private:
 
-  // The number of 2d and 3d fields that the buffers need to be able to handle
-  int m_num_2d_fields;
-  int m_num_3d_fields;
+  // This free function is the only function that can add the BM to the BE and register the BE as
+  // customer of the BM. This is to make sure that all and only the customers of BM contain a
+  // valid ptr to BM. Otherwise, one would need to REMEMBER to set both of them into each other.
+  friend void create_buffers_provider_customer_relationship (std::shared_ptr<BuffersManager> bm, std::shared_ptr<BoundaryExchange> be);
+
+  // If necessary, updates buffers sizes so that there is enough storage to hold the required number of fields.
+  // Note: this method does not (re)allocate views
+  void update_requested_sizes (const int num_2d_fields, const int num_3d_fields);
+
+  // Computes the required storages
+  void required_buffer_sizes (const int num_2d_fields, const int num_3d_fields, size_t& mpi_buffer_size, size_t& local_buffer_size) const;
+
+  // The size of the mpi and local buffers
+  size_t m_mpi_buffer_size;
+  size_t m_local_buffer_size;
 
   // Used to check whether user can still request different sizes
-  bool m_views_allocated;
+  bool m_views_are_valid;
+
+  // Customers of this BuffersManager
+  std::vector<std::weak_ptr<BoundaryExchange>>  m_customers_be;
+
+  // The connectivity (needed to allocate buffers)
+  std::shared_ptr<Connectivity> m_connectivity;
 
   // The buffers
   ExecViewManaged<Real*>  m_send_buffer;
@@ -71,6 +101,62 @@ inline void BuffersManager::sync_send_buffer ()
 inline void BuffersManager::sync_recv_buffer ()
 {
   Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer);
+}
+
+inline ExecViewManaged<Real*>
+BuffersManager::get_send_buffer () const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_send_buffer;
+}
+
+inline ExecViewManaged<Real*>
+BuffersManager::get_recv_buffer () const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_recv_buffer;
+}
+
+inline ExecViewManaged<Real*>
+BuffersManager::get_local_buffer () const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_local_buffer;
+}
+
+inline MPIViewManaged<Real*>
+BuffersManager::get_mpi_send_buffer() const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_mpi_send_buffer;
+}
+
+inline MPIViewManaged<Real*>
+BuffersManager::get_mpi_recv_buffer() const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_mpi_recv_buffer;
+}
+
+inline ExecViewManaged<Real*>
+BuffersManager::get_blackhole_send_buffer () const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_blackhole_send_buffer;
+}
+
+inline ExecViewManaged<Real*>
+BuffersManager::get_blackhole_recv_buffer () const
+{
+  // We ensure that the buffers are valid
+  assert(m_views_are_valid);
+  return m_blackhole_recv_buffer;
 }
 
 } // namespace Homme
