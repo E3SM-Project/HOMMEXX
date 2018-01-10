@@ -1,7 +1,6 @@
 #ifndef HOMMEXX_BOUNDARY_EXCHANGE_HPP
 #define HOMMEXX_BOUNDARY_EXCHANGE_HPP
 
-#include "BuffersManager.hpp"
 #include "Connectivity.hpp"
 #include "ConnectivityHelpers.hpp"
 
@@ -18,13 +17,16 @@
 namespace Homme
 {
 
+// Forward declaration
+class BuffersManager;
+
 // The main class, handling the pack/exchange/unpack process
 class BoundaryExchange
 {
 public:
 
   BoundaryExchange();
-  explicit BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
+  explicit BoundaryExchange(std::shared_ptr<Connectivity> connectivity);
 
   // Thou shall not copy this class
   BoundaryExchange(const BoundaryExchange& src) = delete;
@@ -37,13 +39,11 @@ public:
   // These number refers to *scalar* fields. A 2-vector field counts as 2 fields.
   void set_num_fields (int num_3d_fields, int num_2d_fields);
 
-  // Set the buffers manager (registration must not be completed)
-  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
-
-  // Clean up MPI stuff and registered fields
+  // Clean up MPI stuff and registered fields (but leaves connectivity and buffers manager)
   void clean_up ();
 
-  // Check whether fields have already been registered
+  // Check whether fields registration has already started/finished
+  bool is_registration_started   () const { return m_registration_started;   }
   bool is_registration_completed () const { return m_registration_completed; }
 
   // Note: num_dims is the # of dimensions to exchange, while idim is the first to exchange
@@ -67,6 +67,10 @@ public:
   // Exchange all registered fields
   void exchange ();
 
+  // Get the number of 2d/3d fields that this object handles
+  int get_num_2d_fields () const { return m_num_2d_fields; }
+  int get_num_3d_fields () const { return m_num_3d_fields; }
+
   template<typename ptr_type,typename raw_type>
   struct Pointer {
 
@@ -86,7 +90,19 @@ public:
 
 private:
 
-  void build_requests ();
+  // This free function is the only function that can add the BM to the BE and register the BE as
+  // customer of the BM. This is to make sure that all and only the customers of BM contain a
+  // valid ptr to BM. Otherwise, one would need to REMEMBER to set both of them into each other.
+  friend void create_buffers_provider_customer_relationship (std::shared_ptr<BuffersManager> bm, std::shared_ptr<BoundaryExchange> be);
+
+  // Set the buffers manager (registration must not be completed)
+  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
+
+  // Make BuffersManager a friend, so it can call the method underneath
+  friend class BuffersManager;
+
+  void clear_buffer_views_and_requests ();
+  void build_buffer_views_and_requests ();
 
   std::shared_ptr<Connectivity>   m_connectivity;
 
@@ -102,7 +118,7 @@ private:
   // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
   // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
   // and the blackhole buffers (used for missing connections)
-  std::shared_ptr<BuffersManager> m_buffers_manager;
+  std::weak_ptr<BuffersManager> m_buffers_manager;
 
   //// These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
   //ExecViewManaged<Real*>     m_send_buffer;
@@ -138,6 +154,7 @@ private:
   // methods of this class in an order that generate errors. And if he/she does, we try to avoid errors.
   bool        m_registration_started;
   bool        m_registration_completed;
+  bool        m_buffer_views_and_requests_built;
   bool        m_cleaned_up;
 };
 

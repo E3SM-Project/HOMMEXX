@@ -1,7 +1,9 @@
 #include <catch/catch.hpp>
 
 #include "Context.hpp"
+#include "BuffersManager.hpp"
 #include "BoundaryExchange.hpp"
+#include "BoundaryExchangeHelpers.hpp"
 #include "Connectivity.hpp"
 #include "Utility.hpp"
 #include "Types.hpp"
@@ -57,11 +59,6 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   init_connectivity_f90(num_scalar_fields_2d, num_scalar_fields_3d, num_vector_fields_3d, DIM);
   std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
 
-  // Initialize the buffers manager
-  std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
-  buffers_manager->request_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+num_vector_fields_3d*DIM);
-  buffers_manager->allocate_buffers(connectivity);
-
   // Retrieve local number of elements
   int num_elements = connectivity->get_num_elements();
   int rank = connectivity->get_comm().m_rank;
@@ -82,13 +79,22 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   ExecViewManaged<Scalar*[NUM_TIME_LEVELS][DIM][NP][NP][NUM_LEV]>::HostMirror field_4d_cxx_host;
   field_4d_cxx_host = Kokkos::create_mirror_view(field_4d_cxx);
 
+  // Get the buffers manager
+  std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+  buffers_manager->set_connectivity(connectivity);
+
   // Create boundary exchange
-  BoundaryExchange be(connectivity,buffers_manager);
-  be.set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);
-  be.register_field(field_2d_cxx,1,field_2d_idim);
-  be.register_field(field_3d_cxx,1,field_3d_idim);
-  be.register_field(field_4d_cxx,  field_4d_outer_idim,DIM,0);
-  be.registration_completed();
+  std::shared_ptr<BoundaryExchange> be = std::make_shared<BoundaryExchange>(connectivity);
+
+  // Create the provider-customer relationship between be and buffers_manager
+  create_buffers_provider_customer_relationship(buffers_manager,be);
+
+  // Setup the be object
+  be->set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);
+  be->register_field(field_2d_cxx,1,field_2d_idim);
+  be->register_field(field_3d_cxx,1,field_3d_idim);
+  be->register_field(field_4d_cxx,  field_4d_outer_idim,DIM,0);
+  be->registration_completed();
 
   for (int itest=0; itest<num_tests; ++itest)
   {
@@ -129,7 +135,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
     // Perform boundary exchange
     boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
-    be.exchange();
+    be->exchange();
     Kokkos::deep_copy(field_2d_cxx_host, field_2d_cxx);
     Kokkos::deep_copy(field_3d_cxx_host, field_3d_cxx);
     Kokkos::deep_copy(field_4d_cxx_host, field_4d_cxx);
@@ -181,5 +187,5 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
   // Cleanup
   cleanup_f90();  // Deallocate stuff in the F90 module
-  be.clean_up();
+  be->clean_up();
 }
