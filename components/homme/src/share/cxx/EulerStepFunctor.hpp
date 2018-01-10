@@ -147,12 +147,7 @@ private:
 
         Real x[NP2], c[NP2];
         parallel_for(tvr, [&] (const int& k) {
-            // This div-mod line is *purposely* the reverse of usual. HOMMEXX
-            // carries the transpose of the GLL points, for historical (?)
-            // reasons. But to get BFB in the reductions below, I have to carry
-            // them out in the Fortran orientation. I get that by reversing the
-            // usual i,j here.
-            const int i = k % NP, j = k / NP;
+            const int i = k / NP, j = k % NP;
             const auto& dpm = dpmass(i,j,vpi)[vsi];
             c[k] = sphweights(i,j)*dpm;
             x[k] = ptens(i,j,vpi)[vsi]/dpm;
@@ -213,8 +208,7 @@ private:
         }
 
         parallel_for(tvr, [&] (const int& k) {
-            // *Purposely* reverse of usual HOMMEXX convention.
-            const int i = k % NP, j = k / NP;
+            const int i = k / NP, j = k % NP;
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });        
       });
