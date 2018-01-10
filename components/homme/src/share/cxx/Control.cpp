@@ -45,15 +45,6 @@ void Control::init(const int nets_in, const int nete_in,
   Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
   Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
 
-/*
-std::cout << "printing hybi! in CONTROL!!!!!!!!!!!!!! \n";
-for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
-std::cout << "hybrid_bi " << ii << " " << hybrid_bi(ii) << "\n";
-std::cout << "printing host hybi! in CONTROL!!!!!!!!!!!!!! \n";
-for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
-std::cout << "HOST hybrid_bi " << ii << " " << host_hybrid_bi(ii) << "\n";
-*/
-
 }
 
 } // namespace Homme
