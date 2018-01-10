@@ -2000,7 +2000,7 @@ OMP_SIMD
 
 #ifdef USE_KOKKOS_KERNELS
   subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
-    use iso_c_binding,  only: c_ptr, c_loc
+    use iso_c_binding,  only: c_ptr, c_loc, c_int, c_double
     use control_mod, only: vert_remap_q_alg
     use kinds,          only: real_kind
     use hybvcoord_mod,  only: hvcoord_t
@@ -2009,16 +2009,21 @@ OMP_SIMD
     use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
                                 elem_derived_phi, elem_derived_pecnd,           &
                                 elem_derived_omega_p, elem_derived_vn0,         &
-                                elem_derived_eta_dot_dpdn, elem_state_Qdp
+                                elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+                                elem_state_ps_v
 
     use fvm_control_volume_mod, only : fvm_struct
 
     implicit none
 
     interface
-      subroutine vertical_remap_c(vert_remap_alg) bind(c)
-        use iso_c_binding, only : c_int
+      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v_ptr) bind(c)
+        use iso_c_binding, only : c_int, c_double, c_ptr
         integer (kind=c_int), intent(in) :: vert_remap_alg
+        integer (kind=c_int), intent(in) :: np1
+        integer (kind=c_int), intent(in) :: np1_qdp
+        real (kind=c_double), intent(in) :: dt
+        type (c_ptr), intent(in) :: ps_v_ptr
       end subroutine vertical_remap_c
 
       subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
@@ -2057,11 +2062,15 @@ OMP_SIMD
     real (kind=real_kind), intent(in) :: dt
     integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
 
+    integer (kind=c_int) :: np1_c, np1_qdp_c
+
     type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
     type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+
+    type (c_ptr) :: elem_state_ps_v_ptr
 
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
@@ -2076,13 +2085,28 @@ OMP_SIMD
                            elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                            elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+
+    np1_c = np1 - 1
+    np1_qdp_c = np1_qdp - 1
+
     call t_startf('total vertical remap time')
-    call vertical_remap_c(vert_remap_q_alg)
+    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v_ptr)
     call t_stopf('total vertical remap time')
     call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                               elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    print *, "f90 np1", np1
+    print *, "f90 dt", dt
+    print *, "Lateral Velocity"
+    print *, elem(1)%state%v(:,:,1,1:4,np1)
+    print *, "Temperature"
+    print *, elem(1)%state%t(:,:,1:4,np1)
+    print *, "ps_v"
+    print *, elem(1)%state%ps_v(:,:,np1)
+    print *, ""
   end subroutine vertical_remap_interface
 
 #else
@@ -2106,6 +2130,13 @@ OMP_SIMD
     call t_startf('total vertical remap time')
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     call t_stopf('total vertical remap time')
+    print *, "Lateral Velocity"
+    print *, elem(1)%state%v(:,:,1,1:4,np1)
+    print *, "Temperature"
+    print *, elem(1)%state%t(:,:,1:4,np1)
+    print *, "ps_v"
+    print *, elem(1)%state%ps_v(:,:,np1)
+    print *, ""
   end subroutine vertical_remap_interface
 #endif ! USE_KOKKOS_KERNELS
 
