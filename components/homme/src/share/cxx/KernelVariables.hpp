@@ -55,7 +55,7 @@ struct Memory {
   class AutoArray {
     Scalar data_[N];
   public:
-    AutoArray (Scalar*) {}
+    KOKKOS_INLINE_FUNCTION AutoArray (Scalar*) {}
     KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) { return data_[i]; }
   };
 };
@@ -72,7 +72,7 @@ struct Memory<Hommexx_Cuda> {
   class AutoArray {
     Scalar* data_;
   public:
-    AutoArray (Scalar* data) : data_(data) {}
+    KOKKOS_INLINE_FUNCTION AutoArray (Scalar* data) : data_(data) {}
     KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) { return data_[i]; }
   };
 };
