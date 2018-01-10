@@ -80,6 +80,8 @@ void preq_vertadv(const Real *temperature, const Real *velocity,
                   const Real *eta_dot_dpdn, const Real *recipr_density,
                   Real *t_vadv, Real *v_vadv);
 
+void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
+                                    Real *eta_dot_total, const Real *eta_dot);
 
 }  // extern C
 
@@ -976,6 +978,83 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   }
 }
 
+
+class accumulate_eta_dot_dpdn_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.accumulate_eta_dot_dpdn(kv);
+  }
+};
+
+TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+  std::random_device rd;
+  rngAlg engine(rd());
+  using TestType = compute_subfunctor_test<accumulate_eta_dot_dpdn_test>;
+
+  Elements &elements = Context::singleton().get_elements();
+  elements.random_init(num_elems);
+
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("eta dot", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+
+  TestType test_functor(elements);
+
+//check rsplit in m_data init!!! set to zero?
+
+//wahts going on with eta_ave_w? should be random
+  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
+       TestType::eta_ave_w, test_functor.return_rsplit(),
+       NULL, NULL,
+       NULL, NULL);
+
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  sync_to_host(elements.m_eta_dot_dpdn, eta_dot_total_f90);
+  //will run on device
+  test_functor.run_functor();
+
+  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_adjust_eta_dot_dpdn_c_int(test_functor.eta_ave_w,
+                               Kokkos::subview(eta_dot_total_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(eta_dot, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          //compare total eta
+          const Real correct = eta_dot_total_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+        }
+      }
+    }//level loop
+  }//ie loop
+};//end of accumulate_eta_dot_dpdn test
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class eta_dot_dpdn_vertadv_euler_test {
 public:
   KOKKOS_INLINE_FUNCTION
@@ -1086,13 +1165,8 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //save these in host values for comparison
   sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
   sync_to_host(elements.buffers.sdot_sum, sdot_sum);
-  //if one of results is buffer variable, it needs another copy of host view,
-  //see virt_temp for an example
 
-
-//FORGOT TO CHECK SDOT!
   for (int ie = 0; ie < num_elems; ++ie) {
-// input is eta, sdot, divdp, hybi
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
                                Kokkos::subview(eta_dot_f90, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data(),
@@ -1102,8 +1176,6 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                hybrid_bi_mirror.data());
 
-
-//should be checking sdot_sum too!!!!!
     for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -1112,10 +1184,6 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
           REQUIRE(!std::isnan(correct));
           const Real computed = eta_dot(ie, level, igp, jgp);
           REQUIRE(!std::isnan(computed));
-//if( igp == 0 && jgp == 0){
-//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-//std::cout << " F = " << correct << " C = " << computed << "\n";
-//}
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
         }
@@ -1149,13 +1217,6 @@ public:
 
 
 //DONE
-//og: it would be good if each test that uses buffers init-ed vars for buffers 
-//the same way, but i don't thnk it is the case. or maybe it is?
-//all emelents m_vars have copies in the test_functor, to move it to host?
-//some buffer vars for C and F tests are inited as Real*, some are inited as Scalar*
-//in the test body (even those with midlevels values only). why?
-//
-//
 //preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
 //takes in only buf value of eta, m values T, v, dp3d
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
@@ -1174,16 +1235,19 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
 
   //preq_vertadv depends on eta_dot_dpdn, dp3d, T, v (all in elements, randomized by random_init),
   //modifies v_vadv, t_vadv (those are in buffers). 
-  //We will assign nans to the buffer values:
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
 
-//we need quiet nans, this is just to debug the test itself
-//  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
-//  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+//what is the good strategy for NAN values? tails of NUM_PHYSICAL_LEVEL+1 vars
+//should be init-ed to nans. the rest can be random...
+//how to implement it -- to have a method that will assign quiet nans to tail of eta_dot
+//in elments?
+  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
 
+/*
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int i = 0; i < NP; i++) {
@@ -1195,8 +1259,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
       }
     } //level loop
   }//ie loop, end of assigning of quiet nans
-
-//do we have this function for nlev+1 levels?
+*/
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
   sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
@@ -1214,7 +1277,6 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   deep_copy(v_vadv_f90, v_vadv);
 
   TestType test_functor(elements);
-  //this test does not need m_data init?
   //this test will change t_vadv_buf, v_vadv_buf, eta_dot_dpdn_buf
   test_functor.run_functor();
 
@@ -1223,12 +1285,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
   sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
 
-//std::cout << "in C NUM_PHYS_LEV="<< NUM_PHYSICAL_LEV << "\n";
-//std::cout << "NUM_LEV, VECTOR_SIZE="<<NUM_LEV << ", " << VECTOR_SIZE << "\n";
-
   for (int ie = 0; ie < num_elems; ++ie) {
-//         call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
-//                       eta_dot_dpdn,rdp,T_vadv,v_vadv)
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         for (int i = 0; i < NP; i++) {
           for (int j = 0; j < NP; j++) {
@@ -1241,8 +1298,6 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(test_functor.velocity, ie, test_functor.n0, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-//        Kokkos::subview(test_functor.eta_dpdn, ie, 
-//                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(), //if test takes m_value
         Kokkos::subview(eta_dot_f90, ie, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         rdp_f90.data(),
@@ -1259,17 +1314,10 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
           const Real correct = t_vadv_f90(ie, level, igp, jgp);
           REQUIRE(!std::isnan(correct));
           const Real computed = t_vadv(ie, level, igp, jgp);
-
-//if( igp == 0 && jgp == 0){
-//std::cout <<"ie="<< ie << " level="<< level <<" igp="<< igp << " jgp=" << jgp << "\n";
-//std::cout << " F = " << correct << " C = " << computed << "\n";
-//}
-
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
-
-
+          //errors for v_vadv
           for (int dim = 0; dim < 2; dim ++){
             const Real correct = v_vadv_f90(ie, level, dim, igp, jgp);
             REQUIRE(!std::isnan(correct));
@@ -1278,7 +1326,6 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
             const Real rel_error = compare_answers(correct, computed);
             REQUIRE(rel_threshold >= rel_error);
           }//end of dim loop
-
         }
       }
     }//level loop

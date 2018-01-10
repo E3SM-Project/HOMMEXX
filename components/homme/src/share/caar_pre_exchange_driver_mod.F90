@@ -549,7 +549,7 @@ print *, 'qn0 that is sent to C', qn0
   end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
 
 
-  subroutine caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,eta_accum,eta)
+  subroutine caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,eta_accum,eta) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np,nlev
     implicit none
