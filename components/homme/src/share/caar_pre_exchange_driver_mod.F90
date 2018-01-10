@@ -9,7 +9,6 @@ module caar_pre_exchange_driver_mod
 
 contains
 
-!>>>>>>> master
   ! An interface to enable access from C/C++
   subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, tvirt, press, press_grad, vtemp) bind(c)
     use kinds, only : real_kind

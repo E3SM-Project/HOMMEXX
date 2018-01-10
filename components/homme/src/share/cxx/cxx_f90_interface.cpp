@@ -237,11 +237,12 @@ void advance_qdp_c()
 
 } // extern "C"
 
-template <typename RemapAlg, bool rsplit> void vertical_remap(Real *fort_ps_v) {
-  Control &data = Context::singleton().get_control();
-  Kokkos::TeamPolicy<ExecSpace> policy(data.num_elems, ExecSpace::thread_pool_size(), 1);
+template <typename RemapAlg, bool rsplit>
+void vertical_remap(Control &sim_state, Real *fort_ps_v) {
+  Kokkos::TeamPolicy<ExecSpace, void> policy =
+      Homme::get_default_team_policy<ExecSpace>(sim_state.num_elems);
 
-  Remap_Functor<RemapAlg, rsplit> remap(data,
+  Remap_Functor<RemapAlg, rsplit> remap(sim_state,
                                         Context::singleton().get_elements());
 
   profiling_resume();
@@ -256,7 +257,7 @@ extern "C" {
 
 // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
 void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
-                      const Real &dt, Real *fort_ps_v) {
+                      const Real &dt, Real *&fort_ps_v) {
   Control &sim_state = Context::singleton().get_control();
   sim_state.np1 = np1;
   sim_state.qn0 = np1_qdp;
@@ -264,15 +265,15 @@ void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
   const auto rsplit = sim_state.rsplit;
   if (remap_alg == PPM_Fixed::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>(fort_ps_v);
+      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>(sim_state, fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>(fort_ps_v);
+      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>(sim_state, fort_ps_v);
     }
   } else if (remap_alg == PPM_Mirrored::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>(fort_ps_v);
+      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>(sim_state, fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>(fort_ps_v);
+      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>(sim_state, fort_ps_v);
     }
   } else {
     MPI_Abort(0, -1);

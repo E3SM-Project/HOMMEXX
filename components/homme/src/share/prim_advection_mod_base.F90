@@ -2017,13 +2017,13 @@ OMP_SIMD
     implicit none
 
     interface
-      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v_ptr) bind(c)
+      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v) bind(c)
         use iso_c_binding, only : c_int, c_double, c_ptr
         integer (kind=c_int), intent(in) :: vert_remap_alg
         integer (kind=c_int), intent(in) :: np1
         integer (kind=c_int), intent(in) :: np1_qdp
         real (kind=c_double), intent(in) :: dt
-        type (c_ptr), intent(in) :: ps_v_ptr
+        real (kind=c_double), intent(in) :: ps_v(:,:,:,:)
       end subroutine vertical_remap_c
 
       subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
@@ -2070,8 +2070,6 @@ OMP_SIMD
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
 
-    type (c_ptr) :: elem_state_ps_v_ptr
-
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
     elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
@@ -2086,13 +2084,11 @@ OMP_SIMD
                            elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
 
-    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
-
     np1_c = np1 - 1
     np1_qdp_c = np1_qdp - 1
 
     call t_startf('total vertical remap time')
-    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v_ptr)
+    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
     call t_stopf('total vertical remap time')
     call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &

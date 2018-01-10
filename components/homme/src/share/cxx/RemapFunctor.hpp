@@ -556,7 +556,8 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       ps_v(igp, jgp) = 0.0;
-      // This doesn't work - possibly because of aggressive vectorization in Kokkos
+      // This doesn't work - possibly because of aggressive vectorization in
+      // Kokkos
       // Kokkos::parallel_reduce(
       //     Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
       //     [&](const int &ilevel, Real &accumulator) {
@@ -565,7 +566,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       //       accumulator += dp3d(igp, jgp, ilev)[vec_lev];
       //     },
       //     ps_v(igp, jgp));
-      for(int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int vlev = level % VECTOR_SIZE;
         ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
