@@ -26,7 +26,7 @@ class BoundaryExchange
 public:
 
   BoundaryExchange();
-  explicit BoundaryExchange(std::shared_ptr<Connectivity> connectivity);
+  BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
 
   // Thou shall not copy this class
   BoundaryExchange(const BoundaryExchange& src) = delete;
@@ -35,6 +35,9 @@ public:
 
   // Set the connectivity if default constructor was used
   void set_connectivity (std::shared_ptr<Connectivity> connectivity);
+
+  // Set the buffers manager (registration must not be completed)
+  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
 
   // These number refers to *scalar* fields. A 2-vector field counts as 2 fields.
   void set_num_fields (int num_3d_fields, int num_2d_fields);
@@ -90,15 +93,7 @@ public:
 
 private:
 
-  // This free function is the only function that can add the BM to the BE and register the BE as
-  // customer of the BM. This is to make sure that all and only the customers of BM contain a
-  // valid ptr to BM. Otherwise, one would need to REMEMBER to set both of them into each other.
-  friend void create_buffers_provider_customer_relationship (std::shared_ptr<BuffersManager> bm, std::shared_ptr<BoundaryExchange> be);
-
-  // Set the buffers manager (registration must not be completed)
-  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
-
-  // Make BuffersManager a friend, so it can call the method underneath
+  // Make BuffersManager a friend, so it can call the methods underneath
   friend class BuffersManager;
 
   void clear_buffer_views_and_requests ();
@@ -118,7 +113,7 @@ private:
   // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
   // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
   // and the blackhole buffers (used for missing connections)
-  std::weak_ptr<BuffersManager> m_buffers_manager;
+  std::shared_ptr<BuffersManager> m_buffers_manager;
 
   // These are the dummy send/recv buffers used for missing connections
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;

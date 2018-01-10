@@ -20,10 +20,6 @@ public:
   BuffersManager ();
   BuffersManager (std::shared_ptr<Connectivity> connectivity);
 
-  // Adds the given BoundaryExchange to the list of 'customers' of this class
-  // Note: does not update storage requirements yet. Need to call check_for_reallocation for that
-  void add_customer (std::shared_ptr<BoundaryExchange> be);
-
   // Checks whether the connectivity is already set
   bool is_connectivity_set () const { return m_connectivity!=nullptr; }
 
@@ -54,10 +50,14 @@ public:
 
 private:
 
-  // This free function is the only function that can add the BM to the BE and register the BE as
-  // customer of the BM. This is to make sure that all and only the customers of BM contain a
-  // valid ptr to BM. Otherwise, one would need to REMEMBER to set both of them into each other.
-  friend void create_buffers_provider_customer_relationship (std::shared_ptr<BuffersManager> bm, std::shared_ptr<BoundaryExchange> be);
+  // Make BoundaryExchange a friend, so it can call the next two methods underneath
+  friend class BoundaryExchange;
+
+  // Adds/removes the given BoundaryExchange to/from the list of 'customers' of this class
+  // Note: the only class that should call these methods is BoundaryExchange, so
+  //       it can register/unregister itself as a customer
+  void add_customer (BoundaryExchange* add_me);
+  void remove_customer (BoundaryExchange* remove_me);
 
   // If necessary, updates buffers sizes so that there is enough storage to hold the required number of fields.
   // Note: this method does not (re)allocate views
@@ -74,7 +74,7 @@ private:
   bool m_views_are_valid;
 
   // Customers of this BuffersManager
-  std::vector<std::weak_ptr<BoundaryExchange>>  m_customers_be;
+  std::vector<BoundaryExchange*>  m_customers_be;
 
   // The connectivity (needed to allocate buffers)
   std::shared_ptr<Connectivity> m_connectivity;

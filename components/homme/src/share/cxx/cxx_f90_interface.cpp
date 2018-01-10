@@ -197,10 +197,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
       }
 
       // Set the views of this time level into this time level's boundary exchange
-      be[tl] = std::make_shared<BoundaryExchange>(connectivity);
-
-      // Perform the 'provider-customer registration' (register one into each other)
-      create_buffers_provider_customer_relationship(buffers_manager, be[tl]);
+      be[tl] = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
 
       // Setup the boundary exchange
       be[tl]->set_num_fields(0,4);
@@ -210,6 +207,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
       be[tl]->register_field(elements.m_dp3d,1,tl);
       be[tl]->registration_completed();
 
+      // Set this BE in the Context's map
       be_map[ss.str()] = be[tl];
     }
   }

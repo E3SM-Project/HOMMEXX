@@ -84,10 +84,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   buffers_manager->set_connectivity(connectivity);
 
   // Create boundary exchange
-  std::shared_ptr<BoundaryExchange> be = std::make_shared<BoundaryExchange>(connectivity);
-
-  // Create the provider-customer relationship between be and buffers_manager
-  create_buffers_provider_customer_relationship(buffers_manager,be);
+  std::shared_ptr<BoundaryExchange> be = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
 
   // Setup the be object
   be->set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);

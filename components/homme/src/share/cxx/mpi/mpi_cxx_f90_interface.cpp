@@ -10,14 +10,6 @@ namespace Homme
 extern "C"
 {
 
-void setup_buffer_manager (const int& /*num_2d_fields*/,
-                           const int& /*num_3d_fields*/)
-{
-  //BuffersManager& buffers_manager = *Context::singleton().get_buffers_manager();
-  //buffers_manager.request_num_fields (num_2d_fields, num_3d_fields);
-  //buffers_manager.allocate_buffers(Context::singleton().get_connectivity());
-}
-
 void init_connectivity (const int& num_local_elems)
 {
   Connectivity& connectivity = *Context::singleton().get_connectivity();
