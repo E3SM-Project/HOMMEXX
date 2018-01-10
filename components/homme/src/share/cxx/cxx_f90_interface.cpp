@@ -112,15 +112,15 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
   }
   Kokkos::deep_copy(vstar_exec, vstar_host);
 
-  sync_to_device(ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
                    Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.qtens_biharmonic);
-  sync_to_device(ExecViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.dpdissk);
-  sync_to_device(ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
                    qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
-                 ExecViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                 HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
                    qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                  r.buffers.qlim);
 }
