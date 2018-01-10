@@ -2969,8 +2969,13 @@ end do
     do k=1,nlev
 
        k1=1
+#ifdef REBASELINE
        do j=1,np
           do i=1,np
+#else
+       do i=1,np
+          do j=1,np
+#endif
              c(k1)=sphweights(i,j)*dpmass(i,j,k)
              x(k1)=ptens(i,j,k)/dpmass(i,j,k)
              k1=k1+1
@@ -3039,8 +3044,13 @@ end do
        enddo
 
        k1=1
+#ifdef REBASELINE
        do j=1,np
           do i=1,np
+#else
+       do i=1,np
+          do j=1,np
+#endif
              ptens(i,j,k)=x(k1)
              k1=k1+1
           enddo
