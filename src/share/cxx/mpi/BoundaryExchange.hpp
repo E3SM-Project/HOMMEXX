@@ -120,23 +120,14 @@ private:
   // and the blackhole buffers (used for missing connections)
   std::weak_ptr<BuffersManager> m_buffers_manager;
 
-  //// These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
-  //ExecViewManaged<Real*>     m_send_buffer;
-  //ExecViewManaged<Real*>     m_recv_buffer;
-  //ExecViewManaged<Real*>     m_local_buffer;
-
-  // These are the raw buffers to be used in MPI calls
-  //MPIViewManaged<Real*>     m_mpi_send_buffer;
-  //MPIViewManaged<Real*>     m_mpi_recv_buffer;
-
   // These are the dummy send/recv buffers used for missing connections
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_recv;
 
   // These views can look quite complicated. Basically, we want something like
   // send_buffer(ielem,ifield,iedge) to point to the right area of one of the
-  // three buffers above. In particular, if it is a local connection, it will
-  // point to m_local_buffer (on both send and recv views), while for shared
+  // three buffers in the buffers manager. In particular, if it is a local connection, it will
+  // point to local_buffer (on both send and recv views), while for shared
   // connection, it will point to the corresponding mpi buffer, and for missing
   // connection, it will point to the send/recv blackhole.
 
