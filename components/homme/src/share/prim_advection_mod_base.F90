@@ -2094,15 +2094,6 @@ OMP_SIMD
                               elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                               elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
-    print *, "f90 np1", np1
-    print *, "f90 dt", dt
-    print *, "Lateral Velocity"
-    print *, elem(1)%state%v(:,:,1,1:4,np1)
-    print *, "Temperature"
-    print *, elem(1)%state%t(:,:,1:4,np1)
-    print *, "ps_v"
-    print *, elem(1)%state%ps_v(:,:,np1)
-    print *, ""
   end subroutine vertical_remap_interface
 
 #else
@@ -2126,13 +2117,6 @@ OMP_SIMD
     call t_startf('total vertical remap time')
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     call t_stopf('total vertical remap time')
-    print *, "Lateral Velocity"
-    print *, elem(1)%state%v(:,:,1,1:4,np1)
-    print *, "Temperature"
-    print *, elem(1)%state%t(:,:,1:4,np1)
-    print *, "ps_v"
-    print *, elem(1)%state%ps_v(:,:,np1)
-    print *, ""
   end subroutine vertical_remap_interface
 #endif ! USE_KOKKOS_KERNELS
 
@@ -2198,8 +2182,11 @@ OMP_SIMD
 
   do ie=nets,nete
      ! update final ps_v
-     elem(ie)%state%ps_v(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
-          sum(elem(ie)%state%dp3d(:,:,:,np1),3)
+     elem(ie)%state%ps_v(:,:,np1) = 0.0
+     do k=1,nlev
+        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + elem(ie)%state%dp3d(:,:,k,np1)
+     end do
+     elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + hvcoord%hyai(1)*hvcoord%ps0
      do k=1,nlev
         ! target layer thickness
         dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
