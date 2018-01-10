@@ -128,14 +128,10 @@ struct CaarFunctor {
     accumulate_eta_dot_dpdn(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
-    // Note this is dependent on eta_dot_dpdn from other levels and will cause
-    // issues when rsplit is 0
-    // OG NOTE THIS! is it tested with eta_dot_dpdn \neq 0?
     compute_dp3d_np1(kv);
     check_dp3d(kv);
   } // TRIVIAL
-//? is it
-
+//is it?
 
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -217,7 +213,6 @@ struct CaarFunctor {
   } // TRIVIAL? not tested
 
 
-
 //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
   void accumulate_eta_dot_dpdn(KernelVariables &kv) const {
@@ -231,8 +226,7 @@ struct CaarFunctor {
       }//k loop
     });
     kv.team_barrier();
-  } // not tested yet, should be tested against caar_adjust_eta_dot_dpdn_c_int
-
+  } //tested against caar_adjust_eta_dot_dpdn_c_int
 
 
   KOKKOS_INLINE_FUNCTION
@@ -249,18 +243,11 @@ struct CaarFunctor {
   KOKKOS_INLINE_FUNCTION
   void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
 
-/*
-std::cout << "IN C CODE -----------------\n";
-std::cout << "printing hybi! in FUNCTOR!!!!!!!!!!!!!! \n";
-for(int ii = 0; ii < NUM_PHYSICAL_LEV+1; ++ii)
-std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
-*/
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-//do it without vectorization for now, like in Cuda space but without kokkos single
       for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
@@ -271,54 +258,20 @@ std::cout << "hybi " << ii << " " << m_data.hybrid_bi(ii) << "\n";
            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
-
-/*
-if ( igp==0 && jgp==0  ){
-//if((k==0 )|| (k==1)){
-std::cout << "igp=" <<igp << " jgp="<<jgp <<" k="<<k << " ilev = " << ilev << " ivec=" <<ivec <<"\n";
-
-std::cout << "kp1=" << kp1 << " ilevp1="<<ilevp1 << " ivecp1="<<ivecp1 << "\n";
-std::cout << "sdot_sum=" << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
-std::cout << "eta_dpdn=" << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilevp1)[ivecp1] << "\n";
-std::cout << "divdp=" << m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec] << "\n";
-//}
-}
-*/
       }//k loop
       //note that index starts from 1
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
-/*
-if( igp==0 && jgp==0 ){
-std::cout << "BEFORE C In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";  
-std::cout << "hybi, sdot = "<<m_data.hybrid_bi(k+1) <<" " << m_elements.buffers.sdot_sum(kv.ie, igp, jgp) << "\n";
-};
-*/
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] = 
            m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
-/*
-if( igp==0 && jgp==0 ){
-std::cout << "RESULT In the last assignment k=" << k << "and etaC= " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[ivec] << "\n";
-std::cout << " ilev, ivec = " << ilev << " " <<ivec << "\n"; 
-std::cout << "----------------------------------------------------\n";
-}
-*/
-
       }//k loop
       constexpr const int Np1 = NUM_PHYSICAL_LEV;
       const int ilevNp1 = Np1 / VECTOR_SIZE;
       const int ivecNp1 = Np1 % VECTOR_SIZE;
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
-/*
-if( igp==0 && jgp==0 ){
-std::cout << "C CODE before exit eta\n";
-for(int k = 0; k < NUM_LEV; ++k){
-for(int kk = 0; kk<VECTOR_SIZE ; kk++)
-std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k)[kk] << "\n";
-}}*/
     });//NP*NP loop
     kv.team_barrier();
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
@@ -538,14 +491,6 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
       const int ilevp1 = kp1 / VECTOR_SIZE;
       const int ivecp1 = kp1 % VECTOR_SIZE;
 
-//if( igp==0 && jgp==0){
-//for (int k=0; k<NUM_LEV;k++)
-//for (int vec = 0; vec<VECTOR_SIZE; vec++)
-//std::cout << "In C k="<<k << ", vec= " <<vec <<", t_vadv="<<
-//m_elements.buffers.t_vadv_buf(kv.ie, igp,jgp,k)[vec]<<"\n";
-//}
-
-
 //lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                        * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
@@ -560,7 +505,6 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
                   facp * (m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
 
-//do it without vectorization for now, like in Cuda space but without kokkos single
       for(int k = 1; k < NUM_PHYSICAL_LEV-1 ; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
@@ -571,8 +515,6 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
         const int ilevp1 = kp1 / VECTOR_SIZE;
         const int ivecp1 = kp1 % VECTOR_SIZE; 
         
-//std::cout << "in C k level=" << k <<"\n";
-
         facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
         facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
@@ -625,57 +567,6 @@ std::cout << "etaC " << k << " " << kk << ", " << m_elements.m_eta_dot_dpdn(kv.i
      });//NP*NP
      kv.team_barrier();
   } // TESTED against preq_vertadv 
-
-
- // Computes the vertical advection of T and v
-/*
-  //Part of code with rsplit=0
-  KOKKOS_INLINE_FUNCTION
-  void preq_vertadv(
-      const TeamMember &,
-      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> T,
-      const ExecViewUnmanaged<const Scalar[NUM_LEV][2][NP][NP]> v,
-      const ExecViewUnmanaged<const Scalar[NUM_LEV_P][NP][NP]> eta_dp_deta,
-      const ExecViewUnmanaged<const Scalar[NUM_LEV][NP][NP]> rpdel,
-      ExecViewUnmanaged<Scalar[NUM_LEV][NP][NP]> T_vadv,
-      ExecViewUnmanaged<Scalar[NUM_LEV][2][NP][NP]> v_vadv) {
-    constexpr const int k_0 = 0;
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Scalar facp = 0.5 * rpdel(k_0, j, i) * eta_dp_deta(k_0 + 1, j, i);
-        T_vadv(k_0, j, i) = facp * (T(k_0 + 1, j, i) - T(k_0, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_0, h, j, i) = facp * (v(k_0 + 1, h, j, i) - v(k_0, h, j, i));
-        }
-      }
-    }
-    constexpr const int k_f = NUM_LEV - 1;
-    for (int k = k_0 + 1; k < k_f; ++k) {
-      for (int j = 0; j < NP; ++j) {
-        for (int i = 0; i < NP; ++i) {
-          Scalar facp = 0.5 * rpdel(k, j, i) * eta_dp_deta(k + 1, j, i);
-          Scalar facm = 0.5 * rpdel(k, j, i) * eta_dp_deta(k, j, i);
-          T_vadv(k, j, i) = facp * (T(k + 1, j, i) - T(k, j, i)) +
-                            facm * (T(k, j, i) - T(k - 1, j, i));
-          for (int h = 0; h < 2; ++h) {
-            v_vadv(k, h, j, i) = facp * (v(k + 1, h, j, i) - v(k, h, j, i)) +
-                                 facm * (v(k, h, j, i) - v(k - 1, h, j, i));
-          }
-        }
-      }
-    }
-    for (int j = 0; j < NP; ++j) {
-      for (int i = 0; i < NP; ++i) {
-        Scalar facm = 0.5 * rpdel(k_f, j, i) * eta_dp_deta(k_f, j, i);
-        T_vadv(k_f, j, i) = facm * (T(k_f, j, i) - T(k_f - 1, j, i));
-        for (int h = 0; h < 2; ++h) {
-          v_vadv(k_f, h, j, i) = facm * (v(k_f, h, j, i) - v(k_f - 1, h, j, i));
-        }
-      }
-    }
-  } // UNTESTED 13
-*/
-
 
 
   KOKKOS_INLINE_FUNCTION
