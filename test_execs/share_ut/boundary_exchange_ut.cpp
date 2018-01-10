@@ -3,7 +3,6 @@
 #include "Context.hpp"
 #include "BuffersManager.hpp"
 #include "BoundaryExchange.hpp"
-#include "BoundaryExchangeHelpers.hpp"
 #include "Connectivity.hpp"
 #include "Utility.hpp"
 #include "Types.hpp"
@@ -83,15 +82,19 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
   buffers_manager->set_connectivity(connectivity);
 
-  // Create boundary exchange
-  std::shared_ptr<BoundaryExchange> be = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
+  // Create boundary exchanges
+  std::shared_ptr<BoundaryExchange> be1 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
+  std::shared_ptr<BoundaryExchange> be2 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
 
-  // Setup the be object
-  be->set_num_fields(num_scalar_fields_2d,num_scalar_fields_3d+DIM*num_vector_fields_3d);
-  be->register_field(field_2d_cxx,1,field_2d_idim);
-  be->register_field(field_3d_cxx,1,field_3d_idim);
-  be->register_field(field_4d_cxx,  field_4d_outer_idim,DIM,0);
-  be->registration_completed();
+  // Setup the be objects
+  be1->set_num_fields(num_scalar_fields_2d,DIM*num_vector_fields_3d);
+  be1->register_field(field_2d_cxx,1,field_2d_idim);
+  be1->register_field(field_4d_cxx,  field_4d_outer_idim,DIM,0);
+  be1->registration_completed();
+
+  be2->set_num_fields(0,num_scalar_fields_3d);
+  be2->register_field(field_3d_cxx,1,field_3d_idim);
+  be2->registration_completed();
 
   for (int itest=0; itest<num_tests; ++itest)
   {
@@ -132,7 +135,8 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
     // Perform boundary exchange
     boundary_exchange_test_f90(field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(), DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1);
-    be->exchange();
+    be1->exchange();
+    be2->exchange();
     Kokkos::deep_copy(field_2d_cxx_host, field_2d_cxx);
     Kokkos::deep_copy(field_3d_cxx_host, field_3d_cxx);
     Kokkos::deep_copy(field_4d_cxx_host, field_4d_cxx);
@@ -184,5 +188,6 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
   // Cleanup
   cleanup_f90();  // Deallocate stuff in the F90 module
-  be->clean_up();
+  be1->clean_up();
+  be2->clean_up();
 }

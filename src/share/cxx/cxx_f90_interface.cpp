@@ -6,7 +6,6 @@
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "BoundaryExchange.hpp"
-#include "BoundaryExchangeHelpers.hpp"
 #include "BuffersManager.hpp"
 
 #include "Utility.hpp"
