@@ -106,7 +106,6 @@ contains
     hvcoord_bm_ptr             = c_loc(hvcoord%hybm)
     hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
 
-print *, 'qn0 that is sent to C', qn0
     call init_control_caar_c(nets,nete,nelemd,nm1,n0,np1,qn0,dt2,hvcoord%ps0, &
          compute_diagnostics, eta_ave_w, rsplit, &
          hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
