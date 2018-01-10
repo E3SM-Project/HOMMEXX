@@ -43,6 +43,40 @@ struct KernelVariables {
   int ie, ilev, iq;
 }; // KernelVariables
 
+template <typename ExeSpace>
+struct Memory {
+  template <typename Scalar>
+  KOKKOS_INLINE_FUNCTION static
+  Scalar* get_shmem (const KernelVariables& kv, const size_t sz = 0) {
+    return nullptr;
+  }
+
+  template <typename Scalar, int N>
+  class AutoArray {
+    Scalar data_[N];
+  public:
+    AutoArray (Scalar*) {}
+    KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) { return data_[i]; }
+  };
+};
+
+template <>
+struct Memory<Hommexx_Cuda> {
+  template <typename Scalar>
+  KOKKOS_INLINE_FUNCTION static
+  Scalar* get_shmem (const KernelVariables& kv, const size_t sz = 0) {
+    return static_cast<Scalar*>(kv.team.team_shmem().get_shmem(sz));
+  }  
+
+  template <typename Scalar, int N>
+  class AutoArray {
+    Scalar* data_;
+  public:
+    AutoArray (Scalar* data) : data_(data) {}
+    KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) { return data_[i]; }
+  };
+};
+
 } // Homme
 
 #endif // KERNEL_VARIABLES_HPP
