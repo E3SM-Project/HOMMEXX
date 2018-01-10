@@ -134,6 +134,7 @@ struct CaarFunctor {
     compute_dp3d_np1(kv);
     check_dp3d(kv);
   } // TRIVIAL
+//? is it
 
 
 
@@ -191,6 +192,8 @@ struct CaarFunctor {
     });
     kv.team_barrier();
   } // UNTESTED 2
+//og: i'd better make a test for this
+
 
   // TODO: Use partial template specialization to determine if we need this
   // Make a templated subclass of an untemplated version of CaarFunctor
@@ -211,11 +214,11 @@ struct CaarFunctor {
       });//loop for _vadv quantities
     });
     kv.team_barrier();
-  } // TRIVIAL
+  } // TRIVIAL? not tested
 
 
 
-//needs to be for the buffer
+//m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
   void accumulate_eta_dot_dpdn(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -232,7 +235,6 @@ struct CaarFunctor {
 
 
 
-//Is this needed? views are inited to zero
   KOKKOS_INLINE_FUNCTION
   void assign_zero_to_sdot_sum(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
