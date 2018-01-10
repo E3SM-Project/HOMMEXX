@@ -20,7 +20,62 @@ namespace Homme
 // Forward declaration
 class BuffersManager;
 
-// The main class, handling the pack/exchange/unpack process
+/*
+ * BoundaryExchange: a class to handle the pack/exchange/unpack process
+ *
+ * This class (BE) takes care of exchanging the values of one or more fields in the
+ * GP on the boundary of the elements with the neighboring elements. In particular,
+ * it takes care of packing the values into some buffers, performing the exchange
+ * (usually, this includes some MPI calls, unless running in serial mode),
+ * and then unpacking the values, accumulating them into the receiving elements.
+ * This process can be done for an arbitrary number of 2d fields (that is,
+ * no vertical levels) and 3d fields (with vertical levels). If you have a
+ * vector field of dimension DIM, you need to register DIM separate scalar
+ * fields. Internally, for each input field the BE object stores a bunch of
+ * separate Views, that view the input field at each element and component
+ * (if vector field). When the exchange method is called, ALL the stored
+ * fields are packed/exchanged/unpacked. Therefore, if you have two sets
+ * of fields that need to be exchanged at different times, you need to
+ * register them into two separate BE objects.
+ *
+ * The registration happens in three steps:
+ *
+ *  - a call to set_num_fields, which sets the number of 2d and 3d fields
+ *    that will be exchanged. Once this method is called, it cannot be
+ *    called again, unless the method clean_up is called first.
+ *  - a number of calls to one of more of the register_field(...), methods,
+ *    which set the fields into the BE class. You cannot register more fields
+ *    than declared in the set_num_fields call. However you can, if you want,
+ *    register less fields, although this scenario is not tested, and may
+ *    be buggy, so you are probably better off calling set_num_fields with
+ *    the actual number of fields you are going to register. Note that you
+ *    are not allowed to call register_field(...) before set_num_fields.
+ *  - a call to registration_completed, which ends the registration phase,
+ *    and sets up all the internal structure to prepare for calls to
+ *    exchange(). This method MUST be called BEFORE any call to exchange.
+ *
+ * This class relies on the BuffersManager (BM) class for the handling of the buffers.
+ * See BuffersManager header for more info on that. As explained above,
+ * you may have different BE objects, which are however never used at the
+ * same time. Therefore, it makes sense to reuse the same BM for all of them.
+ * For this reason, the BM can serve multiple 'customers'. The BE and BM
+ * classes are linked by a provider-customer relationship. It is up to the BE
+ * to register itself as a customer in the stored BM, and to unregister
+ * itself before going out of scope, to make sure the BM does not keep
+ * a dangling pointer to a non-existent customer. This is why BE's destructor
+ * automatically removes the 'this' object from the stored BM's customers list
+ * (assuming there is a stored BM, otherwise nothing happens).
+ *
+ * In order to work correctly, BE needs a valid Connectivity and a valid
+ * BM (both stored as shared_ptr). They can be set at construction time
+ * or later, via a setter method. There are only a few rules:
+ *
+ *  - once one is set, you cannot reset it
+ *  - the Connectivity must be set BEFORE any call to set_num_fields
+ *  - the BM must be set BEFORE any call to registration_completed
+ *
+ */
+
 class BoundaryExchange
 {
 public:
@@ -29,7 +84,8 @@ public:
   BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
 
   // Thou shall not copy this class
-  BoundaryExchange(const BoundaryExchange& src) = delete;
+  BoundaryExchange(const BoundaryExchange&) = delete;
+  BoundaryExchange& operator= (const BoundaryExchange&) = delete;
 
   ~BoundaryExchange();
 

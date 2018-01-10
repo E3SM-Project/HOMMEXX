@@ -7,7 +7,8 @@ namespace Homme
 {
 
 BuffersManager::BuffersManager ()
- : m_mpi_buffer_size   (0)
+ : m_num_customers     (0)
+ , m_mpi_buffer_size   (0)
  , m_local_buffer_size (0)
  , m_views_are_valid   (false)
 {
@@ -28,8 +29,8 @@ BuffersManager::BuffersManager (std::shared_ptr<Connectivity> connectivity)
 
 void BuffersManager::check_for_reallocation ()
 {
-  for (auto be_ptr : m_customers_be) {
-    update_requested_sizes (be_ptr->get_num_2d_fields(),be_ptr->get_num_3d_fields());
+  for (auto& it : m_customers) {
+    update_requested_sizes (it);
   }
 }
 
@@ -46,7 +47,8 @@ bool BuffersManager::check_views_capacity (const int num_2d_fields, const int nu
   size_t mpi_buffer_size, local_buffer_size;
   required_buffer_sizes (num_2d_fields, num_3d_fields, mpi_buffer_size, local_buffer_size);
 
-  return (mpi_buffer_size<=m_mpi_buffer_size) && (local_buffer_size<=m_local_buffer_size);
+  return (mpi_buffer_size<=m_mpi_buffer_size) &&
+         (local_buffer_size<=m_local_buffer_size);
 }
 
 void BuffersManager::allocate_buffers ()
@@ -69,14 +71,14 @@ void BuffersManager::allocate_buffers ()
   m_views_are_valid = true;
 
   // Tell to all our customers that they need to redo the setup of the internal buffer views
-  for (auto& be_ptr : m_customers_be) {
+  for (auto& be_ptr : m_customers) {
     // Invalidate buffer views and requests in the customer (if none built yet, it's a no-op)
-    be_ptr->clear_buffer_views_and_requests ();
+    be_ptr.first->clear_buffer_views_and_requests ();
 
     // Build buffer views and requests in the customer.
     // NOTE: if the registration is not completed yet, they will be built when
     //       registration_completed is called
-    be_ptr->build_buffer_views_and_requests ();
+    be_ptr.first->build_buffer_views_and_requests ();
   }
 }
 
@@ -86,13 +88,18 @@ void BuffersManager::add_customer (BoundaryExchange* add_me)
   assert (add_me!=nullptr);
 
   // We also don't allow re-registration
-  assert (std::find(m_customers_be.begin(),m_customers_be.end(),add_me)==m_customers_be.end());
+  assert (m_customers.find(add_me)==m_customers.end());
 
   // Add to the list of customers
-  m_customers_be.push_back(add_me);
+  auto pair_it_bool = m_customers.emplace(add_me,CustomerNeeds{0,0});
+
+  // Update the number of customers
+  ++m_num_customers;
 
   // If this customer has already started the registration, we can already update the buffers sizes
-  update_requested_sizes(add_me->get_num_2d_fields(),add_me->get_num_3d_fields());
+  if (add_me->is_registration_started()) {
+    update_requested_sizes(*pair_it_bool.first);
+  }
 }
 
 void BuffersManager::remove_customer (BoundaryExchange* remove_me)
@@ -100,32 +107,57 @@ void BuffersManager::remove_customer (BoundaryExchange* remove_me)
   // We don't allow null customers (although this should never happen)
   assert (remove_me!=nullptr);
 
+  // Perhaps overzealous, but won't hurt: we should have customers
+  assert (m_num_customers>0);
+
   // Find the customer
-  auto it = std::find(m_customers_be.begin(),m_customers_be.end(),remove_me);
+  auto it = m_customers.find(remove_me);
 
   // We don't allow removal of non-customers
-  assert (it!=m_customers_be.end());
+  assert (it!=m_customers.end());
 
-  // Remove the customer
-  m_customers_be.erase(it);
+  // Remove the customer and its needs
+  m_customers.erase(it);
+
+  // Decrease number of customers
+  --m_num_customers;
 }
 
-void BuffersManager::update_requested_sizes (const int num_2d_fields, const int num_3d_fields)
+void BuffersManager::update_requested_sizes (typename std::map<BoundaryExchange*,CustomerNeeds>::value_type& customer)
 {
   // Make sure connectivity is valid
   assert (m_connectivity && m_connectivity->is_finalized());
+
+  // Make sure this is a customer
+  assert (m_customers.find(customer.first)!=m_customers.end());
+
+  // Get the number of fields that this customer has
+  const int num_2d_fields = customer.first->get_num_2d_fields();
+  const int num_3d_fields = customer.first->get_num_3d_fields();
 
   // Compute the requested buffers sizes and compare with stored ones
   size_t mpi_buffer_size, local_buffer_size;
   required_buffer_sizes (num_2d_fields, num_3d_fields, mpi_buffer_size, local_buffer_size);
 
   if (mpi_buffer_size>m_mpi_buffer_size) {
+    // Update this customer's mpi buffer needs
+    customer.second.mpi_buffer_size = mpi_buffer_size;
+
+    // Update the total
     m_mpi_buffer_size = mpi_buffer_size;
+
+    // Mark the views as invalid
     m_views_are_valid = false;
   }
 
   if(local_buffer_size>m_local_buffer_size) {
+    // Update this customer's local buffer needs
+    customer.second.local_buffer_size = local_buffer_size;
+
+    // Update the total
     m_local_buffer_size = local_buffer_size;
+
+    // Mark the views as invalid
     m_views_are_valid = false;
   }
 }

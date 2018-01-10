@@ -54,8 +54,11 @@ BoundaryExchange::~BoundaryExchange()
 {
   clean_up ();
 
-  // Remove me as a customer of the BM
-  m_buffers_manager->remove_customer(this);
+  // It may be that we never really used this object, and never set the BM...
+  if (m_buffers_manager) {
+    // Remove me as a customer of the BM
+    m_buffers_manager->remove_customer(this);
+  }
 }
 
 void BoundaryExchange::set_connectivity (std::shared_ptr<Connectivity> connectivity)
@@ -115,7 +118,7 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
   // Make sure it is a valid pointer. Also, replacing the buffers manager
   // could have unintended side-effects; better prohibit it.
   // Besides, when can it be useful?
-  assert (buffers_manager && m_buffers_manager.expired());
+  assert (buffers_manager && !m_buffers_manager);
 
   // Set the internal pointer
   m_buffers_manager = buffers_manager;
@@ -187,6 +190,10 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 
   // Ask the buffer manager to check for reallocation and then proceed with the allocation (if needed)
+  // Note: if we set the BM after the call to set_num_fields, the BM already knows about our needs,
+  //       otherwise, this next call will update BM's buffers sizes, and force reallocation.
+  //       Also, if BM already knows about our needs, and buffers were already allocated, then
+  //       these two calls should not change the internal state of the BM
   m_buffers_manager->check_for_reallocation();
   m_buffers_manager->allocate_buffers();
 
@@ -269,7 +276,7 @@ void BoundaryExchange::pack_and_send ()
 
   // ---- Send ---- //
   assert (m_buffers_manager);
-  m_buffers_manager->sync_send_buffer(); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
+  m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
 }
 
@@ -278,7 +285,7 @@ void BoundaryExchange::recv_and_unpack ()
   // ---- Recv ---- //
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   assert (m_buffers_manager);
-  m_buffers_manager->sync_recv_buffer(); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
+  m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
