@@ -26,19 +26,10 @@ BuffersManager::BuffersManager (std::shared_ptr<Connectivity> connectivity)
   set_connectivity(connectivity);
 }
 
-void BuffersManager::add_customer (std::shared_ptr<BoundaryExchange> be)
-{
-  // We don't allow null customers
-  assert (be);
-
-  // Add to the list of customers
-  m_customers_be.push_back(be);
-}
-
 void BuffersManager::check_for_reallocation ()
 {
   for (auto be_ptr : m_customers_be) {
-    update_requested_sizes (be_ptr.lock()->get_num_2d_fields(),be_ptr.lock()->get_num_3d_fields());
+    update_requested_sizes (be_ptr->get_num_2d_fields(),be_ptr->get_num_3d_fields());
   }
 }
 
@@ -80,13 +71,43 @@ void BuffersManager::allocate_buffers ()
   // Tell to all our customers that they need to redo the setup of the internal buffer views
   for (auto& be_ptr : m_customers_be) {
     // Invalidate buffer views and requests in the customer (if none built yet, it's a no-op)
-    be_ptr.lock()->clear_buffer_views_and_requests ();
+    be_ptr->clear_buffer_views_and_requests ();
 
     // Build buffer views and requests in the customer.
     // NOTE: if the registration is not completed yet, they will be built when
     //       registration_completed is called
-    be_ptr.lock()->build_buffer_views_and_requests ();
+    be_ptr->build_buffer_views_and_requests ();
   }
+}
+
+void BuffersManager::add_customer (BoundaryExchange* add_me)
+{
+  // We don't allow null customers (although this should never happen)
+  assert (add_me!=nullptr);
+
+  // We also don't allow re-registration
+  assert (std::find(m_customers_be.begin(),m_customers_be.end(),add_me)==m_customers_be.end());
+
+  // Add to the list of customers
+  m_customers_be.push_back(add_me);
+
+  // If this customer has already started the registration, we can already update the buffers sizes
+  update_requested_sizes(add_me->get_num_2d_fields(),add_me->get_num_3d_fields());
+}
+
+void BuffersManager::remove_customer (BoundaryExchange* remove_me)
+{
+  // We don't allow null customers (although this should never happen)
+  assert (remove_me!=nullptr);
+
+  // Find the customer
+  auto it = std::find(m_customers_be.begin(),m_customers_be.end(),remove_me);
+
+  // We don't allow removal of non-customers
+  assert (it!=m_customers_be.end());
+
+  // Remove the customer
+  m_customers_be.erase(it);
 }
 
 void BuffersManager::update_requested_sizes (const int num_2d_fields, const int num_3d_fields)

@@ -28,7 +28,7 @@ BoundaryExchange::BoundaryExchange()
   m_cleaned_up = true;
 }
 
-BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity)
+BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager)
 {
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -40,6 +40,9 @@ BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity)
   // Set the connectivity
   set_connectivity (connectivity);
 
+  // Set the buffers manager
+  set_buffers_manager (buffers_manager);
+
   // There is no buffer view or request yet
   m_buffer_views_and_requests_built = false;
 
@@ -50,6 +53,9 @@ BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity)
 BoundaryExchange::~BoundaryExchange()
 {
   clean_up ();
+
+  // Remove me as a customer of the BM
+  m_buffers_manager->remove_customer(this);
 }
 
 void BoundaryExchange::set_connectivity (std::shared_ptr<Connectivity> connectivity)
@@ -113,6 +119,9 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
 
   // Set the internal pointer
   m_buffers_manager = buffers_manager;
+
+  // Add myself as a customer of the BM
+  m_buffers_manager->add_customer(this);
 }
 
 void BoundaryExchange::clean_up()
@@ -156,7 +165,7 @@ void BoundaryExchange::registration_completed()
 
   // At this point, the connectivity MUST be finalized already, and the buffers manager must be set already
   assert (m_connectivity && m_connectivity->is_finalized());
-  assert (!m_buffers_manager.expired());
+  assert (m_buffers_manager);
 
   // Create requests
   // Note: we put an extra null request at the end, so that if we have no share connections
@@ -178,8 +187,8 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 
   // Ask the buffer manager to check for reallocation and then proceed with the allocation (if needed)
-  m_buffers_manager.lock()->check_for_reallocation();
-  m_buffers_manager.lock()->allocate_buffers();
+  m_buffers_manager->check_for_reallocation();
+  m_buffers_manager->allocate_buffers();
 
   // Create buffer views and persistend send/recv requests, to reuse over and over
   build_buffer_views_and_requests ();
@@ -259,8 +268,8 @@ void BoundaryExchange::pack_and_send ()
   ExecSpace::fence();
 
   // ---- Send ---- //
-  assert (!m_buffers_manager.expired());
-  m_buffers_manager.lock()->sync_send_buffer(); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
+  assert (m_buffers_manager);
+  m_buffers_manager->sync_send_buffer(); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
 }
 
@@ -268,8 +277,8 @@ void BoundaryExchange::recv_and_unpack ()
 {
   // ---- Recv ---- //
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  assert (!m_buffers_manager.expired());
-  m_buffers_manager.lock()->sync_recv_buffer(); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
+  assert (m_buffers_manager);
+  m_buffers_manager->sync_recv_buffer(); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
@@ -323,7 +332,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   }
 
   // Check that the BuffersManager is present and was setup with enough storage
-  assert (!m_buffers_manager.expired() && m_buffers_manager.lock()->check_views_capacity(m_num_2d_fields, m_num_3d_fields));
+  assert (m_buffers_manager && m_buffers_manager->check_views_capacity(m_num_2d_fields, m_num_3d_fields));
 
   // Note: this may look cryptic, so I'll try to explain what's about to happen.
   //       We want to set the send/recv buffers to point to:
@@ -348,7 +357,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   h_increment[etoi(ConnectionKind::MISSING)] =  0;
 
   // Since we access the manager many times, we may as well call lock once and store the shared_ptr.
-  auto buffers_manager = m_buffers_manager.lock();
+  auto buffers_manager = m_buffers_manager;
 
   using local_buf_ptr_type = decltype( buffers_manager->get_local_buffer().data());
   using local_buf_val_type = decltype(*buffers_manager->get_local_buffer().data());
