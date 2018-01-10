@@ -572,6 +572,9 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                 REQUIRE(!std::isnan(correct));
                 Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
                 REQUIRE(!std::isnan(computed));
+
+//og why is this if? what is special about correct=0? 
+//i see this can backfire
                 if (correct != 0.0) {
                   Real rel_error = compare_answers(correct, computed);
                   REQUIRE(rel_threshold >= rel_error);
@@ -639,7 +642,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
 //OG coefficients A and B increase is not taken into here...
 //probably, does not matter
-//this test takes in only ai, so other should be made quiet_nans
+//this test takes in only ai, so others should be made quiet_nans?
   genRandArray(hybrid_am_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_ai_mirror, engine,
@@ -737,13 +740,6 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   test_functor.run_functor();
 
   sync_to_host(elements.m_t, test_functor.temperature);
-
-//  HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
-//  for(int i = 0; i < NP; ++i) {
-//    for(int j = 0; j < NP; ++j) {
-//      temperature_vadv(i, j) = 0.0;
-//    }
-//  }
 
   HostViewManaged<Real [NP][NP]> temperature_f90("Temperature f90");
   for (int ie = 0; ie < num_elems; ++ie) {
@@ -853,8 +849,8 @@ public:
   }
 };
 
-//is it meant moist?
-TEST_CASE("virtual temperature with tracers",
+
+TEST_CASE("moist virtual temperature",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
@@ -1048,18 +1044,6 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 };//end of accumulate_eta_dot_dpdn test
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 class eta_dot_dpdn_vertadv_euler_test {
 public:
   KOKKOS_INLINE_FUNCTION
@@ -1067,7 +1051,6 @@ public:
     functor.compute_eta_dot_dpdn_vertadv_euler(kv);
   }
 };
-
 
 // computing eta_dot_dpdn: (eta_dot, divdp, sdot_sum) --> (eta_dot, sdot_sum)
 // affects only buf value of eta, sdot
@@ -1082,8 +1065,6 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   // singleton
   // on host first
   Elements &elements = Context::singleton().get_elements();
-  //element fields (except buffers) are randomly init-ed
-  // will copy to device and randotm on device
   elements.random_init(num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host div_dp", num_elems);
@@ -1092,19 +1073,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
-  //push host views to device
   sync_to_device(div_vdp, elements.buffers.div_vdp);
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-//source, dest
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
-  //define host view for F input/output
-//  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> divdp_f90("divdp f90", num_elems);
-//  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("sdot_sum f90", num_elems);
-  //copy random host C views to F views
-  //??? transposed or not?
-//  deep_copy(divdp_f90, div_vdp);
-//  deep_copy(sdot_sum_f90, sdot_sum);
-//  why not copy from elements?
 //only hybi is used, should the rest be quiet_nans? yes
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
@@ -1115,18 +1086,12 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
-
-//we need these copies because vals test_functor will be modified
-//now set up F output and make sure it has the same vals for _vadv before we run
-////test_functor.
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum_f90("tavd f90", num_elems);
 
-//to from
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(sdot_sum_f90, sdot_sum);
 
-//  const int rsplit = 0;
   TestType test_functor(elements);
   const int rsplit = 0;
   test_functor.set_rsplit(rsplit);
@@ -1137,37 +1102,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
        hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
        hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
-// m value
-//  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_dpdn_f90("etadotdpdn f90", num_elems);
-//
-
-//we will always set etadot=0 before calling vertadv, but this makes it a better test
-// m value
-//  deep_copy(eta_dot_dpdn_f90, test_functor.eta_dpdn);
-//
-
-
-  //RUN subfunctor, why does it run on device?
   //will run on device
   test_functor.run_functor();
-  //get C output from device to host to some var to store result
-  //why does it need copying? is there any other mechanism to copy elements views 
-  //than having external host views?
 
-//in elements, m_eta_dot_dpdn should have a 'tail' of quiet nans,
-//not sure where to init them.
-
-//UNCOMMENT this later
-  //source dest , copy C output to test_functor
-  //
-
-//m values only
-//  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
-//
-//
-//
-
-//save these in host values for comparison
   sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
   sync_to_host(elements.buffers.sdot_sum, sdot_sum);
 
@@ -1218,10 +1155,6 @@ public:
   }
 };
 
-
-
-
-//DONE
 //preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
 //takes in only buf value of eta, m values T, v, dp3d
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
@@ -1238,8 +1171,6 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  //preq_vertadv depends on eta_dot_dpdn, dp3d, T, v (all in elements, randomized by random_init),
-  //modifies v_vadv, t_vadv (those are in buffers). 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
@@ -1252,37 +1183,20 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
 
-/*
-  for (int ie = 0; ie < num_elems; ++ie) {
-    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
-      for (int i = 0; i < NP; i++) {
-        for (int j = 0; j < NP; j++) {
-          t_vadv(ie,level,i,j) = std::numeric_limits<Real>::quiet_NaN();
-          v_vadv(ie,level,0,i,j) = std::numeric_limits<Real>::quiet_NaN();
-          v_vadv(ie,level,1,i,j) = std::numeric_limits<Real>::quiet_NaN();
-        }
-      }
-    } //level loop
-  }//ie loop, end of assigning of quiet nans
-*/
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
   sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
 
-//now set up F output and make sure it has the same vals for _vadv before we run
-//test_functor.
   HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
   HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
 
-//to from
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(t_vadv_f90, t_vadv);
   deep_copy(v_vadv_f90, v_vadv);
 
   TestType test_functor(elements);
-  //this test will change t_vadv_buf, v_vadv_buf, eta_dot_dpdn_buf
   test_functor.run_functor();
 
   //now copy buffer vals back to test values
@@ -1335,6 +1249,5 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
       }
     }//level loop
   }//ie loop
-
 }//end of test case preq_vertadv
 

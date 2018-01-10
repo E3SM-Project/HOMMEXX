@@ -620,9 +620,6 @@ print *, 'qn0 that is sent to C', qn0
     integer :: h,i,j,k,kptr,ie
     real (kind=real_kind) :: u_m_umet, v_m_vmet, t_m_tmet
 
-
-!print *, 'qn0 in caar_mono', qn0
-
     do ie=nets,nete
       !ps => elem(ie)%state%ps_v(:,:,n0)
       phi => elem(ie)%derived%phi(:,:,:)
@@ -681,8 +678,6 @@ print *, 'qn0 that is sent to C', qn0
 
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
-
-!print *, 'use_cpstar', use_cpstar
 
       if (qn0 == -1 ) then
         call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
@@ -747,7 +742,6 @@ print *, 'qn0 that is sent to C', qn0
          v_vadv=0
       else
 
-!make this an F function
          ! compute eta_dot_dpdn
          call caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord%hybi)
 
@@ -766,20 +760,6 @@ print *, 'qn0 that is sent to C', qn0
       call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
 
       call caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,elem(ie)%derived%eta_dot_dpdn,eta_dot_dpdn)
-!THIS WAS NOT CONVERTED TO C --------------------------------
-!#if (defined COLUMN_OPENMP)
-!       !$omp parallel do private(k)
-!#endif
-!      do k=1,nlev  !  Loop index added (AAM)
-!is derived eta not zero here?
-!         elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
-!              elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
-!      enddo
-!      elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
-!           elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
-! -----------------------------------------------------------
-
-
 
       ! ==============================================
       ! Compute phi + kinetic energy term: 10*nv*nv Flops
