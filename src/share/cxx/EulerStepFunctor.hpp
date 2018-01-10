@@ -147,7 +147,11 @@ private:
 
         Real x[NP2], c[NP2];
         parallel_for(tvr, [&] (const int& k) {
+#ifdef REBASELINE
             const int i = k / NP, j = k % NP;
+#else
+            const int i = k % NP, j = k / NP;
+#endif
             const auto& dpm = dpmass(i,j,vpi)[vsi];
             c[k] = sphweights(i,j)*dpm;
             x[k] = ptens(i,j,vpi)[vsi]/dpm;
@@ -208,7 +212,11 @@ private:
         }
 
         parallel_for(tvr, [&] (const int& k) {
+#ifdef REBASELINE
             const int i = k / NP, j = k % NP;
+#else
+            const int i = k % NP, j = k / NP;
+#endif
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });        
       });
