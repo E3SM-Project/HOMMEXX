@@ -45,6 +45,8 @@ struct KernelVariables {
 
 template <typename ExeSpace>
 struct Memory {
+  enum : bool { on_gpu = false };
+
   template <typename Scalar>
   KOKKOS_INLINE_FUNCTION static
   Scalar* get_shmem (const KernelVariables& kv, const size_t sz = 0) {
@@ -62,10 +64,12 @@ struct Memory {
 
 template <>
 struct Memory<Hommexx_Cuda> {
+  enum : bool { on_gpu = true };
+
   template <typename Scalar>
   KOKKOS_INLINE_FUNCTION static
-  Scalar* get_shmem (const KernelVariables& kv, const size_t sz = 0) {
-    return static_cast<Scalar*>(kv.team.team_shmem().get_shmem(sz));
+  Scalar* get_shmem (const KernelVariables& kv, const size_t n = 0) {
+    return static_cast<Scalar*>(kv.team.team_shmem().get_shmem(n*sizeof(Scalar)));
   }  
 
   template <typename Scalar, int N>
