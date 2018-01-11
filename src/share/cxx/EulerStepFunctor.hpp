@@ -18,7 +18,7 @@ class EulerStepFunctor {
 public:
 
   size_t team_shmem_size (const int team_size) const {
-    return team_size * m_mem_per_team;
+    return Memory<ExecSpace>::on_gpu ? team_size * m_mem_per_team : 0;
   }
 
   EulerStepFunctor (const Control& data)
@@ -148,7 +148,7 @@ private:
         using Kokkos::parallel_reduce;
 
         Real* const data = team_data ?
-          team_data + m_mem_per_team * kv.team.team_rank() :
+          team_data + 2 * NP2 * kv.team.team_rank() :
           nullptr;
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
