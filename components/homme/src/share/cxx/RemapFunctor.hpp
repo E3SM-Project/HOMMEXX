@@ -810,11 +810,6 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
 
     stop_timer("Remap functor");
   }
-
-  KOKKOS_INLINE_FUNCTION
-  size_t shmem_size(const int team_size) const {
-    return KernelVariables::shmem_size(team_size);
-  }
 };
 
 } // namespace Homme
