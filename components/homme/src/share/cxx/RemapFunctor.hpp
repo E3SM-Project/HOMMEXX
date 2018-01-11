@@ -257,17 +257,18 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
             remap_vals) const {
     constexpr int gs = 2; // ghost cells
 
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV * NP * NP),
-        [&](const int &loop_idx) {
-          const int k = (loop_idx / NP) / NP;
-          const int igp = (loop_idx / NP) % NP;
-          const int jgp = loop_idx % NP;
-          int ilevel = k / VECTOR_SIZE;
-          int ivector = k % VECTOR_SIZE;
-          dpo(kv.ie, igp, jgp, k + 2) =
-              src_layer_thickness(igp, jgp, ilevel)[ivector];
-        });
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int &k) {
+        int ilevel = k / VECTOR_SIZE;
+        int ivector = k % VECTOR_SIZE;
+        dpo(kv.ie, igp, jgp, k + 2) =
+            src_layer_thickness(igp, jgp, ilevel)[ivector];
+      });
+    });
     kv.team_barrier();
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -311,14 +312,16 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
     // consequence.
     // Note that the range of k makes this completely parallel,
     // without any data dependencies
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP * gs),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
-      const int k = loop_idx % gs;
-      const int igp = (loop_idx / gs) % NP;
-      const int jgp = (loop_idx / gs) / NP;
-      dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
-      dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
-          dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k);
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, gs),
+                           [&](const int &k) {
+        dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
+        dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
+            dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k);
+      });
     });
     kv.team_barrier();
 
@@ -568,12 +571,14 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
       //       accumulator += dp3d(igp, jgp, ilev)[vec_lev];
       //     },
       //     ps_v(igp, jgp));
-      for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
-        const int ilev = level / VECTOR_SIZE;
-        const int vlev = level % VECTOR_SIZE;
-        ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
-      }
-      ps_v(igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+          const int ilev = level / VECTOR_SIZE;
+          const int vlev = level % VECTOR_SIZE;
+          ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
+        }
+        ps_v(igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
+      });
     });
     kv.team_barrier();
   }
