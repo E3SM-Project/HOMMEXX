@@ -29,9 +29,9 @@ public:
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
-  // ???
+  // weighted velocity flux for consistency
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
-  // ???
+  // weighted velocity flux for consistency
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Velocity in lon lat basis
@@ -39,18 +39,19 @@ public:
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
   // Temperature
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
-  // dp ( it is dp/d\eta * delta(eta))
+  // dp ( it is dp/d\eta * delta(eta)), or pseudodensity
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
-  // q is the specific humidity
+  // q is tracer ratio, qdp is tracer mass
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
   // eta=$\eta$ is the vertical coordinate
   // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$ 
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
 
-//OG what is logic to put smth in buffers or not?
-
+  //buffer views are temporaries that matter only during local RK steps 
+  //(dynamics and tracers time step).
+  //m_ views are also used outside of local timesteps. 
   struct BufferViews {
 
     BufferViews() = default;
@@ -83,8 +84,9 @@ public:
 
     // Buffers for vertical advection terms in V and T for case
     // of Eulerian advection, rsplit=0. These buffers are used in both 
-    // cases, rsplit>0 and =0, but we rely on fact that views are init-ed to zero
-    // at construction.
+    // cases, rsplit>0 and =0. Some of these values need to be init-ed 
+    // to zero at the beginning of each RK stage. Right now there is a code
+    // for this, since Elements is a singleton.
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
     ExecViewManaged<Scalar* [NP][NP][NUM_LEV]> t_vadv_buf;
     ExecViewManaged<Scalar* [NP][NP][NUM_LEV_P]> eta_dot_dpdn_buf;
