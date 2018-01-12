@@ -1,6 +1,7 @@
 #ifndef HOMMEXX_EULER_STEP_FUNCTOR_HPP
 #define HOMMEXX_EULER_STEP_FUNCTOR_HPP
 
+#include "Context.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "Control.hpp"
@@ -17,7 +18,7 @@ class EulerStepFunctor {
 
 public:
 
-  size_t team_shmem_size (const int team_size) const {
+  static size_t team_shmem_size (const int team_size) {
     return Memory<ExecSpace>::on_gpu ? team_size * m_mem_per_team : 0;
   }
 
@@ -125,30 +126,61 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
-    const int NP2 = NP * NP;
-    const int maxiter = NP2-1;
-    const Real tol_limiter = 5e-14;
-
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
     const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
 
+    limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
+  }
+
+  //! apply mass matrix, overwrite np1 with solution:
+  //! dont do this earlier, since we allow np1_qdp == n0_qdp
+  //! and we dont want to overwrite n0_qdp until we are done using it
+  KOKKOS_INLINE_FUNCTION
+  void apply_mass_matrix (const KernelVariables& kv) const {
+    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
+    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP * NP),
+      [&] (const int loop_idx) {
+        const int igp = loop_idx / NP;
+        const int jgp = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& ilev) {
+            qdp(igp, jgp, ilev) = spheremp(igp, jgp) * qtens(igp, jgp, ilev);
+          });
+      });
+  }
+
+  // Do all the setup and teardown associated with a limiter. Call a limiter
+  // functor to do the actual math given the problem data (mass, minp, maxp, c,
+  // x), where the limiter possibly alters x to place it in the constraint set
+  //    {x: (i) minp <= x_k <= maxp and (ii) c'x = mass }.
+  template <typename Limit, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  with_limiter_shell (const TeamMember& team, const Limit& limit,
+                      const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
+                      const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
+    const int NP2 = NP * NP;
+
     // Size doesn't matter; just need to get a pointer to the start of the
     // shared memory.
-    Real* const team_data = Memory<ExecSpace>::get_shmem<Real>(kv);
+    Real* const team_data = Memory<ExecSpace>::get_shmem<Real>(team);
 
     Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV),
+      Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
       [&] (const int ilev) {
         const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
 
-        const auto tvr = Kokkos::ThreadVectorRange(kv.team, NP2);
+        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
         using Kokkos::parallel_for;
         using Kokkos::parallel_reduce;
 
         Real* const data = team_data ?
-          team_data + 2 * NP2 * kv.team.team_rank() :
+          team_data + 2 * NP2 * team.team_rank() :
           nullptr;
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
@@ -179,6 +211,40 @@ private:
           minp = qlim(0,vpi)[vsi] = mass/sumc;
         if (mass > maxp*sumc)
           maxp = qlim(1,vpi)[vsi] = mass/sumc;
+    
+        limit(team, mass, minp, maxp, x.data(), c.data());
+
+        parallel_for(tvr, [&] (const int& k) {
+#ifdef REBASELINE
+            const int i = k / NP, j = k % NP;
+#else
+            const int i = k % NP, j = k / NP;
+#endif
+            ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
+          });        
+      });
+  }
+
+public:
+
+  // limiter_option = 8.
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  limiter_optim_iter_full (const TeamMember& team,
+                           const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
+                           const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
+    struct Limit {
+      KOKKOS_INLINE_FUNCTION void
+      operator() (const TeamMember& team, const Real& mass,
+                  const Real& minp, const Real& maxp,
+                  Real* const x, Real const* const c) const {
+        const int NP2 = NP * NP;
+        const int maxiter = NP*NP - 1;
+        const Real tol_limiter = 5e-14;
+
+        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
+        using Kokkos::parallel_for;
+        using Kokkos::parallel_reduce;
 
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
@@ -218,37 +284,69 @@ private:
               });
           }
         }
+      }
+    };
 
-        parallel_for(tvr, [&] (const int& k) {
-#ifdef REBASELINE
-            const int i = k / NP, j = k % NP;
-#else
-            const int i = k % NP, j = k / NP;
-#endif
-            ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
-          });        
-      });
+    with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
   }
 
-  //! apply mass matrix, overwrite np1 with solution:
-  //! dont do this earlier, since we allow np1_qdp == n0_qdp
-  //! and we dont want to overwrite n0_qdp until we are done using it
-  KOKKOS_INLINE_FUNCTION
-  void apply_mass_matrix (const KernelVariables& kv) const {
-    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
-    Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team, NP * NP),
-      [&] (const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Kokkos::parallel_for(
-          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-          [&] (const int& ilev) {
-            qdp(igp, jgp, ilev) = spheremp(igp, jgp) * qtens(igp, jgp, ilev);
-          });
-      });
+  // This is limiter_option = 9 in ACME master. For now, just unit test it.
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  limiter_clip_and_sum (const TeamMember& team,
+                        const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
+                        const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
+    struct Limit {
+      KOKKOS_INLINE_FUNCTION void
+      operator() (const TeamMember& team, const Real& mass,
+                  const Real& minp, const Real& maxp,
+                  Real* const x, Real const* const c) const {
+        const int NP2 = NP * NP;
+
+        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
+        using Kokkos::parallel_for;
+        using Kokkos::parallel_reduce;
+
+        // Clip.
+        Real addmass = 0;
+        parallel_reduce(tvr, [&] (const int& k, Real& iaddmass) {
+            if (x[k] > maxp) {
+              iaddmass += (x[k] - maxp)*c[k];
+              x[k] = maxp;
+            } else if (x[k] < minp) {
+              iaddmass += (x[k] - minp)*c[k];
+              x[k] = minp;
+            }
+          }, addmass);
+
+        // No need for a tol: this isn't iterative. If it happens to be exactly
+        // 0, then return early.
+        if (addmass == 0) return;
+
+        Real fac = 0;
+        if (addmass > 0) {
+          // Get sum of weights. Don't store them; we don't want another array.
+          parallel_reduce(tvr, [&] (const int& k, Real& ifac) {
+              ifac += c[k]*(maxp - x[k]);
+            }, fac);
+          if (fac > 0) {
+            // Update.
+            fac = addmass/fac;
+            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(maxp - x[k]); });
+          }
+        } else {
+          parallel_reduce(tvr, [&] (const int& k, Real& ifac) {
+              ifac += c[k]*(x[k] - minp);
+            }, fac);
+          if (fac > 0) {
+            fac = addmass/fac;
+            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(x[k] - minp); });
+          }
+        }
+      }
+    };
+
+    with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
   }
 };
 
