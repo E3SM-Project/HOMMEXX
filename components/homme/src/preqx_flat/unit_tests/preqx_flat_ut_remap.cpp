@@ -35,7 +35,7 @@ void remap_q_ppm_c_callable(Real *Qdp, const int &nx, const int &qsize,
 }; // extern C
 
 template <typename boundary_cond, int _remap_dim> class ppm_remap_functor_test {
-  static_assert(std::is_base_of<PPM_Boundary_Conditions, boundary_cond>::value,
+  static_assert(std::is_base_of<PpmBoundaryConditions, boundary_cond>::value,
                 "PPM Remap test must have a valid boundary condition");
 
 public:
@@ -326,7 +326,7 @@ public:
   }
 
   const int ne;
-  PPM_Vert_Remap<boundary_cond, num_remap> remap;
+  PpmVertRemap<boundary_cond, num_remap> remap;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness_kokkos;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness_kokkos;
   Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
@@ -338,7 +338,7 @@ TEST_CASE("ppm_mirrored", "vertical remap") {
   constexpr int num_elems = 4;
   Control data;
   data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PPM_Mirrored, remap_dim> remap_test_mirrored(data);
+  ppm_remap_functor_test<PpmMirrored, remap_dim> remap_test_mirrored(data);
   SECTION("grid test") { remap_test_mirrored.test_grid(); }
   SECTION("ppm test") { remap_test_mirrored.test_ppm(); }
   SECTION("remap test") { remap_test_mirrored.test_remap(); }
@@ -349,7 +349,7 @@ TEST_CASE("ppm_fixed", "vertical remap") {
   constexpr int num_elems = 4;
   Control data;
   data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PPM_Fixed, remap_dim> remap_test_fixed(data);
+  ppm_remap_functor_test<PpmFixed, remap_dim> remap_test_fixed(data);
   SECTION("grid test") { remap_test_fixed.test_grid(); }
   SECTION("ppm test") { remap_test_fixed.test_ppm(); }
   SECTION("remap test") { remap_test_fixed.test_remap(); }
@@ -369,8 +369,8 @@ TEST_CASE("remap_interface", "vertical remap") {
     constexpr int rsplit = 1;
     data.qsize = 0;
     data.rsplit = rsplit;
-    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim>, rsplit> remap(
-        data, elements);
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
                          remap);
   }
@@ -379,8 +379,8 @@ TEST_CASE("remap_interface", "vertical remap") {
     constexpr int rsplit = 0;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
-    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim>, rsplit> remap(
-        data, elements);
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
                          remap);
   }
@@ -389,8 +389,8 @@ TEST_CASE("remap_interface", "vertical remap") {
     constexpr int rsplit = 1;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
-    Remap_Functor<PPM_Vert_Remap<PPM_Mirrored, remap_dim>, rsplit> remap(
-        data, elements);
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
                          remap);
   }

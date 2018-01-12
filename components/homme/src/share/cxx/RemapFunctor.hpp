@@ -19,12 +19,12 @@ namespace Homme {
 static constexpr int num_states_remap = 3;
 static constexpr int default_num_remap = num_states_remap + QSIZE_D;
 
-struct Vert_Remap_Alg {};
+struct VertRemapAlg {};
 
-struct PPM_Boundary_Conditions {};
+struct PpmBoundaryConditions {};
 
 // Corresponds to remap alg = 1
-struct PPM_Mirrored : public PPM_Boundary_Conditions {
+struct PpmMirrored : public PpmBoundaryConditions {
   static constexpr int fortran_remap_alg = 1;
 
   KOKKOS_INLINE_FUNCTION
@@ -61,7 +61,7 @@ struct PPM_Mirrored : public PPM_Boundary_Conditions {
 };
 
 // Corresponds to remap alg = 2
-struct PPM_Fixed : public PPM_Boundary_Conditions {
+struct PpmFixed : public PpmBoundaryConditions {
   static constexpr int fortran_remap_alg = 2;
 
   KOKKOS_INLINE_FUNCTION
@@ -115,13 +115,13 @@ struct PPM_Fixed : public PPM_Boundary_Conditions {
 
 // Piecewise Parabolic Method stencil
 template <typename boundaries, int _remap_dim = default_num_remap>
-struct PPM_Vert_Remap : public Vert_Remap_Alg {
-  static_assert(std::is_base_of<PPM_Boundary_Conditions, boundaries>::value,
-                "PPM_Vert_Remap requires a valid PPM "
+struct PpmVertRemap : public VertRemapAlg {
+  static_assert(std::is_base_of<PpmBoundaryConditions, boundaries>::value,
+                "PpmVertRemap requires a valid PPM "
                 "boundary condition");
   static constexpr auto remap_dim = _remap_dim;
 
-  PPM_Vert_Remap(const Control &data)
+  PpmVertRemap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
             "dpo", data.num_elems)),
         pio(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>(
@@ -502,9 +502,9 @@ struct PPM_Vert_Remap : public Vert_Remap_Alg {
                 remap_dim> parabola_coeffs;
 };
 
-template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
-  static_assert(std::is_base_of<Vert_Remap_Alg, remap_type>::value,
-                "Remap_Functor not given a remap algorithm to use");
+template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
+  static_assert(std::is_base_of<VertRemapAlg, remap_type>::value,
+                "RemapFunctor not given a remap algorithm to use");
   static_assert(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                               remap_type::remap_dim>::size() ==
                     remap_type::remap_dim,
@@ -526,7 +526,7 @@ template <typename remap_type, bool nonzero_rsplit> struct Remap_Functor {
 
   remap_type m_remap;
 
-  Remap_Functor(const Control &data, const Elements &elements)
+  RemapFunctor(const Control &data, const Elements &elements)
       : m_data(data), m_elements(elements),
         m_ps_v("Surface pressure", data.num_elems),
         m_tgt_layer_thickness("Target Layer Thickness", data.num_elems),
