@@ -17,7 +17,7 @@ void Elements::init(const int num_elems) {
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
-//D is not a metric tensor, D^tD is
+  //D is not a metric tensor, D^tD is
   m_d =
       ExecViewManaged<Real * [2][2][NP][NP]>("matrix D", m_num_elems);
   m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
@@ -27,9 +27,9 @@ void Elements::init(const int num_elems) {
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
   m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Velocity u", m_num_elems);
+      "Flux for u", m_num_elems);
   m_derived_vn0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Velocity v", m_num_elems);
+      "Flux for v", m_num_elems);
 
   m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "Velocity u", m_num_elems);
@@ -561,7 +561,7 @@ void Elements::BufferViews::init(int num_elems) {
 
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for tracers", num_elems);
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for v/dp",
+  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
                                                          num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "buffer for vstar*qdp", num_elems);
@@ -570,7 +570,7 @@ void Elements::BufferViews::init(int num_elems) {
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
-  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum", num_elems);
+  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum buffer", num_elems);
 
   div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
                                                            num_elems);
