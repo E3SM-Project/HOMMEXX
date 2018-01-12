@@ -1,0 +1,56 @@
+
+Each entry will have name(s) as for now, description, latex for it, and suggested name for a future.
+Let's have 1 sentence per line.
+
+Variable:
+eta_dot_dpdn, eta_dot, eta_dpdn
+Description:
+A diagnostic quantity that is present in formulations for divergence operator. 
+It is a product of material derivative of \eta (a new vertical coordinate) and partial derivative of pressure.
+Though it is 'dpdn', last 'n' stands for \eta (shortcut).
+See Chapter 12, eqn 12.7.
+Latex:
+$\dot{\eta}\frac{\partial p}{\partial \eta}$
+Suggested:
+None.
+
+Variable:
+A, B, ai, bi, am, bm, hybrid_ai, etc...
+Description:
+Coefficients for a hybrid pressure coordinate.
+The hybrid pressure is given by p(\eta)=A(\eta)p_0 + B(\eta)p_{surface}.
+Hybrid coefficients have to obey certain properties, so, often the safest is to read them from vcoodr files.
+Latex:
+Suggested:
+None.
+
+Variable:
+rsplit
+Description:
+An integer that controls after how many dynamic steps vertical remap will be performed.
+Latex:
+Suggested:
+None.
+
+
+Variable:
+phi, phis
+Description:
+Geopotential or surface geopotential, g*z, where g is grav. constant and z is height above surface.
+Latex:
+$\Phi$, $\Phi_s$
+Suggested:
+None.
+
+
+
+
+
+
+
+
+
+
+
+
+
