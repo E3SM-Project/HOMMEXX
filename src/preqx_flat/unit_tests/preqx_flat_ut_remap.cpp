@@ -193,9 +193,8 @@ public:
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           auto grid_slice = Homme::subview(grid, ie, igp, jgp);
-          auto start =
-              Host_View_Iterator<decltype(grid_slice)>::start(grid_slice);
-          auto end = Host_View_Iterator<decltype(grid_slice)>::end(grid_slice);
+          auto start = reinterpret_cast<Real *>(grid.data());
+          auto end = start + grid.size();
           std::sort(start, end);
           grid_slice(0)[0] = 0.0;
           grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
