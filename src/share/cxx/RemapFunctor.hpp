@@ -682,29 +682,20 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     return state_remap;
   }
 
-  template <bool nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == true), int>::type
-  build_remap_array(
+  KOKKOS_INLINE_FUNCTION int build_remap_array(
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                     remap_type::remap_dim> &remap_vals) const {
-    const int num_states =
-        build_remap_array_states(kv, remap_vals, src_layer_thickness);
-    const int num_tracers =
-        build_remap_array_tracers(kv, num_states, remap_vals);
-    return num_tracers + num_states;
-  }
-
-  template <bool nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<(nz_rsplit == false),
-                                                 int>::type
-  build_remap_array(
-      KernelVariables &kv,
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                    remap_type::remap_dim> &remap_vals) const {
-    return build_remap_array_tracers(kv, 0, remap_vals);
+    if (nonzero_rsplit == true) {
+      const int num_states =
+          build_remap_array_states(kv, remap_vals, src_layer_thickness);
+      const int num_tracers =
+          build_remap_array_tracers(kv, num_states, remap_vals);
+      return num_tracers + num_states;
+    } else {
+      return build_remap_array_tracers(kv, 0, remap_vals);
+    }
   }
 
   KOKKOS_INLINE_FUNCTION int build_remap_array_states(
