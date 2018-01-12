@@ -121,7 +121,7 @@ struct PpmVertRemap : public VertRemapAlg {
                 "boundary condition");
   static constexpr auto remap_dim = _remap_dim;
 
-  PpmVertRemap(const Control &data)
+  explicit PpmVertRemap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
             "dpo", data.num_elems)),
         pio(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>(
@@ -502,7 +502,83 @@ struct PpmVertRemap : public VertRemapAlg {
                 remap_dim> parabola_coeffs;
 };
 
-template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
+template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
+  static_assert(nonzero_rsplit == false, "The template specialization for "
+                                         "_RemapFunctorRSplit seems to have "
+                                         "been removed.");
+
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_src_layer_thickness;
+  explicit _RemapFunctorRSplit(const int &num_elems)
+      : m_src_layer_thickness("Source layer thickness", num_elems) {}
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
+      KernelVariables &kv, const int &np1, const Real &dt,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
+      const {
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
+        Homme::subview(m_src_layer_thickness, kv.ie);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int &level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int vlev = level % VECTOR_SIZE;
+        const int next_ilev = (level + 1) / VECTOR_SIZE;
+        const int next_vlev = (level + 1) % VECTOR_SIZE;
+        const Real delta_dpdn =
+            eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] -
+            eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
+        src_layer_thickness(igp, jgp, ilev)[vlev] =
+            tgt_layer_thickness(igp, jgp, ilev)[vlev] + dt * delta_dpdn;
+        if (kv.ie == 0 && igp == 0 && jgp == 0) {
+          DEBUG_PRINT("src/tgt %d (%d %d): % .17e vs % .17e\n", level, ilev,
+                      vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
+                      tgt_layer_thickness(igp, jgp, ilev)[vlev]);
+        }
+        if (src_layer_thickness(igp, jgp, ilev)[vlev] < 0.0) {
+          MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+      });
+    });
+    kv.team_barrier();
+    return src_layer_thickness;
+  }
+};
+
+template <> struct _RemapFunctorRSplit<true> {
+  explicit _RemapFunctorRSplit(const int &num_elems) {}
+
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
+      KernelVariables &kv, const int &np1, const Real &dt,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
+      const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int vlev = level % VECTOR_SIZE;
+        if (dp3d(kv.ie, np1, igp, jgp, ilev)[vlev] < 0.0) {
+          MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+      });
+    });
+    return Homme::subview(dp3d, kv.ie, np1);
+  }
+};
+
+template <typename remap_type, bool nonzero_rsplit>
+struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   static_assert(std::is_base_of<VertRemapAlg, remap_type>::value,
                 "RemapFunctor not given a remap algorithm to use");
   static_assert(Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
@@ -516,9 +592,6 @@ template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
   Control m_data;
   const Elements m_elements;
 
-  // TODO: Conditionally remove this member based on nonzero_rsplit
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_src_layer_thickness;
-
   // Surface pressure
   ExecViewManaged<Real * [NP][NP]> m_ps_v;
 
@@ -526,19 +599,11 @@ template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
 
   remap_type m_remap;
 
-  RemapFunctor(const Control &data, const Elements &elements)
-      : m_data(data), m_elements(elements),
-        m_ps_v("Surface pressure", data.num_elems),
+  explicit RemapFunctor(const Control &data, const Elements &elements)
+      : _RemapFunctorRSplit<nonzero_rsplit>(data.num_elems), m_data(data),
+        m_elements(elements), m_ps_v("Surface pressure", data.num_elems),
         m_tgt_layer_thickness("Target Layer Thickness", data.num_elems),
-        m_remap(data) {
-    // TODO: Find a safer and just as simple method of only making this member
-    // available
-    // Maybe std::conditional?
-    if (nonzero_rsplit == false) {
-      m_src_layer_thickness = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-          "Source layer thickness", data.num_elems);
-    }
-  }
+        m_remap(data) {}
 
   // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
   // This method only updates the np1 timelevel
@@ -560,18 +625,11 @@ template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      ps_v(igp, jgp) = 0.0;
-      // This doesn't work - possibly because of aggressive vectorization in
-      // Kokkos
-      // Kokkos::parallel_reduce(
-      //     Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-      //     [&](const int &ilevel, Real &accumulator) {
-      //       const int ilev = ilevel / VECTOR_SIZE;
-      //       const int vec_lev = ilevel % VECTOR_SIZE;
-      //       accumulator += dp3d(igp, jgp, ilev)[vec_lev];
-      //     },
-      //     ps_v(igp, jgp));
+      // Using parallel_reduce to calculate this doesn't seem to work,
+      // even when accumulating into a Scalar and computing the final sum in
+      // serial, and is likely a Kokkos bug since ivdep shouldn't matter.
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        ps_v(igp, jgp) = 0.0;
         for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
           const int ilev = level / VECTOR_SIZE;
           const int vlev = level % VECTOR_SIZE;
@@ -581,69 +639,6 @@ template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
       });
     });
     kv.team_barrier();
-  }
-
-  // This template is a hacky way of choosing which method to compile based on a
-  // class template parameter
-  template <bool nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<
-      (nz_rsplit == false),
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> >::type
-  compute_source_thickness(KernelVariables &kv,
-                           ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-                               tgt_layer_thickness) const {
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        Homme::subview(m_src_layer_thickness, kv.ie);
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                           [&](const int &level) {
-        const int ilev = level / VECTOR_SIZE;
-        const int vlev = level % VECTOR_SIZE;
-        const int next_ilev = (level + 1) / VECTOR_SIZE;
-        const int next_vlev = (level + 1) % VECTOR_SIZE;
-        const Real delta_dpdn =
-            m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] -
-            m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
-        src_layer_thickness(igp, jgp, ilev)[vlev] =
-            tgt_layer_thickness(igp, jgp, ilev)[vlev] + m_data.dt * delta_dpdn;
-        if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          DEBUG_PRINT("src/tgt %d (%d %d): % .17e vs % .17e\n", level, ilev,
-                      vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
-                      tgt_layer_thickness(igp, jgp, ilev)[vlev]);
-        }
-        if (m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] < 0.0) {
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-      });
-    });
-    kv.team_barrier();
-    return src_layer_thickness;
-  }
-
-  template <bool nz_rsplit = nonzero_rsplit>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<
-      (nz_rsplit == true),
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> >::type
-  compute_source_thickness(KernelVariables &kv,
-                           ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-                               tgt_layer_thickness) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                           [&](const int level) {
-        const int ilev = level / VECTOR_SIZE;
-        const int vlev = level % VECTOR_SIZE;
-        if (m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[vlev] < 0.0) {
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-      });
-    });
-    return Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1);
   }
 
   KOKKOS_INLINE_FUNCTION ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
@@ -792,7 +787,9 @@ template <typename remap_type, bool nonzero_rsplit> struct RemapFunctor {
         compute_target_thickness(kv);
 
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        compute_source_thickness(kv, tgt_layer_thickness);
+        this->compute_source_thickness(
+            kv, m_data.np1, m_data.dt, tgt_layer_thickness,
+            m_elements.m_eta_dot_dpdn, m_elements.m_dp3d);
 
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;
