@@ -242,8 +242,8 @@ void vertical_remap(Control &sim_state, Real *fort_ps_v) {
   Kokkos::TeamPolicy<ExecSpace, void> policy =
       Homme::get_default_team_policy<ExecSpace>(sim_state.num_elems);
 
-  Remap_Functor<RemapAlg, rsplit> remap(sim_state,
-                                        Context::singleton().get_elements());
+  RemapFunctor<RemapAlg, rsplit> remap(sim_state,
+                                       Context::singleton().get_elements());
 
   profiling_resume();
   Kokkos::parallel_for("vertical remap", policy, remap);
@@ -263,17 +263,17 @@ void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
   sim_state.qn0 = np1_qdp;
   sim_state.dt = dt;
   const auto rsplit = sim_state.rsplit;
-  if (remap_alg == PPM_Fixed::fortran_remap_alg) {
+  if (remap_alg == PpmFixed::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, true>(sim_state, fort_ps_v);
+      vertical_remap<PpmVertRemap<PpmFixed>, true>(sim_state, fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Fixed>, false>(sim_state, fort_ps_v);
+      vertical_remap<PpmVertRemap<PpmFixed>, false>(sim_state, fort_ps_v);
     }
-  } else if (remap_alg == PPM_Mirrored::fortran_remap_alg) {
+  } else if (remap_alg == PpmMirrored::fortran_remap_alg) {
     if (rsplit != 0) {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, true>(sim_state, fort_ps_v);
+      vertical_remap<PpmVertRemap<PpmMirrored>, true>(sim_state, fort_ps_v);
     } else {
-      vertical_remap<PPM_Vert_Remap<PPM_Mirrored>, false>(sim_state, fort_ps_v);
+      vertical_remap<PpmVertRemap<PpmMirrored>, false>(sim_state, fort_ps_v);
     }
   } else {
     MPI_Abort(0, -1);
