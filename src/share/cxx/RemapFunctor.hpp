@@ -6,7 +6,7 @@
 
 #include <Kokkos_Array.hpp>
 
-#include <mpi.h>
+#include "mpi/ErrorDefs.hpp"
 
 #include "Control.hpp"
 #include "Elements.hpp"
@@ -540,9 +540,6 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
                       vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
                       tgt_layer_thickness(igp, jgp, ilev)[vlev]);
         }
-        if (src_layer_thickness(igp, jgp, ilev)[vlev] < 0.0) {
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
       });
     });
     kv.team_barrier();
@@ -560,19 +557,6 @@ template <> struct _RemapFunctorRSplit<true> {
       ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                           [&](const int level) {
-        const int ilev = level / VECTOR_SIZE;
-        const int vlev = level % VECTOR_SIZE;
-        if (dp3d(kv.ie, np1, igp, jgp, ilev)[vlev] < 0.0) {
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-      });
-    });
     return Homme::subview(dp3d, kv.ie, np1);
   }
 };
@@ -597,12 +581,19 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
 
+  ExecViewManaged<bool *> valid_layer_thickness;
+  typename decltype(valid_layer_thickness)::HostMirror host_valid_input;
+
   remap_type m_remap;
 
   explicit RemapFunctor(const Control &data, const Elements &elements)
       : _RemapFunctorRSplit<nonzero_rsplit>(data.num_elems), m_data(data),
         m_elements(elements), m_ps_v("Surface pressure", data.num_elems),
         m_tgt_layer_thickness("Target Layer Thickness", data.num_elems),
+        valid_layer_thickness(
+            "Check for whether the surface thicknesses are positive",
+            data.num_elems),
+        host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
         m_remap(data) {}
 
   // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
@@ -614,6 +605,16 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     for (int ie = 0; ie < m_data.num_elems; ++ie) {
       Kokkos::deep_copy(Homme::subview(fort_ps_v, ie, m_data.np1),
                         Homme::subview(m_ps_v, ie));
+    }
+  }
+
+  void input_valid_assert() {
+    Kokkos::deep_copy(host_valid_input, valid_layer_thickness);
+    for (int ie = 0; ie < m_data.num_elems; ++ie) {
+      if (host_valid_input(ie) == false) {
+        Errors::runtime_abort("Negative layer thickness detected, aborting!",
+                              Errors::err_negative_layer_thickness);
+      }
     }
   }
 
@@ -669,6 +670,30 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     });
     kv.team_barrier();
     return tgt_layer_thickness;
+  }
+
+  KOKKOS_INLINE_FUNCTION void check_source_thickness(
+      KernelVariables &kv,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
+      const {
+    // Kokkos parallel reduce doesn't support bool as a reduction type, so use
+    // int instead
+    // Reduce starts with false (0), making that the default state
+    // If there is an error, this becomes true
+    int invalid = false;
+    Kokkos::parallel_reduce(
+        Kokkos::TeamThreadRange(kv.team, NP * NP * NUM_PHYSICAL_LEV),
+        [&](const int &loop_idx, int &is_invalid) {
+          const int igp = (loop_idx / NUM_PHYSICAL_LEV) / NP;
+          const int jgp = (loop_idx / NUM_PHYSICAL_LEV) % NP;
+          const int level = loop_idx % NUM_PHYSICAL_LEV;
+          const int ilev = level / VECTOR_SIZE;
+          const int vlev = level % VECTOR_SIZE;
+          const int tmp = is_invalid;
+          is_invalid |= (src_layer_thickness(igp, jgp, ilev)[vlev] < 0.0);
+        },
+        invalid);
+    valid_layer_thickness(kv.ie) = !invalid;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -781,6 +806,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         this->compute_source_thickness(
             kv, m_data.np1, m_data.dt, tgt_layer_thickness,
             m_elements.m_eta_dot_dpdn, m_elements.m_dp3d);
+
+    check_source_thickness(kv, src_layer_thickness);
 
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                   remap_type::remap_dim> remap_vals;

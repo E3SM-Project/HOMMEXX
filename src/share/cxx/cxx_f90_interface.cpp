@@ -250,6 +250,7 @@ void vertical_remap(Control &sim_state, Real *fort_ps_v) {
   ExecSpace::fence();
   profiling_pause();
 
+  remap.input_valid_assert();
   remap.update_fortran_ps_v(fort_ps_v);
 }
 
