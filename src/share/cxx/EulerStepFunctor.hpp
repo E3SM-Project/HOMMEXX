@@ -237,7 +237,8 @@ public:
       KOKKOS_INLINE_FUNCTION void
       operator() (const TeamMember& team, const Real& mass,
                   const Real& minp, const Real& maxp,
-                  Real* const x, Real const* const c) const {
+                  Real* KOKKOS_RESTRICT const x,
+                  Real const* KOKKOS_RESTRICT const c) const {
         const int NP2 = NP * NP;
         const int maxiter = NP*NP - 1;
         const Real tol_limiter = 5e-14;
@@ -300,7 +301,8 @@ public:
       KOKKOS_INLINE_FUNCTION void
       operator() (const TeamMember& team, const Real& mass,
                   const Real& minp, const Real& maxp,
-                  Real* const x, Real const* const c) const {
+                  Real* KOKKOS_RESTRICT const x,
+                  Real const* KOKKOS_RESTRICT const c) const {
         const int NP2 = NP * NP;
 
         const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
