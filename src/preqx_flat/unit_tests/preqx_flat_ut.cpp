@@ -1063,8 +1063,6 @@ struct LimiterTester {
           REQUIRE(ptens(i,j,vi)[si] <=
                   (1 + 1e1*eps)*qlim(1,vi)[si]*dpmass(i,j,vi)[si]);
           m += sphweights(i,j) * ptens(i,j,vi)[si];
-          lo += sphweights(i,j) * qlim(0,vi)[si] * dpmass(i,j,vi)[si];
-          hi += sphweights(i,j) * qlim(1,vi)[si] * dpmass(i,j,vi)[si];
         }
       // Check mass conservation.
       REQUIRE(std::abs(m - Qmass(k)) <= 1e2*eps*Qmass(k));
