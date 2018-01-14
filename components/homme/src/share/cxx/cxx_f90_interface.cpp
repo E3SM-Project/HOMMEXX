@@ -84,8 +84,8 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-  void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
-                          CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
+void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
+                        CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -125,10 +125,16 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                  r.buffers.qlim);
 }
 
-void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr)
+void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr, F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
   Elements& r = Context::singleton().get_elements();
+  const Control& data = Context::singleton().get_control();
   r.push_qdp(elem_state_Qdp_ptr);
+  sync_to_host(r.buffers.qlim,
+               HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
+                 qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+               HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
+                 qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
 }
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
