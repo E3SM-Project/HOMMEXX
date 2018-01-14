@@ -114,12 +114,12 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
            qmin_ptr, qmax_ptr, dpdissk_ptr
     end subroutine euler_pull_data_c
-    subroutine euler_push_results_c(elem_state_Qdp_ptr) bind(c)
+    subroutine euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
     subroutine advance_qdp_c() bind(c)
       use iso_c_binding, only : c_int
@@ -1746,7 +1746,7 @@ OMP_SIMD
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")
-  call euler_push_results_c(elem_state_Qdp_ptr)
+  call euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)

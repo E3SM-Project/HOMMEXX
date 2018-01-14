@@ -386,6 +386,24 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
+  exec_view_mappable<Source_T, Scalar*[QSIZE_D][2][NUM_LEV]>::value &&
+  host_view_mappable<Dest_T, Real**[NUM_PHYSICAL_LEV]>::value, void>::type
+sync_to_host(Source_T source, Dest_T dest0, Dest_T dest1) {
+  typename Source_T::HostMirror source_mirror = Kokkos::create_mirror_view(source);
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < dest0.extent_int(0); ++ie) {
+    for (int q = 0; q < dest0.extent_int(1); ++q) {
+      for (int k = 0; k < dest0.extent_int(2); ++k) {
+        const int vpi = k / VECTOR_SIZE, vsi = k % VECTOR_SIZE;
+        dest0(ie, q, k) = source_mirror(ie, q, 0, vpi)[vsi];
+        dest1(ie, q, k) = source_mirror(ie, q, 1, vpi)[vsi];
+      }
+    }
+  }
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
     host_view_mappable<Source_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value &&
         exec_view_mappable<Dest_T, Scalar * [NP][NP][NUM_LEV]>::value,
     void>::type
