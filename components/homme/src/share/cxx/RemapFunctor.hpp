@@ -120,6 +120,7 @@ struct PpmVertRemap : public VertRemapAlg {
                 "PpmVertRemap requires a valid PPM "
                 "boundary condition");
   static constexpr auto remap_dim = _remap_dim;
+  static constexpr int gs = 2;
 
   explicit PpmVertRemap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
@@ -249,14 +250,12 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void
-  remap(KernelVariables &kv, const int num_remap,
-        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-        Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
-            remap_vals) const {
-    constexpr int gs = 2; // ghost cells
-
+  void compute_partitions(
+      KernelVariables &kv,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness)
+      const {
+    start_timer("remap compute_partitions");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -324,6 +323,23 @@ struct PpmVertRemap : public VertRemapAlg {
       });
     });
     kv.team_barrier();
+    stop_timer("remap compute_partitions");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_remap_polynomials(KernelVariables &kv,
+                                 const int num_remap) const {}
+
+  KOKKOS_INLINE_FUNCTION
+  void
+  remap(KernelVariables &kv, const int num_remap,
+        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
+        Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
+            remap_vals) const {
+    start_timer("remap_Q_ppm");
+
+    compute_partitions(kv, src_layer_thickness, tgt_layer_thickness);
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
@@ -468,6 +484,7 @@ struct PpmVertRemap : public VertRemapAlg {
         } // k loop
       });
     }); // End team thread range
+    stop_timer("remap_Q_ppm");
   }
 
   KOKKOS_INLINE_FUNCTION Real
@@ -518,6 +535,7 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
       ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
+    start_timer("remap compute_source_thickness");
     ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
         Homme::subview(m_src_layer_thickness, kv.ie);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -543,6 +561,7 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
       });
     });
     kv.team_barrier();
+    stop_timer("remap compute_source_thickness");
     return src_layer_thickness;
   }
 };
@@ -557,7 +576,9 @@ template <> struct _RemapFunctorRSplit<true> {
       ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
+    start_timer("remap compute_source_thickness");
     return Homme::subview(dp3d, kv.ie, np1);
+    stop_timer("remap compute_source_thickness");
   }
 };
 
@@ -622,6 +643,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   void compute_ps_v(KernelVariables &kv,
                     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> dp3d,
                     ExecViewUnmanaged<Real[NP][NP]> ps_v) const {
+    start_timer("remap compute_ps_v");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -640,10 +662,12 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       });
     });
     kv.team_barrier();
+    stop_timer("remap compute_ps_v");
   }
 
   KOKKOS_INLINE_FUNCTION ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
   compute_target_thickness(KernelVariables &kv) const {
+    start_timer("remap compute_target_thickness");
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &idx) {
@@ -669,6 +693,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       });
     });
     kv.team_barrier();
+    stop_timer("remap compute_target_thickness");
     return tgt_layer_thickness;
   }
 
@@ -676,6 +701,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
       const {
+    start_timer("remap check_source_thickness");
     // Kokkos parallel reduce doesn't support bool as a reduction type, so use
     // int instead
     // Reduce starts with false (0), making that the default state
@@ -694,6 +720,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         },
         invalid);
     valid_layer_thickness(kv.ie) = !invalid;
+    stop_timer("remap check_source_thickness");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -768,6 +795,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   rescale_states(KernelVariables &kv,
                  ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
                      tgt_layer_thickness) const {
+    start_timer("remap rescale_states");
     auto state_remap = remap_states_array(kv);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
                                                  state_remap.size() * NP * NP),
@@ -780,6 +808,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         state_remap[var](igp, jgp, ilev) /= tgt_layer_thickness(igp, jgp, ilev);
       });
     });
+    stop_timer("remap rescale_states");
   }
 
   template <bool nz_rsplit = nonzero_rsplit>
