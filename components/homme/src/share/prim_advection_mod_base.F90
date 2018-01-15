@@ -128,31 +128,80 @@ module prim_advection_mod_base
 
 contains
 
-  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
-       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
+  subroutine advance_qdp_f90 (nets,nete, &
+       rhs_multiplier,DSSopt,dp,dpdissk, &
+       n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,np1_qdp)
     use kinds,          only : real_kind
     use derivative_mod, only : derivative_t, limiter_optim_iter_full
     use element_mod,    only : element_t
     !
     ! Inputs
     !
-    real (kind=real_kind), intent(in),  dimension(np,np,2,nlev,nets:nete) :: Vstar
+    real (kind=real_kind), intent(inout), dimension(np,np,2,nlev,nets:nete) :: Vstar
     real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
-    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,qsize,nets:nete) :: Qtens_biharmonic
-    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,nets:nete) :: dpdissk
-    type (element_t),      intent(inout), dimension(:) :: elem
+    real (kind=real_kind), intent(in), dimension(np,np,nlev,qsize,nets:nete) :: Qtens_biharmonic
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev,nets:nete) :: dpdissk
+    type (element_t),      intent(inout), dimension(:), target :: elem
     type (derivative_t),   intent(in) :: deriv
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in) :: nets, nete, n0_qdp, rhs_viss, np1_qdp
+    integer, intent(in) :: nets, nete, n0_qdp, rhs_viss, np1_qdp, rhs_multiplier, DSSopt
     !
     ! Locals
     !
     real (kind=real_kind), dimension(np,np,2) :: gradQ
     real (kind=real_kind), dimension(np,np)   :: dp_star
+    real (kind=real_kind), dimension(np,np,nlev) :: dp ! Could do same as dp_start, but Fortran code doesn't
+    real (kind=real_kind), dimension(:,:,:), pointer :: DSSvar
     integer :: ie, k, q
     !
     ! Routine body
     !
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !   2D Advection step
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    do ie = nets , nete
+       ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
+       ! all zero so we only have to DSS 1:nlev
+       if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+       if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+       if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
+
+       ! Compute velocity used to advance Qdp
+#if (defined COLUMN_OPENMP)
+       !$omp parallel do private(k,q)
+#endif
+       do k = 1 , nlev    !  Loop index added (AAM)
+          ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
+          ! but that's ok because rhs_multiplier=0 on the first stage:
+          dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
+          Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
+          Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
+
+          if ( limiter_option == 8) then
+             ! Note that the term dpdissk is independent of Q
+             ! UN-DSS'ed dp at timelevel n0+1:
+             dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
+             if ( nu_p > 0 .and. rhs_viss /= 0 ) then
+                ! add contribution from UN-DSS'ed PS dissipation
+                !          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
+                !          elem(ie)%derived%psdiss_biharmonic(:,:)
+                dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
+                     * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
+             endif
+             ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
+             ! testing
+             do q=1,qsize
+                qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
+             enddo
+          endif  ! limiter == 8
+
+          ! also DSS extra field
+          DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
+       enddo
+       call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
+    enddo
+
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,gradQ,dp_star)
@@ -1719,10 +1768,11 @@ OMP_SIMD
   endif  ! compute biharmonic mixing term and qmin/qmax
   ! end of limiter_option == 8
 
+  call t_startf('eus_2d_advec')
+#ifdef USE_KOKKOS_KERNELS
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   !   2D Advection step
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  call t_startf('eus_2d_advec')
   do ie = nets , nete
     ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
     ! all zero so we only have to DSS 1:nlev
@@ -1765,7 +1815,6 @@ OMP_SIMD
     call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
   enddo
 
-#ifdef USE_KOKKOS_KERNELS
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
@@ -1795,8 +1844,10 @@ OMP_SIMD
   end do  
 #else
   call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
-       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
+  call advance_qdp_f90(nets,nete, &
+       rhs_multiplier,DSSopt,dp,dpdissk, &
+       n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,np1_qdp)
   call t_stopf("advance_qdp")
 #endif
 
