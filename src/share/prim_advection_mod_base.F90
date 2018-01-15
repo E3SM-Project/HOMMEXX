@@ -128,19 +128,22 @@ module prim_advection_mod_base
 
 contains
 
-  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
+  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
     use kinds,          only : real_kind
-    use derivative_mod, only : derivative_t
+    use derivative_mod, only : derivative_t, limiter_optim_iter_full
     use element_mod,    only : element_t
     !
     ! Inputs
     !
     real (kind=real_kind), intent(in),  dimension(np,np,2,nlev,nets:nete) :: Vstar
     real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
-    type (element_t),      intent(in),  dimension(:) :: elem
+    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,qsize,nets:nete) :: Qtens_biharmonic
+    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,nets:nete) :: dpdissk
+    type (element_t),      intent(inout), dimension(:) :: elem
     type (derivative_t),   intent(in) :: deriv
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in) :: nets, nete, n0_qdp
+    integer, intent(in) :: nets, nete, n0_qdp, rhs_viss, np1_qdp
     !
     ! Locals
     !
@@ -163,7 +166,41 @@ contains
           Qtens(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
         enddo
       enddo
-    enddo
+   enddo
+
+   do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+      !$omp parallel do private(q,k,dp_star)
+#endif
+      do q=1,qsize
+         do k=1,nlev
+            ! optionally add in hyperviscosity computed above:
+            if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 8) then
+            ! apply limiter to Q = Qtens / dp_star
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
+                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+         endif
+
+         ! apply mass matrix, overwrite np1 with solution:
+         ! dont do this earlier, since we allow np1_qdp == n0_qdp
+         ! and we dont want to overwrite n0_qdp until we are done using it
+         do k = 1 , nlev
+            elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 4 ) then
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            ! sign-preserving limiter, applied after mass matrix
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
+         endif
+
+         call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
+      enddo
+   enddo ! ie loop
 
   end subroutine advance_qdp_f90
 
@@ -1469,7 +1506,7 @@ end subroutine ALE_parametric_coords
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
   use element_mod    , only : element_t, elem_state_Qdp
-  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, limiter_optim_iter_full
+  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
@@ -1758,42 +1795,9 @@ OMP_SIMD
   end do  
 #else
   call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
+  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
   call t_stopf("advance_qdp")
-
-  do ie=nets,nete
-#if (defined COLUMN_OPENMP)
- !$omp parallel do private(q,k,dp_star)
-#endif
-    do q=1,qsize
-      do k=1,nlev
-        ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 8) then
-        ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dpdissk(:,:,:,ie) )
-      endif
-
-      ! apply mass matrix, overwrite np1 with solution:
-      ! dont do this earlier, since we allow np1_qdp == n0_qdp
-      ! and we dont want to overwrite n0_qdp until we are done using it
-      do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 4 ) then
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        ! sign-preserving limiter, applied after mass matrix
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
-      endif
-
-      call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
-    enddo
-  enddo ! ie loop
 #endif
 
   call t_startf('eus_bexchV')
