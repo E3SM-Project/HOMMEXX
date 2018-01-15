@@ -128,6 +128,7 @@ module prim_advection_mod_base
 
 contains
 
+#ifndef USE_KOKKOS_KERNELS
   subroutine advance_qdp_f90 (nets,nete, &
        rhs_multiplier,DSSopt,dp,dpdissk, &
        n0_qdp,dt,Vstar,elem,deriv,Qtens, &
@@ -252,7 +253,7 @@ contains
    enddo ! ie loop
 
   end subroutine advance_qdp_f90
-
+#endif
 
   subroutine Prim_Advec_Init1(par, elem, n_domains)
     use dimensions_mod, only : nlev, qsize, nelemd
@@ -1770,54 +1771,49 @@ OMP_SIMD
 
   call t_startf('eus_2d_advec')
 #ifdef USE_KOKKOS_KERNELS
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !   2D Advection step
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  do ie = nets , nete
-    ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
-    ! all zero so we only have to DSS 1:nlev
-    if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
-    if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
-    if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
-
-    ! Compute velocity used to advance Qdp
-#if (defined COLUMN_OPENMP)
-    !$omp parallel do private(k,q)
-#endif
-    do k = 1 , nlev    !  Loop index added (AAM)
-      ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
-      ! but that's ok because rhs_multiplier=0 on the first stage:
-      dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
-      Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
-      Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
-
-      if ( limiter_option == 8) then
-        ! Note that the term dpdissk is independent of Q
-        ! UN-DSS'ed dp at timelevel n0+1:
-        dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
-        if ( nu_p > 0 .and. rhs_viss /= 0 ) then
-          ! add contribution from UN-DSS'ed PS dissipation
-!          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
-!          elem(ie)%derived%psdiss_biharmonic(:,:)
-          dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
-                           * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
-        endif
-        ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
-        ! testing
-        do q=1,qsize
-          qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
-        enddo
-      endif  ! limiter == 8
-
-      ! also DSS extra field
-      DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
-    enddo
-    call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
-  enddo
-
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
+  do ie = nets , nete
+     ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
+     ! all zero so we only have to DSS 1:nlev
+     if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+     if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
+
+     ! Compute velocity used to advance Qdp
+#if (defined COLUMN_OPENMP)
+     !$omp parallel do private(k,q)
+#endif
+     do k = 1 , nlev    !  Loop index added (AAM)
+        ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
+        ! but that's ok because rhs_multiplier=0 on the first stage:
+        dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
+        Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
+        Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
+
+        if ( limiter_option == 8) then
+           ! Note that the term dpdissk is independent of Q
+           ! UN-DSS'ed dp at timelevel n0+1:
+           dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
+           if ( nu_p > 0 .and. rhs_viss /= 0 ) then
+              ! add contribution from UN-DSS'ed PS dissipation
+              !          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
+              !          elem(ie)%derived%psdiss_biharmonic(:,:)
+              dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
+                   * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
+           endif
+           ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
+           ! testing
+           do q=1,qsize
+              qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
+           enddo
+        endif  ! limiter == 8
+
+        ! also DSS extra field
+        DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
+     enddo
+  end do
 
   call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
        np1_qdp, rhs_viss, limiter_option)
@@ -1834,6 +1830,12 @@ OMP_SIMD
   call t_stopf("advance_qdp")
   call euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
+  do ie = nets , nete
+     if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+     if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
+     call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
+  enddo
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,dp_star)
