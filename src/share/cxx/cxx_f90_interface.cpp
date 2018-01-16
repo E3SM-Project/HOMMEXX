@@ -53,8 +53,9 @@ void init_derivative_c (CF90Ptr& dvv)
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                          CF90Ptr& spheremp, CF90Ptr& rspheremp, CF90Ptr& metdet, CF90Ptr& phis)
 {
+  Control& control = Context::singleton().get_control ();
   Elements& r = Context::singleton().get_elements ();
-  r.init (num_elems);
+  r.init (num_elems, control.rsplit == 0);
   r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
 }
 
