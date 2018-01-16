@@ -2966,99 +2966,100 @@ end do
     integer :: maxiter = np*np-1
     real (kind=real_kind) :: tol_limiter = 5e-14
 
-
     do k=1,nlev
 
-     k1=1
-     do i=1,np
-     do j=1,np
-       c(k1)=sphweights(i,j)*dpmass(i,j,k)
-       x(k1)=ptens(i,j,k)/dpmass(i,j,k)
-       k1=k1+1
-      enddo
-     enddo
+       k1=1
+#ifdef REBASELINE
+       do j=1,np
+          do i=1,np
+#else
+       do i=1,np
+          do j=1,np
+#endif
+             c(k1)=sphweights(i,j)*dpmass(i,j,k)
+             x(k1)=ptens(i,j,k)/dpmass(i,j,k)
+             k1=k1+1
+          enddo
+       enddo
 
-     sumc=sum(c)
-     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it does, dont limit
-     mass=sum(c*x)
+       sumc=sum(c)
+       if (sumc <= 0 ) CYCLE   ! this should never happen, but if it does, dont limit
+       mass=sum(c*x)
 
+       ! relax constraints to ensure limiter has a solution:
+       ! This is only needed if running with the SSP CFL>1 or
+       ! due to roundoff errors
+       if( mass < minp(k)*sumc ) then
+          minp(k) = mass / sumc
+       endif
+       if( mass > maxp(k)*sumc ) then
+          maxp(k) = mass / sumc
+       endif
 
+       do iter=1,maxiter
+          addmass=0.0d0
 
-      ! relax constraints to ensure limiter has a solution:
-      ! This is only needed if runnign with the SSP CFL>1 or
-      ! due to roundoff errors
-      if( mass < minp(k)*sumc ) then
-        minp(k) = mass / sumc
-      endif
-      if( mass > maxp(k)*sumc ) then
-        maxp(k) = mass / sumc
-      endif
+          do k1=1,np*np
+             if((x(k1)>maxp(k))) then
+                addmass=addmass+(x(k1)-maxp(k))*c(k1)
+                x(k1)=maxp(k)
+             endif
+             if((x(k1)<minp(k))) then
+                addmass=addmass-(minp(k)-x(k1))*c(k1)
+                x(k1)=minp(k)
+             endif
+          enddo !k1
 
+          if(abs(addmass)<=tol_limiter*abs(mass)) exit
 
-
-     do iter=1,maxiter
-
-      addmass=0.0d0
-
-       do k1=1,np*np
-         if((x(k1)>maxp(k))) then
-           addmass=addmass+(x(k1)-maxp(k))*c(k1)
-           x(k1)=maxp(k)
-         endif
-         if((x(k1)<minp(k))) then
-           addmass=addmass-(minp(k)-x(k1))*c(k1)
-           x(k1)=minp(k)
-         endif
-       enddo !k1
-
-       if(abs(addmass)<=tol_limiter*abs(mass)) exit
-
-       weightssum=0.0d0
-!       weightsnum=0
-       if(addmass>0)then
-        do k1=1,np*np
-          if(x(k1)<maxp(k))then
-            weightssum=weightssum+c(k1)
-!            weightsnum=weightsnum+1
+          weightssum=0.0d0
+          !       weightsnum=0
+          if(addmass>0)then
+             do k1=1,np*np
+                if(x(k1)<maxp(k))then
+                   weightssum=weightssum+c(k1)
+                   !            weightsnum=weightsnum+1
+                endif
+             enddo !k1
+             do k1=1,np*np
+                if(x(k1)<maxp(k))then
+                   x(k1)=x(k1)+addmass/weightssum
+                   !              x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
+                endif
+             enddo
+          else
+             do k1=1,np*np
+                if(x(k1)>minp(k))then
+                   weightssum=weightssum+c(k1)
+                   !            weightsnum=weightsnum+1
+                endif
+             enddo
+             do k1=1,np*np
+                if(x(k1)>minp(k))then
+                   x(k1)=x(k1)+addmass/weightssum
+                   !           x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
+                endif
+             enddo
           endif
-        enddo !k1
-        do k1=1,np*np
-          if(x(k1)<maxp(k))then
-              x(k1)=x(k1)+addmass/weightssum
-!              x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
-          endif
-        enddo
-      else
-        do k1=1,np*np
-          if(x(k1)>minp(k))then
-            weightssum=weightssum+c(k1)
-!            weightsnum=weightsnum+1
-          endif
-        enddo
-        do k1=1,np*np
-          if(x(k1)>minp(k))then
-            x(k1)=x(k1)+addmass/weightssum
-!           x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
-          endif
-        enddo
-      endif
+       enddo
 
-
-   enddo!end of iteration
-
-   k1=1
-   do i=1,np
-    do j=1,np
-      ptens(i,j,k)=x(k1)
-      k1=k1+1
+       k1=1
+#ifdef REBASELINE
+       do j=1,np
+          do i=1,np
+#else
+       do i=1,np
+          do j=1,np
+#endif
+             ptens(i,j,k)=x(k1)
+             k1=k1+1
+          enddo
+       enddo
     enddo
-   enddo
 
-  enddo
-
-  do k=1,nlev
-    ptens(:,:,k)=ptens(:,:,k)*dpmass(:,:,k)
-  enddo
+    do k=1,nlev
+       ptens(:,:,k)=ptens(:,:,k)*dpmass(:,:,k)
+    enddo
 
   end subroutine limiter_optim_iter_full
 
@@ -3067,4 +3068,4 @@ end do
 
 
 end module derivative_mod_base
-                                                                                                     
+

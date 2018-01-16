@@ -99,44 +99,51 @@ module prim_advection_mod_base
   integer,parameter :: DSSdiv_vdp_ave = 3
   integer,parameter :: DSSno_var = -1
 
-  real(kind=real_kind), allocatable :: qmin(:,:,:), qmax(:,:,:)
+  real(kind=real_kind), allocatable, target :: qmin(:,:,:), qmax(:,:,:)
 
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr) bind(c)
+    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
+         qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
       use iso_c_binding, only : c_ptr
+      use kinds, only : real_kind
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
+           qmin_ptr, qmax_ptr, dpdissk_ptr
     end subroutine euler_pull_data_c
-    subroutine euler_push_results_c(Qtens_ptr) bind(c)
+    subroutine euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: Qtens_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
     subroutine advance_qdp_c() bind(c)
+      use iso_c_binding, only : c_int
     end subroutine advance_qdp_c
   end interface
 
 contains
 
-  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
+  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
     use kinds,          only : real_kind
-    use derivative_mod, only : derivative_t
+    use derivative_mod, only : derivative_t, limiter_optim_iter_full
     use element_mod,    only : element_t
     !
     ! Inputs
     !
     real (kind=real_kind), intent(in),  dimension(np,np,2,nlev,nets:nete) :: Vstar
     real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
-    type (element_t),      intent(in),  dimension(:) :: elem
+    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,qsize,nets:nete) :: Qtens_biharmonic
+    real(kind=real_kind),  intent(in),  dimension(np,np,nlev,nets:nete) :: dpdissk
+    type (element_t),      intent(inout), dimension(:) :: elem
     type (derivative_t),   intent(in) :: deriv
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in) :: nets, nete, n0_qdp
+    integer, intent(in) :: nets, nete, n0_qdp, rhs_viss, np1_qdp
     !
     ! Locals
     !
@@ -159,7 +166,41 @@ contains
           Qtens(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
         enddo
       enddo
-    enddo
+   enddo
+
+   do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+      !$omp parallel do private(q,k,dp_star)
+#endif
+      do q=1,qsize
+         do k=1,nlev
+            ! optionally add in hyperviscosity computed above:
+            if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 8) then
+            ! apply limiter to Q = Qtens / dp_star
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
+                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+         endif
+
+         ! apply mass matrix, overwrite np1 with solution:
+         ! dont do this earlier, since we allow np1_qdp == n0_qdp
+         ! and we dont want to overwrite n0_qdp until we are done using it
+         do k = 1 , nlev
+            elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 4 ) then
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            ! sign-preserving limiter, applied after mass matrix
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
+         endif
+
+         call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
+      enddo
+   enddo ! ie loop
 
   end subroutine advance_qdp_f90
 
@@ -1465,7 +1506,7 @@ end subroutine ALE_parametric_coords
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
   use element_mod    , only : element_t, elem_state_Qdp
-  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, limiter_optim_iter_full
+  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
@@ -1474,13 +1515,13 @@ end subroutine ALE_parametric_coords
   implicit none
 
   interface
-    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt) bind(c)
+    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize
+      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
       real (kind=c_double), intent(in) :: dt
     end subroutine init_control_euler_c
   end interface
@@ -1499,17 +1540,18 @@ end subroutine ALE_parametric_coords
   ! local
   real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
   real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete)               :: dpdissk
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target       :: dpdissk
   real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
   real(kind=real_kind), dimension(np,np,2)                            :: gradQ
   real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
-  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete)         :: Qtens_biharmonic
+  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens_biharmonic
   real(kind=real_kind), dimension(:,:,:), pointer                     :: DSSvar
   real(kind=real_kind), dimension(nlev)                               :: dp0
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
+  type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+       qmin_ptr, qmax_ptr, dpdissk_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1724,57 +1766,39 @@ OMP_SIMD
   enddo
 
 #ifdef USE_KOKKOS_KERNELS
-  Vstar_ptr = c_loc(Vstar)
+  if ( limiter_option == 4 ) then
+     call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
+  endif
+
+  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
+       np1_qdp, rhs_viss, limiter_option)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt)
-
-  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr)
-
+  Vstar_ptr = c_loc(Vstar)
+  Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
+  qmin_ptr = c_loc(qmin)
+  qmax_ptr = c_loc(qmax)
+  dpdissk_ptr = c_loc(dpdissk)
+  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
+       qmin_ptr, qmax_ptr, dpdissk_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")
-
-  Qtens_ptr = c_loc(Qtens)
-  call euler_push_results_c(Qtens_ptr)
-#else
-  call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
-  call t_stopf("advance_qdp")
-#endif
+  call euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,dp_star)
 #endif
     do q=1,qsize
-      do k=1,nlev
-        ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 8) then
-        ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dpdissk(:,:,:,ie) )
-      endif
-
-      ! apply mass matrix, overwrite np1 with solution:
-      ! dont do this earlier, since we allow np1_qdp == n0_qdp
-      ! and we dont want to overwrite n0_qdp until we are done using it
-      do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 4 ) then
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        ! sign-preserving limiter, applied after mass matrix
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
-      endif
-
       call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
     enddo
-  enddo ! ie loop
+  end do  
+#else
+  call t_startf("advance_qdp")
+  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,dpdissk,np1_qdp)
+  call t_stopf("advance_qdp")
+#endif
 
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
