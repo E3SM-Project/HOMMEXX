@@ -185,11 +185,7 @@ private:
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
         parallel_for(tvr, [&] (const int& k) {
-#ifdef REBASELINE
             const int i = k / NP, j = k % NP;
-#else
-            const int i = k % NP, j = k / NP;
-#endif
             const auto& dpm = dpmass(i,j,vpi)[vsi];
             c[k] = sphweights(i,j)*dpm;
             x[k] = ptens(i,j,vpi)[vsi]/dpm;
@@ -215,11 +211,7 @@ private:
         limit(team, mass, minp, maxp, x.data(), c.data());
 
         parallel_for(tvr, [&] (const int& k) {
-#ifdef REBASELINE
             const int i = k / NP, j = k % NP;
-#else
-            const int i = k % NP, j = k / NP;
-#endif
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });        
       });
