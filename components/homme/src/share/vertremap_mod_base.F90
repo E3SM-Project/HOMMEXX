@@ -801,12 +801,12 @@ function compute_ppm( a , dx )    result(coefs)
       al = a(j)
       ar = a(j)
     endif
-    if ( (ar - al) * (a(j) - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.*a(j) - 2. * ar
-    if ( (ar - al) * (a(j) - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.*a(j) - 2. * al
+    if ( (ar - al) * (a(j) - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.D0*a(j) - 2.D0 * ar
+    if ( (ar - al) * (a(j) - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.D0*a(j) - 2.D0 * al
     !Computed these coefficients from the edge values and cell mean in Maple. Assumes normalized coordinates: xi=(x-x0)/dx
-    coefs(0,j) = 1.5 * a(j) - ( al + ar ) / 4.
+    coefs(0,j) = 1.5D0 * a(j) - ( al + ar ) / 4.D0
     coefs(1,j) = ar - al
-    coefs(2,j) = 3. * (-2. * a(j) + ( al + ar ))
+    coefs(2,j) = 3.D0 * (-2.D0 * a(j) + ( al + ar ))
   enddo
 
   !If we're not using a mirrored boundary condition, then make the two cells bordering the top and bottom
@@ -816,8 +816,8 @@ function compute_ppm( a , dx )    result(coefs)
     coefs(0,1:2) = a(1:2)
     coefs(1:2,1:2) = 0.
     coefs(0,nlev-1:nlev) = a(nlev-1:nlev)
-    coefs(1:2,nlev-1:nlev) = 0.D0
-  endif
+    coefs(1:2,nlev-1:nlev) = 0.
+ endif
 end function compute_ppm
 
 !=======================================================================================================!
@@ -832,7 +832,8 @@ function integrate_parabola( a , x1 , x2 )    result(mass)
   real(kind=real_kind), intent(in) :: x2      !upper domain bound for integration
   real(kind=real_kind)             :: mass
 
-  mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
+  !mass = a(0) * (x2 - x1) + a(1) * (x2 ** 2 - x1 ** 2) / 0.2D1 + a(2) * (x2 ** 3 - x1 ** 3) / 0.3D1
+  mass = (a(0) * (x2 - x1) + a(1) * (x2 * x2 - x1 * x1) / 2.0D0) + a(2) * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0D0
 end function integrate_parabola
 
 
