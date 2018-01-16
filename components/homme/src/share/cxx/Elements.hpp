@@ -50,6 +50,11 @@ public:
   //    (note there are NUM_LEV_P of them)
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+    m_derived_dp,                // for dp_tracers at physics timestep
+    m_derived_divdp,             // divergence of dp
+    m_derived_divdp_proj,        // DSSed divdp
+    m_derived_dpdiss_biharmonic; // mean dp dissipation tendency, if nu_p>0
 
   struct BufferViews {
 

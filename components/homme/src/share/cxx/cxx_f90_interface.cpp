@@ -98,6 +98,28 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
 
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_INTERFACE_LEV][NP][NP]>(
+                   elem_derived_eta_dot_dpdn_ptr, data.num_elems),
+                 r.m_eta_dot_dpdn);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_omega_p_ptr, data.num_elems),
+                 r.m_omega_p);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_vn0_ptr, data.num_elems),
+                 r.m_derived_vn0);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dp_ptr, data.num_elems),
+                 r.m_derived_dp);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_divdp_ptr, data.num_elems),
+                 r.m_derived_divdp);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_divdp_proj_ptr, data.num_elems),
+                 r.m_derived_divdp_proj);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
+                 r.m_derived_dpdiss_biharmonic);
+
   // Copy data from f90 pointers to cxx views
   r.pull_qdp(elem_state_Qdp_ptr);
 
