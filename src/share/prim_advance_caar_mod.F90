@@ -12,14 +12,9 @@ module prim_advance_caar_mod
   use control_mod,    only: qsplit,rsplit
   use derivative_mod, only: derivative_t, vorticity, divergence, gradient, gradient_wk
   use dimensions_mod, only: np, nlev, nlevp, nvar, nc, nelemd
-  use edgetype_mod,   only: EdgeDescriptor_t, EdgeBuffer_t
+  use edgetype_mod,   only: EdgeBuffer_t
   use element_mod,    only: element_t
-  use hybrid_mod,     only: hybrid_t
-  use hybvcoord_mod,  only: hvcoord_t
-  use kinds,          only: real_kind, iulog
-  use perf_mod,       only: t_startf, t_stopf, t_barrierf, t_adj_detailf ! _EXTERNAL
-  use parallel_mod,   only: abortmp, parallel_t, iam
-  use time_mod,       only: Timelevel_t
+  use perf_mod,       only: t_startf, t_stopf
 
   implicit none
   private
@@ -29,7 +24,7 @@ module prim_advance_caar_mod
 
   public :: distribute_flux_at_corners, edge3p1, compute_and_apply_rhs
 
-  contains
+contains
 
   !
   ! phl notes: output is stored in first argument. Advances from 2nd argument using tendencies evaluated at 3rd rgument:
@@ -64,102 +59,97 @@ module prim_advance_caar_mod
   !
   ! ===================================
 
-  use kinds,          only : real_kind
-  use bndry_mod,      only : bndry_exchangev
-  use derivative_mod, only : derivative_t, subcell_dss_fluxes
-  use dimensions_mod, only : nlev, ntrac
-  use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
-  use edgetype_mod,   only : edgedescriptor_t
-  use element_mod,    only : element_t
-  use hybvcoord_mod,  only : hvcoord_t
-  use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic
+    use kinds,          only : real_kind
+    use bndry_mod,      only : bndry_exchangev
+    use derivative_mod, only : derivative_t, subcell_dss_fluxes
+    use dimensions_mod, only : nlev, ntrac
+    use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
+    use edgetype_mod,   only : edgedescriptor_t
+    use element_mod,    only : element_t, elem_state_temp, elem_state_v, elem_state_dp3d
+    use hybvcoord_mod,  only : hvcoord_t
+    use hybrid_mod,     only : hybrid_t
+    use caar_pre_exchange_driver_mod, only: caar_pre_exchange_monolithic_f90
 
-  implicit none
+    implicit none
 
-  type (hvcoord_t)      , intent(in)    :: hvcoord
-  type (element_t)      , intent(inout) :: elem(:)
-  type (hybrid_t)       , intent(in)    :: hybrid
-  type (derivative_t)   , intent(in)    :: deriv
-  integer               , intent(in)    :: np1, nm1, n0, qn0, nets, nete
-  real (kind=real_kind) , intent(in)    :: dt2
-  logical               , intent(in)    :: compute_diagnostics
-  real (kind=real_kind) , intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
+    type (hvcoord_t)      , intent(in)    :: hvcoord
+    type (element_t)      , intent(inout) :: elem(:)
+    type (hybrid_t)       , intent(in)    :: hybrid
+    type (derivative_t)   , intent(in)    :: deriv
+    integer               , intent(in)    :: np1, nm1, n0, qn0, nets, nete
+    real (kind=real_kind) , intent(in)    :: dt2
+    logical               , intent(in)    :: compute_diagnostics
+    real (kind=real_kind) , intent(in)    :: eta_ave_w  ! weighting for eta_dot_dpdn mean flux
 
-  type (EdgeDescriptor_t)                                 :: desc
-  real (kind=real_kind)   , dimension(np,np,nlev)         :: stashdp3d
-  real (kind=real_kind)   , dimension(0:np+1,0:np+1,nlev) :: corners
-  real (kind=real_kind)   , dimension(2,2,2)              :: cflux
-  real (kind=real_kind)   , dimension(nc,nc,4)            :: tempflux
-  real (kind=real_kind)   , dimension(np,np)              :: tempdp3d
-  integer                                                 :: ie, k, kptr
+    type (EdgeDescriptor_t)                                 :: desc
+    real (kind=real_kind)   , dimension(np,np,nlev)         :: stashdp3d
+    real (kind=real_kind)   , dimension(0:np+1,0:np+1,nlev) :: corners
+    real (kind=real_kind)   , dimension(2,2,2)              :: cflux
+    real (kind=real_kind)   , dimension(nc,nc,4)            :: tempflux
+    real (kind=real_kind)   , dimension(np,np)              :: tempdp3d
+    integer                                                 :: ie, k, kptr
 
 !JMD  call t_barrierf('sync_compute_and_apply_rhs', hybrid%par%comm)
 
 !pw call t_adj_detailf(+1)
-  call t_startf('compute_and_apply_rhs')
+    call t_startf('caar compute')
 
-  call caar_pre_exchange_monolithic (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
-                                     deriv,nets,nete,compute_diagnostics,eta_ave_w)
-  call t_stopf('compute_and_apply_rhs')
+    call caar_pre_exchange_monolithic_f90 (nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
+                                           deriv,nets,nete,compute_diagnostics,eta_ave_w)
+    call t_stopf('caar compute')
 
-  do ie=nets,nete
-     ! =========================================================
-     !
-     ! Pack ps(np1), T, and v tendencies into comm buffer
-     !
-     ! =========================================================
-     kptr=0
-     call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
+    call t_startf('caar_bexchV')
+    do ie=nets,nete
+       ! =========================================================
+       !
+       ! Pack T, v and dp3d tendencies into comm buffer
+       !
+       ! =========================================================
+       kptr=0
+       call edgeVpack(edge3p1, elem(ie)%state%T(:,:,:,np1),nlev,kptr,ie)
 
-     kptr=kptr+nlev
-     call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
+       kptr=kptr+nlev
+       call edgeVpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1),2*nlev,kptr,ie)
 
-     kptr=kptr+2*nlev
-     call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+       kptr=kptr+2*nlev
+       call edgeVpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr, ie)
+    end do
 
-  end do
+    ! =============================================================
+    ! Insert communications here: for shared memory, just a single
+    ! sync is required
+    ! =============================================================
 
-  ! =============================================================
-  ! Insert communications here: for shared memory, just a single
-  ! sync is required
-  ! =============================================================
+    call bndry_exchangeV(hybrid,edge3p1)
 
-  call t_startf('caar_bexchV')
-  call bndry_exchangeV(hybrid,edge3p1)
-  call t_stopf('caar_bexchV')
+    do ie=nets,nete
+       ! ===========================================================
+       ! Unpack the edges for vgrad_T and v tendencies...
+       ! ===========================================================
+       kptr=0
+       call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
 
-  do ie=nets,nete
-     ! ===========================================================
-     ! Unpack the edges for vgrad_T and v tendencies...
-     ! ===========================================================
-     kptr=0
-     call edgeVunpack(edge3p1, elem(ie)%state%T(:,:,:,np1), nlev, kptr, ie)
+       kptr=kptr+nlev
+       call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
 
-     kptr=kptr+nlev
-     call edgeVunpack(edge3p1, elem(ie)%state%v(:,:,:,:,np1), 2*nlev, kptr, ie)
+       kptr=kptr+2*nlev
+       call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
 
-     kptr=kptr+2*nlev
-     call edgeVunpack(edge3p1, elem(ie)%state%dp3d(:,:,:,np1),nlev,kptr,ie)
-
-     ! ====================================================
-     ! Scale tendencies by inverse mass matrix
-     ! ====================================================
+       ! ====================================================
+       ! Scale tendencies by inverse mass matrix
+       ! ====================================================
 
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
 #endif
-     do k=1,nlev
-        elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
-        elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
-        elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
-     end do
-
-     ! vertically lagrangian: complete dp3d timestep:
-     do k=1,nlev
-        elem(ie)%state%dp3d(:,:,k,np1)=elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
-     enddo
-
-  end do
+       do k=1,nlev
+          elem(ie)%state%T(:,:,k,np1)   = elem(ie)%rspheremp(:,:)*elem(ie)%state%T(:,:,k,np1)
+          elem(ie)%state%v(:,:,1,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,1,k,np1)
+          elem(ie)%state%v(:,:,2,k,np1) = elem(ie)%rspheremp(:,:)*elem(ie)%state%v(:,:,2,k,np1)
+          elem(ie)%state%dp3d(:,:,k,np1)= elem(ie)%rspheremp(:,:)*elem(ie)%state%dp3d(:,:,k,np1)
+       enddo
+    end do
+    call t_stopf('caar_bexchV')
 
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)

@@ -47,32 +47,46 @@ using MemoryManaged   = Kokkos::MemoryTraits<Kokkos::Restrict>;
 using MemoryUnmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict>;
 
 // The memory spaces
-using ExecMemSpace = ExecSpace::memory_space;
+using ExecMemSpace    = ExecSpace::memory_space;
 using ScratchMemSpace = ExecSpace::scratch_memory_space;
-using HostMemSpace = Kokkos::HostSpace;
+using HostMemSpace    = Kokkos::HostSpace;
+// Selecting the memory space for the MPI buffers, that is, where the MPI
+// buffers will be allocated. In a CPU build, this is always going to be
+// the same as ExecMemSpace, i.e., HostSpace. In a GPU build, one can choose
+// whether the MPI is done on host or on device. If on device, then all MPI
+// calls will be issued from device pointers.
+// NOTE: this has nothing to do with pack/unpack, which ALWAYS happen on
+//       device views (to be done in parallel). The difference is ONLY in
+//       the location of the MPI buffer for send/receive.
+
+#if defined (HOMMEXX_MPI_ON_DEVICE)
+  using MPIMemSpace = ExecMemSpace;
+#else
+  using MPIMemSpace = HostMemSpace;
+#endif
 
 // A team member type
-using TeamMember = Kokkos::TeamPolicy<ExecSpace>::member_type;
-
-// Native language layouts
-using FortranLayout = Kokkos::LayoutLeft;
-using CXXLayout = Kokkos::LayoutRight;
+using TeamMember     = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
 // Short name for views
-template <typename DataType, typename MemorySpace, typename MemoryManagement>
-using ViewType = Kokkos::View<DataType, Kokkos::LayoutRight, MemorySpace, MemoryManagement>;
+template <typename DataType, typename... Properties>
+using ViewType = Kokkos::View<DataType, Kokkos::LayoutRight, Properties...>;
 
 // Managed/Unmanaged view
-template <typename DataType, typename MemorySpace>
-using ViewManaged = ViewType<DataType, MemorySpace, MemoryManaged>;
-template <typename DataType, typename MemorySpace>
-using ViewUnmanaged = ViewType<DataType, MemorySpace, MemoryUnmanaged>;
+template <typename DataType, typename... Properties>
+using ViewManaged = ViewType<DataType, Properties..., MemoryManaged>;
+template <typename DataType, typename... Properties>
+using ViewUnmanaged = ViewType<DataType, Properties..., MemoryUnmanaged>;
 
-// Host/Device views
-template <typename DataType, typename MemoryManagement>
-using HostView = ViewType<DataType, HostMemSpace, MemoryManagement>;
-template <typename DataType, typename MemoryManagement>
-using ExecView = ViewType<DataType, ExecMemSpace, MemoryManagement>;
+// Host/Device/MPI views
+template <typename DataType, typename... Properties>
+using HostView = ViewType<DataType, HostMemSpace, Properties...>;
+template <typename DataType, typename... Properties>
+using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
+template <typename DataType, typename... Properties>
+using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecSpace>::value,
+                                          ExecView<DataType,Properties...>,
+                                          typename ExecView<DataType,Properties...>::HostMirror>::type;
 
 // Further specializations for execution space and managed/unmanaged memory
 template <typename DataType>
@@ -85,6 +99,12 @@ template <typename DataType>
 using HostViewManaged = HostView<DataType, MemoryManaged>;
 template <typename DataType>
 using HostViewUnmanaged = HostView<DataType, MemoryUnmanaged>;
+
+// Further specializations for MPI memory space.
+template <typename DataType>
+using MPIViewManaged = MPIView<DataType, MemoryManaged>;
+template <typename DataType>
+using MPIViewUnmanaged = MPIView<DataType, MemoryUnmanaged>;
 
 // The scratch view type: always unmanaged, and always with c pointers
 template <typename DataType>

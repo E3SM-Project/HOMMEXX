@@ -20,8 +20,6 @@ module prim_advance_exp_mod
   use perf_mod,       only: t_startf, t_stopf, t_barrierf, t_adj_detailf ! _EXTERNAL
   use parallel_mod,   only: abortmp, parallel_t, iam
   use time_mod,       only: Timelevel_t
-  use prim_advance_caar_mod, only: compute_and_apply_rhs, edge3p1
-  use prim_advance_hypervis_mod, only: advance_hypervis_dp, advance_hypervis_lf
 
   implicit none
   private
@@ -42,6 +40,16 @@ module prim_advance_exp_mod
     use reduction_mod,  only: reductionbuffer_ordered_1d_t
     use time_mod,       only: timelevel_qdp, tevolve
     use diffusion_mod,  only: prim_diffusion
+    use prim_advance_caar_mod, only: compute_and_apply_rhs, edge3p1
+    use prim_advance_hypervis_mod, only: advance_hypervis_dp, advance_hypervis_lf
+
+#ifdef USE_KOKKOS_KERNELS
+    use iso_c_binding,  only: c_ptr, c_loc
+    use element_mod,    only: elem_state_v, elem_state_temp, elem_state_dp3d
+    use element_mod,    only: elem_derived_phi
+    use element_mod,    only: elem_derived_omega_p, elem_derived_vn0
+    use element_mod,    only: elem_derived_eta_dot_dpdn, elem_state_Qdp
+#endif
 
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
@@ -58,7 +66,7 @@ module prim_advance_exp_mod
 
     type (element_t),      intent(inout), target :: elem(:)
     type (derivative_t),   intent(in)            :: deriv
-    type (hvcoord_t)                             :: hvcoord
+    type (hvcoord_t),                     target :: hvcoord
     type (hybrid_t),       intent(in)            :: hybrid
     real (kind=real_kind), intent(in)            :: dt
     type (TimeLevel_t)   , intent(in)            :: tl
@@ -75,6 +83,15 @@ module prim_advance_exp_mod
     integer :: ie,nm1,n0,np1,nstep,method,qsplit_stage,k, qn0
     integer :: n,i,j,lx,lenx
 
+#ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_am_ptr, hvcoord_ai_ptr
+    type (c_ptr) :: hvcoord_bm_ptr, hvcoord_bi_ptr
+#endif
+
 #ifdef TRILINOS
     real (c_double) ,allocatable, dimension(:) :: xstate(:)
 
@@ -90,9 +107,64 @@ module prim_advance_exp_mod
     type(c_ptr)                        :: c_ptr_to_jac
 
     integer(c_int) :: ierr = 0
+#endif
 
     interface
+#ifdef USE_KOKKOS_KERNELS
+      subroutine init_control_caar_c (nets,nete,nelemd,qn0,ps0, &
+                                      rsplit,                   &
+                                      hybrid_am_ptr,hybrid_ai_ptr, &
+                                      hybrid_bm_ptr, hybrid_bi_ptr) bind(c)
+        use iso_c_binding , only : c_ptr, c_int, c_double
+        !
+        ! Inputs
+        !
+        integer (kind=c_int),  intent(in) :: qn0,nets,nete,nelemd,rsplit
+        real (kind=c_double),  intent(in) :: ps0
+        type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+        type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
+      end subroutine init_control_caar_c
 
+      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                   elem_derived_phi_ptr,                                    &
+                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_pull_data_c
+
+      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                      elem_derived_phi_ptr,                                    &
+                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_push_results_c
+
+      subroutine u3_5stage_timestep_c(nm1,n0,np1,dt,eta_ave_w,compute_diagnostics) bind(c)
+        use iso_c_binding , only : c_int, c_double
+        !
+        ! Inputs
+        !
+        integer (kind=c_int),  intent(in) :: np1,nm1,n0
+        logical,               intent(in) :: compute_diagnostics
+        real (kind=c_double),  intent(in) :: dt, eta_ave_w
+      end subroutine u3_5stage_timestep_c
+#endif
+
+#ifdef TRILINOS
       subroutine noxsolve(vectorSize,vector,v_container,p_container,j_container,ierr) &
         bind(C,name='noxsolve')
         use ,intrinsic :: iso_c_binding
@@ -103,9 +175,9 @@ module prim_advance_exp_mod
         type(c_ptr)                   :: j_container  !analytic jacobian ptr
         integer(c_int)                :: ierr         !error flag
       end subroutine noxsolve
+#endif
 
     end interface
-#endif
 
     call t_startf('prim_advance_exp')
     nm1   = tl%nm1
@@ -273,6 +345,42 @@ module prim_advance_exp_mod
            deriv,nets,nete,.false.,eta_ave_w)
       call t_stopf("KG3-5stage_timestep")
 #else
+#ifdef USE_KOKKOS_KERNELS
+      call t_startf("caar_overhead")
+      hvcoord_am_ptr             = c_loc(hvcoord%hyam)
+      hvcoord_ai_ptr             = c_loc(hvcoord%hyai)
+      hvcoord_bm_ptr             = c_loc(hvcoord%hybm)
+      hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
+      ! In F, elem range is [nets,nete]. In C, elem range is [nets,nete).
+      ! Also, F has index base 1, C has index base 0.
+      call init_control_caar_c(nets-1,nete,nelemd,qn0-1,hvcoord%ps0,rsplit, &
+                               hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
+
+      elem_state_v_ptr              = c_loc(elem_state_v)
+      elem_state_t_ptr              = c_loc(elem_state_temp)
+      elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+      elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+      elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+      elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+      elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+      elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+      call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                             elem_derived_phi_ptr,                                    &
+                             elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                             elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+      call t_stopf("caar_overhead")
+
+      call t_startf("U3-5stage_timestep")
+      call u3_5stage_timestep_c(nm1-1,n0-1,np1-1,dt,eta_ave_w,compute_diagnostics)
+      call t_stopf("U3-5stage_timestep")
+
+      call t_startf("caar_overhead")
+      call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                elem_derived_phi_ptr,                                    &
+                                elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+      call t_stopf("caar_overhead")
+#else
       ! Ullrich 3nd order 5 stage:   CFL=sqrt( 4^2 -1) = 3.87
       ! u1 = u0 + dt/5 RHS(u0)  (save u1 in timelevel nm1)
       call t_startf("U3-5stage_timestep")
@@ -303,6 +411,7 @@ module prim_advance_exp_mod
       ! final method is the same as:
       ! u5 = u0 +  dt/4 RHS(u0)) + 3dt/4 RHS(u4)
       call t_stopf("U3-5stage_timestep")
+#endif
 #endif
 
     else if ((method==11).or.(method==12)) then
@@ -524,12 +633,12 @@ module prim_advance_exp_mod
     ! test code only dont bother to openmp thread
     do ie = nets,nete
        eta_dot_dpdn(:,:,:)=elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,:)
-       ! accumulate mean fluxes for advection                                                        
+       ! accumulate mean fluxes for advection
        if (rsplit==0) then
           elem(ie)%derived%eta_dot_dpdn(:,:,:) = &
                elem(ie)%derived%eta_dot_dpdn(:,:,:) +eta_dot_dpdn(:,:,:)*eta_ave_w
        else
-          ! lagrangian case.  mean vertical velocity = 0                                             
+          ! lagrangian case.  mean vertical velocity = 0
           elem(ie)%derived%eta_dot_dpdn(:,:,:) = 0
           ! update position of floating levels
           do k=1,nlev
@@ -537,7 +646,7 @@ module prim_advance_exp_mod
                   + dt*(eta_dot_dpdn(:,:,k+1) - eta_dot_dpdn(:,:,k))
           enddo
        end if
-       ! accumulate U*dp 
+       ! accumulate U*dp
        do k=1,nlev
           elem(ie)%derived%vn0(:,:,1,k)=elem(ie)%derived%vn0(:,:,1,k)+&
 eta_ave_w*elem(ie)%state%v(:,:,1,k,n0)*elem(ie)%state%dp3d(:,:,k,tl%n0)
