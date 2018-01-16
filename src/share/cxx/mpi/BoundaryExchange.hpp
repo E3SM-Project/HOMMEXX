@@ -149,10 +149,10 @@ public:
 
 private:
 
-  // Make BuffersManager a friend, so it can call the methods underneath
+  // Make BuffersManager a friend, so it can call the method underneath
   friend class BuffersManager;
-
   void clear_buffer_views_and_requests ();
+
   void build_buffer_views_and_requests ();
 
   std::shared_ptr<Connectivity>   m_connectivity;

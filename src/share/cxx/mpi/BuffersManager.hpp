@@ -70,6 +70,7 @@ public:
 
   BuffersManager ();
   BuffersManager (std::shared_ptr<Connectivity> connectivity);
+  ~BuffersManager ();
 
   // I'm not sure copying this class is a good idea.
   BuffersManager(const BuffersManager&) = delete;

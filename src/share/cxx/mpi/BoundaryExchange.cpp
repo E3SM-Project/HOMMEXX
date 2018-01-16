@@ -188,23 +188,18 @@ void BoundaryExchange::registration_completed()
   // Prohibit further registration of fields, and allow exchange
   m_registration_started   = false;
   m_registration_completed = true;
-
-  // Ask the buffer manager to check for reallocation and then proceed with the allocation (if needed)
-  // Note: if we set the BM after the call to set_num_fields, the BM already knows about our needs,
-  //       otherwise, this next call will update BM's buffers sizes, and force reallocation.
-  //       Also, if BM already knows about our needs, and buffers were already allocated, then
-  //       these two calls should not change the internal state of the BM
-  m_buffers_manager->check_for_reallocation();
-  m_buffers_manager->allocate_buffers();
-
-  // Create buffer views and persistend send/recv requests, to reuse over and over
-  build_buffer_views_and_requests ();
 }
 
 void BoundaryExchange::exchange ()
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
+
+  // If this is the first time we call the exchange method, or if the BuffersManager has performed a reallocation
+  // since the last time this method was called, we need to rebuild all our internal buffer views
+  if (!m_buffer_views_and_requests_built) {
+    build_buffer_views_and_requests();
+  }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
@@ -332,14 +327,21 @@ void BoundaryExchange::recv_and_unpack ()
 
 void BoundaryExchange::build_buffer_views_and_requests()
 {
-  // BuffersManager may call this method before we have completed the registration.
-  // We return now, and simply delay the construction until the next call to registration_completed
-  if (!m_registration_completed) {
+  // If we already set the buffers before, then nothing to be done here
+  if (m_buffer_views_and_requests_built) {
     return;
   }
 
   // Check that the BuffersManager is present and was setup with enough storage
-  assert (m_buffers_manager && m_buffers_manager->check_views_capacity(m_num_2d_fields, m_num_3d_fields));
+  assert (m_buffers_manager);
+
+  // Ask the buffer manager to check for reallocation and then proceed with the allocation (if needed)
+  // Note: if we set the BM after the call to set_num_fields, the BM already knows about our needs,
+  //       otherwise, this next call may update BM's buffers sizes, and force reallocation.
+  //       Also, if BM already knows about our needs, and buffers were already allocated, then
+  //       these two calls should not change the internal state of the BM
+  m_buffers_manager->check_for_reallocation();
+  m_buffers_manager->allocate_buffers();
 
   // Note: this may look cryptic, so I'll try to explain what's about to happen.
   //       We want to set the send/recv buffers to point to:
@@ -467,9 +469,8 @@ void BoundaryExchange::build_buffer_views_and_requests()
 
 void BoundaryExchange::clear_buffer_views_and_requests ()
 {
-  // BuffersManager calls this method before calling build_buffers_views_and_requests,
-  // so that it can invalidate them. However, if the views were not yet built, we can
-  // skip this
+  // BuffersManager calls this method upon (re)allocation of buffers, so that all its customers are forced to
+  // recompute their internal buffers views. However, if the views were not yet built, we can skip this
   if (!m_buffer_views_and_requests_built) {
     return;
   }
