@@ -141,6 +141,7 @@ struct CaarFunctor {
         m_elements.buffers.vort_buf,
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
+    const bool rsplit_gt0 = m_data.rsplit > 0;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -153,14 +154,14 @@ struct CaarFunctor {
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            (m_data.rsplit > 0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
+            (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            (m_data.rsplit > 0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
+            (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
             m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
@@ -403,6 +404,7 @@ struct CaarFunctor {
         m_elements.buffers.grad_buf,
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
+    const bool rsplit_gt0 = m_data.rsplit > 0;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -416,7 +418,7 @@ struct CaarFunctor {
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         // t_vadv + vgrad_t + kappa * T_v * omega_p
-        const Scalar ttens = (m_data.rsplit > 0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
+        const Scalar ttens = (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
                   - vgrad_t
                   + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
