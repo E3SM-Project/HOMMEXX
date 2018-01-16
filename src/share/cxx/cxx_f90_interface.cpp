@@ -5,6 +5,7 @@
 
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
+#include "RemapFunctor.hpp"
 #include "BoundaryExchange.hpp"
 
 #include "Utility.hpp"
@@ -17,14 +18,12 @@ namespace Homme
 extern "C"
 {
 
-void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0, const int& rsplit, CRCPtr& hybrid_a_ptr)
-{
-  Control& control = Context::singleton().get_control ();
-
-  control.init(nets, nete, num_elems, qn0, ps0, hybrid_a_ptr);
-
-  control.rsplit = rsplit;
+void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
+                         const int &qn0, const Real &ps0, const int &rsplit,
+                         CRCPtr &hybrid_a_ptr, CRCPtr &hybrid_b_ptr) {
+  Control &control = Context::singleton().get_control();
+  control.init(nets, nete, num_elems, qn0, ps0, rsplit, hybrid_a_ptr,
+               hybrid_b_ptr);
 }
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
@@ -272,6 +271,52 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 void advance_qdp_c()
 {
   EulerStepFunctor::run();
+}
+
+} // extern "C"
+
+template <typename RemapAlg, bool rsplit>
+void vertical_remap(Control &sim_state, Real *fort_ps_v) {
+  Kokkos::TeamPolicy<ExecSpace, void> policy =
+      Homme::get_default_team_policy<ExecSpace>(sim_state.num_elems);
+
+  RemapFunctor<RemapAlg, rsplit> remap(sim_state,
+                                       Context::singleton().get_elements());
+
+  profiling_resume();
+  Kokkos::parallel_for("vertical remap", policy, remap);
+  ExecSpace::fence();
+  profiling_pause();
+
+  remap.input_valid_assert();
+  remap.update_fortran_ps_v(fort_ps_v);
+}
+
+extern "C" {
+
+// fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
+void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
+                      const Real &dt, Real *&fort_ps_v) {
+  Control &sim_state = Context::singleton().get_control();
+  sim_state.np1 = np1;
+  sim_state.qn0 = np1_qdp;
+  sim_state.dt = dt;
+  const auto rsplit = sim_state.rsplit;
+  if (remap_alg == PpmFixed::fortran_remap_alg) {
+    if (rsplit != 0) {
+      vertical_remap<PpmVertRemap<PpmFixed>, true>(sim_state, fort_ps_v);
+    } else {
+      vertical_remap<PpmVertRemap<PpmFixed>, false>(sim_state, fort_ps_v);
+    }
+  } else if (remap_alg == PpmMirrored::fortran_remap_alg) {
+    if (rsplit != 0) {
+      vertical_remap<PpmVertRemap<PpmMirrored>, true>(sim_state, fort_ps_v);
+    } else {
+      vertical_remap<PpmVertRemap<PpmMirrored>, false>(sim_state, fort_ps_v);
+    }
+  } else {
+    MPI_Abort(0, -1);
+  }
 }
 
 } // extern "C"

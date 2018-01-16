@@ -89,7 +89,7 @@ module prim_advection_mod_base
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
   public :: prim_advec_tracers_fvm
-  public :: vertical_remap
+  public :: vertical_remap_interface
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
   type (ghostBuffer3D_t)   :: ghostbuf_tr
@@ -2099,9 +2099,127 @@ OMP_SIMD
   call t_stopf('advance_hypervis_scalar')
   end subroutine advance_hypervis_scalar
 
+#ifdef USE_KOKKOS_KERNELS
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use iso_c_binding,  only: c_ptr, c_loc, c_int, c_double
+    use control_mod, only: vert_remap_q_alg
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
 
+    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                elem_derived_phi, elem_derived_pecnd,           &
+                                elem_derived_omega_p, elem_derived_vn0,         &
+                                elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+                                elem_state_ps_v
 
+    use fvm_control_volume_mod, only : fvm_struct
 
+    implicit none
+
+    interface
+      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v) bind(c)
+        use iso_c_binding, only : c_int, c_double, c_ptr
+        integer (kind=c_int), intent(in) :: vert_remap_alg
+        integer (kind=c_int), intent(in) :: np1
+        integer (kind=c_int), intent(in) :: np1_qdp
+        real (kind=c_double), intent(in) :: dt
+        real (kind=c_double), intent(in) :: ps_v(:,:,:,:)
+      end subroutine vertical_remap_c
+
+      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                   elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_pull_data_c
+
+      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                      elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_push_results_c
+    end interface
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    integer (kind=c_int) :: np1_c, np1_qdp_c
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+
+    elem_state_v_ptr              = c_loc(elem_state_v)
+    elem_state_t_ptr              = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
+    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                           elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+
+    np1_c = np1 - 1
+    np1_qdp_c = np1_qdp - 1
+
+    call t_startf('total vertical remap time')
+    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
+    call t_stopf('total vertical remap time')
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                              elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+  end subroutine vertical_remap_interface
+
+#else
+
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
+
+    use fvm_control_volume_mod, only : fvm_struct
+
+    implicit none
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    call t_startf('total vertical remap time')
+    call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call t_stopf('total vertical remap time')
+  end subroutine vertical_remap_interface
+#endif ! USE_KOKKOS_KERNELS
 
   subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
 
@@ -2165,15 +2283,21 @@ OMP_SIMD
 
   do ie=nets,nete
      ! update final ps_v
-     elem(ie)%state%ps_v(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
-          sum(elem(ie)%state%dp3d(:,:,:,np1),3)
+     elem(ie)%state%ps_v(:,:,np1) = 0.0
      do k=1,nlev
+        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + elem(ie)%state%dp3d(:,:,k,np1)
+     end do
+     elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + hvcoord%hyai(1)*hvcoord%ps0
+     do k=1,nlev
+        ! target layer thickness
         dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
              ( hvcoord%hybi(k+1) - hvcoord%hybi(k))*elem(ie)%state%ps_v(:,:,np1)
         if (rsplit==0) then
+           ! source layer thickness
            dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -&
                 elem(ie)%derived%eta_dot_dpdn(:,:,k))
         else
+           ! source layer thickness
            dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
         endif
      enddo
@@ -2193,17 +2317,14 @@ OMP_SIMD
 
      if (rsplit>0) then
         !  REMAP u,v,T from levels in dp3d() to REF levels
-#undef REMAP_TE
-#ifdef REMAP_TE
-        ! remap u,v and cp*T + .5 u^2
-        ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-             elem(ie)%state%t(:,:,:,np1)*cp
-#else
         ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1)
-#endif
         ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star
 
+        ! ttmp    Field to be remapped
+        ! np      Number of points ??? Why is this a parameter
+        ! 1       Number of fields to remap
+        ! dp_star Source layer thickness
+        ! dp      Target layer thickness
         call t_startf('vertical_remap1_1')
         call remap1(ttmp,np,1,dp_star,dp)
         call t_stopf('vertical_remap1_1')
@@ -2219,13 +2340,6 @@ OMP_SIMD
 
         elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)/dp
         elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)/dp
-
-#ifdef REMAP_TE
-        ! back out T from TE
-        elem(ie)%state%t(:,:,:,np1) = &
-             ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cp
-#endif
      endif
 
      ! remap the gll tracers from lagrangian levels (dp_star)  to REF levels dp
