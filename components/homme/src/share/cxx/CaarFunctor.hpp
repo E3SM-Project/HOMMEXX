@@ -116,14 +116,15 @@ struct CaarFunctor {
     //vertical Lagrangian
     if(m_data.rsplit){
        //each timestep this needs to be reassigned (or stage?)
-       assign_zero_to_eta_dot_dpdn_and_vadv_bufs(kv);
-     
+       assign_zero_to_vadv_bufs(kv);
+       compute_eta_dot_dpdn(kv);
     //vertical Eulerian
     }else{
        //each timestep this needs to be reassigned (or stage?)
        assign_zero_to_sdot_sum(kv);
        compute_eta_dot_dpdn_vertadv_euler(kv);
        preq_vertadv(kv);
+       accumulate_eta_dot_dpdn(kv);
     };
     compute_omega_p(kv);
 
@@ -131,7 +132,6 @@ struct CaarFunctor {
 //the accumulated value is used in remap to compute dp_star for rsplit=0.
 //this, should this be wrapped into if (!rsplit) or derived%eta_dot is
 //used somewhere else? energy? fortran computes it unconditionally.
-    accumulate_eta_dot_dpdn(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
@@ -201,14 +201,11 @@ struct CaarFunctor {
   // Make a templated subclass of an untemplated version of CaarFunctor
   // Specialize the templated subclass to implement these based on rsplit
   KOKKOS_INLINE_FUNCTION
-  void assign_zero_to_eta_dot_dpdn_and_vadv_bufs(KernelVariables &kv) const {
+  void assign_zero_to_vadv_bufs(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
-        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev) = 0;
-      });//loop for eta_dot
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) = 0;
         m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) = 0; 
@@ -218,8 +215,22 @@ struct CaarFunctor {
     kv.team_barrier();
   } // TRIVIAL? not tested
 
+  //m_eta is zeroed outside of local kernels, in prim_step
+  KOKKOS_INLINE_FUNCTION
+  void compute_eta_dot_dpdn(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      for(int k = 0; k < NUM_LEV_P; ++k){
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) = 
+           m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k); 
+      }//k loop
+    });
+    kv.team_barrier();
+  } //tested against caar_adjust_eta_dot_dpdn_c_int
 
-//m_eta is zeroed outside of local kernels, in prim_step
+  //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
   void accumulate_eta_dot_dpdn(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
