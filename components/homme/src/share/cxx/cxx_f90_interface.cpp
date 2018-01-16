@@ -271,18 +271,9 @@ void advance_qdp_c()
 
 template <typename RemapAlg, bool rsplit>
 void vertical_remap(Control &sim_state, Real *fort_ps_v) {
-  Kokkos::TeamPolicy<ExecSpace, void> policy =
-      Homme::get_default_team_policy<ExecSpace>(sim_state.num_elems);
-
   RemapFunctor<RemapAlg, rsplit> remap(sim_state,
                                        Context::singleton().get_elements());
-
-  profiling_resume();
-  Kokkos::parallel_for("vertical remap", policy, remap);
-  ExecSpace::fence();
-  profiling_pause();
-
-  remap.input_valid_assert();
+  remap.run_remap();
   remap.update_fortran_ps_v(fort_ps_v);
 }
 
