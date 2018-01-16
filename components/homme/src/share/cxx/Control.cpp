@@ -18,19 +18,24 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
 
   //hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient A_midpoints");
-  hybrid_ai = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
-      "Hybrid coordinates; coefficient A_interfaces");
+  //hybrid_ai = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
+  //    "Hybrid coordinates; coefficient A_interfaces");
   //hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient B_midpoints");
 
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
-  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_ai(hybrid_ai_ptr);
+  //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_ai(hybrid_ai_ptr);
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
 
-//dest, source
+  //dest, source
   //Kokkos::deep_copy(hybrid_am, host_hybrid_am);
-  Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
+  //Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
   //Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
+
+  {
+    // Only hybrid_ai(0) is needed.
+    hybrid_ai0 = hybrid_ai_ptr[0];
+  }
 
   if (rsplit == 0) {
     hybrid_bi = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(

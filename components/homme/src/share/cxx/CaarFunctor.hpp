@@ -617,7 +617,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai(0) * m_data.ps0;
+      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
         const int vector_end = (ilev == NUM_LEV-1 ?
                                 ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
@@ -650,7 +650,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai(0) * m_data.ps0;
+      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;
