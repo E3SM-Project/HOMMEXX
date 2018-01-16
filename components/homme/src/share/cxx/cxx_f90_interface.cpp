@@ -27,10 +27,16 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
   control.rsplit = rsplit;
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt,
+void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
+                           const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
                            const int& np1_qdp, const int& rhs_viss, const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
+
+  control.DSSopt = DSSopt;
+  control.rhs_multiplier = rhs_multiplier;
+  control.rhs_viss = rhs_viss;
+  control.limiter_option = limiter_option;
 
   // Adjust indices
   control.nets  = nets-1;
@@ -41,8 +47,6 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
   control.dt    = dt;
 
   control.np1_qdp = np1_qdp-1;
-  control.rhs_viss = rhs_viss;
-  control.limiter_option = limiter_option;
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -84,8 +88,12 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
-                        CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
+void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_derived_omega_p_ptr,
+                        CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
+                        CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
+                        CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
+                        CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& qmin_ptr,
+                        CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -125,7 +133,9 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr
                  r.buffers.qlim);
 }
 
-void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr, F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
+void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_derived_omega_p_ptr,
+                           F90Ptr& elem_derived_divdp_proj_ptr, F90Ptr& elem_state_Qdp_ptr,
+                           F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
