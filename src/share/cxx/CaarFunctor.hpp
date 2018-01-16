@@ -113,9 +113,6 @@ struct CaarFunctor {
     //nullifies sdot_sum, needed for both vert Lagrangian and Eulerian,
     //sdot_sum is used in energy diagnostics
 
-    //each timestep this needs to be reassigned (or stage?)
-    assign_zero_to_sdot_sum(kv);
-
     //vertical Lagrangian
     if(m_data.rsplit){
        //each timestep this needs to be reassigned (or stage?)
@@ -123,6 +120,8 @@ struct CaarFunctor {
      
     //vertical Eulerian
     }else{
+       //each timestep this needs to be reassigned (or stage?)
+       assign_zero_to_sdot_sum(kv);
        compute_eta_dot_dpdn_vertadv_euler(kv);
        preq_vertadv(kv);
     };
