@@ -36,7 +36,8 @@ struct Control {
   int np1_qdp;
 
   // Tracers options;
-  int rhs_viss;
+  int DSSopt;
+  int rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
   // Number of tracers (may be lower than QSIZE_D)

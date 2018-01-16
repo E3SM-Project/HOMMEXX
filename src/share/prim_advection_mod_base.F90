@@ -104,26 +104,34 @@ module prim_advection_mod_base
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
-         qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      use kinds, only : real_kind
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
-           qmin_ptr, qmax_ptr, dpdissk_ptr
-    end subroutine euler_pull_data_c
-    subroutine euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
-    end subroutine euler_push_results_c
-    subroutine advance_qdp_c() bind(c)
-      use iso_c_binding, only : c_int
-    end subroutine advance_qdp_c
+     subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+          elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+          elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+          elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
+          qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
+       use iso_c_binding, only : c_ptr
+       use kinds, only : real_kind
+       !
+       ! Inputs
+       !
+       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+            elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+            elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+            elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
+            qmin_ptr, qmax_ptr, dpdissk_ptr
+     end subroutine euler_pull_data_c
+     subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+          elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
+       use iso_c_binding, only : c_ptr
+       !
+       ! Inputs
+       !
+       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
+     end subroutine euler_push_results_c
+     subroutine advance_qdp_c() bind(c)
+       use iso_c_binding, only : c_int
+     end subroutine advance_qdp_c
   end interface
 
 contains
@@ -1555,7 +1563,9 @@ end subroutine ALE_parametric_coords
   use kinds          , only : real_kind
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
-  use element_mod    , only : element_t, elem_state_Qdp
+  use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
+       elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
+       elem_derived_divdp, elem_derived_dpdiss_biharmonic
   use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
@@ -1565,13 +1575,15 @@ end subroutine ALE_parametric_coords
   implicit none
 
   interface
-    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
+    subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
+         n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
+      integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
+           n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
       real (kind=c_double), intent(in) :: dt
     end subroutine init_control_euler_c
   end interface
@@ -1601,7 +1613,9 @@ end subroutine ALE_parametric_coords
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
-       qmin_ptr, qmax_ptr, dpdissk_ptr
+       qmin_ptr, qmax_ptr, dpdissk_ptr, elem_derived_eta_dot_dpdn_ptr, &
+       elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
+       elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1815,20 +1829,30 @@ OMP_SIMD
      enddo
   end do
 
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt, &
-       np1_qdp, rhs_viss, limiter_option)
+  call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+       dt, np1_qdp, rhs_viss, limiter_option)
+  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
+  elem_derived_dp_ptr = c_loc(elem_derived_dp)
+  elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
+  elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+  elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+  elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
+  dpdissk_ptr = c_loc(dpdissk)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
   Vstar_ptr = c_loc(Vstar)
   Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
-  dpdissk_ptr = c_loc(dpdissk)
-  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
-       qmin_ptr, qmax_ptr, dpdissk_ptr)
+  call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+       elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+       Vstar_ptr, Qtens_biharmonic_ptr, qmin_ptr, qmax_ptr, dpdissk_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")
-  call euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
+  call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
   do ie = nets , nete
      if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
