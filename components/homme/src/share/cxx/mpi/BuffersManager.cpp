@@ -27,6 +27,12 @@ BuffersManager::BuffersManager (std::shared_ptr<Connectivity> connectivity)
   set_connectivity(connectivity);
 }
 
+BuffersManager::~BuffersManager ()
+{
+  // Check that all the customers un-registered themselves
+  assert (m_num_customers==0);
+}
+
 void BuffersManager::check_for_reallocation ()
 {
   for (auto& it : m_customers) {
@@ -74,11 +80,6 @@ void BuffersManager::allocate_buffers ()
   for (auto& be_ptr : m_customers) {
     // Invalidate buffer views and requests in the customer (if none built yet, it's a no-op)
     be_ptr.first->clear_buffer_views_and_requests ();
-
-    // Build buffer views and requests in the customer.
-    // NOTE: if the registration is not completed yet, they will be built when
-    //       registration_completed is called
-    be_ptr.first->build_buffer_views_and_requests ();
   }
 }
 
