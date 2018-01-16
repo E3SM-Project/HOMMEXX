@@ -115,8 +115,6 @@ struct CaarFunctor {
 
     //vertical Lagrangian
     if(m_data.rsplit){
-       //each timestep this needs to be reassigned (or stage?)
-       assign_zero_to_vadv_bufs(kv);
        compute_eta_dot_dpdn(kv);
     //vertical Eulerian
     }else{
@@ -195,25 +193,6 @@ struct CaarFunctor {
     kv.team_barrier();
   } // UNTESTED 2
 //og: i'd better make a test for this
-
-
-  // TODO: Use partial template specialization to determine if we need this
-  // Make a templated subclass of an untemplated version of CaarFunctor
-  // Specialize the templated subclass to implement these based on rsplit
-  KOKKOS_INLINE_FUNCTION
-  void assign_zero_to_vadv_bufs(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev) = 0;
-        m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) = 0; 
-        m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev) = 0; 
-      });//loop for _vadv quantities
-    });
-    kv.team_barrier();
-  } // TRIVIAL? not tested
 
   //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
