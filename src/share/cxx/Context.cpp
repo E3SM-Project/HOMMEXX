@@ -66,11 +66,13 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 }
 
 void Context::clear() {
+  comm_ = nullptr;
   control_ = nullptr;
   elements_ = nullptr;
   derivative_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
+  buffers_manager_ = nullptr;
 }
 
 Context& Context::singleton() {
