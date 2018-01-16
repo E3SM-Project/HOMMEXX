@@ -56,7 +56,7 @@ public:
   struct BufferViews {
 
     BufferViews() = default;
-    void init(const int num_elems);
+    void init(const int num_elems, const bool rsplit0);
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> pressure;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> pressure_grad;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> temperature_virt;
@@ -98,7 +98,7 @@ public:
 
   Elements() = default;
 
-  void init(const int num_elems);
+  void init(const int num_elems, const bool rsplit0);
 
   void random_init(int num_elems, Real max_pressure = 1.0);
 
