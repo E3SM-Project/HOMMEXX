@@ -315,7 +315,8 @@ struct PpmVertRemap : public VertRemapAlg {
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, gs),
+      const int _gs = gs;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, _gs),
                            [&](const int &k) {
         dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
         dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
@@ -435,7 +436,8 @@ struct PpmVertRemap : public VertRemapAlg {
           ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
         } // end k loop
 
-        for (int k = 1; k <= gs; k++) {
+        const int _gs = gs;
+        for (int k = 1; k <= _gs; k++) {
           ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
           ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
               ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
@@ -715,7 +717,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
           const int level = loop_idx % NUM_PHYSICAL_LEV;
           const int ilev = level / VECTOR_SIZE;
           const int vlev = level % VECTOR_SIZE;
-          const int tmp = is_invalid;
           is_invalid |= (src_layer_thickness(igp, jgp, ilev)[vlev] < 0.0);
         },
         invalid);
