@@ -761,7 +761,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     auto state_remap = remap_states_array(kv);
 
     // This must be done for every thread
-    for (size_t state_idx = 0; state_idx < state_remap.size(); ++state_idx) {
+    for (int state_idx = 0; state_idx < static_cast<int>(state_remap.size()); ++state_idx) {
       remap_vals[state_idx] = state_remap[state_idx];
     }
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
