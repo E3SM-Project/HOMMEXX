@@ -109,9 +109,9 @@ public:
         qdp("QDP", elements.num_elems()), 
         metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
-        spheremp("SphereMP", elements.num_elems()), 
-        dvv("dvv"), nets(1),
-        nete(elements.num_elems()),
+        spheremp("SphereMP", elements.num_elems()), dvv("dvv"), 
+        //nets(1),
+        //nete(elements.num_elems()), 
         rsplit(0) {
 
 //make these random
@@ -120,9 +120,11 @@ public:
     Real hybrid_bm[NUM_LEV_P] = { 0 };
     Real hybrid_bi[NUM_LEV_P+1] = { 0 };
 
-    functor.m_data.init(0, elements.num_elems(), elements.num_elems(), nm1, n0, np1,
-                        qn0, ps0, dt, false, eta_ave_w, 0, //0 for rsplit for now 
+    functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
+                        qn0, ps0, 
+                        0, //for rsplit
                         hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
+    functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
 //is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
@@ -180,8 +182,8 @@ public:
   HostViewManaged<Real * [NP][NP]> spheremp;
   HostViewManaged<Real[NP][NP]> dvv;
 
-  const int nets;
-  const int nete;
+//  const int nets;
+//  const int nete;
 
   static constexpr int nm1 = 0;
   static constexpr int nm1_f90 = nm1 + 1;
@@ -654,15 +656,15 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
-  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-                                   TestType::n0, TestType::np1, TestType::qn0,
-                                   TestType::dt, TestType::ps0, false,
-                                   TestType::eta_ave_w, 
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0,  
                                    0, //0 for rsplit
                                    hybrid_am_mirror.data(),
                                    hybrid_ai_mirror.data(),
                                    hybrid_bm_mirror.data(),
                                    hybrid_bi_mirror.data());
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                   TestType::dt, TestType::eta_ave_w, false);
 
   test_functor.run_functor();
 
@@ -1008,11 +1010,21 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
-  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
-       TestType::eta_ave_w, test_functor.return_rsplit(),
-       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
-       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
+//  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+//       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
+//       TestType::eta_ave_w, test_functor.return_rsplit(),
+//       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
+//       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
+
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0,
+                                   test_functor.return_rsplit(), //0 for rsplit
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bi_mirror.data());
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                                TestType::dt, TestType::eta_ave_w, false);
 
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_host(elements.m_eta_dot_dpdn, eta_dot_total_f90);
@@ -1096,11 +1108,15 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   const int rsplit = 0;
   test_functor.set_rsplit(rsplit);
 
-  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
-       TestType::eta_ave_w, test_functor.return_rsplit(), 
-       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
-       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0,
+                                   test_functor.return_rsplit(), //0 for rsplit
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bi_mirror.data());  
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,                                                TestType::dt, TestType::eta_ave_w, false);
+
 
   //will run on device
   test_functor.run_functor();
