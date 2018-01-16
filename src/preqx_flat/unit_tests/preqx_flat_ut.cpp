@@ -115,10 +115,10 @@ public:
         rsplit(0) {
 
 //make these random
-    Real hybrid_am[NUM_LEV_P] = { 0 };
-    Real hybrid_ai[NUM_LEV_P+1] = { 0 };
-    Real hybrid_bm[NUM_LEV_P] = { 0 };
-    Real hybrid_bi[NUM_LEV_P+1] = { 0 };
+    Real hybrid_am[NUM_PHYSICAL_LEV] = { 0 };
+    Real hybrid_ai[NUM_INTERFACE_LEV] = { 0 };
+    Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
+    Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
                         qn0, ps0, 
@@ -637,10 +637,10 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
 //OG coefficients A and B increase is not taken into here...
 //probably, does not matter
@@ -1005,10 +1005,10 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //check rsplit in m_data init!!! set to zero?
 //wahts going on with eta_ave_w? should be random
 //zeored, we don't need them in this test
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
 //  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
 //       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
@@ -1089,10 +1089,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
   sync_to_device(sdot_sum, elements.buffers.sdot_sum);
 //only hybi is used, should the rest be quiet_nans? yes
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_am_mirror("hybrid_am_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
-  ExecViewManaged<Real[NUM_LEV_P+1]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
   genRandArray(hybrid_am_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_ai_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
