@@ -650,7 +650,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_am(0) * m_data.ps0;
+      Real p_prev = m_data.hybrid_ai(0) * m_data.ps0;
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;
