@@ -34,6 +34,11 @@ void remap_q_ppm_c_callable(Real *Qdp, const int &nx, const int &qsize,
 
 }; // extern C
 
+/* This object is meant for testing different configurations of the PPM vertical
+ * remap method.
+ * boundary_cond needs to be one of the PPM boundary condition objects,
+ * which provide the indexes to loop over
+ */
 template <typename boundary_cond, int _remap_dim> class ppm_remap_functor_test {
   static_assert(std::is_base_of<PpmBoundaryConditions, boundary_cond>::value,
                 "PPM Remap test must have a valid boundary condition");
@@ -184,6 +189,10 @@ public:
     });
   }
 
+  // This ensures that the represented grid is not degenerate
+  // The grid is represented by the interval widths, so they must all be
+  // positive. The top of the grid must also be a fixed value,
+  // so the sum of the intervals must be top, and the bottom is assumed to be 0
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
   generate_grid_intervals(rngAlg &engine, const Real &top, std::string name) {
     HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
