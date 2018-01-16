@@ -1,5 +1,7 @@
 #include "Comm.hpp"
 
+#include <iostream>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h.c"
 #endif
