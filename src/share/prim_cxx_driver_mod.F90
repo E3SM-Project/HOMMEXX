@@ -6,6 +6,8 @@
 
 module prim_cxx_driver_mod
 
+  use iso_c_binding, only: c_int
+
   implicit none
 
   public :: init_cxx_mpi_structures
