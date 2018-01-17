@@ -84,7 +84,7 @@ using HostView = ViewType<DataType, HostMemSpace, Properties...>;
 template <typename DataType, typename... Properties>
 using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
 template <typename DataType, typename... Properties>
-using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecSpace>::value,
+using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecMemSpace>::value,
                                           ExecView<DataType,Properties...>,
                                           typename ExecView<DataType,Properties...>::HostMirror>::type;
 
