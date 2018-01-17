@@ -7,11 +7,13 @@
 
 namespace Homme {
 
+class Comm;
 class Control;
 class Elements;
 class Derivative;
 class Connectivity;
 class BoundaryExchange;
+class BuffersManager;
 
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
@@ -25,15 +27,17 @@ class BoundaryExchange;
  */
 class Context {
 public:
-  using BEMap = std::map<std::string,BoundaryExchange>;
+  using BEMap = std::map<std::string,std::shared_ptr<BoundaryExchange>>;
 
 private:
   // Note: using uniqe_ptr disables copy construction
-  std::unique_ptr<Control>      control_;
-  std::unique_ptr<Elements>     elements_;
-  std::unique_ptr<Derivative>   derivative_;
-  std::unique_ptr<Connectivity> connectivity_;
-  std::unique_ptr<BEMap>        boundary_exchanges_;
+  std::unique_ptr<Comm>           comm_;
+  std::unique_ptr<Control>        control_;
+  std::unique_ptr<Elements>       elements_;
+  std::unique_ptr<Derivative>     derivative_;
+  std::shared_ptr<Connectivity>   connectivity_;
+  std::shared_ptr<BuffersManager> buffers_manager_;
+  std::unique_ptr<BEMap>          boundary_exchanges_;
 
   // Clear the objects Context manages.
   void clear();
@@ -43,12 +47,14 @@ public:
   virtual ~Context();
 
   // Getters for each managed object.
+  Comm& get_comm();
   Control& get_control();
   Elements& get_elements();
   Derivative& get_derivative();
-  Connectivity& get_connectivity();
+  std::shared_ptr<BuffersManager> get_buffers_manager();
+  std::shared_ptr<Connectivity> get_connectivity();
   BEMap& get_boundary_exchanges();
-  BoundaryExchange& get_boundary_exchange(const std::string& name);
+  std::shared_ptr<BoundaryExchange> get_boundary_exchange(const std::string& name);
 
   // Exactly one singleton.
   static Context& singleton();

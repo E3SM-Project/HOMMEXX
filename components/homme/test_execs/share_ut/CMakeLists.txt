@@ -13,6 +13,7 @@ SET (INFRASTRUCTURE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/infrastructure_ut.cpp
@@ -42,6 +43,7 @@ SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/infrastructure_ut.cpp
@@ -86,6 +88,7 @@ SET (SPHERE_OPERATORS_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SHARE_UT_DIR}/sphere_operators_ut.cpp
@@ -102,7 +105,11 @@ SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-SET (NUM_CPUS 4)
+IF (USE_NUM_PROCS)
+  SET (NUM_CPUS ${USE_NUM_PROCS})
+ELSE()
+  SET (NUM_CPUS 1)
+ENDIF()
 cxx_unit_test (sphere_operators_ut "${SPHERE_OPERATORS_UT_F90_SRCS}" "${SPHERE_OPERATORS_UT_CXX_SRCS}" "${SPHERE_OPERATORS_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
 
 ### Boundary exchange unit test ###
@@ -141,6 +148,7 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/mpi_cxx_f90_interface.cpp
@@ -158,5 +166,9 @@ SET (BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-SET (NUM_CPUS 4)
+IF (USE_NUM_PROCS)
+  SET (NUM_CPUS ${USE_NUM_PROCS})
+ELSE()
+  SET (NUM_CPUS 1)
+ENDIF()
 cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDARY_EXCHANGE_UT_CXX_SRCS}" "${BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
