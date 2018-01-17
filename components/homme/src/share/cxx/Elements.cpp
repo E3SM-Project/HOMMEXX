@@ -568,12 +568,18 @@ void Elements::BufferViews::init(int num_elems) {
 
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for tracers", num_elems);
+  qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
+      "buffer for biharmonic term for tracers", num_elems);
   vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for v/dp",
                                                          num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "buffer for vstar*qdp", num_elems);
   qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "work buffer for tracers", num_elems);
+  dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "dpdissk", num_elems);
+  qlim = ExecViewManaged<Scalar* [QSIZE_D][2][NUM_LEV]>(
+      "qlim: combined qmin, qmax", num_elems);
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 

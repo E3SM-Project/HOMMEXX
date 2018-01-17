@@ -373,8 +373,6 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
 
   testing_divwk.run_functor_div_wk();
 
-  Real local_fortran_output[NP][NP];
-
   for(int _index = 0; _index < elements; _index++) {
     Real local_fortran_output[NP][NP];
 
@@ -395,7 +393,6 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
     Real vf[2][NP][NP];
     Real dvvf[NP][NP];
     Real dinvf[2][2][NP][NP];
-    Real metf[NP][NP];
     Real sphf[NP][NP];
 
     for(int _i = 0; _i < NP; _i++)

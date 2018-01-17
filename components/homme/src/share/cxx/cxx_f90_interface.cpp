@@ -5,7 +5,9 @@
 
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
+#include "RemapFunctor.hpp"
 #include "BoundaryExchange.hpp"
+#include "BuffersManager.hpp"
 
 #include "Utility.hpp"
 
@@ -17,17 +19,16 @@ namespace Homme
 extern "C"
 {
 
-void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0, const int& rsplit, CRCPtr& hybrid_a_ptr)
-{
-  Control& control = Context::singleton().get_control ();
-
-  control.init(nets, nete, num_elems, qn0, ps0, hybrid_a_ptr);
-
-  control.rsplit = rsplit;
+void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
+                         const int &qn0, const Real &ps0, const int &rsplit,
+                         CRCPtr &hybrid_a_ptr, CRCPtr &hybrid_b_ptr) {
+  Control &control = Context::singleton().get_control();
+  control.init(nets, nete, num_elems, qn0, ps0, rsplit, hybrid_a_ptr,
+               hybrid_b_ptr);
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt)
+void init_control_euler_c (const int& nets, const int& nete, const int& qn0, const int& qsize, const Real& dt,
+                           const int& np1_qdp, const int& rhs_viss, const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
 
@@ -38,6 +39,10 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
 
   control.qsize = qsize;
   control.dt    = dt;
+
+  control.np1_qdp = np1_qdp-1;
+  control.rhs_viss = rhs_viss;
+  control.limiter_option = limiter_option;
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -79,7 +84,8 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
+void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
+                        CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -105,31 +111,30 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr)
     }
   }
   Kokkos::deep_copy(vstar_exec, vstar_host);
+
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
+                   Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
+                 r.buffers.qtens_biharmonic);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
+                 r.buffers.dpdissk);
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+                 HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+                 r.buffers.qlim);
 }
 
-void euler_push_results_c (F90Ptr& qtens_ptr)
+void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr, F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
-  const Elements& r = Context::singleton().get_elements();
+  Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
-
-  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>             qtens_exec = r.buffers.qtens;
-  ExecViewUnmanaged<Scalar *[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror qtens_host = Kokkos::create_mirror_view(qtens_exec);
-  Kokkos::deep_copy(qtens_host, qtens_exec);
-
-  int iter=0;
-  for (int ie=0; ie<data.num_elems; ++ie) {
-    for (int iq=0; iq<data.qsize; ++iq) {
-      for (int k=0; k<NUM_PHYSICAL_LEV; ++k) {
-        int ilev = k / VECTOR_SIZE;
-        int iv   = k % VECTOR_SIZE;
-        for (int i=0; i<NP; ++i) {
-          for (int j=0; j<NP; ++j, ++iter) {
-             qtens_ptr[iter] = qtens_host(ie,iq,i,j,ilev)[iv];
-          }
-        }
-      }
-    }
-  }
+  r.push_qdp(elem_state_Qdp_ptr);
+  sync_to_host(r.buffers.qlim,
+               HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
+                 qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+               HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
+                 qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
 }
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
@@ -170,22 +175,35 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
 
   // Setup the boundary exchange
-  BoundaryExchange* be[NUM_TIME_LEVELS];
+  std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];
+  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be_map = Context::singleton().get_boundary_exchanges();
   for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
     std::stringstream ss;
     ss << "caar tl " << tl;
-    be[tl] = &Context::singleton().get_boundary_exchange(ss.str());
+    be[tl] = be_map[ss.str()];
 
-    // Set the views of this time level into this time level's boundary exchange
-    if (!be[tl]->is_registration_completed())
-    {
+    // If it was not yet created, create it and set it up
+    if (!be[tl]) {
+      std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+      if (!buffers_manager->is_connectivity_set()) {
+        // TODO: should we do this inside the get_buffers_manager in Context?
+        buffers_manager->set_connectivity(connectivity);
+      }
+
+      // Set the views of this time level into this time level's boundary exchange
+      be[tl] = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
+
+      // Setup the boundary exchange
       be[tl]->set_num_fields(0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
-
       be[tl]->registration_completed();
+
+      // Set this BE in the Context's map
+      be_map[ss.str()] = be[tl];
     }
   }
 
@@ -226,6 +244,52 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 void advance_qdp_c()
 {
   EulerStepFunctor::run();
+}
+
+} // extern "C"
+
+template <typename RemapAlg, bool rsplit>
+void vertical_remap(Control &sim_state, Real *fort_ps_v) {
+  Kokkos::TeamPolicy<ExecSpace, void> policy =
+      Homme::get_default_team_policy<ExecSpace>(sim_state.num_elems);
+
+  RemapFunctor<RemapAlg, rsplit> remap(sim_state,
+                                       Context::singleton().get_elements());
+
+  profiling_resume();
+  Kokkos::parallel_for("vertical remap", policy, remap);
+  ExecSpace::fence();
+  profiling_pause();
+
+  remap.input_valid_assert();
+  remap.update_fortran_ps_v(fort_ps_v);
+}
+
+extern "C" {
+
+// fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
+void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
+                      const Real &dt, Real *&fort_ps_v) {
+  Control &sim_state = Context::singleton().get_control();
+  sim_state.np1 = np1;
+  sim_state.qn0 = np1_qdp;
+  sim_state.dt = dt;
+  const auto rsplit = sim_state.rsplit;
+  if (remap_alg == PpmFixed::fortran_remap_alg) {
+    if (rsplit != 0) {
+      vertical_remap<PpmVertRemap<PpmFixed>, true>(sim_state, fort_ps_v);
+    } else {
+      vertical_remap<PpmVertRemap<PpmFixed>, false>(sim_state, fort_ps_v);
+    }
+  } else if (remap_alg == PpmMirrored::fortran_remap_alg) {
+    if (rsplit != 0) {
+      vertical_remap<PpmVertRemap<PpmMirrored>, true>(sim_state, fort_ps_v);
+    } else {
+      vertical_remap<PpmVertRemap<PpmMirrored>, false>(sim_state, fort_ps_v);
+    }
+  } else {
+    MPI_Abort(0, -1);
+  }
 }
 
 } // extern "C"
