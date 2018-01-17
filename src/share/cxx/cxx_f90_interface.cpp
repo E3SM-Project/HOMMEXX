@@ -32,7 +32,7 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
 {
   Control& control = Context::singleton().get_control ();
 
-  control.DSSopt = DSSopt;
+  control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
   control.rhs_viss = rhs_viss;
   control.limiter_option = limiter_option;
