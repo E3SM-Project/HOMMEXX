@@ -6,16 +6,28 @@ namespace Homme
 {
 
 Connectivity::Connectivity ()
- : m_finalized (false)
+ : m_finalized    (false)
+ , m_initialized  (false)
  , m_num_elements (-1)
 {
-  // TODO: change this to allow integration of Hommexx in acme, and
-  //       pass the number of processes dedicated to homme
-  m_comm.init();
+  // Nothing to be done here
+}
+
+void Connectivity::set_comm (const Comm& comm)
+{
+  // Input comm must be valid (not storing a null MPI comm)
+  assert (comm.m_mpi_comm!=MPI_COMM_NULL);
+
+  m_comm = comm;
 }
 
 void Connectivity::set_num_elements (const int num_elements)
 {
+  // We don't allow to change the number of elements once set. There may be downstream classes
+  // that already read num_elements from this class, and would not be informed of the change.
+  // Besides, does it really make sense? Does it add an interesting feature? I don't think so.
+  assert (!m_initialized);
+
   m_num_elements = num_elements;
 
   m_connections = ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("Connections", m_num_elements);
@@ -46,16 +58,20 @@ void Connectivity::set_num_elements (const int num_elements)
 
   // Initialize all counters to 0 (even the missing ones)
   Kokkos::deep_copy (h_num_connections,0);
+
+  // Connectivity is now initialized
+  m_initialized = true;
 }
 
 void Connectivity::add_connection (const int first_elem_lid,  const int first_elem_gid,  const int first_elem_pos,  const int first_elem_pid,
                                    const int second_elem_lid, const int second_elem_gid, const int second_elem_pos, const int second_elem_pid)
 {
-  if (m_finalized)
-  {
-    std::cerr << "Error! The connectivity has already been finalized.\n";
-    std::abort();
-  }
+  // Connectivity must be in initialized state but not in finalized state
+  assert (m_initialized);
+  assert (!m_finalized);
+
+  // Comm must not be a null comm, otherwise checks on ranks may be misleading
+  assert (m_comm.m_mpi_comm!=MPI_COMM_NULL);
 
   // I believe edges appear twice in fortran, once per each ordering.
   // Here, we only need to store them once
@@ -150,7 +166,10 @@ void Connectivity::clean_up()
   Kokkos::deep_copy(h_connections, m_connections);
   Kokkos::deep_copy(h_num_connections,0);
 
-  m_finalized = false;
+  // Cleaning the elements counter
+
+  m_initialized = false;
+  m_finalized   = false;
 }
 
 } // namespace Homme
