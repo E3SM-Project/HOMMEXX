@@ -202,8 +202,8 @@ public:
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           auto grid_slice = Homme::subview(grid, ie, igp, jgp);
-          auto start = reinterpret_cast<Real *>(grid.data());
-          auto end = start + grid.size();
+          auto start = reinterpret_cast<Real *>(grid_slice.data());
+          auto end = start + grid_slice.size();
           std::sort(start, end);
           grid_slice(0)[0] = 0.0;
           grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
