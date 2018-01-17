@@ -137,26 +137,18 @@ void BuffersManager::update_requested_sizes (typename std::map<BoundaryExchange*
   const int num_3d_fields = customer.first->get_num_3d_fields();
 
   // Compute the requested buffers sizes and compare with stored ones
-  size_t mpi_buffer_size, local_buffer_size;
-  required_buffer_sizes (num_2d_fields, num_3d_fields, mpi_buffer_size, local_buffer_size);
-
-  if (mpi_buffer_size>m_mpi_buffer_size) {
-    // Update this customer's mpi buffer needs
-    customer.second.mpi_buffer_size = mpi_buffer_size;
-
+  required_buffer_sizes (num_2d_fields, num_3d_fields, customer.second.mpi_buffer_size, customer.second.local_buffer_size);
+  if (customer.second.mpi_buffer_size>m_mpi_buffer_size) {
     // Update the total
-    m_mpi_buffer_size = mpi_buffer_size;
+    m_mpi_buffer_size = customer.second.mpi_buffer_size;
 
     // Mark the views as invalid
     m_views_are_valid = false;
   }
 
-  if(local_buffer_size>m_local_buffer_size) {
-    // Update this customer's local buffer needs
-    customer.second.local_buffer_size = local_buffer_size;
-
+  if(customer.second.local_buffer_size>m_local_buffer_size) {
     // Update the total
-    m_local_buffer_size = local_buffer_size;
+    m_local_buffer_size = customer.second.local_buffer_size;
 
     // Mark the views as invalid
     m_views_are_valid = false;
