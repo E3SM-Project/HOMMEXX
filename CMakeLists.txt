@@ -109,6 +109,9 @@ ENDIF()
 # queried at runtime.
 SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 4 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
 
+# An option to allow to use GPU pointers for MPI calls. The value of this option is irrelevant for CPU/KNL builds.
+OPTION (HOMMEXX_MPI_ON_DEVICE "Whether we want to use device pointers for MPI calls (relevant only for GPU builds)" ON)
+
 ##############################################################################
 # Options for floating point model.
 ##############################################################################

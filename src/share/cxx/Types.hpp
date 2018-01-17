@@ -59,7 +59,7 @@ using HostMemSpace    = Kokkos::HostSpace;
 //       device views (to be done in parallel). The difference is ONLY in
 //       the location of the MPI buffer for send/receive.
 
-#if defined (HOMMEXX_MPI_ON_DEVICE)
+#if HOMMEXX_MPI_ON_DEVICE
   using MPIMemSpace = ExecMemSpace;
 #else
   using MPIMemSpace = HostMemSpace;
