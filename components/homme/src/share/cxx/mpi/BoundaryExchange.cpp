@@ -93,14 +93,14 @@ void BoundaryExchange::set_num_fields(int num_2d_fields, int num_3d_fields)
   //       we will check that they match the 2nd dimension of the m_2d_fields and m_3d_fields.
 
   // Create the fields views
-  m_2d_fields = ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>("2d fields",m_connectivity->get_num_elements(),num_2d_fields);
-  m_3d_fields = ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>("3d fields",m_connectivity->get_num_elements(),num_3d_fields);
+  m_2d_fields = decltype(m_2d_fields)("2d fields",m_connectivity->get_num_elements(),num_2d_fields);
+  m_3d_fields = decltype(m_3d_fields)("3d fields",m_connectivity->get_num_elements(),num_3d_fields);
 
   // Create buffer views' (but don't fill them)
-  m_send_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>("2d send buffer",m_connectivity->get_num_elements(),num_2d_fields);
-  m_recv_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>("2d send buffer",m_connectivity->get_num_elements(),num_2d_fields);
-  m_send_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>("3d send buffer",m_connectivity->get_num_elements(),num_3d_fields);
-  m_recv_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>("3d send buffer",m_connectivity->get_num_elements(),num_3d_fields);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer",m_connectivity->get_num_elements(),num_2d_fields);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d send buffer",m_connectivity->get_num_elements(),num_2d_fields);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer",m_connectivity->get_num_elements(),num_3d_fields);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d send buffer",m_connectivity->get_num_elements(),num_3d_fields);
 
   // Now we can start register fields
   m_registration_started   = true;
@@ -142,8 +142,8 @@ void BoundaryExchange::clean_up()
   HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_connectivity->get_comm().m_mpi_comm);
 
   // Clear stored fields
-  m_2d_fields = ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>(0,0);
-  m_3d_fields = ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>(0,0);
+  m_2d_fields = decltype(m_2d_fields)(0,0);
+  m_3d_fields = decltype(m_3d_fields)(0,0);
 
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -204,24 +204,22 @@ void BoundaryExchange::exchange ()
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
 
-  // Make sure the send requests are inactive (can't reuse buffers otherwise)
-  // TODO: figure out why MPI_Waitall does not work. If the requests are all inactive, MPI_Waitall
-  //       should return immediately. Instead, it appears to hang.
-  int all_done = 0;
-  while (all_done==0) {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Testall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),&all_done,MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm);
-  }
-  //HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm);
-
   // ---- Pack and send ---- //
   pack_and_send ();
 
   // --- Recv and unpack --- //
   recv_and_unpack ();
+
+  // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
+  // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
 }
 
 void BoundaryExchange::pack_and_send ()
 {
+  // Note: it is safe to reuse buffers by now, since the send requests are only fired off during this call
+  //       and by the end of the call to exchange() we guarantee that the sends successfully completed
+
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
   auto connections = m_connectivity->get_connections<ExecMemSpace>();
@@ -336,9 +334,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   assert (m_buffers_manager);
 
   // Ask the buffer manager to check for reallocation and then proceed with the allocation (if needed)
-  // Note: if we set the BM after the call to set_num_fields, the BM already knows about our needs,
-  //       otherwise, this next call may update BM's buffers sizes, and force reallocation.
-  //       Also, if BM already knows about our needs, and buffers were already allocated, then
+  // Note: if BM already knows about our needs, and buffers were already allocated, then
   //       these two calls should not change the internal state of the BM
   m_buffers_manager->check_for_reallocation();
   m_buffers_manager->allocate_buffers();
@@ -434,6 +430,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   assert (h_buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
 #endif // NDEBUG
   // TODO: we could make this for into parallel_for if we want. But it is just a setup cost.
+  auto mpi_comm = m_connectivity->get_comm().m_mpi_comm;
   auto connections = m_connectivity->get_connections<HostMemSpace>();
   int buf_offset = 0;
   int irequest   = 0;
@@ -455,8 +452,8 @@ void BoundaryExchange::build_buffer_views_and_requests()
       buf_offset += m_elem_buf_size[info.kind];
 
       // Create the persistent requests
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,send_tag,m_connectivity->get_comm().m_mpi_comm,&m_send_requests[irequest]),m_connectivity->get_comm().m_mpi_comm);
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,recv_tag,m_connectivity->get_comm().m_mpi_comm,&m_recv_requests[irequest]),m_connectivity->get_comm().m_mpi_comm);
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,send_tag,mpi_comm,&m_send_requests[irequest]),mpi_comm);
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,recv_tag,mpi_comm,&m_recv_requests[irequest]),mpi_comm);
 
       // Increment the request counter;
       ++irequest;
@@ -489,10 +486,10 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
   m_recv_requests.clear();
 
   // Clear buffer views
-  m_send_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>(0,0);
-  m_recv_2d_buffers = ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>(0,0);
-  m_send_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>(0,0);
-  m_recv_3d_buffers = ExecViewManaged<ExecViewUnmanaged<Scalar*[NUM_LEV]>**[NUM_CONNECTIONS]>(0,0);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)(0,0);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)(0,0);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)(0,0);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)(0,0);
 
   // Done
   m_buffer_views_and_requests_built = false;
