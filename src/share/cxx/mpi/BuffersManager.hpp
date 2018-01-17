@@ -170,7 +170,7 @@ inline void BuffersManager::sync_send_buffer (BoundaryExchange* customer)
   if (customer_mpi_buffer_size<m_mpi_buffer_size) {
     // Avoid copying more than we need
     MPIViewUnmanaged<Real*>  mpi_send_view(m_mpi_send_buffer.data(),customer_mpi_buffer_size);
-    ExecViewUnmanaged<Real*> send_view(m_send_buffer.data(),customer_mpi_buffer_size);
+    ExecViewUnmanaged<const Real*> send_view(m_send_buffer.data(),customer_mpi_buffer_size);
     Kokkos::deep_copy(mpi_send_view, send_view);
   } else {
     Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer);
@@ -185,9 +185,9 @@ inline void BuffersManager::sync_recv_buffer (BoundaryExchange* customer)
   const size_t customer_mpi_buffer_size = m_customers.find(customer)->second.mpi_buffer_size;
   if (customer_mpi_buffer_size<m_mpi_buffer_size) {
     // Avoid copying more than we need
-    MPIViewUnmanaged<Real*>  mpi_recv_view(m_mpi_recv_buffer.data(),customer_mpi_buffer_size);
+    MPIViewUnmanaged<const Real*>  mpi_recv_view(m_mpi_recv_buffer.data(),customer_mpi_buffer_size);
     ExecViewUnmanaged<Real*> recv_view(m_recv_buffer.data(),customer_mpi_buffer_size);
-    Kokkos::deep_copy(mpi_recv_view, recv_view);
+    Kokkos::deep_copy(recv_view, mpi_recv_view);
   } else {
     Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer);
   }
