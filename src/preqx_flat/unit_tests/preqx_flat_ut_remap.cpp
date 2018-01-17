@@ -1,6 +1,4 @@
 #include <catch/catch.hpp>
-//?
-#include <limits>
 
 #include "dimensions_remap_tests.hpp"
 
@@ -9,51 +7,14 @@
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "Control.hpp"
+#include "RemapFunctor.hpp"
 
 #include <assert.h>
 #include <stdio.h>
+#include <algorithm>
+#include <limits>
 #include <random>
-
-//Documenting failures with opt. flags.
-
-/*test compute_ppm_grids (alg=1) finished. 
- * test compute_ppm_grids (alg=2) finished. 
- * -------------------------------------------------------------------------------
- *  Testing compute_ppm() with alg=1
- *  -------------------------------------------------------------------------------
- /home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:382
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.015625
-
--------------------------------------------------------------------------------
-Testing compute_ppm() with alg=2
--------------------------------------------------------------------------------
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:388
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:293: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers(fortran_output[_i][_j], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.015625
-
-test remap_Q_ppm (alg=1) finished. 
--------------------------------------------------------------------------------
-Testing remap_Q_ppm() with alg=2
--------------------------------------------------------------------------------
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:400
-...............................................................................
-
-/home/onguba/acmexxremap/components/homme/src/preqx_flat/unit_tests/preqx_flat_ut_remap.cpp:361: FAILED:
-  REQUIRE( std::numeric_limits<Real>::epsilon() >= compare_answers( fortran_output[_i][_j][_k][_l], coutput0, 128.0) )
-with expansion:
-  0.0 >= 0.0
-*/
-
-
 
 using namespace Homme;
 
@@ -62,382 +23,383 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 // sort out const here
-void compute_ppm_grids_c_callable(const Real *dx,
-                                  Real *rslt,
-                                  const int &alg);
+void compute_ppm_grids_c_callable(const Real *dx, Real *rslt, const int &alg);
 
-void compute_ppm_c_callable(const Real *a, const Real *dx,
-                            Real *coefs, const int &alg);
-
-// F.o object files have only small letters in names
-void remap_q_ppm_c_callable(Real *Qdp, const int &nx,
-                            const int &qsize,
-                            const Real *dp1,
-                            const Real *dp2,
+void compute_ppm_c_callable(const Real *a, const Real *dx, Real *coefs,
                             const int &alg);
 
-};  // extern C
+// F.o object files have only small letters in names
+void remap_q_ppm_c_callable(Real *Qdp, const int &nx, const int &qsize,
+                            const Real *dp1, const Real *dp2, const int &alg);
 
-class remap_test {
- public:
-  remap_test(int _alg) : alg(_alg) {
+}; // extern C
+
+/* This object is meant for testing different configurations of the PPM vertical
+ * remap method.
+ * boundary_cond needs to be one of the PPM boundary condition objects,
+ * which provide the indexes to loop over
+ */
+template <typename boundary_cond, int _remap_dim> class ppm_remap_functor_test {
+  static_assert(std::is_base_of<PpmBoundaryConditions, boundary_cond>::value,
+                "PPM Remap test must have a valid boundary condition");
+
+public:
+  static constexpr int num_remap = _remap_dim;
+
+  ppm_remap_functor_test(Control &data)
+      : ne(data.num_elems), remap(data),
+        src_layer_thickness_kokkos("source layer thickness", ne),
+        tgt_layer_thickness_kokkos("target layer thickness", ne) {
+    for (int var = 0; var < num_remap; ++var) {
+      remap_vals[var] =
+          ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap var", ne);
+    }
+  }
+
+  struct TagGridTest {};
+  struct TagPPMTest {};
+  struct TagRemapTest {};
+
+  void test_grid() {
     std::random_device rd;
     rngAlg engine(rd());
-    // in case of routine compute_pm_grids dx should always
-    // be positive  it is thickness of the grid.
-    genRandArray(
-        r1_dx, r1_dx_dim, engine,
-        std::uniform_real_distribution<Real>(0.0, 100.0));
+    genRandArray(remap.dpo, engine,
+                 std::uniform_real_distribution<Real>(0.125, 1000));
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
+    ExecSpace::fence();
 
-    // in case of routine compute_ppm it is not clear what
-    // input is.
-    genRandArray(
-        r2_a, r2_a_dim, engine,
-        std::uniform_real_distribution<Real>(0.0, 10.0));
-    genRandArray(
-        &(r2_dx[0][0]), r2_dx_dim1 * r2_dx_dim2, engine,
-        std::uniform_real_distribution<Real>(0.0, 10.0));
-
-    // for routine 3
-    // it is bug prone to multiply 3-4 dims together
-
-    // we need to satisfy sum(dp1) = sum(dp2), so, we will
-    // first generate  bounds for p, then p1 and p2 within
-    // bounds, then will compute dp1 and dp2  and place a
-    // check to make sure sum(dp1) = sum(dp2)
-
-    genRandArray(
-        &(r3_Qdp[0][0][0][0]),
-        r3_Qdp_dim1 * r3_Qdp_dim2 * r3_Qdp_dim3 *
-            r3_Qdp_dim4,
-        engine,
-        std::uniform_real_distribution<Real>(0.0, 10.0));
-
-    // what are the typical dp values?
-    Real ptop, pbottom;
-    genRandArray(
-        &pbottom, 1, engine,
-        std::uniform_real_distribution<Real>(10.0, 100.0));
-    genRandArray(&ptop, 1, engine,
-                 std::uniform_real_distribution<Real>(
-                     10000.0, 20000.0));
-
-    // now, generate p, for each column: we divide column
-    // into NLEV-1 equal intervals  and generate p in each
-    // interval. This way sum(dp) is always the same.
-    Real dp0 = (ptop - pbottom) / (NLEV - 1);
-    Real pend[NLEV];
-    pend[0] = pbottom;
-    pend[NLEV-1] = ptop;
-
-    for(int _k = 0; _k < (NLEV - 2); _k++) {
-      pend[_k + 1] = pend[_k] + dp0;
-    }  // k loop
-
-    for(int _i = 0; _i < r3_dp1_dim2; _i++)
-      for(int _j = 0; _j < r3_dp1_dim3; _j++) {
-        Real pinner1[NLEV + 1], pinner2[NLEV + 1];
-        pinner1[0] = pbottom;
-        pinner2[0] = pbottom;
-        pinner1[NLEV] = ptop;
-        pinner2[NLEV] = ptop;
-        for(int _k = 0; _k < NLEV - 1; _k++) {
-          genRandArray(&(pinner1[_k + 1]), 1, engine,
-                       std::uniform_real_distribution<Real>(
-                           pend[_k], pend[_k + 1]));
-          genRandArray(&(pinner2[_k + 1]), 1, engine,
-                       std::uniform_real_distribution<Real>(
-                           pend[_k], pend[_k + 1]));
-        }  // k loop,
-
-        // now pinner is generated
-        for(int _k = 0; _k < NLEV; _k++) {
-          r3_dp1[_k][_i][_j] =
-              pinner1[_k + 1] - pinner1[_k];
-          r3_dp2[_k][_i][_j] =
-              pinner2[_k + 1] - pinner2[_k];
+    const int remap_alg = boundary_cond::fortran_remap_alg;
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input("fortran dpo");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_result("fortra ppmdx");
+    for (int var = 0; var < num_remap; ++var) {
+      auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
+      Kokkos::deep_copy(kokkos_result, remap.ppmdx);
+      for (int ie = 0; ie < ne; ++ie) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Kokkos::deep_copy(f90_input,
+                              Homme::subview(remap.dpo, ie, igp, jgp));
+            compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
+                                         remap_alg);
+            for (int k = 0; k < f90_result.extent_int(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
+                   ++stencil_idx) {
+                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
+                REQUIRE(
+                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
+                REQUIRE(f90_result(k, stencil_idx) ==
+                        kokkos_result(ie, igp, jgp, k, stencil_idx));
+              }
+            }
+          }
         }
-      }  // i,j
-
-    for(int _i = 0; _i < r3_Qdp_dim1; _i++)
-      for(int _j = 0; _j < r3_Qdp_dim2; _j++)
-        for(int _k = 0; _k < r3_Qdp_dim3; _k++)
-          for(int _l = 0; _l < r3_Qdp_dim4; _l++) {
-            r3_Qdp_copy2[_i][_j][_k][_l] =
-                r3_Qdp[_i][_j][_k][_l];
-          };
-
-    for(int _i = 0; _i < r1_rslt_dim1; ++_i)
-      for(int _j = 0; _j < r1_rslt_dim2; ++_j)
-        r1_rslt[_i][_j] = 0.0;
-
-    for(int _i = 0; _i < r2_coefs_dim1; ++_i)
-      for(int _j = 0; _j < r2_coefs_dim2; ++_j)
-        r2_coefs[_i][_j] = 0.0;
-
-    // for debugging, assign 1 to everything
-    //  for(int _i = 0; _i < r2_dx_dim1; ++_i)
-    //    for(int _j = 0; _j < r2_dx_dim2; ++_j)
-    //       r2_dx[_i][_j] = 1.0;
-    //    for(int _i = 0; _i < r2_a_dim; ++_i)
-    //       r2_a[_i] = 1.0;
-
-    /*
-        for(int _i = 0; _i < r3_Qdp_dim1; _i++)
-        for(int _j = 0; _j < r3_Qdp_dim2; _j++)
-        for(int _k = 0; _k < r3_Qdp_dim3; _k++)
-        for(int _l = 0; _l < r3_Qdp_dim4; _l++){
-          r3_Qdp[_i][_j][_k][_l] = 1.0;
-          r3_Qdp_copy2[_i][_j][_k][_l] = 1.0;
-        };
-        for(int _i = 0; _i < r3_dp1_dim1; _i++)
-        for(int _j = 0; _j < r3_dp1_dim2; _j++)
-        for(int _k = 0; _k < r3_dp1_dim3; _k++){
-          r3_dp2[_i][_j][_k] = 1.0;
-        };
-    */
-
-  }  // end of constructor
-
-  // let's avoid static
-  // Since there are many routines that take in/out vars
-  // with same names,  and since we want to keep names
-  // consistens, let's mark  each var with rN_ , where N is
-  // number of routine under development.
-
-  // routine compute_ppm_grids
-  const int r1_dx_dim = NLEVP4;
-  const int r1_rslt_dim1 = NLEVP2;
-  const int r1_rslt_dim2 = DIM10;
-  Real r1_dx[NLEVP4];
-  Real r1_rslt[NLEVP2][DIM10];
-
-  // routine compute_ppm_grids
-  const int r2_a_dim = NLEVP4;
-  const int r2_dx_dim1 = NLEVP2;
-  const int r2_dx_dim2 = DIM10;
-  const int r2_coefs_dim1 = NLEV;
-  const int r2_coefs_dim2 = DIM3;
-  Real r2_a[NLEVP4];
-  Real r2_dx[NLEVP2][DIM10];
-  Real r2_coefs[NLEV][DIM3];
-
-  // routine remap_Q_ppm
-  const int r3_Qdp_dim1 = QSIZETEST;
-  const int r3_Qdp_dim2 = NLEV;
-  const int r3_Qdp_dim3 = NP;
-  const int r3_Qdp_dim4 = NP;
-  const int r3_dp1_dim1 =
-      NLEV;  // both dp1 and dp2 have same dims
-  const int r3_dp1_dim2 = NP;
-  const int r3_dp1_dim3 = NP;
-  Real r3_Qdp[QSIZETEST][NLEV][NP][NP];
-  Real r3_Qdp_copy2[QSIZETEST][NLEV][NP]
-                   [NP];  // in r3 Qdp in input and output
-  // we need an extra copy to save the input for F
-  Real r3_dp1[NLEV][NP][NP];
-  Real r3_dp2[NLEV][NP][NP];
-
-  int alg;
-
-  void run_compute_ppm_grids() {
-    compute_ppm_grids(r1_dx, r1_rslt, alg);
+      }
+    }
   }
 
-  void run_compute_ppm() {
-    compute_ppm(r2_a, r2_dx, r2_coefs, alg);
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagGridTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_grids(kv, Homme::subview(remap.dpo, kv.ie, igp, jgp),
+                          Homme::subview(remap.ppmdx, kv.ie, igp, jgp));
+    });
   }
 
-  void run_remap_Q_ppm() {
-    remap_Q_ppm(r3_Qdp, QSIZETEST, r3_dp1, r3_dp2, alg);
+  void test_ppm() {
+    constexpr const Real rel_threshold =
+        std::numeric_limits<Real>::epsilon() * 128.0;
+    std::random_device rd;
+    rngAlg engine(rd());
+    genRandArray(remap.ppmdx, engine,
+                 std::uniform_real_distribution<Real>(0.125, 1000));
+    for (int i = 0; i < num_remap; ++i) {
+      genRandArray(remap.ao[i], engine,
+                   std::uniform_real_distribution<Real>(0.125, 1000));
+    }
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
+    ExecSpace::fence();
+
+    const int remap_alg = boundary_cond::fortran_remap_alg;
+
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_cellmeans_input(
+        "fortran cell means");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_dx_input(
+        "fortran ppmdx");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result");
+    for (int var = 0; var < num_remap; ++var) {
+      auto kokkos_result =
+          Kokkos::create_mirror_view(remap.parabola_coeffs[var]);
+      Kokkos::deep_copy(kokkos_result, remap.parabola_coeffs[var]);
+
+      for (int ie = 0; ie < ne; ++ie) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            Kokkos::deep_copy(f90_cellmeans_input,
+                              Homme::subview(remap.ao[var], ie, igp, jgp));
+            Kokkos::deep_copy(f90_dx_input,
+                              Homme::subview(remap.ppmdx, ie, igp, jgp));
+            compute_ppm_c_callable(f90_cellmeans_input.data(),
+                                   f90_dx_input.data(), f90_result.data(),
+                                   remap_alg);
+            for (int k = 0; k < f90_result.extent_int(0); ++k) {
+              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
+                   ++stencil_idx) {
+                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
+                REQUIRE(
+                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
+                const Real rel_error = compare_answers(
+                    f90_result(k, stencil_idx),
+                    kokkos_result(ie, igp, jgp, k, stencil_idx));
+                if (rel_threshold < rel_error) {
+                  DEBUG_PRINT(
+                      "%s results ppm: %d %d %d %d %d %d -> % .17e vs % .17e\n",
+                      boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
+                      f90_result(k, stencil_idx),
+                      kokkos_result(ie, igp, jgp, k, stencil_idx));
+                }
+                REQUIRE(rel_threshold >= rel_error);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
-};  // end of class def compute_sphere_op_test_ml
-
-void testbody_compute_ppm_grids(const int _alg) {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
-  constexpr const int iterations = 10;
-  const int vertical_alg = _alg;
-  remap_test test(vertical_alg);
-  test.run_compute_ppm_grids();
-
-  const int out_len1 = test.r1_rslt_dim1,
-            out_len2 = test.r1_rslt_dim2,
-            dx_len = test.r1_dx_dim;
-
-  Real fortran_output[out_len1][out_len2];
-  Real dxf[dx_len];
-
-  for(int _i = 0; _i < dx_len; _i++) {
-    dxf[_i] = test.r1_dx[_i];
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagPPMTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = loop_idx / NP / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_ppm(
+          kv, Homme::subview(remap.ao[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ppmdx, kv.ie, igp, jgp),
+          Homme::subview(remap.dma[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ai[var], kv.ie, igp, jgp),
+          Homme::subview(remap.parabola_coeffs[var], kv.ie, igp, jgp));
+    });
   }
 
-  compute_ppm_grids_c_callable(
-      &(dxf[0]), &(fortran_output[0][0]), test.alg);
-
-  for(int _i = 0; _i < out_len1; ++_i) {
-    for(int _j = 0; _j < out_len2; ++_j) {
-      Real coutput0 = test.r1_rslt[_i][_j];
-      REQUIRE(!std::isnan(fortran_output[_i][_j]));
-      REQUIRE(!std::isnan(coutput0));
-      REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(fortran_output[_i][_j],
-                              coutput0, 128.0));
-    }  // _j
-  }    // _i
-  std::cout << "test compute_ppm_grids (alg=" << _alg
-            << ") finished. \n";
-};  // end fo testbody_compute_ppm_grids
-
-void testbody_compute_ppm(const int _alg) {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
-  constexpr const int iterations = 10;
-  const int vertical_alg = _alg;
-  remap_test test(vertical_alg);
-  test.run_compute_ppm();
-
-  const int out_dim1 = test.r2_coefs_dim1,
-            out_dim2 = test.r2_coefs_dim2,
-            dx_dim1 = test.r2_dx_dim1,
-            dx_dim2 = test.r2_dx_dim2,
-            a_dim = test.r2_a_dim;
-
-  Real fortran_output[out_dim1][out_dim2];
-  Real dxf[dx_dim1][dx_dim2];
-  Real af[a_dim];
-
-  for(int _i = 0; _i < dx_dim1; _i++)
-    for(int _j = 0; _j < dx_dim2; _j++) {
-      dxf[_i][_j] = test.r2_dx[_i][_j];
+  // This ensures that the represented grid is not degenerate
+  // The grid is represented by the interval widths, so they must all be
+  // positive. The top of the grid must also be a fixed value,
+  // so the sum of the intervals must be top, and the bottom is assumed to be 0
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+  generate_grid_intervals(rngAlg &engine, const Real &top, std::string name) {
+    HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
+    genRandArray(grid, engine,
+                 std::uniform_real_distribution<Real>(0.0625, top));
+    for (int ie = 0; ie < ne; ++ie) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          auto grid_slice = Homme::subview(grid, ie, igp, jgp);
+          auto start = reinterpret_cast<Real *>(grid_slice.data());
+          auto end = start + grid_slice.size();
+          std::sort(start, end);
+          grid_slice(0)[0] = 0.0;
+          grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
+          for (int k = NUM_PHYSICAL_LEV - 1; k > 0; --k) {
+            const int vector_level = k / VECTOR_SIZE;
+            const int vector = k % VECTOR_SIZE;
+            const int lower_vector_level = (k - 1) / VECTOR_SIZE;
+            const int lower_vector = (k - 1) % VECTOR_SIZE;
+            grid_slice(vector_level)[vector] -=
+                grid_slice(lower_vector_level)[lower_vector];
+          }
+        }
+      }
     }
 
-  for(int _i = 0; _i < a_dim; _i++) {
-    af[_i] = test.r2_a[_i];
+    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> intervals(name, ne);
+    Kokkos::deep_copy(intervals, grid);
+    return intervals;
   }
 
-  compute_ppm_c_callable(&(af[0]), &(dxf[0][0]),
-                         &(fortran_output[0][0]), test.alg);
+  void initialize_layers(rngAlg &engine) {
+    // Note that these must have the property that
+    // sum(src_layer_thickness) = sum(tgt_layer_thickness)
+    // To do this, we generate two grids and compute the interval lengths
 
-  for(int _i = 0; _i < out_dim1; ++_i) {
-    for(int _j = 0; _j < out_dim2; ++_j) {
-      Real coutput0 = test.r2_coefs[_i][_j];
-      //     std::cout << std::setprecision(20)
-      //<<"F result = " << fortran_output[_i][_j] << ", C
-      //output = " << coutput0 << "\n";
-      REQUIRE(!std::isnan(fortran_output[_i][_j]));
-      REQUIRE(!std::isnan(coutput0));
-      REQUIRE(std::numeric_limits<Real>::epsilon() >=
-              compare_answers(fortran_output[_i][_j],
-                              coutput0, 128.0));
-    }  // _j
-  }    // _i
+    const Real top = std::uniform_real_distribution<Real>(1.0, 1024.0)(engine);
 
-  std::cout << "test compute_ppm (alg=" << _alg
-            << ") finished. \n";
-};  // end of testbody_compute_ppm
+    src_layer_thickness_kokkos =
+        generate_grid_intervals(engine, top, "kokkos source layer thickness");
+    tgt_layer_thickness_kokkos =
+        generate_grid_intervals(engine, top, "kokkos target layer thickness");
+  }
 
-void testbody_remap_Q_ppm(const int _alg) {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
-  constexpr const int iterations = 10;
-  const int vertical_alg = _alg;
-  remap_test test(vertical_alg);
-  test.run_remap_Q_ppm();
+  void test_remap() {
+    constexpr const Real rel_threshold =
+        std::numeric_limits<Real>::epsilon() * 4096.0;
+    std::random_device rd;
+    rngAlg engine(rd());
+    std::uniform_real_distribution<Real> dist(0.125, 1000.0);
+    for (int i = 0; i < num_remap; ++i) {
+      remap_vals[i] =
+          ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap variable", ne);
+      genRandArray(remap_vals[i], engine, dist);
+    }
 
-  const int out_dim1 = test.r3_Qdp_dim1,
-            out_dim2 = test.r3_Qdp_dim2,
-            out_dim3 = test.r3_Qdp_dim3,
-            out_dim4 = test.r3_Qdp_dim4,
-            dp_dim1 = test.r3_dp1_dim1,
-            dp_dim2 = test.r3_dp1_dim2,
-            dp_dim3 = test.r3_dp1_dim3;
-
-  Real fortran_output[out_dim1][out_dim2][out_dim3]
-                     [out_dim4];
-  ;
-  Real dp1f[dp_dim1][dp_dim2][dp_dim3];
-  Real dp2f[dp_dim1][dp_dim2][dp_dim3];
-
-  for(int _i = 0; _i < dp_dim1; _i++)
-    for(int _j = 0; _j < dp_dim2; _j++)
-      for(int _k = 0; _k < dp_dim3; _k++) {
-        dp1f[_i][_j][_k] = test.r3_dp1[_i][_j][_k];
-        dp2f[_i][_j][_k] = test.r3_dp2[_i][_j][_k];
+    // This must be initialize before remap_vals is updated
+    HostViewManaged<Real * [num_remap][NUM_PHYSICAL_LEV][NP][NP]> f90_remap_qdp(
+        "fortran qdp", ne);
+    for (int var = 0; var < num_remap; ++var) {
+      for (int ie = 0; ie < ne; ++ie) {
+        sync_to_host(Homme::subview(remap_vals[var], ie),
+                     Homme::subview(f90_remap_qdp, ie, var));
       }
+    }
 
-  for(int _i = 0; _i < out_dim1; _i++)
-    for(int _j = 0; _j < out_dim2; _j++)
-      for(int _k = 0; _k < out_dim3; _k++)
-        for(int _l = 0; _l < out_dim4; _l++) {
-          fortran_output[_i][_j][_k][_l] =
-              test.r3_Qdp_copy2[_i][_j][_k][_l];
+    initialize_layers(engine);
+
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TagRemapTest>(ne), *this);
+    ExecSpace::fence();
+
+    const int remap_alg = boundary_cond::fortran_remap_alg;
+    const int np = NP;
+    const int qsize = num_remap;
+
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
+    f90_src_layer_thickness_input("fortran source layer thickness");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
+    f90_tgt_layer_thickness_input("fortran target layer thickness");
+
+    Kokkos::Array<HostViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
+    kokkos_remapped;
+    for (int var = 0; var < num_remap; ++var) {
+      kokkos_remapped[var] = Kokkos::create_mirror_view(remap_vals[var]);
+      Kokkos::deep_copy(kokkos_remapped[var], remap_vals[var]);
+    }
+
+    for (int ie = 0; ie < ne; ++ie) {
+      sync_to_host(Homme::subview(src_layer_thickness_kokkos, ie),
+                   f90_src_layer_thickness_input);
+      sync_to_host(Homme::subview(tgt_layer_thickness_kokkos, ie),
+                   f90_tgt_layer_thickness_input);
+
+      remap_q_ppm_c_callable(Homme::subview(f90_remap_qdp, ie).data(), np,
+                             qsize, f90_src_layer_thickness_input.data(),
+                             f90_tgt_layer_thickness_input.data(), remap_alg);
+
+      for (int var = 0; var < num_remap; ++var) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+              const int vector_level = k / VECTOR_SIZE;
+              const int vector = k % VECTOR_SIZE;
+              // The fortran returns NaN's, so make certain we only return NaN's
+              // when the Fortran does
+              REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
+                      std::isnan(kokkos_remapped[var](ie, igp, jgp,
+                                                      vector_level)[vector]));
+              if (!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp))) {
+                Real rel_error = compare_answers(
+                    f90_remap_qdp(ie, var, k, igp, jgp),
+                    kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+                if (rel_threshold < rel_error) {
+                  DEBUG_PRINT(
+                      "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
+                      f90_remap_qdp(ie, var, k, igp, jgp),
+                      kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+                }
+                REQUIRE(rel_threshold >= rel_error);
+              }
+            }
+          }
         }
+      }
+    }
+  }
 
-  remap_q_ppm_c_callable(&(fortran_output[0][0][0][0]), NP,
-                         out_dim1, &(dp1f[0][0][0]),
-                         &(dp2f[0][0][0]), test.alg);
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const TagRemapTest &, TeamMember team) const {
+    KernelVariables kv(team);
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_remap>
+    elem_remap;
+    for (int var = 0; var < num_remap; ++var) {
+      elem_remap[var] = Homme::subview(remap_vals[var], kv.ie);
+    }
+    remap.remap(kv, num_remap,
+                Homme::subview(src_layer_thickness_kokkos, kv.ie),
+                Homme::subview(tgt_layer_thickness_kokkos, kv.ie), elem_remap);
+  }
 
-  for(int _i = 0; _i < out_dim1; _i++)
-    for(int _j = 0; _j < out_dim2; _j++)
-      for(int _k = 0; _k < out_dim3; _k++)
-        for(int _l = 0; _l < out_dim4; _l++) {
-          Real coutput0 = test.r3_Qdp[_i][_j][_k][_l];
+  const int ne;
+  PpmVertRemap<boundary_cond, num_remap> remap;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness_kokkos;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness_kokkos;
+  Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
+  remap_vals;
+};
 
-          // std::cout <<" indices " << _i << " " << _j << "
-          // " << _k << " " << _l << "\n";  std::cout <<
-          // std::setprecision(20)
-          //<<"F result = " <<
-          //fortran_output[_i][_j][_k][_l]
-          //<< ", C output = " << coutput0 << "\n";
+TEST_CASE("ppm_mirrored", "vertical remap") {
+  constexpr int remap_dim = 3;
+  constexpr int num_elems = 4;
+  Control data;
+  data.random_init(num_elems, std::random_device()());
+  ppm_remap_functor_test<PpmMirrored, remap_dim> remap_test_mirrored(data);
+  SECTION("grid test") { remap_test_mirrored.test_grid(); }
+  SECTION("ppm test") { remap_test_mirrored.test_ppm(); }
+  SECTION("remap test") { remap_test_mirrored.test_remap(); }
+}
 
-          REQUIRE(
-              !std::isnan(fortran_output[_i][_j][_k][_l]));
-          REQUIRE(!std::isnan(coutput0));
-          REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                  compare_answers(
-                      fortran_output[_i][_j][_k][_l],
-                      coutput0, 128.0));
+TEST_CASE("ppm_fixed", "vertical remap") {
+  constexpr int remap_dim = 3;
+  constexpr int num_elems = 4;
+  Control data;
+  data.random_init(num_elems, std::random_device()());
+  ppm_remap_functor_test<PpmFixed, remap_dim> remap_test_fixed(data);
+  SECTION("grid test") { remap_test_fixed.test_grid(); }
+  SECTION("ppm test") { remap_test_fixed.test_ppm(); }
+  SECTION("remap test") { remap_test_fixed.test_remap(); }
+}
 
-        }  // _l
-
-  std::cout << "test remap_Q_ppm (alg=" << _alg
-            << ") finished. \n";
-};  // end of testbody_compute_ppm
-
-TEST_CASE("Testing compute_ppm_grids() with alg=1",
-          "compute_ppm_grids, alg=1") {
-  const int _alg = 1;
-  testbody_compute_ppm_grids(_alg);
-};  // end fo test compute_ppm_grids, alg=1
-
-TEST_CASE("Testing compute_ppm_grids() with alg=2",
-          "compute_ppm_grids, alg=2") {
-  const int _alg = 2;
-  testbody_compute_ppm_grids(_alg);
-};  // end fo test compute_ppm_grids, alg=1
-
-TEST_CASE("Testing compute_ppm() with alg=1",
-          "compute_ppm, alg=1") {
-  const int _alg = 1;
-  testbody_compute_ppm(_alg);
-};  // end fo test compute_ppm, alg=1
-
-TEST_CASE("Testing compute_ppm() with alg=2",
-          "compute_ppm, alg=2") {
-  const int _alg = 2;
-  testbody_compute_ppm(_alg);
-};  // end fo test compute_ppm, alg=2
-
-TEST_CASE("Testing remap_Q_ppm() with alg=1",
-          "remap_Q_ppm, alg=1") {
-  const int _alg = 1;
-  testbody_remap_Q_ppm(_alg);
-};  // end fo test compute_ppm, alg=1
-
-TEST_CASE("Testing remap_Q_ppm() with alg=2",
-          "remap_Q_ppm, alg=2") {
-  const int _alg = 2;
-  testbody_remap_Q_ppm(_alg);
-};  // end fo test compute_ppm, alg=2
+TEST_CASE("remap_interface", "vertical remap") {
+  constexpr int num_elems = 4;
+  Control data;
+  data.random_init(num_elems, std::random_device()());
+  Elements elements;
+  elements.random_init(num_elems);
+  data.np1 = 0;
+  data.qn0 = 0;
+  SECTION("states_only") {
+    constexpr int remap_dim = 3;
+    constexpr int rsplit = 1;
+    data.qsize = 0;
+    data.rsplit = rsplit;
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+  SECTION("tracers_only") {
+    constexpr int remap_dim = 10;
+    constexpr int rsplit = 0;
+    data.qsize = QSIZE_D;
+    data.rsplit = rsplit;
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+  SECTION("states_tracers") {
+    constexpr int remap_dim = 13;
+    constexpr int rsplit = 1;
+    data.qsize = QSIZE_D;
+    data.rsplit = rsplit;
+    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
+                                                                     elements);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
+                         remap);
+  }
+}

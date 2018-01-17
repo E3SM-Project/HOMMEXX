@@ -57,6 +57,8 @@ public:
   //@name Methods
   //@{
 
+  void set_comm (const Comm& comm);
+
   void set_num_elements (const int num_elements);
 
   void add_connection (const int first_elem_lid,  const int first_elem_gid,  const int first_elem_pos,  const int first_elem_pid,
@@ -112,6 +114,9 @@ public:
 
   int get_num_elements           () const { return m_num_elements; }
 
+  bool is_initialized () const { return m_initialized; }
+  bool is_finalized   () const { return m_finalized;   }
+
   const Comm& get_comm () const { return m_comm; }
   //@}
 
@@ -120,6 +125,7 @@ private:
   Comm    m_comm;
 
   bool    m_finalized;
+  bool    m_initialized;
 
   int     m_num_elements;
 
