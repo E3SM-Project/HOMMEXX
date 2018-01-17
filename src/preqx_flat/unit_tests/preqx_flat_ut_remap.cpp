@@ -365,7 +365,6 @@ TEST_CASE("ppm_fixed", "vertical remap") {
 }
 
 TEST_CASE("remap_interface", "vertical remap") {
-  constexpr int remap_dim = 3;
   constexpr int num_elems = 4;
   Control data;
   data.random_init(num_elems, std::random_device()());

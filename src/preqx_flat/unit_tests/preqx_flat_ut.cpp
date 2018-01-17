@@ -597,10 +597,10 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_a_mirror("hybrid_a_host");
   genRandArray(hybrid_a_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_b_mirror("hybrid_a_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_b_mirror("hybrid_b_host");
   genRandArray(hybrid_b_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
