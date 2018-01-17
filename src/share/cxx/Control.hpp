@@ -44,6 +44,7 @@ struct Control {
 
   // Tracers options;
   DSSOption::Enum DSSopt;
+  Real nu_p;
   int rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 

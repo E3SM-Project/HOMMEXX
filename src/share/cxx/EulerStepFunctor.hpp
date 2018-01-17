@@ -32,6 +32,7 @@ public:
   void operator() (const TeamMember& team) const {
     start_timer("esf compute");
     KernelVariables kv(team, m_data.qsize);
+    compute_2d_advection_step(kv);
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
@@ -65,6 +66,11 @@ private:
   static Kokkos::TeamPolicy<ExecSpace, void> get_policy(const Control& data) {
     return Homme::get_default_team_policy<ExecSpace>(data.num_elems * data.qsize);
   }
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_2d_advection_step (const KernelVariables& kv) const {
+    
+  }  
 
   KOKKOS_INLINE_FUNCTION
   void compute_vstar_qdp (const KernelVariables& kv) const {

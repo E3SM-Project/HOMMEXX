@@ -1576,7 +1576,7 @@ end subroutine ALE_parametric_coords
 
   interface
     subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-         n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
+         n0_qdp, qsize, dt, np1_qdp, nu_p, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
@@ -1584,7 +1584,7 @@ end subroutine ALE_parametric_coords
       !
       integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
            n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
-      real (kind=c_double), intent(in) :: dt
+      real (kind=c_double), intent(in) :: dt, nu_p
     end subroutine init_control_euler_c
   end interface
 
@@ -1830,7 +1830,7 @@ OMP_SIMD
   end do
 
   call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
-       dt, np1_qdp, rhs_viss, limiter_option)
+       dt, np1_qdp, nu_p, rhs_viss, limiter_option)
   elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
   elem_derived_dp_ptr = c_loc(elem_derived_dp)
   elem_derived_divdp_ptr = c_loc(elem_derived_divdp)

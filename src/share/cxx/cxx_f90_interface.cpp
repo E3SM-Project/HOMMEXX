@@ -28,12 +28,14 @@ void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
                            const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const int& rhs_viss, const int& limiter_option)
+                           const int& np1_qdp, const double& nu_p, const int& rhs_viss,
+                           const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
 
   control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
+  control.nu_p = nu_p;
   control.rhs_viss = rhs_viss;
   control.limiter_option = limiter_option;
 
