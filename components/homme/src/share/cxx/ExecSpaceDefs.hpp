@@ -1,6 +1,8 @@
 #ifndef HOMMEXX_EXEC_SPACE_DEFS_HPP
 #define HOMMEXX_EXEC_SPACE_DEFS_HPP
 
+#include <cassert>
+
 #include <Kokkos_Core.hpp>
 
 #include "Hommexx_config.h"
@@ -151,6 +153,56 @@ using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
                               >,
                             Kokkos::IndexType<int>
                           >;
+
+template <typename ExeSpace>
+struct Memory {
+  enum : bool { on_gpu = false };
+
+  template <typename Scalar>
+  KOKKOS_INLINE_FUNCTION static
+  Scalar* get_shmem (const typename Kokkos::TeamPolicy<ExeSpace>::member_type&,
+                     const size_t sz = 0) {
+    return nullptr;
+  }
+
+  template <typename Scalar, int N>
+  class AutoArray {
+    Scalar data_[N];
+  public:
+    KOKKOS_INLINE_FUNCTION AutoArray (Scalar*) {}
+    KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) {
+      assert(i >= 0);
+      assert(i < N);
+      return data_[i];
+    }
+    KOKKOS_INLINE_FUNCTION Scalar* data () { return data_; }
+  };
+};
+
+template <>
+struct Memory<Hommexx_Cuda> {
+  enum : bool { on_gpu = true };
+
+  template <typename Scalar>
+  KOKKOS_INLINE_FUNCTION static
+  Scalar* get_shmem (const Kokkos::TeamPolicy<Hommexx_Cuda>::member_type& team,
+                     const size_t n = 0) {
+    return static_cast<Scalar*>(team.team_shmem().get_shmem(n*sizeof(Scalar)));
+  }
+
+  template <typename Scalar, int N>
+  class AutoArray {
+    Scalar* data_;
+  public:
+    KOKKOS_INLINE_FUNCTION AutoArray (Scalar* data) : data_(data) {}
+    KOKKOS_INLINE_FUNCTION Scalar& operator[] (const int& i) {
+      assert(i >= 0);
+      assert(i < N);
+      return data_[i];
+    }
+    KOKKOS_INLINE_FUNCTION Scalar* data () { return data_; }
+  };
+};
 
 } // namespace Homme
 
