@@ -162,7 +162,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
           for (int igp=0; igp<NP; ++igp) {
             for (int jgp=0; jgp<NP; ++jgp) {
               if(compare_answers(field_3d_f90(ie,itl,level,igp,jgp),field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec]) >= test_tolerance) {
-                std::cout << std::setprecision(17) << "ie,itl,igp,jgp,ilev,iv: " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
+                std::cout << std::setprecision(17) << "rank,ie,itl,igp,jgp,ilev,iv: " << rank << ", " << ie << ", " << itl << ", " << igp << ", " << jgp << ", " << ilev << ", " << ivec << "\n";
                 std::cout << std::setprecision(17) << "f90: " << field_3d_f90(ie,itl,level,igp,jgp) << "\n";
                 std::cout << std::setprecision(17) << "cxx: " << field_3d_cxx_host(ie,itl,igp,jgp,ilev)[ivec] << "\n";
               }
