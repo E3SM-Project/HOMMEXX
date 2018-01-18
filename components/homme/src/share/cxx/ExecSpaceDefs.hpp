@@ -155,8 +155,14 @@ using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
                           >;
 
 template <typename ExeSpace>
+struct OnGpu { enum : bool { value = false }; };
+
+template <>
+struct OnGpu<Hommexx_Cuda> { enum : bool { value = true }; };
+
+template <typename ExeSpace>
 struct Memory {
-  enum : bool { on_gpu = false };
+  enum : bool { on_gpu = OnGpu<ExeSpace>::value };
 
   template <typename Scalar>
   KOKKOS_INLINE_FUNCTION static
@@ -181,7 +187,7 @@ struct Memory {
 
 template <>
 struct Memory<Hommexx_Cuda> {
-  enum : bool { on_gpu = true };
+  enum : bool { on_gpu = OnGpu<Hommexx_Cuda>::value };
 
   template <typename Scalar>
   KOKKOS_INLINE_FUNCTION static
