@@ -335,7 +335,7 @@ public:
   }
 
   const int ne;
-  PpmVertRemap<boundary_cond, num_remap> remap;
+  PpmVertRemap<num_remap, boundary_cond> remap;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness_kokkos;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness_kokkos;
   Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
@@ -377,29 +377,35 @@ TEST_CASE("remap_interface", "vertical remap") {
     constexpr int rsplit = 1;
     data.qsize = 0;
     data.rsplit = rsplit;
-    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
-                                                                     elements);
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
-                         remap);
+    using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
+    _Remap remap(data, elements);
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<
+            ExecSpace, typename _Remap::FusedRemapTag>(num_elems),
+        remap);
   }
   SECTION("tracers_only") {
     constexpr int remap_dim = 10;
     constexpr int rsplit = 0;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
-    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
-                                                                     elements);
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
-                         remap);
+    using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
+    _Remap remap(data, elements);
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, _Remap::FusedRemapTag>(
+            num_elems),
+        remap);
   }
   SECTION("states_tracers") {
     constexpr int remap_dim = 13;
     constexpr int rsplit = 1;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
-    RemapFunctor<PpmVertRemap<PpmMirrored, remap_dim>, rsplit> remap(data,
-                                                                     elements);
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(num_elems),
-                         remap);
+    using _Remap = RemapFunctor<remap_dim, PpmVertRemap, PpmMirrored>;
+    _Remap remap(data, elements);
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, _Remap::FusedRemapTag>(
+            num_elems),
+        remap);
   }
 }
