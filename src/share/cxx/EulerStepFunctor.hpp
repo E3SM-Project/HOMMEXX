@@ -10,9 +10,9 @@
 namespace Homme {
 
 class EulerStepFunctor {
-  Control           m_data;
-  const Elements    m_elements;
-  const Derivative  m_deriv;
+  const Control    m_data;
+  const Elements   m_elements;
+  const Derivative m_deriv;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
@@ -30,12 +30,13 @@ public:
 
   struct SetupPhase {};
   struct TracerPhase {};
+  struct FusedPhases {};
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const SetupPhase&, const TeamMember& team) const {
     start_timer("esf-noq compute");
     KernelVariables kv(team);
-    compute_2d_advection_step(kv);
+    run_setup_phase(kv);
     stop_timer("esf-noq compute");
   }
 
@@ -43,6 +44,58 @@ public:
   void operator() (const TracerPhase&, const TeamMember& team) const {
     start_timer("esf-q compute");
     KernelVariables kv(team, m_data.qsize);
+    run_tracer_phase(kv);
+    stop_timer("esf-q compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const FusedPhases&, const TeamMember& team) const {
+    start_timer("esf-fused compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
+      run_tracer_phase(kv);
+    stop_timer("esf-fused compute");
+  }
+
+  static void run () {
+    Control& data = Context::singleton().get_control();
+    EulerStepFunctor func(data);
+
+    profiling_resume();
+    start_timer("esf-tot run");
+    if (OnGpu<ExecSpace>::value) {
+      start_timer("esf-noq run");
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, SetupPhase>(data.num_elems),
+        func);
+      stop_timer("esf-noq run");
+      ExecSpace::fence();
+      start_timer("esf-q run");
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TracerPhase>(data.num_elems * data.qsize),
+        func);
+      stop_timer("esf-q run");
+    } else {
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, FusedPhases>(data.num_elems),
+        func);
+    }
+    stop_timer("esf-tot run");
+
+    ExecSpace::fence();
+    profiling_pause();
+  }
+
+private:
+
+  KOKKOS_INLINE_FUNCTION
+  void run_setup_phase (const KernelVariables& kv) const {
+    compute_2d_advection_step(kv);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void run_tracer_phase (const KernelVariables& kv) const {
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
@@ -55,33 +108,7 @@ public:
       kv.team_barrier();
     }
     apply_mass_matrix(kv);
-    stop_timer("esf-q compute");
   }
-
-  static void run () {
-    Control& data = Context::singleton().get_control();
-    EulerStepFunctor func(data);
-
-    //todo Fuse these two top-level parallel_for's for CPU/KNL; leave them as is
-    //todo for GPU.
-    profiling_resume();
-    start_timer("esf-noq run");
-    Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, SetupPhase>(data.num_elems),
-      func);
-    stop_timer("esf-noq run");
-    ExecSpace::fence();
-    start_timer("esf-q run");
-    Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, TracerPhase>(data.num_elems * data.qsize),
-      func);
-    stop_timer("esf-q run");
-
-    ExecSpace::fence();
-    profiling_pause();
-  }
-
-private:
 
   KOKKOS_INLINE_FUNCTION
   void compute_2d_advection_step (const KernelVariables& kv) const {
@@ -135,7 +162,7 @@ private:
           });
       });
   }
-  
+
   KOKKOS_INLINE_FUNCTION
   void compute_vstar_qdp (const KernelVariables& kv) const {
     const auto NP2 = NP * NP;
