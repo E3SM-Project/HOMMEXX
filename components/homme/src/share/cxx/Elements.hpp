@@ -31,9 +31,7 @@ public:
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
   // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
-  // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Lateral Velocity
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
@@ -50,6 +48,11 @@ public:
   //    (note there are NUM_LEV_P of them)
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+    m_derived_dp,                // for dp_tracers at physics timestep
+    m_derived_divdp,             // divergence of dp
+    m_derived_divdp_proj,        // DSSed divdp
+    m_derived_dpdiss_biharmonic; // mean dp dissipation tendency, if nu_p>0
 
   struct BufferViews {
 
