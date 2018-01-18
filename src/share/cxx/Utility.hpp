@@ -64,7 +64,7 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3], MemSpace, Properties...> v_in,
   assert(ie < v_in.extent_int(0));
   assert(ie >= 0);
   assert(idim1 < v_in.extent_int(1));
-  assert(idim1 >= 1);
+  assert(idim1 >= 0);
   return ViewUnmanaged<ScalarType[DIM2][DIM3], MemSpace>(
       &v_in.implementation_map().reference(ie, idim1, 0, 0));
 }
