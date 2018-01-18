@@ -69,7 +69,7 @@ module prim_advection_mod_base
   use diffusion_mod, only      : scalar_diffusion, diffusion_init
   use control_mod, only        : integration, test_case, filter_freq_advection,  hypervis_order, &
         statefreq, moisture, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &
-        nu_q, nu_p, limiter_option, hypervis_subcycle_q, rsplit
+        nu_p, nu_q, limiter_option, hypervis_subcycle_q, rsplit
   use edge_mod, only           : edgevpack, edgerotate, edgevunpack, initedgebuffer, initedgesbuffer, &
         edgevunpackmin, initghostbuffer3D
 
@@ -107,8 +107,8 @@ module prim_advection_mod_base
      subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
           elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
           elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-          elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
-          qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
+          elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+          qmin_ptr, qmax_ptr) bind(c)
        use iso_c_binding, only : c_ptr
        use kinds, only : real_kind
        !
@@ -117,8 +117,8 @@ module prim_advection_mod_base
        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
             elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
             elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-            elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
-            qmin_ptr, qmax_ptr, dpdissk_ptr
+            elem_state_Qdp_ptr,Qtens_biharmonic_ptr, &
+            qmin_ptr, qmax_ptr
      end subroutine euler_pull_data_c
      subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
           elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
@@ -1576,7 +1576,7 @@ end subroutine ALE_parametric_coords
 
   interface
     subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-         n0_qdp, qsize, dt, np1_qdp, nu_p, rhs_viss, limiter_option) bind(c)
+         n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
@@ -1584,7 +1584,7 @@ end subroutine ALE_parametric_coords
       !
       integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
            n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
-      real (kind=c_double), intent(in) :: dt, nu_p
+      real (kind=c_double), intent(in) :: dt, nu_p, nu_q
     end subroutine init_control_euler_c
   end interface
 
@@ -1613,7 +1613,7 @@ end subroutine ALE_parametric_coords
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
-       qmin_ptr, qmax_ptr, dpdissk_ptr, elem_derived_eta_dot_dpdn_ptr, &
+       qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
        elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
        elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr
 #endif
@@ -1788,49 +1788,8 @@ OMP_SIMD
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
-  do ie = nets , nete
-     ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
-     ! all zero so we only have to DSS 1:nlev
-     if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
-     if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
-     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
-
-     ! Compute velocity used to advance Qdp
-#if (defined COLUMN_OPENMP)
-     !$omp parallel do private(k,q)
-#endif
-     do k = 1 , nlev    !  Loop index added (AAM)
-        ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
-        ! but that's ok because rhs_multiplier=0 on the first stage:
-        dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
-        Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
-        Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
-
-        if ( limiter_option == 8) then
-           ! Note that the term dpdissk is independent of Q
-           ! UN-DSS'ed dp at timelevel n0+1:
-           dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
-           if ( nu_p > 0 .and. rhs_viss /= 0 ) then
-              ! add contribution from UN-DSS'ed PS dissipation
-              !          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
-              !          elem(ie)%derived%psdiss_biharmonic(:,:)
-              dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
-                   * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
-           endif
-           ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
-           ! testing
-           do q=1,qsize
-              qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
-           enddo
-        endif  ! limiter == 8
-
-        ! also DSS extra field
-        DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
-     enddo
-  end do
-
   call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
-       dt, np1_qdp, nu_p, rhs_viss, limiter_option)
+       dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option)
   elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
   elem_derived_dp_ptr = c_loc(elem_derived_dp)
   elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
@@ -1838,16 +1797,14 @@ OMP_SIMD
   elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
   elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
   elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
-  dpdissk_ptr = c_loc(dpdissk)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
-  Vstar_ptr = c_loc(Vstar)
   Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
   call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
        elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-       Vstar_ptr, Qtens_biharmonic_ptr, qmin_ptr, qmax_ptr, dpdissk_ptr)
+       Qtens_biharmonic_ptr, qmin_ptr, qmax_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")

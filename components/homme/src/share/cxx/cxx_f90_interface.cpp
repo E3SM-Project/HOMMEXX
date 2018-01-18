@@ -29,7 +29,7 @@ void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
                            const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const double& nu_p, const int& rhs_viss,
+                           const int& np1_qdp, const double& nu_p, const double& nu_q, const int& rhs_viss,
                            const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
@@ -37,6 +37,7 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
   control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
   control.nu_p = nu_p;
+  control.nu_q = nu_q;
   control.rhs_viss = rhs_viss;
   control.limiter_option = limiter_option;
 
@@ -94,8 +95,8 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                         CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
                         CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
                         CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                        CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& qmin_ptr,
-                        CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
+                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& qmin_ptr,
+                        CF90Ptr& qmax_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -106,6 +107,9 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_omega_p_ptr, data.num_elems),
                  r.m_omega_p);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_divdp_proj_ptr, data.num_elems),
+                 r.m_derived_divdp_proj);
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][2][NP][NP]>(
                    elem_derived_vn0_ptr, data.num_elems),
                  r.m_derived_vn0);
@@ -116,40 +120,14 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                    elem_derived_divdp_ptr, data.num_elems),
                  r.m_derived_divdp);
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_divdp_proj_ptr, data.num_elems),
-                 r.m_derived_divdp_proj);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
                  r.m_derived_dpdiss_biharmonic);
 
-  // Copy data from f90 pointers to cxx views
   r.pull_qdp(elem_state_Qdp_ptr);
-
-  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>             vstar_exec = r.buffers.vstar;
-  ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror vstar_host = Kokkos::create_mirror_view(vstar_exec);
-
-  int iter=0;
-  for (int ie=0; ie<data.num_elems; ++ie) {
-    for (int k=0; k<NUM_PHYSICAL_LEV; ++k) {
-      int ilev = k / VECTOR_SIZE;
-      int iv   = k % VECTOR_SIZE;
-      for (int idim=0; idim<2; ++idim) {
-        for (int i=0; i<NP; ++i) {
-          for (int j=0; j<NP; ++j, ++iter) {
-            vstar_host(ie,idim,i,j,ilev)[iv] = vstar_ptr[iter];
-          }
-        }
-      }
-    }
-  }
-  Kokkos::deep_copy(vstar_exec, vstar_host);
 
   sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
                    Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.qtens_biharmonic);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
-                 r.buffers.dpdissk);
   sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
                    qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                  HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
