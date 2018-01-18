@@ -10,9 +10,9 @@
 namespace Homme {
 
 class EulerStepFunctor {
-  Control           m_data;
-  const Elements    m_elements;
-  const Derivative  m_deriv;
+  const Control    m_data;
+  const Elements   m_elements;
+  const Derivative m_deriv;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
@@ -28,10 +28,74 @@ public:
    , m_deriv   (Context::singleton().get_derivative())
   {}
 
+  struct SetupPhase {};
+  struct TracerPhase {};
+  struct FusedPhases {};
+
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TeamMember& team) const {
-    start_timer("esf compute");
+  void operator() (const SetupPhase&, const TeamMember& team) const {
+    start_timer("esf-noq compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    stop_timer("esf-noq compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const TracerPhase&, const TeamMember& team) const {
+    start_timer("esf-q compute");
     KernelVariables kv(team, m_data.qsize);
+    run_tracer_phase(kv);
+    stop_timer("esf-q compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const FusedPhases&, const TeamMember& team) const {
+    start_timer("esf-fused compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
+      run_tracer_phase(kv);
+    stop_timer("esf-fused compute");
+  }
+
+  static void run () {
+    Control& data = Context::singleton().get_control();
+    EulerStepFunctor func(data);
+
+    profiling_resume();
+    start_timer("esf-tot run");
+    if (OnGpu<ExecSpace>::value) {
+      start_timer("esf-noq run");
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, SetupPhase>(data.num_elems),
+        func);
+      stop_timer("esf-noq run");
+      ExecSpace::fence();
+      start_timer("esf-q run");
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, TracerPhase>(data.num_elems * data.qsize),
+        func);
+      stop_timer("esf-q run");
+    } else {
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, FusedPhases>(data.num_elems),
+        func);
+    }
+    stop_timer("esf-tot run");
+
+    ExecSpace::fence();
+    profiling_pause();
+  }
+
+private:
+
+  KOKKOS_INLINE_FUNCTION
+  void run_setup_phase (const KernelVariables& kv) const {
+    compute_2d_advection_step(kv);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void run_tracer_phase (const KernelVariables& kv) const {
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
@@ -44,26 +108,59 @@ public:
       kv.team_barrier();
     }
     apply_mass_matrix(kv);
-    stop_timer("esf compute");
   }
 
-  static void run () {
-    Control& data = Context::singleton().get_control();
-    EulerStepFunctor func(data);
-
-    profiling_resume();
-    start_timer("esf run");
-    Kokkos::parallel_for(get_policy(data), func);
-    stop_timer("esf run");
-
-    ExecSpace::fence();
-    profiling_pause();
-  }
-
-private:
-
-  static Kokkos::TeamPolicy<ExecSpace, void> get_policy(const Control& data) {
-    return Homme::get_default_team_policy<ExecSpace>(data.num_elems * data.qsize);
+  KOKKOS_INLINE_FUNCTION
+  void compute_2d_advection_step (const KernelVariables& kv) const {
+    const auto& c = m_data;
+    const auto& e = m_elements;
+    const bool lim8 = c.limiter_option == 8;
+    const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0;
+    const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP*NP),
+      [&] (const int loop_idx) {
+        const int i = loop_idx / NP;
+        const int j = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& k) {
+            //! derived variable divdp_proj() (DSS'd version of divdp) will only
+            //! be correct on 2nd and 3rd stage but that's ok because
+            //! rhs_multiplier=0 on the first stage:
+            const auto dp = e.m_derived_dp(kv.ie,i,j,k) -
+              c.rhs_multiplier * c.dt * e.m_derived_divdp_proj(kv.ie,i,j,k);
+            e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
+            e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
+            if (lim8) {
+              //! Note that the term dpdissk is independent of Q
+              //! UN-DSS'ed dp at timelevel n0+1:
+              e.buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * e.m_derived_divdp(kv.ie,i,j,k);
+              if (add_ps_diss) {
+                //! add contribution from UN-DSS'ed PS dissipation
+                //!          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
+                //!          elem(ie)%derived%psdiss_biharmonic(:,:)
+                e.buffers.dpdissk(kv.ie,i,j,k) += diss_fac *
+                  e.m_derived_dpdiss_biharmonic(kv.ie,i,j,k) / e.m_spheremp(kv.ie,i,j);
+              }
+            }
+            //! also DSS extra field
+            //! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
+            //! all zero so we only have to DSS 1:nlev
+            // Need to differentiate between eta_dot_dpdn and the other two
+            // because the note above implies auto& won't capture all three.
+            switch (c.DSSopt) {
+            case Control::DSSOption::eta:
+              e.m_eta_dot_dpdn(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
+              break;
+            default:
+              auto& v = (c.DSSopt == Control::DSSOption::omega ?
+                         e.m_omega_p :
+                         e.m_derived_divdp_proj);
+              v(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
+            }
+          });
+      });
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -198,6 +295,14 @@ private:
         parallel_reduce(tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
 
         Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
+
+        // This is a slightly different spot than where this comment came from,
+        // but it's logically equivalent to do it here.
+        //! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
+        //! testing
+        if (minp < 0)
+          minp = qlim(0,vpi)[vsi] = 0;
+
         //! relax constraints to ensure limiter has a solution:
         //! This is only needed if running with the SSP CFL>1 or
         //! due to roundoff errors
