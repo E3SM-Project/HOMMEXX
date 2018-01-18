@@ -7,8 +7,6 @@
 #include "Control.hpp"
 #include "SphereOperators.hpp"
 
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
-
 namespace Homme {
 
 class EulerStepFunctor {
