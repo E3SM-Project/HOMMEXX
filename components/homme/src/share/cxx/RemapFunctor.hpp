@@ -678,6 +678,173 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
   }
 
+  KOKKOS_INLINE_FUNCTION int build_remap_array(
+      KernelVariables &kv,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
+          remap_vals) const {
+    if (nonzero_rsplit == true) {
+      const int num_states =
+          build_remap_array_states(kv, remap_vals, src_layer_thickness);
+      const int num_tracers =
+          build_remap_array_tracers(kv, num_states, remap_vals);
+      return num_tracers + num_states;
+    } else {
+      return build_remap_array_tracers(kv, 0, remap_vals);
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION int build_remap_array_states(
+      KernelVariables &kv,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
+          remap_vals,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
+      const {
+
+    auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
+
+    // This must be done for every thread
+    for (int state_idx = 0; state_idx < static_cast<int>(state_remap.size());
+         ++state_idx) {
+      remap_vals[state_idx] = state_remap[state_idx];
+    }
+    kv.team_barrier();
+    return state_remap.size();
+  }
+
+  KOKKOS_INLINE_FUNCTION int build_remap_array_tracers(
+      KernelVariables &kv, const int prev_filled,
+      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
+          remap_vals) const {
+    for (int q = 0; q < m_data.qsize; ++q) {
+      remap_vals[prev_filled + q] =
+          Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
+    }
+    return m_data.qsize;
+  }
+
+  struct ComputeGridsTag {};
+  struct ComputeRemapTag {};
+  struct FusedRemapTag {};
+
+  // Computes the extrinsic values of the states in the initial map
+  // i.e. velocity -> total momentum
+  struct ComputeExtrinsicsTag {};
+
+  // Computes the intrinsic values of the states in the final map
+  // i.e. total momentum -> velocity
+  struct ComputeIntrinsicsTag {};
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(FusedRemapTag, const TeamMember &team) const {
+    start_timer("Remap functor");
+    (*this)(ComputeGridsTag(), team);
+
+    // Unlike with the kernel launch, this should be optimized away when empty
+    (*this)(ComputeExtrinsicsTag(), team);
+
+    (*this)(ComputeRemapTag(), team);
+
+    // Unlike with the kernel launch, this should be optimized away when empty
+    (*this)(ComputeIntrinsicsTag(), team);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeGridsTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+                 Homme::subview(m_ps_v, kv.ie));
+
+    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness =
+        compute_target_thickness(kv);
+
+    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
+        this->compute_source_thickness(
+            kv, m_data.np1, m_data.dt, tgt_layer_thickness,
+            m_elements.m_eta_dot_dpdn, m_elements.m_dp3d);
+
+    check_source_thickness(kv, src_layer_thickness);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeExtrinsicsTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    this->compute_extrinsic_states(
+        kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeRemapTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+
+    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
+    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
+        this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d);
+
+    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
+    remap_vals;
+    const int num_remap =
+        build_remap_array(kv, src_layer_thickness, remap_vals);
+
+    if (num_remap > 0) {
+      this->m_remap.remap(kv, num_remap, src_layer_thickness,
+                          tgt_layer_thickness, remap_vals);
+      kv.team_barrier();
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeIntrinsicsTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
+    this->compute_intrinsic_states(kv, tgt_layer_thickness);
+  }
+
+  template <typename _ExecSpace = ExecSpace>
+  typename std::enable_if<!std::is_same<_ExecSpace, Hommexx_Cuda>::value,
+                          void>::type
+  run_remap() {
+    run_functor<FusedRemapTag>("fused vertical remap", this->m_data.num_elems);
+
+    this->input_valid_assert();
+  }
+
+  template <typename _ExecSpace = ExecSpace>
+  typename std::enable_if<std::is_same<_ExecSpace, Hommexx_Cuda>::value,
+                          void>::type
+  run_remap() {
+    run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
+                                 this->m_data.num_elems);
+    // We don't want the latency of launching an empty kernel
+    if (nonzero_rsplit) {
+      run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
+                                        this->m_data.num_elems);
+    }
+    run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
+                                 this->m_data.num_elems * this->m_data.qsize);
+    // We don't want the latency of launching an empty kernel
+    if (nonzero_rsplit) {
+      run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
+                                        this->m_data.num_elems);
+    }
+    this->input_valid_assert();
+  }
+
+private:
+  template <typename FunctorTag>
+  void run_functor(const std::string functor_name, int num_exec) {
+    Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
+        Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
+
+    // Timers don't work on CUDA, so place them here
+    start_timer(functor_name.c_str());
+    profiling_resume();
+    Kokkos::parallel_for("vertical remap", policy, *this);
+    ExecSpace::fence();
+    profiling_pause();
+    stop_timer(functor_name.c_str());
+  }
+
   KOKKOS_INLINE_FUNCTION
   void compute_ps_v(KernelVariables &kv,
                     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> dp3d,
@@ -799,173 +966,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         invalid);
     valid_layer_thickness(kv.ie) = !invalid;
     stop_timer("remap check_source_thickness");
-  }
-
-  KOKKOS_INLINE_FUNCTION int build_remap_array(
-      KernelVariables &kv,
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
-          remap_vals) const {
-    if (nonzero_rsplit == true) {
-      const int num_states =
-          build_remap_array_states(kv, remap_vals, src_layer_thickness);
-      const int num_tracers =
-          build_remap_array_tracers(kv, num_states, remap_vals);
-      return num_tracers + num_states;
-    } else {
-      return build_remap_array_tracers(kv, 0, remap_vals);
-    }
-  }
-
-  KOKKOS_INLINE_FUNCTION int build_remap_array_states(
-      KernelVariables &kv,
-      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
-          remap_vals,
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
-      const {
-
-    auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
-
-    // This must be done for every thread
-    for (int state_idx = 0; state_idx < static_cast<int>(state_remap.size()); ++state_idx) {
-      remap_vals[state_idx] = state_remap[state_idx];
-    }
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
-                                                 state_remap.size() * NP * NP),
-                         [&](const int &loop_idx) {
-      const int var = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-                           [=](const int ilev) {
-        remap_vals[var](igp, jgp, ilev) *= src_layer_thickness(igp, jgp, ilev);
-      });
-    });
-    kv.team_barrier();
-    return state_remap.size();
-  }
-
-  KOKKOS_INLINE_FUNCTION int build_remap_array_tracers(
-      KernelVariables &kv, const int prev_filled,
-      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
-          remap_vals) const {
-    for (int q = 0; q < m_data.qsize; ++q) {
-      remap_vals[prev_filled + q] =
-          Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
-    }
-    return m_data.qsize;
-  }
-
-  struct ComputeGridsTag {};
-  struct ComputeRemapTag {};
-  struct FusedRemapTag {};
-
-  // Computes the extrinsic values of the states in the initial map
-  // i.e. velocity -> total momentum
-  struct ComputeExtrinsicsTag {};
-
-  // Computes the intrinsic values of the states in the final map
-  // i.e. total momentum -> velocity
-  struct ComputeIntrinsicsTag {};
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(FusedRemapTag, const TeamMember &team) const {
-    start_timer("Remap functor");
-    (*this)(ComputeGridsTag(), team);
-    (*this)(ComputeRemapTag(), team);
-    (*this)(ComputeIntrinsicsTag(), team);
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeGridsTag, const TeamMember &team) const {
-    KernelVariables kv(team);
-    compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
-                 Homme::subview(m_ps_v, kv.ie));
-
-    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness =
-        compute_target_thickness(kv);
-
-    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        this->compute_source_thickness(
-            kv, m_data.np1, m_data.dt, tgt_layer_thickness,
-            m_elements.m_eta_dot_dpdn, m_elements.m_dp3d);
-
-    check_source_thickness(kv, src_layer_thickness);
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeExtrinsicsTag, const TeamMember &team) const {
-    KernelVariables kv(team);
-    this->compute_extrinsic_states(
-        kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d));
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeRemapTag, const TeamMember &team) const {
-    KernelVariables kv(team);
-
-    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d);
-
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
-    remap_vals;
-    const int num_remap =
-        build_remap_array(kv, src_layer_thickness, remap_vals);
-
-    if (num_remap > 0) {
-      this->m_remap.remap(kv, num_remap, src_layer_thickness,
-                          tgt_layer_thickness, remap_vals);
-      kv.team_barrier();
-    }
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeIntrinsicsTag, const TeamMember &team) const {
-    KernelVariables kv(team);
-    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-    this->compute_intrinsic_states(kv, tgt_layer_thickness);
-  }
-
-  template <typename _ExecSpace = ExecSpace>
-  typename std::enable_if<!std::is_same<_ExecSpace, Hommexx_Cuda>::value,
-                          void>::type
-  run_remap() {
-    run_functor<FusedRemapTag>("fused vertical remap", this->m_data.num_elems);
-
-    this->input_valid_assert();
-  }
-
-  template <typename _ExecSpace = ExecSpace>
-  typename std::enable_if<std::is_same<_ExecSpace, Hommexx_Cuda>::value,
-                          void>::type
-  run_remap() {
-    run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
-                                 this->m_data.num_elems);
-    if (nonzero_rsplit) {
-      run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
-                                        this->m_data.num_elems);
-    }
-    run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                 this->m_data.num_elems * this->m_data.qsize);
-    run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
-                                      this->m_data.num_elems);
-    this->input_valid_assert();
-  }
-
-private:
-  template <typename FunctorTag>
-  void run_functor(const std::string functor_name, int num_exec) {
-    Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
-        Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
-
-    // Timers don't work on CUDA, so place them here
-    start_timer(functor_name.c_str());
-    profiling_resume();
-    Kokkos::parallel_for("vertical remap", policy, *this);
-    ExecSpace::fence();
-    profiling_pause();
-    stop_timer(functor_name.c_str());
   }
 };
 
