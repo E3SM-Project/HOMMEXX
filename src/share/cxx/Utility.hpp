@@ -323,22 +323,20 @@ sync_to_host(Source_T source, Dest_T dest) {
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [2][NP][NP][NUM_LEV]>::value &&
-        host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value,
-    void>::type
-sync_to_host(Source_T source, Dest_T dest) {
+host_view_mappable<Dest_T, Real * [NUM_PHYSICAL_LEV][2][NP][NP]>::value,
+  void>::type
+  sync_to_host(Source_T source, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror source_mirror(
-      Kokkos::create_mirror_view(source));
+    Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-         ++vector_level) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        for (int dim = 0; dim < 2; ++dim) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest(ie, level, dim, igp, jgp) =
-                  source_mirror(ie, dim, igp, jgp, vector_level)[vector];
-            }
+    for (int k = 0; k < dest.extent_int(1); ++ie) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      for (int dim = 0; dim < 2; ++dim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, k, dim, igp, jgp) =
+              source_mirror(ie, dim, igp, jgp, vi)[si];
           }
         }
       }
