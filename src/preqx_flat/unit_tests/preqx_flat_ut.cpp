@@ -496,13 +496,12 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
-  sync_to_host(elements.m_derived_un0, elements.m_derived_vn0, vn0_f90);
+  sync_to_host(elements.m_derived_vn0, vn0_f90);
 
   compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
   test_functor.run_functor();
 
-  sync_to_host(elements.m_derived_un0, elements.m_derived_vn0,
-               test_functor.derived_v);
+  sync_to_host(elements.m_derived_vn0, test_functor.derived_v);
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp("vdp results", num_elems);
   Kokkos::deep_copy(vdp, elements.buffers.vdp);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp("div_vdp results",
