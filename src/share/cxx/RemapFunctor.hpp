@@ -148,6 +148,136 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
+  void compute_grids_phase(
+      KernelVariables &kv,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
+      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness)
+      const {
+    start_timer("remap ppm grids phase");
+    compute_partitions(kv, src_layer_thickness, tgt_layer_thickness);
+    compute_integral_bounds(kv);
+    stop_timer("remap ppm grids phase");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  Real compute_mass(ExecViewUnmanaged<const Real[3]> parabola_coeffs,
+                    const Real prev_mass, const Real prev_dp,
+                    const Real x2) const {
+    // This remapping assumes we're starting from the left interface of an
+    // old grid cell
+    // In fact, we're usually integrating very little or almost all of the
+    // cell in question
+    const Real x1 = -0.5;
+    const Real integral = integrate_parabola(parabola_coeffs, x1, x2);
+    const Real mass = prev_mass + integral * prev_dp;
+    return mass;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_remap(
+      KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 1]> prev_mass,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> prev_dp,
+      ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
+    // Compute tracer values on the new grid by integrating from the old cell
+    // bottom to the new cell interface to form a new grid mass accumulation.
+    // Taking the difference between accumulation at successive interfaces
+    // gives the mass inside each cell. Since Qdp is supposed to hold the full
+    // mass this needs no normalization.
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                         [&](const int k) {
+      const Real x2 = integral_bounds(k);
+
+      // Using an immediately invoked function expression (IIFE, another
+      // annoying C++ lingo acronym) lets us make mass_1 constant
+      // This also provides better scoping for the variables inside it
+      const Real mass_1 = [=]() {
+        if (k > 0) {
+          const int kk_prev_lev = k_id(k - 1) - 1;
+          assert(kk_prev_lev >= 0);
+          assert(kk_prev_lev < parabola_coeffs.extent_int(0));
+          return compute_mass(Homme::subview(parabola_coeffs, k - 1),
+                              prev_mass(kk_prev_lev), prev_dp(kk_prev_lev + 2),
+                              x2);
+        } else {
+          return 0.0;
+        }
+      }();
+
+      const int kk_cur_lev = k_id(k) - 1;
+      assert(kk_cur_lev >= 0);
+      assert(kk_cur_lev < parabola_coeffs.extent_int(0));
+
+      const Real mass_2 =
+          compute_mass(Homme::subview(parabola_coeffs, k),
+                       prev_mass(kk_cur_lev), prev_dp(kk_cur_lev + 2), x2);
+
+      const int ilevel = k / VECTOR_SIZE;
+      const int ivector = k % VECTOR_SIZE;
+      remap_var(ilevel)[ivector] = mass_2 - mass_1;
+    }); // k loop
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void
+  compute_remap_phase(KernelVariables &kv, const int num_remap,
+                      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                                    remap_dim> remap_vals) const {
+    start_timer("remap ppm Q phase");
+
+    // From here, we loop over tracers for only those portions which depend on
+    // tracer data, which includes PPM limiting and mass accumulation
+    // More parallelism than we need here, maybe break it up?
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = (loop_idx / NP) / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        // Accumulate the old mass up to old grid cell interface locations to
+        // simplify integration during remapping. Also, divide out the grid
+        // spacing so we're working with actual tracer values and can conserve
+        // mass.
+        mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
+        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+          const int ilevel = k / VECTOR_SIZE;
+          const int ivector = k % VECTOR_SIZE;
+
+          ao[var](kv.ie, igp, jgp, k + 2) =
+              remap_vals[var](igp, jgp, ilevel)[ivector];
+          mass_o[var](kv.ie, igp, jgp, k + 1) =
+              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
+          ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
+        } // end k loop
+
+        const int _gs = gs;
+        for (int k = 1; k <= _gs; k++) {
+          ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
+          ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
+              ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
+        } // end ghost cell loop
+
+        // Computes a monotonic and conservative PPM reconstruction
+        compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
+                    Homme::subview(ppmdx, kv.ie, igp, jgp),
+                    Homme::subview(dma[var], kv.ie, igp, jgp),
+                    Homme::subview(ai[var], kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
+      });
+      compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
+                    Homme::subview(z2, kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp),
+                    Homme::subview(mass_o[var], kv.ie, igp, jgp),
+                    Homme::subview(dpo, kv.ie, igp, jgp),
+                    Homme::subview(remap_vals[var], igp, jgp));
+    }); // End team thread range
+    stop_timer("remap ppm Q phase");
+  }
+
+  KOKKOS_INLINE_FUNCTION
   void compute_grids(
       KernelVariables &kv,
       const ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> dx,
@@ -395,99 +525,8 @@ struct PpmVertRemap : public VertRemapAlg {
     kv.team_barrier();
   }
 
-  KOKKOS_INLINE_FUNCTION
-  void
-  remap(KernelVariables &kv, const int num_remap,
-        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-        ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-        Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
-            remap_vals) const {
-    start_timer("remap_Q_ppm");
-
-    compute_partitions(kv, src_layer_thickness, tgt_layer_thickness);
-    compute_integral_bounds(kv);
-
-    // From here, we loop over tracers for only those portions which depend on
-    // tracer data, which includes PPM limiting and mass accumulation
-    // More parallelism than we need here, maybe break it up?
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
-                         [&](const int &loop_idx) {
-      const int var = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
-      const int jgp = loop_idx % NP;
-
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        // Accumulate the old mass up to old grid cell interface locations to
-        // simplify integration during remapping. Also, divide out the grid
-        // spacing so we're working with actual tracer values and can conserve
-        // mass.
-        mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
-        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int ilevel = k / VECTOR_SIZE;
-          const int ivector = k % VECTOR_SIZE;
-
-          ao[var](kv.ie, igp, jgp, k + 2) =
-              remap_vals[var](igp, jgp, ilevel)[ivector];
-          mass_o[var](kv.ie, igp, jgp, k + 1) =
-              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
-          ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
-        } // end k loop
-
-        const int _gs = gs;
-        for (int k = 1; k <= _gs; k++) {
-          ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
-          ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
-              ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-        } // end ghost cell loop
-
-        // Computes a monotonic and conservative PPM reconstruction
-        compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
-                    Homme::subview(ppmdx, kv.ie, igp, jgp),
-                    Homme::subview(dma[var], kv.ie, igp, jgp),
-                    Homme::subview(ai[var], kv.ie, igp, jgp),
-                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
-      });
-
-      Real massn1 = 0.0;
-
-      // Maybe just recompute massn1 and double our work
-      // to get significantly more threads?
-      //
-      // Compute tracer values on the new grid by integrating from the old cell
-      // bottom to the new cell interface to form a new grid mass accumulation.
-      // Taking the difference between accumulation at successive interfaces
-      // gives the mass inside each cell. Since Qdp is supposed to hold the full
-      // mass this needs no normalization.
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int ilevel = k / VECTOR_SIZE;
-          const int ivector = k % VECTOR_SIZE;
-          const int kk = kid(kv.ie, igp, jgp, k);
-          assert(parabola_coeffs[var].data() != nullptr);
-          assert(kk - 1 >= 0);
-          assert(kk - 1 < parabola_coeffs[var].extent_int(3));
-          // This remapping assumes we're starting from the left interface of an
-          // old grid cell
-          // In fact, we're usually integrating very little or almost all of the
-          // cell in question
-          const Real x1 = -0.5;
-          const Real x2 = z2(kv.ie, igp, jgp, k);
-          const Real integral = integrate_parabola(
-              Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp, kk - 1), x1,
-              x2);
-
-          const Real massn2 = mass_o[var](kv.ie, igp, jgp, kk - 1) +
-                              integral * dpo(kv.ie, igp, jgp, kk + 1);
-          remap_vals[var](igp, jgp, ilevel)[ivector] = massn2 - massn1;
-          massn1 = massn2;
-        } // k loop
-      });
-    }); // End team thread range
-    stop_timer("remap_Q_ppm");
-  }
-
   KOKKOS_INLINE_FUNCTION Real
-  integrate_parabola(ExecViewUnmanaged<Real[3]> coeffs, Real x1,
+  integrate_parabola(ExecViewUnmanaged<const Real[3]> coeffs, Real x1,
                      Real x2) const {
     const Real a0 = coeffs(0);
     const Real a1 = coeffs(1);
@@ -787,8 +826,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         build_remap_array(kv, src_layer_thickness, remap_vals);
 
     if (num_remap > 0) {
-      this->m_remap.remap(kv, num_remap, src_layer_thickness,
-                          tgt_layer_thickness, remap_vals);
+      this->m_remap.compute_remap_phase(kv, num_remap, remap_vals);
       kv.team_barrier();
     }
   }
@@ -804,8 +842,15 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   typename std::enable_if<!std::is_same<_ExecSpace, Hommexx_Cuda>::value,
                           void>::type
   run_remap() {
-    run_functor<FusedRemapTag>("fused vertical remap", this->m_data.num_elems);
-
+    if (nonzero_rsplit == true || m_data.qsize > 0) {
+      run_functor<FusedRemapTag>("fused vertical remap",
+                                 this->m_data.num_elems);
+    } else {
+      // Nothing to remap, but we still need to compute the source layer
+      // thickness and it's validity
+      run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
+                                   this->m_data.num_elems);
+    }
     this->input_valid_assert();
   }
 
@@ -813,19 +858,23 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   typename std::enable_if<std::is_same<_ExecSpace, Hommexx_Cuda>::value,
                           void>::type
   run_remap() {
+    // This runs the remap algorithm after determining it needs to
+    // It also verifies the state of the simulation is valid
+    // If there's nothing to remap, it will only perform the verification
     run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
                                  this->m_data.num_elems);
-    // We don't want the latency of launching an empty kernel
-    if (nonzero_rsplit) {
-      run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
-                                        this->m_data.num_elems);
-    }
-    run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                 this->m_data.num_elems * this->m_data.qsize);
-    // We don't want the latency of launching an empty kernel
-    if (nonzero_rsplit) {
-      run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
-                                        this->m_data.num_elems);
+    if (nonzero_rsplit == true || m_data.qsize > 0) {
+      // We don't want the latency of launching an empty kernel
+      if (nonzero_rsplit) {
+        run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
+                                          this->m_data.num_elems);
+      }
+      run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
+                                   this->m_data.num_elems * this->m_data.qsize);
+      if (nonzero_rsplit) {
+        run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
+                                          this->m_data.num_elems);
+      }
     }
     this->input_valid_assert();
   }

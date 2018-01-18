@@ -329,9 +329,7 @@ public:
     for (int var = 0; var < num_remap; ++var) {
       elem_remap[var] = Homme::subview(remap_vals[var], kv.ie);
     }
-    remap.remap(kv, num_remap,
-                Homme::subview(src_layer_thickness_kokkos, kv.ie),
-                Homme::subview(tgt_layer_thickness_kokkos, kv.ie), elem_remap);
+    remap.compute_remap_phase(kv, num_remap, elem_remap);
   }
 
   const int ne;
