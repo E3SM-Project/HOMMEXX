@@ -31,9 +31,7 @@ public:
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
   // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
-  // ???
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Lateral Velocity
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;

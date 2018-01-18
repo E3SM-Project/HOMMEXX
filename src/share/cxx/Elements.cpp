@@ -27,10 +27,8 @@ void Elements::init(const int num_elems) {
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
   m_pecnd = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PECND", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
-  m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Lateral Velocity 1", m_num_elems);
-  m_derived_vn0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Derived Lateral Velocity 2", m_num_elems);
+  m_derived_vn0 = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Derived Lateral Velocities", m_num_elems);
 
   m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "Lateral Velocity 1", m_num_elems);
@@ -131,7 +129,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_omega_p, engine, random_dist);
   genRandArray(m_pecnd, engine, random_dist);
   genRandArray(m_phi, engine, random_dist);
-  genRandArray(m_derived_un0, engine, random_dist);
   genRandArray(m_derived_vn0, engine, random_dist);
 
   genRandArray(m_u, engine, random_dist);
@@ -264,9 +261,7 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
       Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
-      Kokkos::create_mirror_view(m_derived_un0);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+  ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
@@ -283,12 +278,12 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
 
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          h_derived_vn0(ie, 0, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
       }
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          h_derived_vn0(ie, 1, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
       }
     }
@@ -296,7 +291,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
   Kokkos::deep_copy(m_omega_p, h_omega_p);
   Kokkos::deep_copy(m_pecnd, h_pecnd);
   Kokkos::deep_copy(m_phi, h_phi);
-  Kokkos::deep_copy(m_derived_un0, h_derived_un0);
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
 }
 
@@ -406,15 +400,12 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
       Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
-      Kokkos::create_mirror_view(m_derived_un0);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+  ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
 
   Kokkos::deep_copy(h_omega_p, m_omega_p);
   Kokkos::deep_copy(h_pecnd, m_pecnd);
   Kokkos::deep_copy(h_phi, m_phi);
-  Kokkos::deep_copy(h_derived_un0, m_derived_un0);
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
@@ -431,12 +422,12 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
 
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] = h_derived_un0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_vn0(ie, 0, igp, jgp, ilev)[ivector];
         }
       }
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] = h_derived_vn0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_vn0(ie, 1, igp, jgp, ilev)[ivector];
         }
       }
     }
