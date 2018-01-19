@@ -772,6 +772,9 @@ public:
   constexpr iterator end() const { return end_; }
 
   KOKKOS_INLINE_FUNCTION
+  constexpr int iterations() const { return *end_ - *begin_; }
+
+  KOKKOS_INLINE_FUNCTION
   constexpr Loop_Range(ordered_iterable begin, ordered_iterable end)
       : begin_(begin), end_(end) {}
 
