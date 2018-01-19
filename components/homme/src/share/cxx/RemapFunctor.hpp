@@ -757,14 +757,12 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
   }
 
-  KOKKOS_INLINE_FUNCTION int build_remap_array(
-      KernelVariables &kv,
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
-      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
-          remap_vals) const {
+  KOKKOS_INLINE_FUNCTION int
+  build_remap_array(KernelVariables &kv,
+                    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                                  remap_dim> &remap_vals) const {
     if (nonzero_rsplit == true) {
-      const int num_states =
-          build_remap_array_states(kv, remap_vals, src_layer_thickness);
+      const int num_states = build_remap_array_states(kv, remap_vals);
       const int num_tracers =
           build_remap_array_tracers(kv, num_states, remap_vals);
       return num_tracers + num_states;
@@ -776,9 +774,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   KOKKOS_INLINE_FUNCTION int build_remap_array_states(
       KernelVariables &kv,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
-          remap_vals,
-      ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
-      const {
+          remap_vals) const {
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
 
@@ -802,6 +798,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     return m_data.qsize;
   }
 
+  struct ComputeThicknessTag {};
   struct ComputeGridsTag {};
   struct ComputeRemapTag {};
   struct FusedRemapTag {};
@@ -817,11 +814,12 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   KOKKOS_INLINE_FUNCTION
   void operator()(FusedRemapTag, const TeamMember &team) const {
     start_timer("Remap functor");
-    (*this)(ComputeGridsTag(), team);
+    (*this)(ComputeThicknessTag(), team);
 
     // Unlike with the kernel launch, this should be optimized away when empty
     (*this)(ComputeExtrinsicsTag(), team);
 
+    (*this)(ComputeGridsTag(), team);
     (*this)(ComputeRemapTag(), team);
 
     // Unlike with the kernel launch, this should be optimized away when empty
@@ -829,7 +827,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeGridsTag, const TeamMember &team) const {
+  void operator()(ComputeThicknessTag, const TeamMember &team) const {
     KernelVariables kv(team);
     compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
                  Homme::subview(m_ps_v, kv.ie));
@@ -848,8 +846,18 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeExtrinsicsTag, const TeamMember &team) const {
     KernelVariables kv(team);
-    this->compute_extrinsic_states(
+    compute_extrinsic_states(
         kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeGridsTag, const TeamMember &team) const {
+    if (this->num_states_remap + m_data.qsize > 0) {
+      KernelVariables kv(team);
+      m_remap.compute_grids_phase(
+          kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
+          Homme::subview(m_tgt_layer_thickness, kv.ie));
+    }
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -862,8 +870,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
     remap_vals;
-    const int num_remap =
-        build_remap_array(kv, src_layer_thickness, remap_vals);
+    const int num_remap = build_remap_array(kv, remap_vals);
 
     if (num_remap > 0) {
       this->m_remap.compute_remap_phase(kv, num_remap, remap_vals);
@@ -901,7 +908,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     // This runs the remap algorithm after determining it needs to
     // It also verifies the state of the simulation is valid
     // If there's nothing to remap, it will only perform the verification
-    run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
+    run_functor<ComputeThicknessTag>("Remap Compute Grids Functor",
                                  this->m_data.num_elems);
     if (nonzero_rsplit == true || m_data.qsize > 0) {
       // We don't want the latency of launching an empty kernel
@@ -909,6 +916,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
                                           this->m_data.num_elems);
       }
+      run_functor<ComputeGridsTag>("Remap Compute Remap Functor",
+                                   this->m_data.num_elems * this->m_data.qsize);
       run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
                                    this->m_data.num_elems * this->m_data.qsize);
       if (nonzero_rsplit) {
