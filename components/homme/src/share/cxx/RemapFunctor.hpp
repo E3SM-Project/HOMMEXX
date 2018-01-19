@@ -16,6 +16,17 @@
 
 namespace Homme {
 
+// All VertRemapAlg types must provide the following methods:
+// compute_grids_phase, and compute_remap_phase
+//
+// compute_grids_phase is expected to have less parallelism available and to
+// compute quantities which are independent of the tracers,
+// based on the computed partitions
+//
+// compute_remap_phase remaps each of the tracers based on the quantities
+// previously computed in compute_grids_phase.
+// It is also expected to have a large amount of parallelism, specifically
+// qsize * num_elems
 struct VertRemapAlg {};
 
 struct PpmBoundaryConditions {};
@@ -160,6 +171,63 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
+  void
+  compute_remap_phase(KernelVariables &kv, const int num_remap,
+                      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
+                                    remap_dim> remap_vals) const {
+    start_timer("remap ppm Q phase");
+
+    // From here, we loop over tracers for only those portions which depend on
+    // tracer data, which includes PPM limiting and mass accumulation
+    // More parallelism than we need here, maybe break it up?
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = (loop_idx / NP) / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        // Accumulate the old mass up to old grid cell interface locations to
+        // simplify integration during remapping. Also, divide out the grid
+        // spacing so we're working with actual tracer values and can conserve
+        // mass.
+        mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
+        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+          const int ilevel = k / VECTOR_SIZE;
+          const int ivector = k % VECTOR_SIZE;
+
+          ao[var](kv.ie, igp, jgp, k + 2) =
+              remap_vals[var](igp, jgp, ilevel)[ivector];
+          mass_o[var](kv.ie, igp, jgp, k + 1) =
+              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
+          ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
+        } // end k loop
+
+        const int _gs = gs;
+        for (int k = 1; k <= _gs; k++) {
+          ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
+          ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
+              ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
+        } // end ghost cell loop
+
+        // Computes a monotonic and conservative PPM reconstruction
+        compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
+                    Homme::subview(ppmdx, kv.ie, igp, jgp),
+                    Homme::subview(dma[var], kv.ie, igp, jgp),
+                    Homme::subview(ai[var], kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
+      });
+      compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
+                    Homme::subview(z2, kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp),
+                    Homme::subview(mass_o[var], kv.ie, igp, jgp),
+                    Homme::subview(dpo, kv.ie, igp, jgp),
+                    Homme::subview(remap_vals[var], igp, jgp));
+    }); // End team thread range
+    stop_timer("remap ppm Q phase");
+  }
+
+  KOKKOS_INLINE_FUNCTION
   Real compute_mass(ExecViewUnmanaged<const Real[3]> parabola_coeffs,
                     const Real prev_mass, const Real prev_dp,
                     const Real x2) const {
@@ -221,91 +289,46 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void
-  compute_remap_phase(KernelVariables &kv, const int num_remap,
-                      Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
-                                    remap_dim> remap_vals) const {
-    start_timer("remap ppm Q phase");
-
-    // From here, we loop over tracers for only those portions which depend on
-    // tracer data, which includes PPM limiting and mass accumulation
-    // More parallelism than we need here, maybe break it up?
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
-                         [&](const int &loop_idx) {
-      const int var = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
-      const int jgp = loop_idx % NP;
-
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        // Accumulate the old mass up to old grid cell interface locations to
-        // simplify integration during remapping. Also, divide out the grid
-        // spacing so we're working with actual tracer values and can conserve
-        // mass.
-        mass_o[var](kv.ie, igp, jgp, 0) = 0.0;
-        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int ilevel = k / VECTOR_SIZE;
-          const int ivector = k % VECTOR_SIZE;
-
-          ao[var](kv.ie, igp, jgp, k + 2) =
-              remap_vals[var](igp, jgp, ilevel)[ivector];
-          mass_o[var](kv.ie, igp, jgp, k + 1) =
-              mass_o[var](kv.ie, igp, jgp, k) + ao[var](kv.ie, igp, jgp, k + 2);
-          ao[var](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
-        } // end k loop
-
-        const int _gs = gs;
-        for (int k = 1; k <= _gs; k++) {
-          ao[var](kv.ie, igp, jgp, 1 - k + 1) = ao[var](kv.ie, igp, jgp, k + 1);
-          ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
-              ao[var](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-        } // end ghost cell loop
-
-        // Computes a monotonic and conservative PPM reconstruction
-        compute_ppm(kv, Homme::subview(ao[var], kv.ie, igp, jgp),
-                    Homme::subview(ppmdx, kv.ie, igp, jgp),
-                    Homme::subview(dma[var], kv.ie, igp, jgp),
-                    Homme::subview(ai[var], kv.ie, igp, jgp),
-                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp));
-      });
-      compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
-                    Homme::subview(z2, kv.ie, igp, jgp),
-                    Homme::subview(parabola_coeffs[var], kv.ie, igp, jgp),
-                    Homme::subview(mass_o[var], kv.ie, igp, jgp),
-                    Homme::subview(dpo, kv.ie, igp, jgp),
-                    Homme::subview(remap_vals[var], igp, jgp));
-    }); // End team thread range
-    stop_timer("remap ppm Q phase");
-  }
-
-  KOKKOS_INLINE_FUNCTION
   void compute_grids(
       KernelVariables &kv,
       const ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV + 4]> dx,
       const ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> grids) const {
-    for (int j : boundaries::grid_indices_1()) {
-      grids(j, 0) = dx(j + 1) / (dx(j) + dx(j + 1) + dx(j + 2));
+    {
+      auto bounds = boundaries::grid_indices_1();
+      Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, bounds.iterations()),
+          [&](const int zoffset_j) {
+            const int j = zoffset_j + *bounds.begin();
+            grids(j, 0) = dx(j + 1) / (dx(j) + dx(j + 1) + dx(j + 2));
 
-      grids(j, 1) = (2.0 * dx(j) + dx(j + 1)) / (dx(j + 1) + dx(j + 2));
+            grids(j, 1) = (2.0 * dx(j) + dx(j + 1)) / (dx(j + 1) + dx(j + 2));
 
-      grids(j, 2) = (dx(j + 1) + 2.0 * dx(j + 2)) / (dx(j) + dx(j + 1));
+            grids(j, 2) = (dx(j + 1) + 2.0 * dx(j + 2)) / (dx(j) + dx(j + 1));
+          });
     }
 
-    for (int j : boundaries::grid_indices_2()) {
-      grids(j, 3) = dx(j + 1) / (dx(j + 1) + dx(j + 2));
+    {
+      auto bounds = boundaries::grid_indices_2();
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                     bounds.iterations()),
+                           [&](const int zoffset_j) {
+        const int j = zoffset_j + *bounds.begin();
+        grids(j, 3) = dx(j + 1) / (dx(j + 1) + dx(j + 2));
 
-      grids(j, 4) = 1.0 / (dx(j) + dx(j + 1) + dx(j + 2) + dx(j + 3));
+        grids(j, 4) = 1.0 / (dx(j) + dx(j + 1) + dx(j + 2) + dx(j + 3));
 
-      grids(j, 5) = (2.0 * dx(j + 1) * dx(j + 2)) / (dx(j + 1) + dx(j + 2));
+        grids(j, 5) = (2.0 * dx(j + 1) * dx(j + 2)) / (dx(j + 1) + dx(j + 2));
 
-      grids(j, 6) = (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
+        grids(j, 6) = (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
 
-      grids(j, 7) = (dx(j + 3) + dx(j + 2)) / (2.0 * dx(j + 2) + dx(j + 1));
+        grids(j, 7) = (dx(j + 3) + dx(j + 2)) / (2.0 * dx(j + 2) + dx(j + 1));
 
-      grids(j, 8) =
-          dx(j + 1) * (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
+        grids(j, 8) =
+            dx(j + 1) * (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
 
-      grids(j, 9) =
-          dx(j + 2) * (dx(j + 2) + dx(j + 3)) / (dx(j + 1) + 2.0 * dx(j + 2));
+        grids(j, 9) =
+            dx(j + 2) * (dx(j + 2) + dx(j + 3)) / (dx(j + 1) + 2.0 * dx(j + 2));
+      });
     }
   }
 
@@ -320,60 +343,78 @@ struct PpmVertRemap : public VertRemapAlg {
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 1]> ai,
       // result view
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) const {
-    for (int j : boundaries::ppm_indices_1()) {
-      if ((cell_means(j + 2) - cell_means(j + 1)) *
-              (cell_means(j + 1) - cell_means(j)) >
-          0.0) {
-        Real da =
-            dx(j, 0) * (dx(j, 1) * (cell_means(j + 2) - cell_means(j + 1)) +
-                        dx(j, 2) * (cell_means(j + 1) - cell_means(j)));
+    {
+      auto bounds = boundaries::ppm_indices_1();
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                     bounds.iterations()),
+                           [&](const int zoffset_j) {
+        const int j = zoffset_j + *bounds.begin();
+        if ((cell_means(j + 2) - cell_means(j + 1)) *
+                (cell_means(j + 1) - cell_means(j)) >
+            0.0) {
+          Real da =
+              dx(j, 0) * (dx(j, 1) * (cell_means(j + 2) - cell_means(j + 1)) +
+                          dx(j, 2) * (cell_means(j + 1) - cell_means(j)));
 
-        dma(j) = min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
-                     2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
-                 copysign(1.0, da);
-      } else {
-        dma(j) = 0.0;
-      }
+          dma(j) = min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
+                       2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
+                   copysign(1.0, da);
+        } else {
+          dma(j) = 0.0;
+        }
+      });
     }
-
-    for (int j : boundaries::ppm_indices_2()) {
-      ai(j) = cell_means(j + 1) +
-              dx(j, 3) * (cell_means(j + 2) - cell_means(j + 1)) +
-              dx(j, 4) * (dx(j, 5) * (dx(j, 6) - dx(j, 7)) *
-                              (cell_means(j + 2) - cell_means(j + 1)) -
-                          dx(j, 8) * dma(j + 1) + dx(j, 9) * dma(j));
+    {
+      auto bounds = boundaries::ppm_indices_2();
+      Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, bounds.iterations()),
+          [&](const int zoffset_j) {
+            const int j = zoffset_j + *bounds.begin();
+            ai(j) = cell_means(j + 1) +
+                    dx(j, 3) * (cell_means(j + 2) - cell_means(j + 1)) +
+                    dx(j, 4) * (dx(j, 5) * (dx(j, 6) - dx(j, 7)) *
+                                    (cell_means(j + 2) - cell_means(j + 1)) -
+                                dx(j, 8) * dma(j + 1) + dx(j, 9) * dma(j));
+          });
     }
+    {
+      auto bounds = boundaries::ppm_indices_3();
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                     bounds.iterations()),
+                           [&](const int zoffset_j) {
+        const int j = zoffset_j + *bounds.begin();
+        Real al = ai(j - 1);
+        Real ar = ai(j);
+        if ((ar - cell_means(j + 1)) * (cell_means(j + 1) - al) <= 0.) {
+          al = cell_means(j + 1);
+          ar = cell_means(j + 1);
+        }
+        if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) >
+            (ar - al) * (ar - al) / 6.0) {
+          al = 3.0 * cell_means(j + 1) - 2.0 * ar;
+        }
+        if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) <
+            -(ar - al) * (ar - al) / 6.0) {
+          ar = 3.0 * cell_means(j + 1) - 2.0 * al;
+        }
 
-    for (int j : boundaries::ppm_indices_3()) {
-      Real al = ai(j - 1);
-      Real ar = ai(j);
-      if ((ar - cell_means(j + 1)) * (cell_means(j + 1) - al) <= 0.) {
-        al = cell_means(j + 1);
-        ar = cell_means(j + 1);
-      }
-      if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) >
-          (ar - al) * (ar - al) / 6.0) {
-        al = 3.0 * cell_means(j + 1) - 2.0 * ar;
-      }
-      if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) <
-          -(ar - al) * (ar - al) / 6.0) {
-        ar = 3.0 * cell_means(j + 1) - 2.0 * al;
-      }
+        // Computed these coefficients from the edge values
+        // and cell mean in Maple. Assumes normalized
+        // coordinates: xi=(x-x0)/dx
 
-      // Computed these coefficients from the edge values
-      // and cell mean in Maple. Assumes normalized
-      // coordinates: xi=(x-x0)/dx
+        assert(parabola_coeffs.data() != nullptr);
+        assert(j - 1 < parabola_coeffs.extent_int(0));
+        assert(2 < parabola_coeffs.extent_int(1));
 
-      assert(parabola_coeffs.data() != nullptr);
-      assert(j - 1 < parabola_coeffs.extent_int(0));
-      assert(2 < parabola_coeffs.extent_int(1));
-
-      parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
-      parabola_coeffs(j - 1, 1) = ar - al;
-      parabola_coeffs(j - 1, 2) = 3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
+        parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
+        parabola_coeffs(j - 1, 1) = ar - al;
+        parabola_coeffs(j - 1, 2) =
+            3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
+      });
     }
-
-    boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
+    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+      boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
+    });
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -514,13 +555,12 @@ struct PpmVertRemap : public VertRemapAlg {
              (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
             dpo(kv.ie, igp, jgp, kk + 1);
       });
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
-            Homme::subview(dpo, kv.ie, igp, jgp);
-        ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
-            Homme::subview(ppmdx, kv.ie, igp, jgp);
-        compute_grids(kv, point_dpo, point_ppmdx);
-      });
+
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 4]> point_dpo =
+          Homme::subview(dpo, kv.ie, igp, jgp);
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV + 2][10]> point_ppmdx =
+          Homme::subview(ppmdx, kv.ie, igp, jgp);
+      compute_grids(kv, point_dpo, point_ppmdx);
     });
     kv.team_barrier();
   }
