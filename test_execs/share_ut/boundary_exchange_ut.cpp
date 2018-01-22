@@ -127,8 +127,8 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
         for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
           const int ilev = level / VECTOR_SIZE;
           const int ivec = level % VECTOR_SIZE;
-          field_min_1d_cxx_host(ie,ifield,ilev)[ivec] = field_min_1d_f90(ie,ifield,ilev);
-          field_max_1d_cxx_host(ie,ifield,ilev)[ivec] = field_max_1d_f90(ie,ifield,ilev);
+          field_min_1d_cxx_host(ie,ifield,ilev)[ivec] = field_min_1d_f90(ie,ifield,level);
+          field_max_1d_cxx_host(ie,ifield,ilev)[ivec] = field_max_1d_f90(ie,ifield,level);
     }}}
     Kokkos::deep_copy(field_min_1d_cxx, field_min_1d_cxx_host);
     Kokkos::deep_copy(field_max_1d_cxx, field_max_1d_cxx_host);
