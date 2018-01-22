@@ -249,6 +249,13 @@ void BoundaryExchange::pack_and_send ()
   // TODO: should I simply call waitall instead of asserting?
   assert (!m_send_pending);
 
+  // If this is the first time we call this method, or if the BuffersManager has performed a reallocation
+  // since the last time this method was called, AND we are calling this method manually, without relying
+  // on the exchange method to call it, then we need to rebuild all our internal buffer views
+  if (!m_buffer_views_and_requests_built) {
+    build_buffer_views_and_requests();
+  }
+
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
   auto connections = m_connectivity->get_connections<ExecMemSpace>();
@@ -387,6 +394,12 @@ void BoundaryExchange::pack_and_send_min_max ()
   // TODO: should I simply call waitall instead of asserting?
   assert (!m_send_pending);
 
+  // If this is the first time we call this method, or if the BuffersManager has performed a reallocation
+  // since the last time this method was called, AND we are calling this method manually, without relying
+  // on the exchange_min_max method to call it, then we need to rebuild all our internal buffer views
+  if (!m_buffer_views_and_requests_built) {
+    build_buffer_views_and_requests();
+  }
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
@@ -404,9 +417,7 @@ void BoundaryExchange::pack_and_send_min_max ()
     // for local connections we need to manually copy on the remote element lid. We can do it here
     const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-    auto tmp = fields_1d(field_lidpos.lid,ifield,int(MAX_ID))[ilev];
-    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = tmp;
-    //send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = fields_1d(field_lidpos.lid,ifield,int(MAX_ID))[ilev];
+    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = fields_1d(field_lidpos.lid,ifield,int(MAX_ID))[ilev];
     send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = fields_1d(field_lidpos.lid,ifield,int(MIN_ID))[ilev];
   });
   ExecSpace::fence();

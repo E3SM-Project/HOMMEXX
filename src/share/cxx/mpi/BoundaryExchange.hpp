@@ -133,7 +133,7 @@ public:
                                 ExecView<Scalar*[DIM][NUM_LEV],Properties...> field_max, int num_dims, int start_dim);
 
 
-  // Initialize the buffers, and the MPI data types
+  // Size the buffers, and initialize the MPI types
   void registration_completed();
 
   // Exchange all registered 2d and 3d fields
