@@ -2,13 +2,15 @@
 #define HOMMEXX_VECTOR_UTILS_HPP
 
 #include "KokkosKernels_Vector.hpp"
+#include "Utility.hpp"
 
 namespace KokkosKernels {
 namespace Batched {
 namespace Experimental {
 
 template <typename SpT>
-inline Vector<VectorTag<AVX<double, SpT>, 4> >
+inline
+Vector<VectorTag<AVX<double, SpT>, 4> >
 max (const Vector<VectorTag<AVX<double, SpT>, 4> >& a,
      const Vector<VectorTag<AVX<double, SpT>, 4> >& b)
 {
@@ -16,7 +18,8 @@ max (const Vector<VectorTag<AVX<double, SpT>, 4> >& a,
 }
 
 template <typename SpT>
-inline Vector<VectorTag<AVX<double, SpT>, 4> >
+inline
+Vector<VectorTag<AVX<double, SpT>, 4> >
 min (const Vector<VectorTag<AVX<double, SpT>, 4> >& a,
      const Vector<VectorTag<AVX<double, SpT>, 4> >& b)
 {
@@ -24,7 +27,8 @@ min (const Vector<VectorTag<AVX<double, SpT>, 4> >& a,
 }
 
 template <typename SpT>
-inline Vector<VectorTag<AVX<double, SpT>, 8> >
+inline
+Vector<VectorTag<AVX<double, SpT>, 8> >
 max (const Vector<VectorTag<AVX<double, SpT>, 8> >& a,
      const Vector<VectorTag<AVX<double, SpT>, 8> >& b)
 {
@@ -32,7 +36,8 @@ max (const Vector<VectorTag<AVX<double, SpT>, 8> >& a,
 }
 
 template <typename SpT>
-inline Vector<VectorTag<AVX<double, SpT>, 8> >
+inline
+Vector<VectorTag<AVX<double, SpT>, 8> >
 min (const Vector<VectorTag<AVX<double, SpT>, 8> >& a,
      const Vector<VectorTag<AVX<double, SpT>, 8> >& b)
 {
@@ -40,28 +45,30 @@ min (const Vector<VectorTag<AVX<double, SpT>, 8> >& a,
 }
 
 template <typename SpT, int l>
-inline Vector<VectorTag<SIMD<double, SpT>, l> >
+KOKKOS_INLINE_FUNCTION
+Vector<VectorTag<SIMD<double, SpT>, l> >
 max (const Vector<VectorTag<SIMD<double, SpT>, l> >& a,
      const Vector<VectorTag<SIMD<double, SpT>, l> >& b)
 {
   Vector<VectorTag<SIMD<double, SpT>, l> > r_val;
 #pragma ivdep
   for (int i = 0; i < Vector<VectorTag<SIMD<double, SpT>, l>>::vector_length; i++) {
-    r_val[i] = std::max(a[i],b[i]);
+    r_val[i] = Homme::max(a[i],b[i]);
   }
 
   return r_val;
 }
 
 template <typename SpT, int l>
-inline Vector<VectorTag<SIMD<double, SpT>, l> >
+KOKKOS_INLINE_FUNCTION
+Vector<VectorTag<SIMD<double, SpT>, l> >
 min (const Vector<VectorTag<SIMD<double, SpT>, l> >& a,
      const Vector<VectorTag<SIMD<double, SpT>, l> >& b)
 {
   Vector<VectorTag<SIMD<double, SpT>, l> > r_val;
 #pragma ivdep
   for (int i = 0; i < Vector<VectorTag<SIMD<double, SpT>, l>>::vector_length; i++) {
-    r_val[i] = min(a[i],b[i]);
+    r_val[i] = Homme::min(a[i],b[i]);
   }
 
   return r_val;
