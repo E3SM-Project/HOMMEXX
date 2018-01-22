@@ -195,7 +195,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
       be[tl] = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
 
       // Setup the boundary exchange
-      be[tl]->set_num_fields(0,4);
+      be[tl]->set_num_fields(0,0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
       be[tl]->register_field(elements.m_t,1,tl);
