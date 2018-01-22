@@ -119,6 +119,7 @@ SET (BOUNDARY_EXCHANGE_UT_F90_SRCS
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
   ${SRC_SHARE_DIR}/cube_mod.F90
+  ${SRC_SHARE_DIR}/derivative_mod_base.F90
   ${SRC_SHARE_DIR}/dimensions_mod.F90
   ${SRC_SHARE_DIR}/edge_mod_base.F90
   ${SRC_SHARE_DIR}/edgetype_mod.F90
@@ -131,11 +132,14 @@ SET (BOUNDARY_EXCHANGE_UT_F90_SRCS
   ${SRC_SHARE_DIR}/parallel_mod.F90
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
+  ${SRC_SHARE_DIR}/quadrature_mod.F90
   ${SRC_SHARE_DIR}/schedtype_mod.F90
   ${SRC_SHARE_DIR}/schedule_mod.F90
   ${SRC_SHARE_DIR}/spacecurve_mod.F90
   ${SRC_SHARE_DIR}/thread_mod.F90
+  ${SRC_SHARE_DIR}/viscosity_mod_base.F90
   ${SRC_PREQX_DIR}/bndry_mod.F90
+  ${SRC_PREQX_DIR}/derivative_mod.F90
   ${SRC_PREQX_DIR}/edge_mod.F90
   ${SHARE_UT_DIR}/boundary_exchange_ut.F90
   ${UTILS_TIMING_DIR}/perf_mod.F90
@@ -155,7 +159,7 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SHARE_UT_DIR}/boundary_exchange_ut.cpp
 )
 
-SET (CONFIG_DEFINES NP=4 NC=4 PLEV=16 QSIZE_D=4 _MPI=1 HOMMEXX_MPI_TEST)
+SET (CONFIG_DEFINES NP=4 NC=4 PLEV=16 QSIZE_D=4 _MPI=1 HOMMEXX_MPI_TEST _PRIM)
 SET (BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS
   ${CONFIG_DIR}
   ${SRC_SHARE_DIR}
