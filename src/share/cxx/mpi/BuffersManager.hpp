@@ -86,7 +86,7 @@ public:
   void check_for_reallocation ();
 
   // Check that the allocated views can handle the requested number of 2d/3d fields
-  bool check_views_capacity (const int num_2d_fields,  const int num_3d_fields) const;
+  bool check_views_capacity (const int num_1d_fields, const int num_2d_fields,  const int num_3d_fields) const;
 
   // Allocate the buffers (overwriting possibly already allocated ones if needed)
   void allocate_buffers ();
@@ -129,7 +129,8 @@ private:
   void update_requested_sizes (std::map<BoundaryExchange*,CustomerNeeds>::value_type& customer);
 
   // Computes the required storages
-  void required_buffer_sizes (const int num_2d_fields, const int num_3d_fields, size_t& mpi_buffer_size, size_t& local_buffer_size) const;
+  void required_buffer_sizes (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields,
+                              size_t& mpi_buffer_size, size_t& local_buffer_size) const;
 
   // The number of customers
   size_t m_num_customers;
