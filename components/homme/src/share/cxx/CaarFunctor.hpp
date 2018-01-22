@@ -160,11 +160,22 @@ struct CaarFunctor {
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
+if(rsplit_gt0){
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+            - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+}else{
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+            - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)
+            - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+}
+/*
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
             m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-
+*/
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             m_elements.m_u(kv.ie, m_data.nm1, igp, jgp, ilev);
