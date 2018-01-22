@@ -171,14 +171,18 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
     boundary_exchange_test_f90(field_min_1d_f90.data(), field_max_1d_f90.data(),
                                field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(),
                                DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1, minmax_split);
-    be1->exchange();
-    be2->exchange();
-    //if (minmax_split==0) {
-      //be3->exchange_min_max();
-    //} else {
+    if (minmax_split==0) {
+      be1->exchange();
+      be2->exchange();
+      be3->exchange_min_max();
+    } else {
+      be1->pack_and_send();
+      be1->recv_and_unpack();
+      be2->pack_and_send();
+      be2->recv_and_unpack();
       be3->pack_and_send_min_max();
       be3->recv_and_unpack_min_max();
-    //}
+    }
     Kokkos::deep_copy(field_min_1d_cxx_host, field_min_1d_cxx);
     Kokkos::deep_copy(field_max_1d_cxx_host, field_max_1d_cxx);
     Kokkos::deep_copy(field_2d_cxx_host,     field_2d_cxx);
