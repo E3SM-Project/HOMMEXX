@@ -91,13 +91,13 @@ public:
   // Allocate the buffers (overwriting possibly already allocated ones if needed)
   void allocate_buffers ();
 
-  ExecViewManaged<Real*> get_send_buffer           () const;
-  ExecViewManaged<Real*> get_recv_buffer           () const;
-  ExecViewManaged<Real*> get_local_buffer          () const;
-  MPIViewManaged<Real*>  get_mpi_send_buffer       () const;
-  MPIViewManaged<Real*>  get_mpi_recv_buffer       () const;
-  ExecViewManaged<Real*> get_blackhole_send_buffer () const;
-  ExecViewManaged<Real*> get_blackhole_recv_buffer () const;
+  ExecViewUnmanaged<Real*> get_send_buffer           () const;
+  ExecViewUnmanaged<Real*> get_recv_buffer           () const;
+  ExecViewUnmanaged<Real*> get_local_buffer          () const;
+  MPIViewUnmanaged<Real*>  get_mpi_send_buffer       () const;
+  MPIViewUnmanaged<Real*>  get_mpi_recv_buffer       () const;
+  ExecViewUnmanaged<Real*> get_blackhole_send_buffer () const;
+  ExecViewUnmanaged<Real*> get_blackhole_recv_buffer () const;
 
 private:
 
@@ -194,7 +194,7 @@ inline void BuffersManager::sync_recv_buffer (BoundaryExchange* customer)
   }
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_send_buffer () const
 {
   // We ensure that the buffers are valid
@@ -202,7 +202,7 @@ BuffersManager::get_send_buffer () const
   return m_send_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_recv_buffer () const
 {
   // We ensure that the buffers are valid
@@ -210,7 +210,7 @@ BuffersManager::get_recv_buffer () const
   return m_recv_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_local_buffer () const
 {
   // We ensure that the buffers are valid
@@ -218,7 +218,7 @@ BuffersManager::get_local_buffer () const
   return m_local_buffer;
 }
 
-inline MPIViewManaged<Real*>
+inline MPIViewUnmanaged<Real*>
 BuffersManager::get_mpi_send_buffer() const
 {
   // We ensure that the buffers are valid
@@ -226,7 +226,7 @@ BuffersManager::get_mpi_send_buffer() const
   return m_mpi_send_buffer;
 }
 
-inline MPIViewManaged<Real*>
+inline MPIViewUnmanaged<Real*>
 BuffersManager::get_mpi_recv_buffer() const
 {
   // We ensure that the buffers are valid
@@ -234,7 +234,7 @@ BuffersManager::get_mpi_recv_buffer() const
   return m_mpi_recv_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_blackhole_send_buffer () const
 {
   // We ensure that the buffers are valid
@@ -242,7 +242,7 @@ BuffersManager::get_blackhole_send_buffer () const
   return m_blackhole_send_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_blackhole_recv_buffer () const
 {
   // We ensure that the buffers are valid

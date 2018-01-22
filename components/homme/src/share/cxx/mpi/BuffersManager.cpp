@@ -14,7 +14,7 @@ BuffersManager::BuffersManager ()
 {
   // The "fake" buffers used for MISSING connections. These do not depend on the requirements
   // from the custormers, so we can create them right away.
-  constexpr size_t blackhole_buffer_size = NUM_LEV * VECTOR_SIZE;
+  constexpr size_t blackhole_buffer_size = 2 * NUM_LEV * VECTOR_SIZE;
   m_blackhole_send_buffer = ExecViewManaged<Real*>("blackhole array",blackhole_buffer_size);
   m_blackhole_recv_buffer = ExecViewManaged<Real*>("blackhole array",blackhole_buffer_size);
   Kokkos::deep_copy(m_blackhole_send_buffer,0.0);
