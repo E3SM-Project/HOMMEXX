@@ -64,8 +64,36 @@ void BoundaryExchange::set_connectivity (std::shared_ptr<Connectivity> connectiv
   // Besides, when can it be useful?
   assert (connectivity && !m_connectivity);
 
+  // If the buffers manager is set and it stores a connectivity, it must match the input one
+  assert (!m_buffers_manager || m_buffers_manager->get_connectivity()==connectivity);
+
   // Set the connectivity
   m_connectivity = connectivity;
+}
+
+void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager)
+{
+  // Functionality available only before the registration is completed
+  assert (!m_registration_completed);
+
+  // Make sure it is a valid pointer. Also, replacing the buffers manager
+  // could have unintended side-effects; better prohibit it.
+  // Besides, when can it be useful?
+  assert (buffers_manager && !m_buffers_manager);
+
+  // If the buffers manager stores a connectivity, and we already have one set, they must match
+  assert (!buffers_manager->is_connectivity_set() || buffers_manager->get_connectivity()==m_connectivity);
+
+  // Set the internal pointer
+  m_buffers_manager = buffers_manager;
+
+  // Set the connectivity in the buffers manager, if not already set
+  if (!m_buffers_manager->is_connectivity_set() && m_connectivity) {
+    m_buffers_manager->set_connectivity(m_connectivity);
+  }
+
+  // Add myself as a customer of the BM
+  m_buffers_manager->add_customer(this);
 }
 
 void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields)
@@ -107,23 +135,6 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
 
   // We're not all clean
   m_cleaned_up = false;
-}
-
-void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager)
-{
-  // Functionality available only before the registration is completed
-  assert (!m_registration_completed);
-
-  // Make sure it is a valid pointer. Also, replacing the buffers manager
-  // could have unintended side-effects; better prohibit it.
-  // Besides, when can it be useful?
-  assert (buffers_manager && !m_buffers_manager);
-
-  // Set the internal pointer
-  m_buffers_manager = buffers_manager;
-
-  // Add myself as a customer of the BM
-  m_buffers_manager->add_customer(this);
 }
 
 void BoundaryExchange::clean_up()
@@ -195,7 +206,7 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 }
 
-void BoundaryExchange::exchange ()
+void BoundaryExchange::exchange (int nets, int nete)
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -211,13 +222,13 @@ void BoundaryExchange::exchange ()
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
-  pack_and_send ();
+  pack_and_send (nets, nete);
 
   // --- Recv and unpack --- //
-  recv_and_unpack ();
+  recv_and_unpack (nets, nete);
 }
 
-void BoundaryExchange::exchange_min_max ()
+void BoundaryExchange::exchange_min_max (int nets, int nete)
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -239,7 +250,7 @@ void BoundaryExchange::exchange_min_max ()
   recv_and_unpack_min_max ();
 }
 
-void BoundaryExchange::pack_and_send ()
+void BoundaryExchange::pack_and_send (int nets, int nete)
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -264,9 +275,18 @@ void BoundaryExchange::pack_and_send ()
   auto send_2d_buffers = m_send_2d_buffers;
   auto send_3d_buffers = m_send_3d_buffers;
 
+  // If the user did not specify upper limit, process till the end of all elements
+  if (nete == -1) {
+    nete = m_connectivity->get_num_elements();
+  }
+
+  // Sanity check
+  assert (nete>nets);
+  assert (nets>=0);
+
   // ---- Pack ---- //
   // First, pack 2d fields...
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({0,0,0},{m_connectivity->get_num_elements(),NUM_CONNECTIONS,m_num_2d_fields},{1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,NUM_CONNECTIONS,m_num_2d_fields},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
     ConnectionHelpers helpers;
 
@@ -284,7 +304,7 @@ void BoundaryExchange::pack_and_send ()
     }
   });
   // ...then pack 3d fields.
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({0,0,0,0},{m_connectivity->get_num_elements(),NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
     ConnectionHelpers helpers;
 
@@ -311,7 +331,7 @@ void BoundaryExchange::pack_and_send ()
   m_send_pending = true;
 }
 
-void BoundaryExchange::recv_and_unpack ()
+void BoundaryExchange::recv_and_unpack (int nets, int nete)
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -341,9 +361,18 @@ void BoundaryExchange::recv_and_unpack ()
   auto recv_2d_buffers = m_recv_2d_buffers;
   auto recv_3d_buffers = m_recv_3d_buffers;
 
+  // If the user did not specify upper limit, process till the end of all elements
+  if (nete == -1) {
+    nete = m_connectivity->get_num_elements();
+  }
+
+  // Sanity check
+  assert (nete>nets);
+  assert (nets>=0);
+
   // --- Unpack --- //
   // First, unpack 2d fields...
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),m_num_2d_fields},{1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({nets,0},{nete,m_num_2d_fields},{1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield) {
     ConnectionHelpers helpers;
 
@@ -359,7 +388,7 @@ void BoundaryExchange::recv_and_unpack ()
     }
   });
   // ...then unpack 3d fields.
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({0,0,0},{m_connectivity->get_num_elements(),m_num_3d_fields,NUM_LEV},{1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_3d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
     ConnectionHelpers helpers;
 
@@ -384,7 +413,7 @@ void BoundaryExchange::recv_and_unpack ()
   m_recv_pending = false;
 }
 
-void BoundaryExchange::pack_and_send_min_max ()
+void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -407,8 +436,17 @@ void BoundaryExchange::pack_and_send_min_max ()
   auto fields_1d   = m_1d_fields;
   auto send_1d_buffers = m_send_1d_buffers;
 
+  // If the user did not specify upper limit, process till the end of all elements
+  if (nete == -1) {
+    nete = m_connectivity->get_num_elements();
+  }
+
+  // Sanity check
+  assert (nete>nets);
+  assert (nets>=0);
+
   // ---- Pack ---- //
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({0,0,0,0},{m_connectivity->get_num_elements(),NUM_CONNECTIONS,m_num_1d_fields,NUM_LEV},{1,1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_1d_fields,NUM_LEV},{1,1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
     const ConnectionInfo info = connections(ie,iconn);
     const LidGidPos field_lidpos  = info.local;
@@ -417,8 +455,8 @@ void BoundaryExchange::pack_and_send_min_max ()
     // for local connections we need to manually copy on the remote element lid. We can do it here
     const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = fields_1d(field_lidpos.lid,ifield,int(MAX_ID))[ilev];
-    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,int(MAX_ID)) = fields_1d(field_lidpos.lid,ifield,int(MIN_ID))[ilev];
+    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
+    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
   });
   ExecSpace::fence();
 
@@ -430,7 +468,7 @@ void BoundaryExchange::pack_and_send_min_max ()
   m_send_pending = true;
 }
 
-void BoundaryExchange::recv_and_unpack_min_max ()
+void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -457,12 +495,21 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   auto fields_1d = m_1d_fields;
   auto recv_1d_buffers = m_recv_1d_buffers;
 
+  // If the user did not specify upper limit, process till the end of all elements
+  if (nete == -1) {
+    nete = m_connectivity->get_num_elements();
+  }
+
+  // Sanity check
+  assert (nete>nets);
+  assert (nets>=0);
+
   // --- Unpack --- //
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({0,0,0},{m_connectivity->get_num_elements(),m_num_2d_fields,NUM_LEV},{1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_2d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
     for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
-      fields_1d(ie,ifield,int(MAX_ID))[ilev] = max(fields_1d(ie,ifield,int(MAX_ID))[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,int(MAX_ID)));
-      fields_1d(ie,ifield,int(MIN_ID))[ilev] = min(fields_1d(ie,ifield,int(MIN_ID))[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,int(MIN_ID)));
+      fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
+      fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
     }
   });
   ExecSpace::fence();
