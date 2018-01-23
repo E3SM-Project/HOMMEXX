@@ -644,7 +644,7 @@ class compute_sphere_operator_test_ml {
                          local_scalar_output_d);
   }  // end of op() for vorticity_sphere_vector multilevel
 
-  
+
 
   void run_functor_gradient_sphere() const {
     // league, team, vector_length_request=1
@@ -722,8 +722,6 @@ class compute_sphere_operator_test_ml {
 
 // SHMEM ????
 TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_grad_ml(elements);
@@ -790,8 +788,6 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
 
 TEST_CASE("Testing divergence_sphere_wk()",
           "divergence_sphere_wk") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_div_ml(elements);
@@ -852,8 +848,6 @@ TEST_CASE("Testing divergence_sphere_wk()",
 }  // end of test div_sphere_wk_ml
 
 TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_laplace_ml(
@@ -918,8 +912,6 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
 
 TEST_CASE("Testing laplace_tensor() multilevel",
           "laplace_tensor") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_tensor_laplace(
@@ -1000,8 +992,6 @@ TEST_CASE("Testing laplace_tensor() multilevel",
 
 TEST_CASE("Testing_laplace_tensor_replace_multilevel",
           "laplace_tensor_replace") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_tensor_laplace(
@@ -1072,8 +1062,6 @@ TEST_CASE("Testing_laplace_tensor_replace_multilevel",
 
 TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
           "curl_sphere_wk_testcov") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_curl(elements);
@@ -1165,8 +1153,6 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
 
 TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
           "grad_sphere_wk_testcov") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_grad(elements);
@@ -1268,8 +1254,6 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
 TEST_CASE(
     "Testing vlaplace_sphere_wk_cartesian() multilevel",
     "vlaplace_sphere_wk_cartesian") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_vlaplace(
@@ -1366,8 +1350,6 @@ TEST_CASE(
 
 TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
           "vlaplace_sphere_wk_contra") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_vlaplace(
@@ -1471,8 +1453,6 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
 
 TEST_CASE("Testing vorticity_sphere_vector()",
           "vorticity_sphere_vector") {
-  constexpr const Real rel_threshold =
-      1E-15;  // let's move this somewhere in *hpp?
   constexpr const int elements = 10;
 
   compute_sphere_operator_test_ml testing_vort(elements);

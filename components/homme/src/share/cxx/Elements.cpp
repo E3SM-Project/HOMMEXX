@@ -27,10 +27,9 @@ void Elements::init(const int num_elems, const bool rsplit0) {
   m_omega_p =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
-  m_derived_un0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Flux for u", m_num_elems);
-  m_derived_vn0 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Flux for v", m_num_elems);
+
+  m_derived_vn0 = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
+      "Derived Lateral Velocities", m_num_elems);
 
   m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "Velocity u", m_num_elems);
@@ -46,6 +45,15 @@ void Elements::init(const int num_elems, const bool rsplit0) {
           "qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn",
                                                                  m_num_elems);
+
+  m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+    "derived_dp", m_num_elems);
+  m_derived_divdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+    "derived_divdp", m_num_elems);
+  m_derived_divdp_proj = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+    "derived_divdp_proj", m_num_elems);
+  m_derived_dpdiss_biharmonic = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+    "derived_dpdiss_biharmonic", m_num_elems);
 }
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
@@ -121,7 +129,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
 
   genRandArray(m_omega_p, engine, random_dist);
   genRandArray(m_phi, engine, random_dist);
-  genRandArray(m_derived_un0, engine, random_dist);
   genRandArray(m_derived_vn0, engine, random_dist);
 
   genRandArray(m_u, engine, random_dist);
@@ -261,9 +268,7 @@ void Elements::pull_3d(CF90Ptr &derived_phi,
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
-      Kokkos::create_mirror_view(m_derived_un0);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+  ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
@@ -279,19 +284,18 @@ void Elements::pull_3d(CF90Ptr &derived_phi,
 
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_un0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          h_derived_vn0(ie, 0, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
       }
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          h_derived_vn0(ie, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
+          h_derived_vn0(ie, 1, igp, jgp, ilev)[ivector] = derived_v[k_3d_vectors];
         }
       }
     }
   }
   Kokkos::deep_copy(m_omega_p, h_omega_p);
   Kokkos::deep_copy(m_phi, h_phi);
-  Kokkos::deep_copy(m_derived_un0, h_derived_un0);
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
 }
 
@@ -398,14 +402,11 @@ void Elements::push_3d(F90Ptr &derived_phi,
       Kokkos::create_mirror_view(m_omega_p);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_un0 =
-      Kokkos::create_mirror_view(m_derived_un0);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
+  ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
 
   Kokkos::deep_copy(h_omega_p, m_omega_p);
   Kokkos::deep_copy(h_phi, m_phi);
-  Kokkos::deep_copy(h_derived_un0, m_derived_un0);
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
@@ -421,12 +422,12 @@ void Elements::push_3d(F90Ptr &derived_phi,
 
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] = h_derived_un0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_vn0(ie, 0, igp, jgp, ilev)[ivector];
         }
       }
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_vectors) {
-          derived_v[k_3d_vectors] = h_derived_vn0(ie, igp, jgp, ilev)[ivector];
+          derived_v[k_3d_vectors] = h_derived_vn0(ie, 1, igp, jgp, ilev)[ivector];
         }
       }
     }
@@ -568,11 +569,17 @@ void Elements::BufferViews::init(const int num_elems, const bool rsplit0) {
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for tracers", num_elems);
   vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
-                                                         num_elems);
+       num_elems);
+  qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
+      "buffer for biharmonic term for tracers", num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "buffer for vstar*qdp", num_elems);
   qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "work buffer for tracers", num_elems);
+  dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "dpdissk", num_elems);
+  qlim = ExecViewManaged<Scalar* [QSIZE_D][2][NUM_LEV]>(
+      "qlim: combined qmin, qmax", num_elems);
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 

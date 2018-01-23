@@ -17,26 +17,92 @@
 namespace Homme
 {
 
-// The main class, handling the pack/exchange/unpack process
+// Forward declaration
+class BuffersManager;
+
+/*
+ * BoundaryExchange: a class to handle the pack/exchange/unpack process
+ *
+ * This class (BE) takes care of exchanging the values of one or more fields in the
+ * GP on the boundary of the elements with the neighboring elements. In particular,
+ * it takes care of packing the values into some buffers, performing the exchange
+ * (usually, this includes some MPI calls, unless running in serial mode),
+ * and then unpacking the values, accumulating them into the receiving elements.
+ * This process can be done for an arbitrary number of 2d fields (that is,
+ * no vertical levels) and 3d fields (with vertical levels). If you have a
+ * vector field of dimension DIM, you need to register DIM separate scalar
+ * fields. Internally, for each input field the BE object stores a bunch of
+ * separate Views, that view the input field at each element and component
+ * (if vector field). When the exchange method is called, ALL the stored
+ * fields are packed/exchanged/unpacked. Therefore, if you have two sets
+ * of fields that need to be exchanged at different times, you need to
+ * register them into two separate BE objects.
+ *
+ * The registration happens in three steps:
+ *
+ *  - a call to set_num_fields, which sets the number of 2d and 3d fields
+ *    that will be exchanged. Once this method is called, it cannot be
+ *    called again, unless the method clean_up is called first.
+ *  - a number of calls to one of more of the register_field(...), methods,
+ *    which set the fields into the BE class. You cannot register more fields
+ *    than declared in the set_num_fields call. However you can, if you want,
+ *    register less fields, although this scenario is not tested, and may
+ *    be buggy, so you are probably better off calling set_num_fields with
+ *    the actual number of fields you are going to register. Note that you
+ *    are not allowed to call register_field(...) before set_num_fields.
+ *  - a call to registration_completed, which ends the registration phase,
+ *    and sets up all the internal structure to prepare for calls to
+ *    exchange(). This method MUST be called BEFORE any call to exchange.
+ *
+ * This class relies on the BuffersManager (BM) class for the handling of the buffers.
+ * See BuffersManager header for more info on that. As explained above,
+ * you may have different BE objects, which are however never used at the
+ * same time. Therefore, it makes sense to reuse the same BM for all of them.
+ * For this reason, the BM can serve multiple 'customers'. The BE and BM
+ * classes are linked by a provider-customer relationship. It is up to the BE
+ * to register itself as a customer in the stored BM, and to unregister
+ * itself before going out of scope, to make sure the BM does not keep
+ * a dangling pointer to a non-existent customer. This is why BE's destructor
+ * automatically removes the 'this' object from the stored BM's customers list
+ * (assuming there is a stored BM, otherwise nothing happens).
+ *
+ * In order to work correctly, BE needs a valid Connectivity and a valid
+ * BM (both stored as shared_ptr). They can be set at construction time
+ * or later, via a setter method. There are only a few rules:
+ *
+ *  - once one is set, you cannot reset it
+ *  - the Connectivity must be set BEFORE any call to set_num_fields
+ *  - the BM must be set BEFORE any call to registration_completed
+ *
+ */
+
 class BoundaryExchange
 {
 public:
 
   BoundaryExchange();
-  BoundaryExchange(const Connectivity& connectivity);
+  BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
 
   // Thou shall not copy this class
-  BoundaryExchange(const BoundaryExchange& src) = delete;
+  BoundaryExchange(const BoundaryExchange&) = delete;
+  BoundaryExchange& operator= (const BoundaryExchange&) = delete;
 
   ~BoundaryExchange();
+
+  // Set the connectivity if default constructor was used
+  void set_connectivity (std::shared_ptr<Connectivity> connectivity);
+
+  // Set the buffers manager (registration must not be completed)
+  void set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager);
 
   // These number refers to *scalar* fields. A 2-vector field counts as 2 fields.
   void set_num_fields (int num_3d_fields, int num_2d_fields);
 
-  // Clean up MPI stuff and registered fields
+  // Clean up MPI stuff and registered fields (but leaves connectivity and buffers manager)
   void clean_up ();
 
-  // Check whether fields have already been registered
+  // Check whether fields registration has already started/finished
+  bool is_registration_started   () const { return m_registration_started;   }
   bool is_registration_completed () const { return m_registration_completed; }
 
   // Note: num_dims is the # of dimensions to exchange, while idim is the first to exchange
@@ -60,6 +126,10 @@ public:
   // Exchange all registered fields
   void exchange ();
 
+  // Get the number of 2d/3d fields that this object handles
+  int get_num_2d_fields () const { return m_num_2d_fields; }
+  int get_num_3d_fields () const { return m_num_3d_fields; }
+
   template<typename ptr_type,typename raw_type>
   struct Pointer {
 
@@ -79,12 +149,13 @@ public:
 
 private:
 
-  void build_requests ();
+  // Make BuffersManager a friend, so it can call the method underneath
+  friend class BuffersManager;
+  void clear_buffer_views_and_requests ();
 
-  const Comm&               m_comm;
-  const Connectivity        m_connectivity;
+  void build_buffer_views_and_requests ();
 
-  int                       m_num_elements;
+  std::shared_ptr<Connectivity>   m_connectivity;
 
   int                       m_elem_buf_size[2];
   MPI_Datatype              m_mpi_data_type[2];
@@ -95,14 +166,10 @@ private:
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                   m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>        m_3d_fields;
 
-  // These are the raw buffers to be stuffed in the buffers views, and used in pack/unpack
-  ExecViewManaged<Real*>     m_send_buffer;
-  ExecViewManaged<Real*>     m_recv_buffer;
-  ExecViewManaged<Real*>     m_local_buffer;
-
-  // These are the raw buffers to be used in MPI calls
-  MPIViewManaged<Real*>     m_mpi_send_buffer;
-  MPIViewManaged<Real*>     m_mpi_recv_buffer;
+  // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
+  // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
+  // and the blackhole buffers (used for missing connections)
+  std::shared_ptr<BuffersManager> m_buffers_manager;
 
   // These are the dummy send/recv buffers used for missing connections
   ExecViewManaged<Real[NUM_LEV*VECTOR_SIZE]>    m_blackhole_send;
@@ -110,8 +177,8 @@ private:
 
   // These views can look quite complicated. Basically, we want something like
   // send_buffer(ielem,ifield,iedge) to point to the right area of one of the
-  // three buffers above. In particular, if it is a local connection, it will
-  // point to m_local_buffer (on both send and recv views), while for shared
+  // three buffers in the buffers manager. In particular, if it is a local connection, it will
+  // point to local_buffer (on both send and recv views), while for shared
   // connection, it will point to the corresponding mpi buffer, and for missing
   // connection, it will point to the send/recv blackhole.
 
@@ -129,6 +196,7 @@ private:
   // methods of this class in an order that generate errors. And if he/she does, we try to avoid errors.
   bool        m_registration_started;
   bool        m_registration_completed;
+  bool        m_buffer_views_and_requests_built;
   bool        m_cleaned_up;
 };
 
@@ -148,7 +216,7 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP],Properties...
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_2d_fields(ie,l_num_2d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL);
     });
@@ -171,7 +239,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV],Pr
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,start_dim+idim,ALL,ALL,ALL);
     });
@@ -194,7 +262,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_num_elements,num_dims},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie,l_num_3d_fields+idim) = Kokkos::subview(field,ie,outer_dim,start_dim+idim,ALL,ALL,ALL);
     });
@@ -215,7 +283,7 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP],Properties...> fie
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_connectivity->get_num_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_2d_fields(ie,l_num_2d_fields) = Kokkos::subview(field,ie,ALL,ALL);
     });
@@ -236,7 +304,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV],Propert
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_num_elements),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_connectivity->get_num_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_3d_fields(ie,l_num_3d_fields) = Kokkos::subview(field,ie,ALL,ALL,ALL);
     });
