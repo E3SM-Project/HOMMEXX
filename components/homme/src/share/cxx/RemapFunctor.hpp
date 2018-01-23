@@ -895,8 +895,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
         Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
           for (int igp = 0; igp < NP; ++igp) {
             for (int jgp = 0; jgp < NP; ++jgp) {
-              printf("remap c++ extrinsic %s %d %d: % .17e\n", var_names[var],
-                     igp, jgp, state_remap[var](igp, jgp, 0)[5]);
+              DEBUG_PRINT("remap c++ extrinsic %s %d %d: % .17e\n",
+                          var_names[var], igp, jgp,
+                          state_remap[var](igp, jgp, 0)[5]);
             }
           }
         });
@@ -906,6 +907,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeExtrinsicsTag<true>, const TeamMember &team) const {
+    assert(this->num_states_remap > 0);
     KernelVariables kv(team);
     int var = kv.ie % this->num_states_remap;
     kv.ie /= this->num_states_remap;
@@ -956,19 +958,21 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       Kokkos::single(Kokkos::PerTeam(kv.team),
                      [&]() { DEBUG_PRINT("num_remap: %d\n", num_remap); });
     }
+    assert(num_remap == num_to_remap());
 
     if (num_remap > 0) {
       for (int var = 0; var < num_remap; ++var) {
         this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
+
         if (kv.ie == 0) {
           if (var < this->num_states_remap) {
             Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
               const char *var_names[] = { "u", "v", "temperature" };
               for (int igp = 0; igp < NP; ++igp) {
                 for (int jgp = 0; jgp < NP; ++jgp) {
-                  printf("remap remapped %s %d %d c++: % .17e\n",
-                         var_names[var], igp, jgp,
-                         remap_vals[var](igp, jgp, 0)[5]);
+                  DEBUG_PRINT("remap remapped %s %d %d c++: % .17e\n",
+                              var_names[var], igp, jgp,
+                              remap_vals[var](igp, jgp, 0)[5]);
                 }
               }
             });
@@ -979,7 +983,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
   }
 
-  // This one is on the GPU
+  // This one is on the GPU, and shouldn't be called if num_to_remap() == 0
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeRemapTag<true>, const TeamMember &team) const {
     KernelVariables kv(team);
@@ -987,6 +991,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       Kokkos::single(Kokkos::PerTeam(kv.team),
                      []() { DEBUG_PRINT("computing remap<true>\n"); });
     }
+    assert(num_to_remap() != 0);
     int var = kv.ie % num_to_remap();
     kv.ie /= num_to_remap();
 
@@ -998,14 +1003,15 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     remap_vals;
     const int num_remap = build_remap_array(kv, remap_vals);
     if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     [&]() { DEBUG_PRINT("num_remap: %d\n", num_remap); });
+      Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
+        DEBUG_PRINT("num_remap: %d vs num_to_remap(): %d\n", num_remap,
+                    num_to_remap());
+      });
     }
+    assert(num_remap == num_to_remap());
 
-    if (num_remap > 0) {
-      this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
-      kv.team_barrier();
-    }
+    this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
+    kv.team_barrier();
   }
 
   // OpenMP version
@@ -1026,9 +1032,10 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   // CUDA version
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeIntrinsicsTag<true>, const TeamMember &team) const {
+    assert(this->num_states_remap != 0);
     KernelVariables kv(team);
-    const int var = kv.ie % num_to_remap();
-    kv.ie /= num_to_remap();
+    const int var = kv.ie % this->num_states_remap;
+    kv.ie /= this->num_states_remap;
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
@@ -1136,7 +1143,8 @@ private:
     stop_timer("remap rescale_states");
   }
 
-  KOKKOS_INLINE_FUNCTION void compute_intrinsic_state(
+  KOKKOS_INLINE_FUNCTION
+  void compute_intrinsic_state(
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
       ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> state_remap) const {
