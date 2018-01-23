@@ -42,7 +42,10 @@ Derivative& Context::get_derivative() {
 }
 
 std::shared_ptr<BuffersManager> Context::get_buffers_manager() {
-  if ( ! buffers_manager_) buffers_manager_.reset(new BuffersManager());
+  if ( ! buffers_manager_) {
+    buffers_manager_.reset(new BuffersManager(get_connectivity()));
+  }
+
   return buffers_manager_;
 }
 
@@ -62,6 +65,9 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 
   // Todo: should we accept a bool param 'must_already_exist'
   //       to make sure we are not creating a new BE?
+  if (!(*boundary_exchanges_)[name]) {
+    (*boundary_exchanges_)[name] = std::make_shared<BoundaryExchange>();
+  }
   return (*boundary_exchanges_)[name];
 }
 
