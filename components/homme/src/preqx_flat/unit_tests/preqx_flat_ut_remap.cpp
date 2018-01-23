@@ -328,6 +328,9 @@ public:
     KernelVariables kv(team);
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_remap>
     elem_remap;
+    remap.compute_grids_phase(
+        kv, Homme::subview(src_layer_thickness_kokkos, kv.ie),
+        Homme::subview(tgt_layer_thickness_kokkos, kv.ie));
     for (int var = 0; var < num_remap; ++var) {
       remap.compute_remap_phase(kv, var,
                                 Homme::subview(remap_vals[var], kv.ie));
