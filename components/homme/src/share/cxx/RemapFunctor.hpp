@@ -218,13 +218,12 @@ struct PpmVertRemap : public VertRemapAlg {
             Homme::subview(ai[remap_idx], kv.ie, igp, jgp),
             Homme::subview(parabola_coeffs[remap_idx], kv.ie, igp, jgp));
         if (kv.ie == 0 && remap_idx == 0) {
-          DEBUG_PRINT(
-              "remap parabola coeffs %d %d %d c++: % .17e x + % .17e x "
-              "+ % .17e x^2\n",
-              remap_idx, igp, jgp,
-              parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 0),
-              parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 1),
-              parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 2));
+          DEBUG_PRINT("remap parabola coeffs %d %d %d c++: % .17e x + % .17e x "
+                      "+ % .17e x^2\n",
+                      remap_idx, igp, jgp,
+                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 0),
+                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 1),
+                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 2));
           DEBUG_PRINT("remap mass_o %d %d %d c++: % .17e\n", remap_idx, igp,
                       jgp, mass_o[remap_idx](kv.ie, igp, jgp, 5));
           DEBUG_PRINT("remap ao %d %d %d c++: % .17e\n", remap_idx, igp, jgp,
@@ -271,7 +270,7 @@ struct PpmVertRemap : public VertRemapAlg {
     // gives the mass inside each cell. Since Qdp is supposed to hold the full
     // mass this needs no normalization.
     // This could be serialized on OpenMP to reduce the work by half,
-    // but the parallel gain on Cuda is >> 2
+    // but the parallel gain on CUDA is >> 2
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
       // Using an immediately invoked function expression (IIFE, another
@@ -1009,6 +1008,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
   }
 
+  // OpenMP version
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeIntrinsicsTag<false>, const TeamMember &team) const {
     KernelVariables kv(team);
@@ -1021,6 +1021,17 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     for (int var = 0; var < state_remap.size(); ++var) {
       compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
     }
+  }
+
+  // CUDA version
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeIntrinsicsTag<true>, const TeamMember &team) const {
+    KernelVariables kv(team);
+    const int var = kv.ie % num_to_remap();
+    kv.ie /= num_to_remap();
+    auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
+    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
+    compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
   }
 
   template <typename _ExecSpace = ExecSpace>
@@ -1056,8 +1067,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       }
       run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
                                    this->m_data.num_elems);
-      run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                   this->m_data.num_elems * num_to_remap());
+      run_functor<ComputeRemapTag<true> >("Remap Compute Remap Functor",
+                                          this->m_data.num_elems *
+                                              num_to_remap());
       if (nonzero_rsplit) {
         run_functor<ComputeIntrinsicsTag<true> >("Remap Rescale States Functor",
                                                  this->m_data.num_elems);

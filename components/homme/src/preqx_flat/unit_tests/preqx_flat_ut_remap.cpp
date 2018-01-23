@@ -376,7 +376,6 @@ TEST_CASE("remap_interface", "vertical remap") {
   data.np1 = 0;
   data.qn0 = 0;
   SECTION("states_only") {
-    constexpr int remap_dim = 3;
     constexpr int rsplit = 1;
     data.qsize = 0;
     data.rsplit = rsplit;
@@ -388,7 +387,6 @@ TEST_CASE("remap_interface", "vertical remap") {
         remap);
   }
   SECTION("tracers_only") {
-    constexpr int remap_dim = 10;
     constexpr int rsplit = 0;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
