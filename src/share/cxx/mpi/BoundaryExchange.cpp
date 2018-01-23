@@ -230,6 +230,7 @@ void BoundaryExchange::pack_and_send ()
 
   // ---- Pack ---- //
   // First, pack 2d fields...
+  if (m_num_2d_fields > 0)
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({0,0,0},{m_connectivity->get_num_elements(),NUM_CONNECTIONS,m_num_2d_fields},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
     ConnectionHelpers helpers;
@@ -248,6 +249,7 @@ void BoundaryExchange::pack_and_send ()
     }
   });
   // ...then pack 3d fields.
+  if (m_num_3d_fields > 0)
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({0,0,0,0},{m_connectivity->get_num_elements(),NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
     ConnectionHelpers helpers;
@@ -290,6 +292,7 @@ void BoundaryExchange::recv_and_unpack ()
 
   // --- Unpack --- //
   // First, unpack 2d fields...
+  if (m_num_2d_fields > 0)
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),m_num_2d_fields},{1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield) {
     ConnectionHelpers helpers;
@@ -306,6 +309,7 @@ void BoundaryExchange::recv_and_unpack ()
     }
   });
   // ...then unpack 3d fields.
+  if (m_num_3d_fields > 0)
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({0,0,0},{m_connectivity->get_num_elements(),m_num_3d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
     ConnectionHelpers helpers;
