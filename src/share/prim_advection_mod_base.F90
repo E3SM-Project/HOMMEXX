@@ -104,15 +104,22 @@ module prim_advection_mod_base
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
-         qmin_ptr, qmax_ptr, dpdissk_ptr) bind(c)
+    subroutine euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: qmin_ptr, qmax_ptr
+    end subroutine euler_pull_qmin_qmax_c
+    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, &
+                                 Qtens_biharmonic_ptr, dpdissk_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       use kinds, only : real_kind
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,Qtens_biharmonic_ptr, &
-           qmin_ptr, qmax_ptr, dpdissk_ptr
+      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr,     &
+                                  Qtens_biharmonic_ptr, dpdissk_ptr
     end subroutine euler_pull_data_c
     subroutine euler_push_results_c(elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
       use iso_c_binding, only : c_ptr
@@ -1517,13 +1524,40 @@ end subroutine ALE_parametric_coords
   interface
     subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt, np1_qdp, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
-      use kinds,         only : real_kind
       !
       ! Inputs
       !
       integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
       real (kind=c_double), intent(in) :: dt
     end subroutine init_control_euler_c
+    subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
+      use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: qsize
+    end subroutine init_euler_neighbor_minmax_c
+    subroutine euler_neighbor_minmax_c(nets, nete) bind(c)
+      use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete
+    end subroutine euler_neighbor_minmax_c
+    subroutine euler_neighbor_minmax_start_c(nets, nete) bind(c)
+      use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete
+    end subroutine euler_neighbor_minmax_start_c
+    subroutine euler_neighbor_minmax_finish_c(nets, nete) bind(c)
+      use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete
+    end subroutine euler_neighbor_minmax_finish_c
   end interface
 
   integer              , intent(in   )         :: np1_qdp, n0_qdp
@@ -1552,6 +1586,11 @@ end subroutine ALE_parametric_coords
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, dpdissk_ptr
+
+  ! Set up the boundary exchange for the minmax calls
+  call init_euler_neighbor_minmax_c(qsize)
+  qmin_ptr = c_loc(qmin)
+  qmax_ptr = c_loc(qmax)
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1623,6 +1662,15 @@ OMP_SIMD
       enddo
     enddo
 
+#ifdef USE_KOKKOS_KERNELS
+    call euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr)
+    if ( rhs_multiplier == 0 ) then
+      ! update qmin/qmax based on neighbor data for lim8
+      call t_startf('eus_neighbor_minmax1')
+      call euler_neighbor_minmax_c(nets,nete)
+      call t_stopf('eus_neighbor_minmax1')
+    endif
+#else
     ! compute element qmin/qmax
     if ( rhs_multiplier == 0 ) then
       ! update qmin/qmax based on neighbor data for lim8
@@ -1630,6 +1678,8 @@ OMP_SIMD
       call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
       call t_stopf('eus_neighbor_minmax1')
     endif
+#endif
+
 
     ! get niew min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
@@ -1679,7 +1729,11 @@ OMP_SIMD
 !      call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
 !           nets , nete , qmin(:,:,nets:nete) , qmax(:,:,nets:nete) )
 #ifdef OVERLAP
+#ifdef USE_KOKKOS_KERNELS
+      call euler_neighbor_minmax_start_c(nets,nete)
+#else
       call neighbor_minmax_start(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+#endif
       call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
       do ie = nets , nete
 #if (defined COLUMN_OPENMP_notB4B)
@@ -1693,10 +1747,19 @@ OMP_SIMD
           enddo
         enddo
       enddo
-      call neighbor_minmax_finish(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+#ifdef USE_KOKKOS_KERNELS
+      call euler_neighbor_minmax_finish_c(nets,nete)
 #else
+      call neighbor_minmax_finish(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+#endif
+#else
+
       call t_startf('eus_neighbor_minmax2')
+#ifdef USE_KOKKOS_KERNELS
+      call euler_neighbor_minmax_c(nets,nete)
+#else
       call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+#endif
       call t_stopf('eus_neighbor_minmax2')
       call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
 
@@ -1778,8 +1841,7 @@ OMP_SIMD
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
   dpdissk_ptr = c_loc(dpdissk)
-  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, &
-       qmin_ptr, qmax_ptr, dpdissk_ptr)
+  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr, Qtens_biharmonic_ptr, dpdissk_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")
@@ -1792,7 +1854,7 @@ OMP_SIMD
     do q=1,qsize
       call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
     enddo
-  end do  
+  end do
 #else
   call t_startf("advance_qdp")
   call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens, &

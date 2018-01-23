@@ -45,6 +45,41 @@ void init_control_euler_c (const int& nets, const int& nete, const int& qn0, con
   control.limiter_option = limiter_option;
 }
 
+void init_euler_neighbor_minmax_c (const int& qsize)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  if (!be.is_registration_completed()) {
+    Elements& elements = Context::singleton().get_elements();
+
+    std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+
+    be.set_connectivity(Context::singleton().get_connectivity());
+    be.set_buffers_manager(Context::singleton().get_buffers_manager());
+    be.set_num_fields(qsize,0,0);
+    be.register_min_max_fields(elements.buffers.qlim,qsize,0);
+    be.registration_completed();
+  }
+}
+
+void euler_neighbor_minmax_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.exchange_min_max(nets-1, nete);
+}
+
+void euler_neighbor_minmax_start_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.pack_and_send_min_max(nets-1, nete);
+}
+
+void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.recv_and_unpack_min_max(nets-1, nete);
+}
+
 void init_derivative_c (CF90Ptr& dvv)
 {
   Derivative& deriv = Context::singleton().get_derivative ();
@@ -84,8 +119,20 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr& Qtens_biharmonic_ptr,
-                        CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr, CF90Ptr& dpdissk_ptr)
+void euler_pull_qmin_qmax_c (CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr)
+{
+  Elements& r = Context::singleton().get_elements();
+  const Control& data = Context::singleton().get_control();
+
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+                 HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
+                   qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
+                 r.buffers.qlim);
+}
+
+void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr,
+                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& dpdissk_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -118,11 +165,6 @@ void euler_pull_data_c (CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& vstar_ptr, CF90Ptr
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    dpdissk_ptr, data.num_elems, NUM_PHYSICAL_LEV, NP, NP),
                  r.buffers.dpdissk);
-  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
-                   qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
-                 HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
-                   qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
-                 r.buffers.qlim);
 }
 
 void euler_push_results_c (F90Ptr& elem_state_Qdp_ptr, F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
