@@ -31,9 +31,7 @@ public:
   // Geopotential height field
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
   // weighted velocity flux for consistency
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_un0;
-  // weighted velocity flux for consistency
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_derived_vn0;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Velocity in lon lat basis
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
@@ -49,6 +47,11 @@ public:
   // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$ 
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
+    m_derived_dp,                // for dp_tracers at physics timestep
+    m_derived_divdp,             // divergence of dp
+    m_derived_divdp_proj,        // DSSed divdp
+    m_derived_dpdiss_biharmonic; // mean dp dissipation tendency, if nu_p>0
 
   //buffer views are temporaries that matter only during local RK steps 
   //(dynamics and tracers time step).
@@ -71,8 +74,11 @@ public:
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
     ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
+    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens_biharmonic;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
+    ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
+    ExecViewManaged<Scalar* [QSIZE_D][2]        [NUM_LEV]>  qlim; // qmin, qmax
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
     // sdot_sum is used in case rsplit=0 and in energy diagnostics

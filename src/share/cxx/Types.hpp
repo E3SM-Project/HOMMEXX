@@ -59,7 +59,7 @@ using HostMemSpace    = Kokkos::HostSpace;
 //       device views (to be done in parallel). The difference is ONLY in
 //       the location of the MPI buffer for send/receive.
 
-#if defined (HOMMEXX_MPI_ON_DEVICE)
+#if HOMMEXX_MPI_ON_DEVICE
   using MPIMemSpace = ExecMemSpace;
 #else
   using MPIMemSpace = HostMemSpace;
@@ -84,7 +84,7 @@ using HostView = ViewType<DataType, HostMemSpace, Properties...>;
 template <typename DataType, typename... Properties>
 using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
 template <typename DataType, typename... Properties>
-using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecSpace>::value,
+using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecMemSpace>::value,
                                           ExecView<DataType,Properties...>,
                                           typename ExecView<DataType,Properties...>::HostMirror>::type;
 

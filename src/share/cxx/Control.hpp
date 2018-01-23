@@ -8,8 +8,12 @@
 namespace Homme {
 
 struct Control {
+  struct DSSOption {
+    enum Enum { eta = 1, omega, div_vdp_ave };
+    static Enum from(int);
+  };
 
-  Control () = default;
+  Control() = default;
 
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
@@ -20,9 +24,12 @@ struct Control {
              CRCPtr hybrid_bm_ptr,
              CRCPtr hybrid_bi_ptr);
 
-  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
-                          const Real dt, const Real eta_ave_w,
-                          const bool compute_diagonstics);
+  void random_init(int num_elems, int seed);
+
+  void set_rk_stage_data(const int nm1, const int n0, const int np1,
+                         const Real dt, const Real eta_ave_w,
+                         const bool compute_diagonstics);
+
   // Range of element indices to be handled by this thread is [nets,nete)
   int nets;
   int nete;
@@ -38,6 +45,13 @@ struct Control {
   // Tracers timelevel, inclusive range of 0-1
   // or time level for moist temp?
   int qn0;
+  int np1_qdp;
+
+  // Tracers options;
+  DSSOption::Enum DSSopt;
+  Real nu_p, nu_q;
+  int rhs_viss, rhs_multiplier;
+  int limiter_option; // we handle = 8
 
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;
@@ -60,7 +74,7 @@ struct Control {
   // hybrid coefficients
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_am;
   Real hybrid_ai0;
-  //ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_ai;
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_ai;
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_bm;
   ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_bi;
 

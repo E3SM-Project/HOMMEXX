@@ -69,7 +69,7 @@ module prim_advection_mod_base
   use diffusion_mod, only      : scalar_diffusion, diffusion_init
   use control_mod, only        : integration, test_case, filter_freq_advection,  hypervis_order, &
         statefreq, moisture, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &
-        nu_q, nu_p, limiter_option, hypervis_subcycle_q, rsplit
+        nu_p, nu_q, limiter_option, hypervis_subcycle_q, rsplit
   use edge_mod, only           : edgevpack, edgerotate, edgevunpack, initedgebuffer, initedgesbuffer, &
         edgevunpackmin, initghostbuffer3D
 
@@ -89,7 +89,7 @@ module prim_advection_mod_base
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
   public :: prim_advec_tracers_fvm
-  public :: vertical_remap
+  public :: vertical_remap_interface
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
   type (ghostBuffer3D_t)   :: ghostbuf_tr
@@ -99,53 +99,118 @@ module prim_advection_mod_base
   integer,parameter :: DSSdiv_vdp_ave = 3
   integer,parameter :: DSSno_var = -1
 
-  real(kind=real_kind), allocatable :: qmin(:,:,:), qmax(:,:,:)
+  real(kind=real_kind), allocatable, target :: qmin(:,:,:), qmax(:,:,:)
 
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
   interface
-    subroutine euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: elem_state_Qdp_ptr,Vstar_ptr
-    end subroutine euler_pull_data_c
-    subroutine euler_push_results_c(Qtens_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: Qtens_ptr
-    end subroutine euler_push_results_c
-    subroutine advance_qdp_c() bind(c)
-    end subroutine advance_qdp_c
+     subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+          elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+          elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+          elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+          qmin_ptr, qmax_ptr) bind(c)
+       use iso_c_binding, only : c_ptr
+       use kinds, only : real_kind
+       !
+       ! Inputs
+       !
+       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+            elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+            elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+            elem_state_Qdp_ptr,Qtens_biharmonic_ptr, &
+            qmin_ptr, qmax_ptr
+     end subroutine euler_pull_data_c
+     subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+          elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
+       use iso_c_binding, only : c_ptr
+       !
+       ! Inputs
+       !
+       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
+     end subroutine euler_push_results_c
+     subroutine advance_qdp_c() bind(c)
+       use iso_c_binding, only : c_int
+     end subroutine advance_qdp_c
   end interface
 
 contains
 
-  subroutine advance_qdp_f90 (nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
+#ifndef USE_KOKKOS_KERNELS
+  subroutine advance_qdp_f90 (nets,nete, &
+       rhs_multiplier,DSSopt,dp,dpdissk, &
+       n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,np1_qdp)
     use kinds,          only : real_kind
-    use derivative_mod, only : derivative_t
+    use derivative_mod, only : derivative_t, limiter_optim_iter_full
     use element_mod,    only : element_t
     !
     ! Inputs
     !
-    real (kind=real_kind), intent(in),  dimension(np,np,2,nlev,nets:nete) :: Vstar
+    real (kind=real_kind), intent(inout), dimension(np,np,2,nlev,nets:nete) :: Vstar
     real (kind=real_kind), intent(out), dimension(np,np,nlev,qsize,nets:nete) :: Qtens
-    type (element_t),      intent(in),  dimension(:) :: elem
+    real (kind=real_kind), intent(in), dimension(np,np,nlev,qsize,nets:nete) :: Qtens_biharmonic
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev,nets:nete) :: dpdissk
+    type (element_t),      intent(inout), dimension(:), target :: elem
     type (derivative_t),   intent(in) :: deriv
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in) :: nets, nete, n0_qdp
+    integer, intent(in) :: nets, nete, n0_qdp, rhs_viss, np1_qdp, rhs_multiplier, DSSopt
     !
     ! Locals
     !
     real (kind=real_kind), dimension(np,np,2) :: gradQ
     real (kind=real_kind), dimension(np,np)   :: dp_star
+    real (kind=real_kind), dimension(np,np,nlev) :: dp ! Could do same as dp_start, but Fortran code doesn't
+    real (kind=real_kind), dimension(:,:,:), pointer :: DSSvar
     integer :: ie, k, q
     !
     ! Routine body
     !
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !   2D Advection step
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    do ie = nets , nete
+       ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
+       ! all zero so we only have to DSS 1:nlev
+       if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+       if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+       if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
+
+       ! Compute velocity used to advance Qdp
+#if (defined COLUMN_OPENMP)
+       !$omp parallel do private(k,q)
+#endif
+       do k = 1 , nlev    !  Loop index added (AAM)
+          ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
+          ! but that's ok because rhs_multiplier=0 on the first stage:
+          dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
+          Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
+          Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
+
+          if ( limiter_option == 8) then
+             ! Note that the term dpdissk is independent of Q
+             ! UN-DSS'ed dp at timelevel n0+1:
+             dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
+             if ( nu_p > 0 .and. rhs_viss /= 0 ) then
+                ! add contribution from UN-DSS'ed PS dissipation
+                !          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
+                !          elem(ie)%derived%psdiss_biharmonic(:,:)
+                dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
+                     * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
+             endif
+             ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
+             ! testing
+             do q=1,qsize
+                qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
+             enddo
+          endif  ! limiter == 8
+
+          ! also DSS extra field
+          DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
+       enddo
+       call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
+    enddo
+
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,gradQ,dp_star)
@@ -159,10 +224,44 @@ contains
           Qtens(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:)
         enddo
       enddo
-    enddo
+   enddo
+
+   do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+      !$omp parallel do private(q,k,dp_star)
+#endif
+      do q=1,qsize
+         do k=1,nlev
+            ! optionally add in hyperviscosity computed above:
+            if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 8) then
+            ! apply limiter to Q = Qtens / dp_star
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
+                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+         endif
+
+         ! apply mass matrix, overwrite np1 with solution:
+         ! dont do this earlier, since we allow np1_qdp == n0_qdp
+         ! and we dont want to overwrite n0_qdp until we are done using it
+         do k = 1 , nlev
+            elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
+         enddo
+
+         if ( limiter_option == 4 ) then
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            ! sign-preserving limiter, applied after mass matrix
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
+         endif
+
+         call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
+      enddo
+   enddo ! ie loop
 
   end subroutine advance_qdp_f90
-
+#endif
 
   subroutine Prim_Advec_Init1(par, elem, n_domains)
     use dimensions_mod, only : nlev, qsize, nelemd
@@ -1464,8 +1563,10 @@ end subroutine ALE_parametric_coords
   use kinds          , only : real_kind
   use dimensions_mod , only : np, nlev
   use hybrid_mod     , only : hybrid_t
-  use element_mod    , only : element_t, elem_state_Qdp
-  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, limiter_optim_iter_full
+  use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
+       elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
+       elem_derived_divdp, elem_derived_dpdiss_biharmonic
+  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
@@ -1474,14 +1575,16 @@ end subroutine ALE_parametric_coords
   implicit none
 
   interface
-    subroutine init_control_euler_c (nets, nete, n0_qdp, qsize, dt) bind(c)
+    subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
+         n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       use kinds,         only : real_kind
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: nets, nete, n0_qdp, qsize
-      real (kind=c_double), intent(in) :: dt
+      integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
+           n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
+      real (kind=c_double), intent(in) :: dt, nu_p, nu_q
     end subroutine init_control_euler_c
   end interface
 
@@ -1499,17 +1602,20 @@ end subroutine ALE_parametric_coords
   ! local
   real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
   real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete)               :: dpdissk
+  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target       :: dpdissk
   real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
   real(kind=real_kind), dimension(np,np,2)                            :: gradQ
   real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
-  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete)         :: Qtens_biharmonic
+  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens_biharmonic
   real(kind=real_kind), dimension(:,:,:), pointer                     :: DSSvar
   real(kind=real_kind), dimension(nlev)                               :: dp0
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: Vstar_ptr, Qtens_ptr, elem_state_Qdp_ptr
+  type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
+       qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
+       elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
+       elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1677,104 +1783,56 @@ OMP_SIMD
   endif  ! compute biharmonic mixing term and qmin/qmax
   ! end of limiter_option == 8
 
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !   2D Advection step
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   call t_startf('eus_2d_advec')
-  do ie = nets , nete
-    ! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
-    ! all zero so we only have to DSS 1:nlev
-    if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
-    if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
-    if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
-
-    ! Compute velocity used to advance Qdp
-#if (defined COLUMN_OPENMP)
-    !$omp parallel do private(k,q)
-#endif
-    do k = 1 , nlev    !  Loop index added (AAM)
-      ! derived variable divdp_proj() (DSS'd version of divdp) will only be correct on 2nd and 3rd stage
-      ! but that's ok because rhs_multiplier=0 on the first stage:
-      dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier * dt * elem(ie)%derived%divdp_proj(:,:,k)
-      Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
-      Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
-
-      if ( limiter_option == 8) then
-        ! Note that the term dpdissk is independent of Q
-        ! UN-DSS'ed dp at timelevel n0+1:
-        dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
-        if ( nu_p > 0 .and. rhs_viss /= 0 ) then
-          ! add contribution from UN-DSS'ed PS dissipation
-!          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
-!          elem(ie)%derived%psdiss_biharmonic(:,:)
-          dpdissk(:,:,k,ie) = dpdissk(:,:,k,ie) - rhs_viss * dt * nu_q &
-                           * elem(ie)%derived%dpdiss_biharmonic(:,:,k) / elem(ie)%spheremp(:,:)
-        endif
-        ! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
-        ! testing
-        do q=1,qsize
-          qmin(k,q,ie)=max(qmin(k,q,ie),0d0)
-        enddo
-      endif  ! limiter == 8
-
-      ! also DSS extra field
-      DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
-    enddo
-    call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
-  enddo
-
 #ifdef USE_KOKKOS_KERNELS
-  Vstar_ptr = c_loc(Vstar)
+  if ( limiter_option == 4 ) then
+     call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
+  endif
+  call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+       dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option)
+  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
+  elem_derived_dp_ptr = c_loc(elem_derived_dp)
+  elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
+  elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+  elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+  elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
   elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
-  call init_control_euler_c (nets, nete, n0_qdp, qsize, dt)
-
-  call euler_pull_data_c(elem_state_Qdp_ptr, Vstar_ptr)
-
+  Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
+  qmin_ptr = c_loc(qmin)
+  qmax_ptr = c_loc(qmax)
+  call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+       elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+       Qtens_biharmonic_ptr, qmin_ptr, qmax_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c()
   call t_stopf("advance_qdp")
+  call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
-  Qtens_ptr = c_loc(Qtens)
-  call euler_push_results_c(Qtens_ptr)
-#else
-  call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete,n0_qdp,dt,Vstar,elem,deriv,Qtens)
-  call t_stopf("advance_qdp")
-#endif
-
+  do ie = nets , nete
+     if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+     if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
+     call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
+  enddo
   do ie=nets,nete
 #if (defined COLUMN_OPENMP)
  !$omp parallel do private(q,k,dp_star)
 #endif
     do q=1,qsize
-      do k=1,nlev
-        ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k,q,ie) = Qtens(:,:,k,q,ie) + Qtens_biharmonic(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 8) then
-        ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dpdissk(:,:,:,ie) )
-      endif
-
-      ! apply mass matrix, overwrite np1 with solution:
-      ! dont do this earlier, since we allow np1_qdp == n0_qdp
-      ! and we dont want to overwrite n0_qdp until we are done using it
-      do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 4 ) then
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        ! sign-preserving limiter, applied after mass matrix
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        call limiter2d_zero( elem(ie)%state%Qdp(:,:,:,q,np1_qdp))
-      endif
-
       call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
     enddo
-  enddo ! ie loop
+  end do  
+#else
+  call t_startf("advance_qdp")
+  call advance_qdp_f90(nets,nete, &
+       rhs_multiplier,DSSopt,dp,dpdissk, &
+       n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+       rhs_viss,Qtens_biharmonic,np1_qdp)
+  call t_stopf("advance_qdp")
+#endif
 
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
@@ -1999,9 +2057,126 @@ OMP_SIMD
   call t_stopf('advance_hypervis_scalar')
   end subroutine advance_hypervis_scalar
 
+#ifdef USE_KOKKOS_KERNELS
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use iso_c_binding,  only: c_ptr, c_loc, c_int, c_double
+    use control_mod, only: vert_remap_q_alg
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
 
+    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                elem_derived_phi,                               &
+                                elem_derived_omega_p, elem_derived_vn0,         &
+                                elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+                                elem_state_ps_v
 
+    use fvm_control_volume_mod, only : fvm_struct
 
+    implicit none
+
+    interface
+      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v) bind(c)
+        use iso_c_binding, only : c_int, c_double, c_ptr
+        integer (kind=c_int), intent(in) :: vert_remap_alg
+        integer (kind=c_int), intent(in) :: np1
+        integer (kind=c_int), intent(in) :: np1_qdp
+        real (kind=c_double), intent(in) :: dt
+        real (kind=c_double), intent(in) :: ps_v(:,:,:,:)
+      end subroutine vertical_remap_c
+
+      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                   elem_derived_phi_ptr,                                    &
+                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_pull_data_c
+
+      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                                      elem_derived_phi_ptr,                                    &
+                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+      end subroutine caar_push_results_c
+    end interface
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    integer (kind=c_int) :: np1_c, np1_qdp_c
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_derived_phi_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+
+    elem_state_v_ptr              = c_loc(elem_state_v)
+    elem_state_t_ptr              = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                           elem_derived_phi_ptr,                                    &
+                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+
+    np1_c = np1 - 1
+    np1_qdp_c = np1_qdp - 1
+
+    call t_startf('total vertical remap time')
+    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
+    call t_stopf('total vertical remap time')
+    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+                              elem_derived_phi_ptr,                                    &
+                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+  end subroutine vertical_remap_interface
+
+#else
+
+  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    use kinds,          only: real_kind
+    use hybvcoord_mod,  only: hvcoord_t
+    use hybrid_mod,     only: hybrid_t
+
+    use fvm_control_volume_mod, only : fvm_struct
+
+    implicit none
+
+    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+    type (element_t), intent(inout)   :: elem(:)
+    type(fvm_struct), intent(inout)   :: fvm(:)
+    type (hvcoord_t), intent(in)      :: hvcoord
+    real (kind=real_kind), intent(in) :: dt
+    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+
+    call t_startf('total vertical remap time')
+    call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call t_stopf('total vertical remap time')
+  end subroutine vertical_remap_interface
+#endif ! USE_KOKKOS_KERNELS
 
   subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
 
@@ -2065,15 +2240,21 @@ OMP_SIMD
 
   do ie=nets,nete
      ! update final ps_v
-     elem(ie)%state%ps_v(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
-          sum(elem(ie)%state%dp3d(:,:,:,np1),3)
+     elem(ie)%state%ps_v(:,:,np1) = 0.0
      do k=1,nlev
+        elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + elem(ie)%state%dp3d(:,:,k,np1)
+     end do
+     elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + hvcoord%hyai(1)*hvcoord%ps0
+     do k=1,nlev
+        ! target layer thickness
         dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
              ( hvcoord%hybi(k+1) - hvcoord%hybi(k))*elem(ie)%state%ps_v(:,:,np1)
         if (rsplit==0) then
+           ! source layer thickness
            dp_star(:,:,k) = dp(:,:,k) + dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -&
                 elem(ie)%derived%eta_dot_dpdn(:,:,k))
         else
+           ! source layer thickness
            dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
         endif
      enddo
@@ -2094,17 +2275,14 @@ OMP_SIMD
 
      if (rsplit>0) then
         !  REMAP u,v,T from levels in dp3d() to REF levels
-#undef REMAP_TE
-#ifdef REMAP_TE
-        ! remap u,v and cp*T + .5 u^2
-        ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-             elem(ie)%state%t(:,:,:,np1)*cp
-#else
         ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1)
-#endif
         ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star
 
+        ! ttmp    Field to be remapped
+        ! np      Number of points ??? Why is this a parameter
+        ! 1       Number of fields to remap
+        ! dp_star Source layer thickness
+        ! dp      Target layer thickness
         call t_startf('vertical_remap1_1')
         call remap1(ttmp,np,1,dp_star,dp)
         call t_stopf('vertical_remap1_1')
@@ -2120,13 +2298,6 @@ OMP_SIMD
 
         elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)/dp
         elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)/dp
-
-#ifdef REMAP_TE
-        ! back out T from TE
-        elem(ie)%state%t(:,:,:,np1) = &
-             ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
-             elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cp
-#endif
      endif
 
      ! remap the gll tracers from lagrangian levels (dp_star)  to REF levels dp
