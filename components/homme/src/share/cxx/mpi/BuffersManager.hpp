@@ -99,6 +99,8 @@ public:
   ExecViewUnmanaged<Real*> get_blackhole_send_buffer () const;
   ExecViewUnmanaged<Real*> get_blackhole_recv_buffer () const;
 
+  std::shared_ptr<Connectivity> get_connectivity () const { return m_connectivity; }
+
 private:
 
   // Make BoundaryExchange a friend, so it can call the next four methods underneath

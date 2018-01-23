@@ -83,6 +83,12 @@ class BuffersManager;
 class BoundaryExchange
 {
 public:
+  // For min/max exchange, we store the two values in a single array, and often need to access it
+  // to retrieve the max or the min. Instead of hard-coding 0/1, we use a wordy name
+  enum : int {
+    MIN_ID = 0,
+    MAX_ID = 1
+  };
 
   BoundaryExchange();
   BoundaryExchange(std::shared_ptr<Connectivity> connectivity, std::shared_ptr<BuffersManager> buffers_manager);
@@ -132,15 +138,17 @@ public:
   void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV],Properties...> field_min,
                                 ExecView<Scalar*[DIM][NUM_LEV],Properties...> field_max, int num_dims, int start_dim);
 
+  template<int DIM, typename... Properties>
+  void register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV],Properties...> field_min_max, int num_dims, int start_dim);
 
   // Size the buffers, and initialize the MPI types
   void registration_completed();
 
   // Exchange all registered 2d and 3d fields
-  void exchange ();
+  void exchange (int nets = 0, int nete = -1);
 
   // Exchange all registered 1d fields, performing min/max operations with neighbors
-  void exchange_min_max ();
+  void exchange_min_max (int nets = 0, int nete = -1);
 
   // Get the number of 2d/3d fields that this object handles
   int get_num_1d_fields () const { return m_num_1d_fields; }
@@ -162,19 +170,17 @@ public:
   };
 
   // Perform the pack_and_send and recv_and_unpack for boundary exchange of 2d/3d fields
-  void pack_and_send ();
-  void recv_and_unpack ();
+  void pack_and_send (int nets = 0, int nete = -1);
+  void recv_and_unpack (int nets = 0, int nete = -1);
 
   // Perform the pack_and_send and recv_and_unpack for min/max boundary exchange of 1d fields
-  void pack_and_send_min_max ();
-  void recv_and_unpack_min_max ();
+  void pack_and_send_min_max (int nets = 0, int nete = -1);
+  void recv_and_unpack_min_max (int nets = 0, int nete = -1);
 
   // If you are really not sure whether we are still transmitting, you can make sure we're done by calling this
   void waitall ();
 
 private:
-  static constexpr const int MIN_ID = 0;
-  static constexpr const int MAX_ID = 1;
 
   // Make BuffersManager a friend, so it can call the method underneath
   friend class BuffersManager;
@@ -364,8 +370,8 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV],Proper
     auto l_1d_fields     = m_1d_fields;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_connectivity->get_num_elements()),
                          KOKKOS_LAMBDA(const int ie){
-      l_1d_fields(ie,l_num_1d_fields,int(MAX_ID)) = Kokkos::subview(field_max,ie,ALL);
-      l_1d_fields(ie,l_num_1d_fields,int(MIN_ID)) = Kokkos::subview(field_min,ie,ALL);
+      l_1d_fields(ie,l_num_1d_fields,MAX_ID) = Kokkos::subview(field_max,ie,ALL);
+      l_1d_fields(ie,l_num_1d_fields,MIN_ID) = Kokkos::subview(field_min,ie,ALL);
     });
   }
 
@@ -388,8 +394,31 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV],P
     auto l_1d_fields     = m_1d_fields;
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
-      l_1d_fields(ie,l_num_1d_fields+idim,int(MAX_ID)) = Kokkos::subview(field_max,ie,start_dim+idim,ALL);
-      l_1d_fields(ie,l_num_1d_fields+idim,int(MIN_ID)) = Kokkos::subview(field_min,ie,start_dim+idim,ALL);
+      l_1d_fields(ie,l_num_1d_fields+idim,MAX_ID) = Kokkos::subview(field_max,ie,start_dim+idim,ALL);
+      l_1d_fields(ie,l_num_1d_fields+idim,MIN_ID) = Kokkos::subview(field_min,ie,start_dim+idim,ALL);
+    });
+  }
+
+  m_num_1d_fields += num_dims;
+}
+
+template<int DIM, typename... Properties>
+void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV],Properties...> field_min_max, int num_dims, int start_dim)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
+  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
+
+  {
+    auto l_num_1d_fields = m_num_1d_fields;
+    auto l_1d_fields     = m_1d_fields;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({0,0},{m_connectivity->get_num_elements(),num_dims},{1,1}),
+                         KOKKOS_LAMBDA(const int ie, const int idim){
+      l_1d_fields(ie,l_num_1d_fields+idim,MAX_ID) = Kokkos::subview(field_min_max,ie,start_dim+idim,etoi(MAX_ID),ALL);
+      l_1d_fields(ie,l_num_1d_fields+idim,MIN_ID) = Kokkos::subview(field_min_max,ie,start_dim+idim,etoi(MIN_ID),ALL);
     });
   }
 
