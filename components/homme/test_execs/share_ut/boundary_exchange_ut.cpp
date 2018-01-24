@@ -64,7 +64,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
 
   // Retrieve local number of elements
-  int num_elements = connectivity->get_num_elements();
+  int num_elements = connectivity->get_num_local_elements();
   int rank = connectivity->get_comm().m_rank;
 
   // Create input data arrays
@@ -92,13 +92,13 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   field_4d_cxx_host = Kokkos::create_mirror_view(field_4d_cxx);
 
   // Get the buffers manager
-  std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
-  buffers_manager->set_connectivity(connectivity);
+  std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+  std::shared_ptr<BuffersManager> buffers_manager_min_max = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
   // Create boundary exchanges
   std::shared_ptr<BoundaryExchange> be1 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
   std::shared_ptr<BoundaryExchange> be2 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
-  std::shared_ptr<BoundaryExchange> be3 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
+  std::shared_ptr<BoundaryExchange> be3 = std::make_shared<BoundaryExchange>(connectivity,buffers_manager_min_max);
 
   // Setup the be objects
   be1->set_num_fields(0,num_scalar_fields_2d,DIM*num_vector_fields_3d);
@@ -171,16 +171,17 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
     boundary_exchange_test_f90(field_min_1d_f90.data(), field_max_1d_f90.data(),
                                field_2d_f90.data(), field_3d_f90.data(), field_4d_f90.data(),
                                DIM, NUM_TIME_LEVELS, field_2d_idim+1, field_3d_idim+1, field_4d_outer_idim+1, minmax_split);
+    minmax_split = 1;
     if (minmax_split==0) {
       be1->exchange();
       be2->exchange();
       be3->exchange_min_max();
     } else {
+      be3->pack_and_send_min_max();
       be1->pack_and_send();
       be1->recv_and_unpack();
       be2->pack_and_send();
       be2->recv_and_unpack();
-      be3->pack_and_send_min_max();
       be3->recv_and_unpack_min_max();
     }
     Kokkos::deep_copy(field_min_1d_cxx_host, field_min_1d_cxx);
