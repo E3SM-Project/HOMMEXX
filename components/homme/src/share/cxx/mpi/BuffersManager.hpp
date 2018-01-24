@@ -91,6 +91,12 @@ public:
   // Allocate the buffers (overwriting possibly already allocated ones if needed)
   void allocate_buffers ();
 
+  // Lock/unlock the buffers are busy
+  void lock_buffers ();
+  void unlock_buffers ();
+
+  bool are_buffers_busy () const { return m_buffers_busy; }
+
   ExecViewUnmanaged<Real*> get_send_buffer           () const;
   ExecViewUnmanaged<Real*> get_recv_buffer           () const;
   ExecViewUnmanaged<Real*> get_local_buffer          () const;
@@ -140,6 +146,9 @@ private:
   // The sizes of the buffer
   size_t m_mpi_buffer_size;
   size_t m_local_buffer_size;
+
+  // Used to check whether buffers are busy
+  bool m_buffers_busy;
 
   // Used to check whether user can still request different sizes
   bool m_views_are_valid;
