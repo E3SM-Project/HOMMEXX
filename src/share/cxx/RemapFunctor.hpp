@@ -206,20 +206,24 @@ struct PpmVertRemap : public VertRemapAlg {
               mass_o[remap_idx](kv.ie, igp, jgp, k) +
               remap_var(igp, jgp, ilevel)[ivector];
         } // end k loop
-
-        // CUDA doesn't copy static variables to the device, so make a device
-        // copy here
-        const int _gs = gs;
-        // Reflect the real values across the top and bottom boundaries in the
-        // ghost cells
-        for (int k = 1; k <= _gs; k++) {
-          ao[remap_idx](kv.ie, igp, jgp, 1 - k + 1) =
-              ao[remap_idx](kv.ie, igp, jgp, k + 1);
-          ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
-              ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
-        } // end ghost cell loop
       });
       kv.team_barrier();
+
+      // CUDA doesn't copy static variables to the device, so make a device
+      // copy here
+      const int _gs = gs;
+      // Reflect the real values across the top and bottom boundaries into the
+      // ghost cells
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, _gs),
+                           [&](const int &k_0) {
+        ao[remap_idx](kv.ie, igp, jgp, 1 - k_0 - 1 + 1) =
+            ao[remap_idx](kv.ie, igp, jgp, k_0 + 1 + 1);
+
+        ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k_0 + 1 + 1) =
+            ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k_0 - 1 + 1);
+      }); // end ghost cell loop
+      kv.team_barrier();
+
       // Computes a monotonic and conservative PPM reconstruction
       compute_ppm(kv, Homme::subview(ao[remap_idx], kv.ie, igp, jgp),
                   Homme::subview(ppmdx, kv.ie, igp, jgp),
