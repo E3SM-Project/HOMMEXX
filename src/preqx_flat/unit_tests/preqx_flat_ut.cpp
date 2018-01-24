@@ -496,13 +496,12 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
-  sync_to_host(elements.m_derived_un0, elements.m_derived_vn0, vn0_f90);
+  sync_to_host(elements.m_derived_vn0, vn0_f90);
 
   compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
   test_functor.run_functor();
 
-  sync_to_host(elements.m_derived_un0, elements.m_derived_vn0,
-               test_functor.derived_v);
+  sync_to_host(elements.m_derived_vn0, test_functor.derived_v);
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp("vdp results", num_elems);
   Kokkos::deep_copy(vdp, elements.buffers.vdp);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp("div_vdp results",
@@ -597,10 +596,10 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_a_mirror("hybrid_a_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_a_mirror("hybrid_a_host");
   genRandArray(hybrid_a_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  ExecViewManaged<Real[NUM_LEV_P]>::HostMirror hybrid_b_mirror("hybrid_a_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_b_mirror("hybrid_b_host");
   genRandArray(hybrid_b_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,

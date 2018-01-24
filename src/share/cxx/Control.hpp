@@ -8,6 +8,10 @@
 namespace Homme {
 
 struct Control {
+  struct DSSOption {
+    enum Enum { eta = 1, omega, div_vdp_ave };
+    static Enum from(int);
+  };
 
   Control() = default;
 
@@ -39,7 +43,9 @@ struct Control {
   int np1_qdp;
 
   // Tracers options;
-  int rhs_viss;
+  DSSOption::Enum DSSopt;
+  Real nu_p, nu_q;
+  int rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
   // Number of tracers (may be lower than QSIZE_D)
