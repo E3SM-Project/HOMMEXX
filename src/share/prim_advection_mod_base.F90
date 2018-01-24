@@ -133,8 +133,12 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
-    subroutine advance_qdp_c() bind(c)
+    subroutine advance_qdp_c(rhs_viss) bind(c)
       use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: rhs_viss
     end subroutine advance_qdp_c
   end interface
 
@@ -1580,13 +1584,13 @@ end subroutine ALE_parametric_coords
 
   interface
     subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-         n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option) bind(c)
+         n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
       use iso_c_binding, only : c_int, c_double
       !
       ! Inputs
       !
       integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
-           n0_qdp, qsize, np1_qdp, rhs_viss, limiter_option
+           n0_qdp, qsize, np1_qdp, limiter_option
       real (kind=c_double), intent(in) :: dt, nu_p, nu_q
     end subroutine init_control_euler_c
     subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
@@ -1649,9 +1653,20 @@ end subroutine ALE_parametric_coords
        elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr
 
   ! Set up the boundary exchange for the minmax calls
+  call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+       dt, np1_qdp, nu_p, nu_q, limiter_option)
   call init_euler_neighbor_minmax_c(qsize)
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
+  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
+  elem_derived_dp_ptr = c_loc(elem_derived_dp)
+  elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
+  elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+  elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+  elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
+  elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+  Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1731,6 +1746,8 @@ OMP_SIMD
       call euler_neighbor_minmax_c(nets,nete)
       call t_stopf('eus_neighbor_minmax1')
     endif
+  !call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       !elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 #else
     ! compute element qmin/qmax
     if ( rhs_multiplier == 0 ) then
@@ -1845,26 +1862,18 @@ OMP_SIMD
 
   call t_startf('eus_2d_advec')
 #ifdef USE_KOKKOS_KERNELS
+    !call euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr)
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
-  call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
-       dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option)
-  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
-  elem_derived_dp_ptr = c_loc(elem_derived_dp)
-  elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
-  elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
-  elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
-  elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
-  elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
-  Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
+  !call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+       !dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option)
   call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
        elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
        Qtens_biharmonic_ptr)
   call t_startf("advance_qdp")
-  call advance_qdp_c()
+  call advance_qdp_c(rhs_viss)
   call t_stopf("advance_qdp")
   call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
@@ -1891,6 +1900,7 @@ OMP_SIMD
        rhs_viss,Qtens_biharmonic,np1_qdp)
   call t_stopf("advance_qdp")
 #endif
+
 
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
