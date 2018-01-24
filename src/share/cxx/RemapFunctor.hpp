@@ -300,7 +300,6 @@ struct PpmVertRemap : public VertRemapAlg {
       const int ivector = k % VECTOR_SIZE;
       remap_var(ilevel)[ivector] = mass_2 - mass_1;
     }); // k loop
-    kv.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -819,36 +818,13 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
   struct ComputeThicknessTag {};
   struct ComputeGridsTag {};
-
-  // Enable us to have a specific launch configuration for the GPU
-  template <bool on_gpu = Memory<ExecSpace>::on_gpu> struct ComputeRemapTag {};
-
-  struct FusedRemapTag {};
-
+  struct ComputeRemapTag {};
   // Computes the extrinsic values of the states in the initial map
   // i.e. velocity -> total momentum
-  template <bool on_gpu = Memory<ExecSpace>::on_gpu>
   struct ComputeExtrinsicsTag {};
-
   // Computes the intrinsic values of the states in the final map
   // i.e. total momentum -> velocity
-  template <bool on_gpu = Memory<ExecSpace>::on_gpu>
   struct ComputeIntrinsicsTag {};
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(FusedRemapTag, const TeamMember &team) const {
-    start_timer("Remap functor");
-    (*this)(ComputeThicknessTag(), team);
-
-    // Unlike with the kernel launch, this should be optimized away when empty
-    (*this)(ComputeExtrinsicsTag<false>(), team);
-
-    (*this)(ComputeGridsTag(), team);
-    (*this)(ComputeRemapTag<false>(), team);
-
-    // Unlike with the kernel launch, this should be optimized away when empty
-    (*this)(ComputeIntrinsicsTag<false>(), team);
-  }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeThicknessTag, const TeamMember &team) const {
@@ -872,37 +848,13 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeExtrinsicsTag<false>, const TeamMember &team) const {
+  void operator()(ComputeExtrinsicsTag, const TeamMember &team) const {
     KernelVariables kv(team);
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing extrinsic states\n"); });
-    }
-    auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
-    const char *var_names[] = { "u", "v", "temperature" };
-    for (int var = 0; var < this->num_states_remap; ++var) {
-      compute_extrinsic_state(
-          kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
-          state_remap[var]);
-      if (kv.ie == 0) {
-        Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              DEBUG_PRINT("remap c++ extrinsic %s %d %d: % .17e\n",
-                          var_names[var], igp, jgp,
-                          state_remap[var](igp, jgp, 0)[5]);
-            }
-          }
-        });
-      }
-    }
-  }
 
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeExtrinsicsTag<true>, const TeamMember &team) const {
     assert(this->num_states_remap > 0);
-    KernelVariables kv(team);
-
+    if(this->num_states_remap == 0) {
+      return;
+    }
     const int var = kv.ie % this->num_states_remap;
     kv.ie /= this->num_states_remap;
     assert(kv.ie < m_data.num_elems);
@@ -930,60 +882,19 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
   }
 
-  // This one is not on the GPU
+  // This asserts if num_to_remap() == 0
   KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeRemapTag<false>, const TeamMember &team) const {
-    KernelVariables kv(team);
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing remap<false>\n"); });
-    }
-
-    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d);
-
-    Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
-    remap_vals;
-    const int num_remap = build_remap_array(kv, remap_vals);
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     [&]() { DEBUG_PRINT("num_remap: %d\n", num_remap); });
-    }
-    assert(num_remap == num_to_remap());
-
-    if (num_remap > 0) {
-      for (int var = 0; var < num_remap; ++var) {
-        this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
-
-        if (kv.ie == 0) {
-          if (var < this->num_states_remap) {
-            Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-              const char *var_names[] = { "u", "v", "temperature" };
-              for (int igp = 0; igp < NP; ++igp) {
-                for (int jgp = 0; jgp < NP; ++jgp) {
-                  DEBUG_PRINT("remap remapped %s %d %d c++: % .17e\n",
-                              var_names[var], igp, jgp,
-                              remap_vals[var](igp, jgp, 0)[5]);
-                }
-              }
-            });
-          }
-        }
-      }
-      kv.team_barrier();
-    }
-  }
-
-  // This one is on the GPU, and shouldn't be called if num_to_remap() == 0
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeRemapTag<true>, const TeamMember &team) const {
+  void operator()(ComputeRemapTag, const TeamMember &team) const {
     KernelVariables kv(team);
     if (kv.ie == 0) {
       Kokkos::single(Kokkos::PerTeam(kv.team),
                      []() { DEBUG_PRINT("computing remap<true>\n"); });
     }
+
     assert(num_to_remap() != 0);
+    if(this->num_states_remap == 0) {
+      return;
+    }
     const int var = kv.ie % num_to_remap();
     kv.ie /= num_to_remap();
     assert(kv.ie < m_data.num_elems);
@@ -1000,27 +911,14 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
   }
 
-  // OpenMP version
   KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeIntrinsicsTag<false>, const TeamMember &team) const {
+  void operator()(ComputeIntrinsicsTag, const TeamMember &team) const {
     KernelVariables kv(team);
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing intrinsic states\n"); });
-    }
-    auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
-    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-    for (int var = 0; var < state_remap.size(); ++var) {
-      compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
-    }
-  }
 
-  // CUDA version
-  KOKKOS_INLINE_FUNCTION
-  void operator()(ComputeIntrinsicsTag<true>, const TeamMember &team) const {
     assert(this->num_states_remap != 0);
-    KernelVariables kv(team);
-
+    if(this->num_states_remap == 0) {
+      return;
+    }
     const int var = kv.ie % this->num_states_remap;
     kv.ie /= this->num_states_remap;
     assert(kv.ie < m_data.num_elems);
@@ -1030,26 +928,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
   }
 
-  template <typename _ExecSpace = ExecSpace>
-  typename std::enable_if<!std::is_same<_ExecSpace, Hommexx_Cuda>::value,
-                          void>::type
-  run_remap() {
-    if (num_to_remap() > 0) {
-      run_functor<FusedRemapTag>("fused vertical remap",
-                                 this->m_data.num_elems);
-    } else {
-      // Nothing to remap, but we still need to compute the source layer
-      // thickness and it's validity
-      run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
-                                   this->m_data.num_elems);
-    }
-    this->input_valid_assert();
-  }
-
-  template <typename _ExecSpace = ExecSpace>
-  typename std::enable_if<std::is_same<_ExecSpace, Hommexx_Cuda>::value,
-                          void>::type
-  run_remap() {
+  void run_remap() {
     // This runs the remap algorithm after determining it needs to
     // It also verifies the state of the simulation is valid
     // If there's nothing to remap, it will only perform the verification
@@ -1058,19 +937,18 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     if (num_to_remap() > 0) {
       // We don't want the latency of launching an empty kernel
       if (nonzero_rsplit) {
-        run_functor<ComputeExtrinsicsTag<true> >("Remap Scale States Functor",
-                                                 m_data.num_elems *
-                                                     this->num_states_remap);
+        run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
+                                          m_data.num_elems *
+                                              this->num_states_remap);
       }
       run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
                                    this->m_data.num_elems);
-      run_functor<ComputeRemapTag<true> >("Remap Compute Remap Functor",
-                                          this->m_data.num_elems *
-                                              num_to_remap());
+      run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
+                                   this->m_data.num_elems * num_to_remap());
       if (nonzero_rsplit) {
-        run_functor<ComputeIntrinsicsTag<true> >("Remap Rescale States Functor",
-                                                 m_data.num_elems *
-                                                     this->num_states_remap);
+        run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
+                                          m_data.num_elems *
+                                              this->num_states_remap);
       }
     }
     this->input_valid_assert();
