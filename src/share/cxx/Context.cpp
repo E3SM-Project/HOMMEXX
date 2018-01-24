@@ -41,12 +41,15 @@ Derivative& Context::get_derivative() {
   return *derivative_;
 }
 
-std::shared_ptr<BuffersManager> Context::get_buffers_manager() {
-  if ( ! buffers_manager_) {
-    buffers_manager_.reset(new BuffersManager(get_connectivity()));
+std::shared_ptr<BuffersManager> Context::get_buffers_manager(short int exchange_type) {
+  if ( ! buffers_managers_) {
+    buffers_managers_.reset(new BMMap());
   }
 
-  return buffers_manager_;
+  if (!(*buffers_managers_)[exchange_type]) {
+    (*buffers_managers_)[exchange_type] = std::make_shared<BuffersManager>(get_connectivity());
+  }
+  return (*buffers_managers_)[exchange_type];
 }
 
 std::shared_ptr<Connectivity> Context::get_connectivity() {
@@ -78,7 +81,7 @@ void Context::clear() {
   derivative_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
-  buffers_manager_ = nullptr;
+  buffers_managers_ = nullptr;
 }
 
 Context& Context::singleton() {
