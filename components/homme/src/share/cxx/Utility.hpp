@@ -621,12 +621,12 @@ KOKKOS_INLINE_FUNCTION constexpr FPType min(const FPType &val, FPPack... pack) {
 template <typename FPType>
 KOKKOS_INLINE_FUNCTION constexpr FPType max(const FPType &val_1,
                                             const FPType &val_2) {
-  return val_1 < val_2 ? val_1 : val_2;
+  return val_1 > val_2 ? val_1 : val_2;
 }
 
 template <typename FPType, typename... FPPack>
 KOKKOS_INLINE_FUNCTION constexpr FPType max(const FPType &val, FPPack... pack) {
-  return val < max(pack...) ? val : max(pack...);
+  return val > max(pack...) ? val : max(pack...);
 }
 
 template <typename ViewType>
