@@ -577,7 +577,6 @@ struct PpmVertRemap : public VertRemapAlg {
           Homme::subview(ppmdx, kv.ie, igp, jgp);
       compute_grids(kv, point_dpo, point_ppmdx);
     });
-    kv.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION Real
@@ -801,7 +800,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
          ++state_idx) {
       remap_vals[state_idx] = state_remap[state_idx];
     }
-    kv.team_barrier();
     return state_remap.size();
   }
 
