@@ -24,6 +24,8 @@ module boundary_exchange_ut
   integer :: nelemd
   integer :: num_min_max_fields_1d
 
+#include <mpif.h>
+
 contains
 
   subroutine initmp_f90 () bind(c)
@@ -82,10 +84,9 @@ contains
     use edge_mod_base,  only : initEdgeBuffer, initEdgeSBuffer
     use element_mod,    only : allocate_element_desc
     use metagraph_mod,  only : initMetaGraph, LocalElemCount
-    use parallel_mod,   only : iam
+    use parallel_mod,   only : iam, MPI_MAX, MPIinteger_t
     use schedtype_mod,  only : Schedule
     use schedule_mod,   only : genEdgeSched
-
     !
     ! Inputs
     !
@@ -94,7 +95,6 @@ contains
     ! Locals
     !
     integer :: Global2Local(nelem)
-    integer, allocatable, target :: Local2Global(:,:)
     integer, pointer :: map_ptr(:)
     integer :: nelemd_max, ie, ip, ierr
     integer, target :: my_num_elems
@@ -126,6 +126,7 @@ contains
     do ie=1,SIZE(MetaVertex%members)
       Global2Local(MetaVertex%members(ie)%number) = ie
     enddo
+    call MPI_Allreduce(MPI_IN_PLACE,Global2Local,nelem,MPIinteger_t,MPI_MAX,par%comm,ierr)
 
     ! Pass info to C
     call init_c_connectivity_f90 (nelemd,Global2Local)
@@ -136,12 +137,12 @@ contains
     use gridgraph_mod,  only : GridEdge_t
     use dimensions_mod, only : nelem
     interface
-      subroutine init_connectivity (nelemd) bind (c)
+      subroutine init_connectivity (num_local_elems) bind (c)
         use iso_c_binding, only : c_int
         !
         ! Inputs
         !
-        integer (kind=c_int), intent(in) :: nelemd
+        integer (kind=c_int), intent(in) :: num_local_elems
       end subroutine init_connectivity
       subroutine finalize_connectivity () bind(c)
       end subroutine finalize_connectivity
