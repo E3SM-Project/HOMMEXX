@@ -59,7 +59,7 @@ public:
 
   void set_comm (const Comm& comm);
 
-  void set_num_elements (const int num_elements);
+  void set_num_elements (const int num_local_elements);
 
   void add_connection (const int first_elem_lid,  const int first_elem_gid,  const int first_elem_pos,  const int first_elem_pid,
                        const int second_elem_lid, const int second_elem_gid, const int second_elem_pos, const int second_elem_pid);
@@ -112,7 +112,7 @@ public:
   KOKKOS_INLINE_FUNCTION
   int get_num_local_connections  () const { return get_num_connections<MemSpace>(ConnectionSharing::LOCAL, ConnectionKind::ANY); }
 
-  int get_num_elements           () const { return m_num_elements; }
+  int get_num_local_elements     () const { return m_num_local_elements;  }
 
   bool is_initialized () const { return m_initialized; }
   bool is_finalized   () const { return m_finalized;   }
@@ -127,7 +127,7 @@ private:
   bool    m_finalized;
   bool    m_initialized;
 
-  int     m_num_elements;
+  int     m_num_local_elements;
 
   ConnectionHelpers m_helpers;
 
