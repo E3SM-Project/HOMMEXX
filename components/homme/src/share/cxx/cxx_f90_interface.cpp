@@ -29,7 +29,7 @@ void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
                            const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const double& nu_p, const double& nu_q, const int& rhs_viss,
+                           const int& np1_qdp, const double& nu_p, const double& nu_q,
                            const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
@@ -38,7 +38,6 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
   control.rhs_multiplier = rhs_multiplier;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
-  control.rhs_viss = rhs_viss;
   control.limiter_option = limiter_option;
 
   // Adjust indices
@@ -126,7 +125,7 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_qmin_qmax_c (CF90Ptr& qmin_ptr, CF90Ptr& qmax_ptr)
+void euler_pull_qmin_qmax_c (F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -303,8 +302,11 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c()
+void advance_qdp_c(const int& rhs_viss)
 {
+  Control& control = Context::singleton().get_control ();
+  control.rhs_viss = rhs_viss;
+
   EulerStepFunctor::run();
 }
 
