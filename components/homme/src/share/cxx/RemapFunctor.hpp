@@ -192,6 +192,7 @@ struct PpmVertRemap : public VertRemapAlg {
             remap_var(igp, jgp, ilevel)[ivector] / dpo(kv.ie, igp, jgp, k + 2);
       });
 
+      // Scan region
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         // Accumulate the old mass up to old grid cell interface locations to
         // simplify integration during remapping. Also, divide out the grid
@@ -207,7 +208,6 @@ struct PpmVertRemap : public VertRemapAlg {
               remap_var(igp, jgp, ilevel)[ivector];
         } // end k loop
       });
-      kv.team_barrier();
 
       // CUDA doesn't copy static variables to the device, so make a device
       // copy here
@@ -222,7 +222,6 @@ struct PpmVertRemap : public VertRemapAlg {
         ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k_0 + 1 + 1) =
             ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k_0 - 1 + 1);
       }); // end ghost cell loop
-      kv.team_barrier();
 
       // Computes a monotonic and conservative PPM reconstruction
       compute_ppm(kv, Homme::subview(ao[remap_idx], kv.ie, igp, jgp),
@@ -230,23 +229,6 @@ struct PpmVertRemap : public VertRemapAlg {
                   Homme::subview(dma[remap_idx], kv.ie, igp, jgp),
                   Homme::subview(ai[remap_idx], kv.ie, igp, jgp),
                   Homme::subview(parabola_coeffs[remap_idx], kv.ie, igp, jgp));
-      kv.team_barrier();
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        if (kv.ie == 0 && remap_idx == 0) {
-          DEBUG_PRINT("remap parabola coeffs %d %d %d c++: % .17e + % .17e x "
-                      "+ % .17e x^2\n",
-                      remap_idx, igp, jgp,
-                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 0),
-                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 1),
-                      parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 2));
-          DEBUG_PRINT("remap mass_o %d %d %d c++: % .17e\n", remap_idx, igp,
-                      jgp, mass_o[remap_idx](kv.ie, igp, jgp, 5));
-          DEBUG_PRINT("remap ao %d %d %d c++: % .17e\n", remap_idx, igp, jgp,
-                      ao[remap_idx](kv.ie, igp, jgp, 5));
-          DEBUG_PRINT("remap z2 %d %d %d c++: % .17e\n", remap_idx, igp, jgp,
-                      z2(kv.ie, igp, jgp, 5));
-        }
-      });
       compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
                     Homme::subview(z2, kv.ie, igp, jgp),
                     Homme::subview(parabola_coeffs[remap_idx], kv.ie, igp, jgp),
@@ -254,6 +236,7 @@ struct PpmVertRemap : public VertRemapAlg {
                     Homme::subview(dpo, kv.ie, igp, jgp),
                     Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
+    kv.team_barrier();
     stop_timer("remap ppm Q phase");
   }
 
@@ -317,6 +300,7 @@ struct PpmVertRemap : public VertRemapAlg {
       const int ivector = k % VECTOR_SIZE;
       remap_var(ilevel)[ivector] = mass_2 - mass_1;
     }); // k loop
+    kv.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -523,21 +507,6 @@ struct PpmVertRemap : public VertRemapAlg {
       });
     });
     kv.team_barrier();
-
-    Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp) {
-          if (kv.ie == 0) {
-            DEBUG_PRINT("remap dpo %d %d c++: % .17e\n", igp, jgp,
-                        dpo(kv.ie, igp, jgp, 5));
-            DEBUG_PRINT("remap pio %d %d c++: % .17e\n", igp, jgp,
-                        pio(kv.ie, igp, jgp, 5));
-            DEBUG_PRINT("remap pin %d %d c++: % .17e\n", igp, jgp,
-                        pin(kv.ie, igp, jgp, 5));
-          }
-        }
-      }
-    });
 
     stop_timer("remap compute_partitions");
   }
@@ -933,12 +902,11 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   void operator()(ComputeExtrinsicsTag<true>, const TeamMember &team) const {
     assert(this->num_states_remap > 0);
     KernelVariables kv(team);
-    int var = kv.ie % this->num_states_remap;
+
+    const int var = kv.ie % this->num_states_remap;
     kv.ie /= this->num_states_remap;
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing extrinsic states\n"); });
-    }
+    assert(kv.ie < m_data.num_elems);
+
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     compute_extrinsic_state(
         kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
@@ -1016,8 +984,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
                      []() { DEBUG_PRINT("computing remap<true>\n"); });
     }
     assert(num_to_remap() != 0);
-    int var = kv.ie % num_to_remap();
+    const int var = kv.ie % num_to_remap();
     kv.ie /= num_to_remap();
+    assert(kv.ie < m_data.num_elems);
 
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
@@ -1026,16 +995,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
     remap_vals;
     const int num_remap = build_remap_array(kv, remap_vals);
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-        DEBUG_PRINT("num_remap: %d vs num_to_remap(): %d\n", num_remap,
-                    num_to_remap());
-      });
-    }
     assert(num_remap == num_to_remap());
 
     this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
-    kv.team_barrier();
   }
 
   // OpenMP version
@@ -1058,8 +1020,11 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   void operator()(ComputeIntrinsicsTag<true>, const TeamMember &team) const {
     assert(this->num_states_remap != 0);
     KernelVariables kv(team);
+
     const int var = kv.ie % this->num_states_remap;
     kv.ie /= this->num_states_remap;
+    assert(kv.ie < m_data.num_elems);
+
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
@@ -1094,7 +1059,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       // We don't want the latency of launching an empty kernel
       if (nonzero_rsplit) {
         run_functor<ComputeExtrinsicsTag<true> >("Remap Scale States Functor",
-                                                 this->m_data.num_elems);
+                                                 m_data.num_elems *
+                                                     this->num_states_remap);
       }
       run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
                                    this->m_data.num_elems);
@@ -1103,7 +1069,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
                                               num_to_remap());
       if (nonzero_rsplit) {
         run_functor<ComputeIntrinsicsTag<true> >("Remap Rescale States Functor",
-                                                 this->m_data.num_elems);
+                                                 m_data.num_elems *
+                                                     this->num_states_remap);
       }
     }
     this->input_valid_assert();
@@ -1116,12 +1083,12 @@ private:
         Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
 
     // Timers don't work on CUDA, so place them here
-    start_timer(functor_name.c_str());
+    GPTLstart(functor_name.c_str());
     profiling_resume();
     Kokkos::parallel_for("vertical remap", policy, *this);
     ExecSpace::fence();
     profiling_pause();
-    stop_timer(functor_name.c_str());
+    GPTLstop(functor_name.c_str());
   }
 
   KOKKOS_INLINE_FUNCTION
