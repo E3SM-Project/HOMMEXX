@@ -184,6 +184,14 @@ struct PpmVertRemap : public VertRemapAlg {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
 
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int k) {
+        const int ilevel = k / VECTOR_SIZE;
+        const int ivector = k % VECTOR_SIZE;
+        ao[remap_idx](kv.ie, igp, jgp, k + 2) =
+            remap_var(igp, jgp, ilevel)[ivector] / dpo(kv.ie, igp, jgp, k + 2);
+      });
+
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         // Accumulate the old mass up to old grid cell interface locations to
         // simplify integration during remapping. Also, divide out the grid
@@ -194,31 +202,34 @@ struct PpmVertRemap : public VertRemapAlg {
           const int ilevel = k / VECTOR_SIZE;
           const int ivector = k % VECTOR_SIZE;
 
-          ao[remap_idx](kv.ie, igp, jgp, k + 2) =
-              remap_var(igp, jgp, ilevel)[ivector];
           mass_o[remap_idx](kv.ie, igp, jgp, k + 1) =
               mass_o[remap_idx](kv.ie, igp, jgp, k) +
-              ao[remap_idx](kv.ie, igp, jgp, k + 2);
-          ao[remap_idx](kv.ie, igp, jgp, k + 2) /= dpo(kv.ie, igp, jgp, k + 2);
+              remap_var(igp, jgp, ilevel)[ivector];
         } // end k loop
 
+        // CUDA doesn't copy static variables to the device, so make a device
+        // copy here
         const int _gs = gs;
+        // Reflect the real values across the top and bottom boundaries in the
+        // ghost cells
         for (int k = 1; k <= _gs; k++) {
           ao[remap_idx](kv.ie, igp, jgp, 1 - k + 1) =
               ao[remap_idx](kv.ie, igp, jgp, k + 1);
           ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 1) =
               ao[remap_idx](kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k + 1);
         } // end ghost cell loop
-
-        // Computes a monotonic and conservative PPM reconstruction
-        compute_ppm(
-            kv, Homme::subview(ao[remap_idx], kv.ie, igp, jgp),
-            Homme::subview(ppmdx, kv.ie, igp, jgp),
-            Homme::subview(dma[remap_idx], kv.ie, igp, jgp),
-            Homme::subview(ai[remap_idx], kv.ie, igp, jgp),
-            Homme::subview(parabola_coeffs[remap_idx], kv.ie, igp, jgp));
+      });
+      kv.team_barrier();
+      // Computes a monotonic and conservative PPM reconstruction
+      compute_ppm(kv, Homme::subview(ao[remap_idx], kv.ie, igp, jgp),
+                  Homme::subview(ppmdx, kv.ie, igp, jgp),
+                  Homme::subview(dma[remap_idx], kv.ie, igp, jgp),
+                  Homme::subview(ai[remap_idx], kv.ie, igp, jgp),
+                  Homme::subview(parabola_coeffs[remap_idx], kv.ie, igp, jgp));
+      kv.team_barrier();
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         if (kv.ie == 0 && remap_idx == 0) {
-          DEBUG_PRINT("remap parabola coeffs %d %d %d c++: % .17e x + % .17e x "
+          DEBUG_PRINT("remap parabola coeffs %d %d %d c++: % .17e + % .17e x "
                       "+ % .17e x^2\n",
                       remap_idx, igp, jgp,
                       parabola_coeffs[remap_idx](kv.ie, igp, jgp, 5, 0),
@@ -487,13 +498,6 @@ struct PpmVertRemap : public VertRemapAlg {
         // either.
         pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
             pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
-
-        if (kv.ie == 0) {
-          DEBUG_PRINT("remap pio %d %d c++: % .17e\n", igp, jgp,
-                      pio(kv.ie, igp, jgp, 5));
-          DEBUG_PRINT("remap pin %d %d c++: % .17e\n", igp, jgp,
-                      pin(kv.ie, igp, jgp, 5));
-        }
       });
     });
 
@@ -515,6 +519,22 @@ struct PpmVertRemap : public VertRemapAlg {
       });
     });
     kv.team_barrier();
+
+    Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          if (kv.ie == 0) {
+            DEBUG_PRINT("remap dpo %d %d c++: % .17e\n", igp, jgp,
+                        dpo(kv.ie, igp, jgp, 5));
+            DEBUG_PRINT("remap pio %d %d c++: % .17e\n", igp, jgp,
+                        pio(kv.ie, igp, jgp, 5));
+            DEBUG_PRINT("remap pin %d %d c++: % .17e\n", igp, jgp,
+                        pin(kv.ie, igp, jgp, 5));
+          }
+        }
+      }
+    });
+
     stop_timer("remap compute_partitions");
   }
 

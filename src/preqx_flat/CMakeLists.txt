@@ -183,7 +183,6 @@ SET(PREQX_FLAT_UT_CXX_SRCS
   ${UNIT_TEST_DIR}/preqx_flat_ut_remap.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_sl.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_ml.cpp
-  ${UNIT_TEST_DIR}/remap.cpp
   ${PREQX_FLAT_DEPS_C}
   ${PREQX_FLAT_DEPS_CXX}
 )
