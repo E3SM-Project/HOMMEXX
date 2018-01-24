@@ -281,10 +281,10 @@ struct CaarFunctor {
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
-        m_elements.m_derived_un0(kv.ie, igp, jgp, ilev) +=
+        m_elements.m_derived_vn0(kv.ie, 0, igp, jgp, ilev) +=
             m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 0, igp, jgp, ilev);
 
-        m_elements.m_derived_vn0(kv.ie, igp, jgp, ilev) +=
+        m_elements.m_derived_vn0(kv.ie, 1, igp, jgp, ilev) +=
             m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, igp, jgp, ilev);
       });
     });
