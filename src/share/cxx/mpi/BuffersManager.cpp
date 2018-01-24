@@ -10,6 +10,7 @@ BuffersManager::BuffersManager ()
  : m_num_customers     (0)
  , m_mpi_buffer_size   (0)
  , m_local_buffer_size (0)
+ , m_buffers_busy      (false)
  , m_views_are_valid   (false)
 {
   // The "fake" buffers used for MISSING connections. These do not depend on the requirements
@@ -31,6 +32,9 @@ BuffersManager::~BuffersManager ()
 {
   // Check that all the customers un-registered themselves
   assert (m_num_customers==0);
+
+  // Check our buffers are not busy
+  assert (!m_buffers_busy);
 }
 
 void BuffersManager::check_for_reallocation ()
@@ -81,6 +85,21 @@ void BuffersManager::allocate_buffers ()
     // Invalidate buffer views and requests in the customer (if none built yet, it's a no-op)
     be_ptr.first->clear_buffer_views_and_requests ();
   }
+}
+
+void BuffersManager::lock_buffers ()
+{
+  // Make sure we are not trying to lock buffers already locked
+  assert (!m_buffers_busy);
+
+  m_buffers_busy = true;
+}
+
+void BuffersManager::unlock_buffers ()
+{
+  // TODO: I am not checking if the buffers are locked. This allows to call
+  //       the method twice in a row safely. Is this a bad idea?
+  m_buffers_busy = false;
 }
 
 void BuffersManager::add_customer (BoundaryExchange* add_me)
