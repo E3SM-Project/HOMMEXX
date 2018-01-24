@@ -52,10 +52,10 @@ void init_euler_neighbor_minmax_c (const int& qsize)
     Elements& elements = Context::singleton().get_elements();
 
     std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
-    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
-    be.set_connectivity(Context::singleton().get_connectivity());
-    be.set_buffers_manager(Context::singleton().get_buffers_manager());
+    be.set_connectivity(connectivity);
+    be.set_buffers_manager(buffers_manager);
     be.set_num_fields(qsize,0,0);
     be.register_min_max_fields(elements.buffers.qlim,qsize,0);
     be.registration_completed();
@@ -227,7 +227,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
     // If it was not yet created, create it and set it up
     if (!be[tl]) {
       std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
-      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
+      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
       if (!buffers_manager->is_connectivity_set()) {
         // TODO: should we do this inside the get_buffers_manager in Context?
         buffers_manager->set_connectivity(connectivity);
