@@ -568,9 +568,16 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   assert (nets>=0);
 
   // --- Unpack --- //
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_2d_fields,NUM_LEV},{1,1,1}),
+  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_1d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
+
     for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
+
+      // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
+      //       the missing recv buffer points to a blackhole fileld with 0's, which do not alter the accummulation)
+      if (connections(ie,neighbor).kind==etoi(ConnectionKind::MISSING)) {
+        continue;
+      }
       fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
       fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
     }
