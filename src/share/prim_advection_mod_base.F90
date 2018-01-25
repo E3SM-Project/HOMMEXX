@@ -140,6 +140,8 @@ module prim_advection_mod_base
       !
       integer (kind=c_int),  intent(in) :: rhs_viss
     end subroutine advance_qdp_c
+    subroutine euler_exchange_qdp_dss_var_and_rescale_qdp_c() bind(c)
+    end subroutine euler_exchange_qdp_dss_var_and_rescale_qdp_c
   end interface
 
 contains
@@ -1656,17 +1658,21 @@ end subroutine ALE_parametric_coords
   call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
        dt, np1_qdp, nu_p, nu_q, limiter_option)
   call init_euler_neighbor_minmax_c(qsize)
+
+  ! Bind the ptrs for the C calls
   qmin_ptr = c_loc(qmin)
   qmax_ptr = c_loc(qmax)
-  elem_derived_vn0_ptr = c_loc(elem_derived_vn0)
-  elem_derived_dp_ptr = c_loc(elem_derived_dp)
-  elem_derived_divdp_ptr = c_loc(elem_derived_divdp)
+
+  Qtens_biharmonic_ptr               = c_loc(Qtens_biharmonic)
+
+  elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+  elem_derived_dp_ptr                = c_loc(elem_derived_dp)
+  elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
   elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-  elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
-  elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
-  elem_derived_divdp_proj_ptr = c_loc(elem_derived_divdp_proj)
-  elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
-  Qtens_biharmonic_ptr = c_loc(Qtens_biharmonic)
+  elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+  elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+  elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
+  elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1862,12 +1868,9 @@ OMP_SIMD
 
   call t_startf('eus_2d_advec')
 #ifdef USE_KOKKOS_KERNELS
-    !call euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr)
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
-  !call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
-       !dt, np1_qdp, nu_p, nu_q, rhs_viss, limiter_option)
   call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
        elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
@@ -1875,33 +1878,20 @@ OMP_SIMD
   call t_startf("advance_qdp")
   call advance_qdp_c(rhs_viss)
   call t_stopf("advance_qdp")
+
+  call euler_exchange_qdp_dss_var_and_rescale_qdp_c()
+
   call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
-  do ie = nets , nete
-     if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
-     if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
-     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
-     call edgeVpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , ie)
-  enddo
-  do ie=nets,nete
-#if (defined COLUMN_OPENMP)
- !$omp parallel do private(q,k,dp_star)
-#endif
-    do q=1,qsize
-      call edgeVpack(edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
-    enddo
-  end do
 #else
+! else (USE_KOKKOS_KERNELS)
   call t_startf("advance_qdp")
   call advance_qdp_f90(nets,nete, &
        rhs_multiplier,DSSopt,dp,dpdissk, &
        n0_qdp,dt,Vstar,elem,deriv,Qtens, &
        rhs_viss,Qtens_biharmonic,np1_qdp)
   call t_stopf("advance_qdp")
-#endif
-
-
   call t_startf('eus_bexchV')
   call bndry_exchangeV( hybrid , edgeAdvp1 )
   call t_stopf('eus_bexchV')
@@ -1932,6 +1922,9 @@ OMP_SIMD
 !$OMP BARRIER
 #endif
 #endif
+#endif
+
+
   call t_stopf('eus_2d_advec')
 !pw call t_stopf('euler_step')
   end subroutine euler_step
