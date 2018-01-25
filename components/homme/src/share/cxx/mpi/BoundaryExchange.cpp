@@ -82,7 +82,7 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
   assert (buffers_manager && !m_buffers_manager);
 
   // If the buffers manager stores a connectivity, and we already have one set, they must match
-  assert (!buffers_manager->is_connectivity_set() || buffers_manager->get_connectivity()==m_connectivity);
+  assert (!buffers_manager->is_connectivity_set() || !(m_connectivity) || buffers_manager->get_connectivity()==m_connectivity);
 
   // Set the internal pointer
   m_buffers_manager = buffers_manager;
@@ -90,6 +90,11 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
   // Set the connectivity in the buffers manager, if not already set
   if (!m_buffers_manager->is_connectivity_set() && m_connectivity) {
     m_buffers_manager->set_connectivity(m_connectivity);
+  }
+
+  // If I don't store a connectivity, take it from the buffers manager (if it has one)
+  if (m_buffers_manager->is_connectivity_set() && !m_connectivity) {
+    m_connectivity = m_buffers_manager->get_connectivity();
   }
 
   // Add myself as a customer of the BM
