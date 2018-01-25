@@ -323,7 +323,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int k = 0; k < source.extent_int(1); ++k) {
+    for (int k = 0; k < dest.extent_int(1); ++k) {
       const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
