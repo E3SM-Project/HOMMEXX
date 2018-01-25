@@ -181,7 +181,7 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_P), [&] (const int& ilev) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
       });
     });
@@ -378,7 +378,7 @@ struct CaarFunctor {
         tmp[VECTOR_SIZE - 1] =
           (ilev + 1 < NUM_LEV) ?
           m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0] :
-          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, NUM_LEV_P-1)[(NUM_INTERFACE_LEV-1) % VECTOR_SIZE];
+          0;
         // Add div_vdp before subtracting the previous value to eta_dot_dpdn
         // This will hopefully reduce numeric error
         tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);

@@ -101,7 +101,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
 
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_INTERFACE_LEV][NP][NP]>(
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_eta_dot_dpdn_ptr, data.num_elems),
                  r.m_eta_dot_dpdn);
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
@@ -148,7 +148,7 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
                  qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
   sync_to_host(r.m_eta_dot_dpdn,
-               HostViewUnmanaged<Real*[NUM_INTERFACE_LEV][NP][NP]>(
+               HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_eta_dot_dpdn_ptr, data.num_elems));
   sync_to_host(r.m_omega_p,
                HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(

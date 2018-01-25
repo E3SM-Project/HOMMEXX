@@ -45,9 +45,9 @@ public:
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
   // eta is the vertical coordinate
   // eta dot is the flux through the vertical level interface
-  //    (note there are NUM_LEV_P of them)
+  //    (note there are NUM_LEV_P of them, but the top and bottom are both 0)
   // dpdn is the derivative of pressure with respect to eta
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
     m_derived_dp,                // for dp_tracers at physics timestep
     m_derived_divdp,             // divergence of dp

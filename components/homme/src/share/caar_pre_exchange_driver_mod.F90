@@ -80,6 +80,7 @@ contains
     real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
     real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlev)
     real (kind=real_kind), intent(out) :: dp3d(np, np, nlev, timelevels)
+    real (kind=real_kind) :: eta_dot_dpdn_kp1
 
     ! locals
     integer :: i, j, k
@@ -87,9 +88,14 @@ contains
     do k = 1, nlev
       do j = 1, np
         do i = 1, np
+          if (k < nlev) then
+            eta_dot_dpdn_kp1 = eta_dot_dpdn(i, j, k + 1)
+          else
+            eta_dot_dpdn_kp1 = 0.0d0
+          end if
           dp3d(i, j, k, np1) = &
                spheremp(i, j) * (dp3d(i, j, k, nm1) - &
-               dt2 * (divdp(i, j, k) + eta_dot_dpdn(i, j, k + 1) - eta_dot_dpdn(i, j, k)))
+               dt2 * (divdp(i, j, k) + eta_dot_dpdn_kp1 - eta_dot_dpdn(i, j, k)))
         end do
       end do
     end do

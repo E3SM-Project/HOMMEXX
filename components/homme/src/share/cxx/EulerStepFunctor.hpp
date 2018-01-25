@@ -117,6 +117,11 @@ private:
     const bool lim8 = c.limiter_option == 8;
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
+    auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
+                   e.m_eta_dot_dpdn :
+                   c.DSSopt == Control::DSSOption::omega ?
+                   e.m_omega_p :
+                   e.m_derived_divdp_proj);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP*NP),
       [&] (const int loop_idx) {
@@ -147,18 +152,7 @@ private:
             //! also DSS extra field
             //! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
             //! all zero so we only have to DSS 1:nlev
-            // Need to differentiate between eta_dot_dpdn and the other two
-            // because the note above implies auto& won't capture all three.
-            switch (c.DSSopt) {
-            case Control::DSSOption::eta:
-              e.m_eta_dot_dpdn(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
-              break;
-            default:
-              auto& v = (c.DSSopt == Control::DSSOption::omega ?
-                         e.m_omega_p :
-                         e.m_derived_divdp_proj);
-              v(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
-            }
+            f_dss(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
           });
       });
   }
