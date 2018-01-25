@@ -367,13 +367,14 @@ struct PpmVertRemap : public VertRemapAlg {
               dx(j, 0) * (dx(j, 1) * (cell_means(j + 2) - cell_means(j + 1)) +
                           dx(j, 2) * (cell_means(j + 1) - cell_means(j)));
 
-          dma(j) = min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
-                       2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
-                   copysign(1.0, da);
+          dma(j) =
+              min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
+                  2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
+              copysign(1.0, da);
         } else {
           dma(j) = 0.0;
         }
-      });
+													 });
     }
     {
       auto bounds = boundaries::ppm_indices_2();
@@ -388,41 +389,48 @@ struct PpmVertRemap : public VertRemapAlg {
                                 dx(j, 8) * dma(j + 1) + dx(j, 9) * dma(j));
           });
     }
-    {
-      auto bounds = boundaries::ppm_indices_3();
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
-                                                     bounds.iterations()),
-                           [&](const int zoffset_j) {
-        const int j = zoffset_j + *bounds.begin();
-        Real al = ai(j - 1);
-        Real ar = ai(j);
-        if ((ar - cell_means(j + 1)) * (cell_means(j + 1) - al) <= 0.) {
-          al = cell_means(j + 1);
-          ar = cell_means(j + 1);
-        }
-        if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) >
-            (ar - al) * (ar - al) / 6.0) {
-          al = 3.0 * cell_means(j + 1) - 2.0 * ar;
-        }
-        if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) <
-            -(ar - al) * (ar - al) / 6.0) {
-          ar = 3.0 * cell_means(j + 1) - 2.0 * al;
-        }
+    // TODO: Figure out and fix the issue which needs the Kokkos::single,
+    // and parallelize over the bounds provided
+    // This costs about 15-20% more on GPU than a fully parallel ppm remap
+    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+      {
+        auto bounds = boundaries::ppm_indices_3();
+        // Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+        //                                                bounds.iterations()),
+        //                      [&](const int zoffset_j) {
+        //   const int j = zoffset_j + *bounds.begin();
+        for (auto j : bounds) {
+          Real al = ai(j - 1);
+          Real ar = ai(j);
+          if ((ar - cell_means(j + 1)) * (cell_means(j + 1) - al) <= 0.) {
+            al = cell_means(j + 1);
+            ar = cell_means(j + 1);
+          }
+          if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) >
+              (ar - al) * (ar - al) / 6.0) {
+            al = 3.0 * cell_means(j + 1) - 2.0 * ar;
+          }
+          if ((ar - al) * (cell_means(j + 1) - (al + ar) / 2.0) <
+              -(ar - al) * (ar - al) / 6.0) {
+            ar = 3.0 * cell_means(j + 1) - 2.0 * al;
+          }
 
-        // Computed these coefficients from the edge values
-        // and cell mean in Maple. Assumes normalized
-        // coordinates: xi=(x-x0)/dx
+          // Computed these coefficients from the edge values
+          // and cell mean in Maple. Assumes normalized
+          // coordinates: xi=(x-x0)/dx
 
-        assert(parabola_coeffs.data() != nullptr);
-        assert(j - 1 < parabola_coeffs.extent_int(0));
-        assert(2 < parabola_coeffs.extent_int(1));
+          assert(parabola_coeffs.data() != nullptr);
+          assert(j - 1 < parabola_coeffs.extent_int(0));
+          assert(2 < parabola_coeffs.extent_int(1));
 
-        parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
-        parabola_coeffs(j - 1, 1) = ar - al;
-        parabola_coeffs(j - 1, 2) =
-            3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
-      });
-    }
+          parabola_coeffs(j - 1, 0) =
+              1.5 * cell_means(j + 1) - (al + ar) / 4.0;
+          parabola_coeffs(j - 1, 1) = ar - al;
+          parabola_coeffs(j - 1, 2) =
+              3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
+        }
+      }
+    });
     Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
       boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
     });
@@ -903,8 +911,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
     remap_vals;
-    const int num_remap = build_remap_array(kv, remap_vals);
-    assert(num_remap == num_to_remap());
+    DEBUG_EXPECT(build_remap_array(kv, remap_vals), num_to_remap());
 
     this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
   }
