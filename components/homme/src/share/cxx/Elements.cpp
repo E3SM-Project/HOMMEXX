@@ -350,6 +350,7 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
         }
       }
     }
+    k_eta_dot_dp_dn += NP*NP;
   }
   Kokkos::deep_copy(m_eta_dot_dpdn, h_eta_dot_dpdn);
 }
@@ -477,10 +478,6 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   Kokkos::deep_copy(h_eta_dot_dpdn, m_eta_dot_dpdn);
   int k_eta_dot_dp_dn = 0;
   for (int ie = 0; ie < m_num_elems; ++ie) {
-    // Note: we must process only NUM_PHYSICAL_LEV, since the F90
-    //       ptr has that size. If we looped on levels packs (0 to NUM_LEV_P)
-    //       and on vector length, we would have to treat the last pack with
-    // care
     for (int ilevel = 0; ilevel < NUM_PHYSICAL_LEV; ++ilevel) {
       int ilev = ilevel / VECTOR_SIZE;
       int ivector = ilevel % VECTOR_SIZE;
@@ -491,6 +488,7 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
         }
       }
     }
+    k_eta_dot_dp_dn += NP*NP;
   }
 }
 
