@@ -13,15 +13,15 @@
 // This enables us to define variables specifically for use in asserts
 // Note this can still cause issues
 #define DEBUG_EXPECT(eval, expected)                                           \
-  { eval; }
-#else
-#define DEBUG_PRINT(...)                                                       \
-  {}
-#define DEBUG_EXPECT(eval, expected)                                           \
   {                                                                            \
     auto v = eval;                                                             \
     assert(v == expected);                                                     \
   }
+#else
+#define DEBUG_PRINT(...)                                                       \
+  {}
+#define DEBUG_EXPECT(eval, expected)                                           \
+  { eval; }
 #endif
 
 namespace Homme {
