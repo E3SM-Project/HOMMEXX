@@ -128,7 +128,7 @@ struct PpmVertRemap : public VertRemapAlg {
                 "PpmVertRemap requires a valid PPM "
                 "boundary condition");
   static constexpr auto remap_dim = _remap_dim;
-  static constexpr int gs = 2;
+  const int gs = 2;
 
   explicit PpmVertRemap(const Control &data)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
@@ -209,12 +209,9 @@ struct PpmVertRemap : public VertRemapAlg {
         } // end k loop
       });
 
-      // CUDA doesn't copy static variables to the device, so make a device
-      // copy here
-      const int _gs = gs;
       // Reflect the real values across the top and bottom boundaries into the
       // ghost cells
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, _gs),
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, gs),
                            [&](const int &k_0) {
         ao[remap_idx](kv.ie, igp, jgp, 1 - k_0 - 1 + 1) =
             ao[remap_idx](kv.ie, igp, jgp, k_0 + 1 + 1);
@@ -850,7 +847,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap > 0);
-    if(this->num_states_remap == 0) {
+    if (this->num_states_remap == 0) {
       return;
     }
     const int var = kv.ie % this->num_states_remap;
@@ -890,7 +887,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
 
     assert(num_to_remap() != 0);
-    if(this->num_states_remap == 0) {
+    if (this->num_states_remap == 0) {
       return;
     }
     const int var = kv.ie % num_to_remap();
@@ -914,7 +911,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap != 0);
-    if(this->num_states_remap == 0) {
+    if (this->num_states_remap == 0) {
       return;
     }
     const int var = kv.ie % this->num_states_remap;
