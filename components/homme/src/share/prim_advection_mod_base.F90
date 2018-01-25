@@ -140,8 +140,8 @@ module prim_advection_mod_base
       !
       integer (kind=c_int),  intent(in) :: rhs_viss
     end subroutine advance_qdp_c
-    subroutine euler_exchange_qdp_dss_var_and_rescale_qdp_c() bind(c)
-    end subroutine euler_exchange_qdp_dss_var_and_rescale_qdp_c
+    subroutine euler_exchange_qdp_dss_var_c() bind(c)
+    end subroutine euler_exchange_qdp_dss_var_c
   end interface
 
 contains
@@ -1500,6 +1500,9 @@ end subroutine ALE_parametric_coords
 !    call extrae_user_function(0)
 
     call t_stopf('prim_advec_tracers_remap_rk2')
+!print *, "+------------------------+"
+!print *, "|  end of advec tracers  |"
+!print *, "+------------------------+"
 
   end subroutine prim_advec_tracers_remap_rk2
 
@@ -1581,6 +1584,9 @@ end subroutine ALE_parametric_coords
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
   use parallel_mod, only : abortmp, iam
+!!!!!!!!!!!!!!!!!!!!!!
+use utils_mod, only: FrobeniusNorm
+!!!!!!!!!!!!!!!!!!!!!!
 
   implicit none
 
@@ -1867,6 +1873,14 @@ OMP_SIMD
   ! end of limiter_option == 8
 
   call t_startf('eus_2d_advec')
+!!!!!!!!!!!!!!!!!!!!!!!!!
+print *, "PRE"
+print *, "DSSopt =", DSSopt
+print *, "|qdp| =", FrobeniusNorm(elem_state_Qdp)
+print *, "|eta| =", FrobeniusNorm(elem_derived_eta_dot_dpdn)
+print *, "|omega| =", FrobeniusNorm(elem_derived_omega_p)
+print *, "|div_vdp| =", FrobeniusNorm(elem_derived_divdp_proj)
+!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifdef USE_KOKKOS_KERNELS
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
@@ -1879,7 +1893,7 @@ OMP_SIMD
   call advance_qdp_c(rhs_viss)
   call t_stopf("advance_qdp")
 
-  call euler_exchange_qdp_dss_var_and_rescale_qdp_c()
+  call euler_exchange_qdp_dss_var_c()
 
   call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
@@ -1923,7 +1937,18 @@ OMP_SIMD
 #endif
 #endif
 #endif
+!!!!!!!!!!!!!!!!!!!!!
+print *, "POST"
+print *, "DSSopt =", DSSopt
+print *, "|qdp| =", FrobeniusNorm(elem_state_Qdp)
+print *, "|eta| =", FrobeniusNorm(elem_derived_eta_dot_dpdn)
+print *, "|omega| =", FrobeniusNorm(elem_derived_omega_p)
+print *, "|div_vdp| =", FrobeniusNorm(elem_derived_divdp_proj)
+!!!!!!!!!!!!!!!!!!!!!
 
+!print *, "+---------------------+"
+!print *, "|  end of euler step  |"
+!print *, "+---------------------+"
 
   call t_stopf('eus_2d_advec')
 !pw call t_stopf('euler_step')

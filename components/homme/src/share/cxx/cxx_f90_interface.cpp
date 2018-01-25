@@ -237,34 +237,23 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Setup the boundary exchange
   std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];
-  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be_map = Context::singleton().get_boundary_exchanges();
   for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
     std::stringstream ss;
     ss << "caar tl " << tl;
-    be[tl] = be_map[ss.str()];
+    be[tl] = Context::singleton().get_boundary_exchange(ss.str());
 
     // If it was not yet created, create it and set it up
-    if (!be[tl]) {
-      std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+    if (!be[tl]->is_registration_completed()) {
       std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-      if (!buffers_manager->is_connectivity_set()) {
-        // TODO: should we do this inside the get_buffers_manager in Context?
-        buffers_manager->set_connectivity(connectivity);
-      }
+      be[tl]->set_buffers_manager(buffers_manager);
 
       // Set the views of this time level into this time level's boundary exchange
-      be[tl] = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
-
-      // Setup the boundary exchange
       be[tl]->set_num_fields(0,0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
       be[tl]->registration_completed();
-
-      // Set this BE in the Context's map
-      be_map[ss.str()] = be[tl];
     }
   }
 
@@ -310,7 +299,7 @@ void advance_qdp_c(const int& rhs_viss)
   EulerStepFunctor::run();
 }
 
-void euler_exchange_qdp_dss_var_and_rescale_qdp_c ()
+void euler_exchange_qdp_dss_var_c ()
 {
   Control data = Context::singleton().get_control();
   Elements& elements = Context::singleton().get_elements();
@@ -323,13 +312,21 @@ void euler_exchange_qdp_dss_var_and_rescale_qdp_c ()
   //       of euler_step in F90, making it set the common parameters to all euler_steps
   //       calls (nets, nete, dt, nu_p, nu_q)
   std::shared_ptr<BoundaryExchange> be_qdp_dss_var;
-  if (data.DSSopt==Control::DSSOption::eta) {
-    be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp eta");
-  } else if (data.DSSopt==Control::DSSOption::omega) {
-    be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp omega");
-  } else if (data.DSSopt==Control::DSSOption::div_vdp_ave) {
-    be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp div_vdp_ave");
+  switch (data.DSSopt) {
+    case Control::DSSOption::eta:
+      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp eta");
+      break;
+    case Control::DSSOption::omega:
+      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp omega");
+      break;
+    case Control::DSSOption::div_vdp_ave:
+      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp div_vdp_ave");
+      break;
   }
+
+  // Sanity check (we must have selected one DSS variable!)
+  assert (be_qdp_dss_var);
+
   if (!be_qdp_dss_var->is_registration_completed()) {
     // If it is the first time we call this method, we need to set up the BE
     std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
@@ -354,10 +351,19 @@ void euler_exchange_qdp_dss_var_and_rescale_qdp_c ()
 
   be_qdp_dss_var->exchange();
 
-  MDRangePolicy<ExecSpace,5> policy({0,0,0,0,0},{data.num_elems,data.qsize,NP,NP,NUM_LEV}, {1,1,1,1,1});
+  // Rescale by rspheremp
+  MDRangePolicy<ExecSpace,5> policy5({0,0,0,0,0},{data.num_elems,data.qsize,NP,NP,NUM_LEV}, {1,1,1,1,1});
   Kokkos::Experimental::md_parallel_for(
-    policy,KOKKOS_LAMBDA(int ie, int q, int igp, int jgp, int ilev) {
+    policy5,KOKKOS_LAMBDA(int ie, int q, int igp, int jgp, int ilev) {
        elements.m_qdp(ie,data.np1_qdp,q,igp,jgp,ilev) *= elements.m_rspheremp(ie,igp,jgp);
+  });
+  auto dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
+                 (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p    : elements.m_derived_divdp_proj));
+
+  MDRangePolicy<ExecSpace,4> policy4({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
+  Kokkos::Experimental::md_parallel_for(
+    policy4,KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
+       dss_var(ie,igp,jgp,ilev) *= elements.m_rspheremp(ie,igp,jgp);
   });
   ExecSpace::fence();
 
