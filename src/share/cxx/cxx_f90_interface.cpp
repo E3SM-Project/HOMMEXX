@@ -363,6 +363,10 @@ void euler_exchange_qdp_dss_var_c ()
   EulerStepFunctor::apply_rspheremp();
 }
 
+void euler_qmin_qmax() {
+  EulerStepFunctor::compute_qmin_qmax();
+}
+
 } // extern "C"
 
 template <bool rsplit, template <int, typename...> class RemapAlg,
