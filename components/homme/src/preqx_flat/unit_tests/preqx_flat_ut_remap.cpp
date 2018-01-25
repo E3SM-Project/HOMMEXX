@@ -382,10 +382,7 @@ TEST_CASE("remap_interface", "vertical remap") {
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
     _Remap remap(data, elements);
-    Kokkos::parallel_for(
-        Homme::get_default_team_policy<
-            ExecSpace, typename _Remap::FusedRemapTag>(num_elems),
-        remap);
+    remap.run_remap();
   }
   SECTION("tracers_only") {
     constexpr int rsplit = 0;
@@ -393,21 +390,15 @@ TEST_CASE("remap_interface", "vertical remap") {
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
     _Remap remap(data, elements);
-    Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, _Remap::FusedRemapTag>(
-            num_elems),
-        remap);
+    remap.run_remap();
   }
   SECTION("states_tracers") {
-    constexpr int remap_dim = 13;
+    constexpr int remap_dim = 3 + QSIZE_D;
     constexpr int rsplit = 1;
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<remap_dim, PpmVertRemap, PpmMirrored>;
     _Remap remap(data, elements);
-    Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, _Remap::FusedRemapTag>(
-            num_elems),
-        remap);
+    remap.run_remap();
   }
 }
