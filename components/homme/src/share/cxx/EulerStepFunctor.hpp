@@ -6,6 +6,7 @@
 #include "Derivative.hpp"
 #include "Control.hpp"
 #include "SphereOperators.hpp"
+#include "vector/VectorUtils.hpp"
 
 namespace Homme {
 
@@ -241,6 +242,42 @@ public:
     ExecSpace::fence();
     GPTLstop("esf-rspheremp run");
     profiling_pause();
+  }
+
+  static void compute_qmin_qmax() {
+    Control &state = Context::singleton().get_control();
+    Elements &elems = Context::singleton().get_elements();
+
+    MDRangePolicy<ExecSpace, 5> policy1(
+        { 0, 0, 0, 0, 0 }, { state.num_elems, state.qsize, NP, NP, NUM_LEV },
+        { 1, 1, 1, 1, 1 });
+    Kokkos::Experimental::md_parallel_for(
+        policy1, KOKKOS_LAMBDA(int ie, int q, int igp, int jgp, int lev) {
+          Scalar dp = elems.m_derived_dp(ie, igp, jgp, lev) -
+                      state.rhs_multiplier * state.dt *
+                          elems.m_derived_dp(ie, igp, jgp, lev);
+          elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) =
+              elems.m_qdp(ie, state.qn0, q, igp, jgp, lev) / dp;
+        });
+
+    MDRangePolicy<ExecSpace, 3> policy2(
+        { 0, 0, 0 }, { state.num_elems, state.qsize, NUM_LEV }, { 1, 1, 1 });
+    if (state.rhs_multiplier == 1.0) {
+      Kokkos::Experimental::md_parallel_for(
+          policy2, KOKKOS_LAMBDA(int ie, int q, int lev) {
+            Scalar min_biharmonic =
+                elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
+            for (int igp = 1; igp < NP; ++igp) {
+              for (int jgp = 1; jgp < NP; ++jgp) {
+                min_biharmonic =
+                  min(min_biharmonic,
+                        elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
+              }
+            }
+            elems.buffers.qlim(ie, q, 0, lev) =
+                min(elems.buffers.qlim(ie, q, 0, lev), min_biharmonic);
+          });
+    }
   }
 
 private:
