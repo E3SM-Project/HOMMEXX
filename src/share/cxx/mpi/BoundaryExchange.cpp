@@ -126,14 +126,6 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   m_2d_fields = decltype(m_2d_fields)("2d fields",m_connectivity->get_num_local_elements(),num_2d_fields);
   m_3d_fields = decltype(m_3d_fields)("3d fields",m_connectivity->get_num_local_elements(),num_3d_fields);
 
-  // Create buffer views' (but don't fill them)
-  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer",m_connectivity->get_num_local_elements(),num_1d_fields);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer",m_connectivity->get_num_local_elements(),num_1d_fields);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer",m_connectivity->get_num_local_elements(),num_2d_fields);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer",m_connectivity->get_num_local_elements(),num_2d_fields);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer",m_connectivity->get_num_local_elements(),num_3d_fields);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer",m_connectivity->get_num_local_elements(),num_3d_fields);
-
   // Now we can start register fields
   m_registration_started   = true;
   m_registration_completed = false;
@@ -659,6 +651,14 @@ void BoundaryExchange::build_buffer_views_and_requests()
   h_all_recv_buffers[etoi(ConnectionSharing::LOCAL)]   = buffers_manager->get_local_buffer().data();
   h_all_recv_buffers[etoi(ConnectionSharing::SHARED)]  = buffers_manager->get_recv_buffer().data();
   h_all_recv_buffers[etoi(ConnectionSharing::MISSING)] = buffers_manager->get_blackhole_recv_buffer().data();
+
+  // Create buffer views
+  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer",m_connectivity->get_num_local_elements(),m_num_1d_fields);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer",m_connectivity->get_num_local_elements(),m_num_1d_fields);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer",m_connectivity->get_num_local_elements(),m_num_2d_fields);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer",m_connectivity->get_num_local_elements(),m_num_2d_fields);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer",m_connectivity->get_num_local_elements(),m_num_3d_fields);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer",m_connectivity->get_num_local_elements(),m_num_3d_fields);
 
   // NOTE: I wanted to do this setup in parallel, on the execution space, but there
   //       is a reduction hidden. In particular, we need to access buf_offset atomically,
