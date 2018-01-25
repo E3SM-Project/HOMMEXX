@@ -308,7 +308,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int k = 0; k < source.extent_int(1); ++k) {
+    for (int k = 0; k < dest.extent_int(1); ++k) {
       const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -319,6 +319,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     }
   }
 }
+
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
@@ -456,25 +457,23 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
 }
 
 //this version is for using NLEV+1 variables, like eta_dot_dpdn
-//source is Scalar*NUM_LEV+1, dest is Real*NUM_PHYSICAL_LEV+1
-/*template <typename Source_T, typename Dest_T>
+//source is Scalar*NUM_LEV+1, dest is Real*NUM_INTERFACE_LEV
+/*
+template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV+1]>::
-        value &&host_view_mappable< Dest_T, Real * [NUM_PHYSICAL_LEV+1][NP][NP]>::value,
+        value &&host_view_mappable< Dest_T, Real * [NUM_INTERFACE_LEV][NP][NP]>::value,
     void>::type
 sync_to_host(Source_T source, Dest_T dest) {
-
   ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV+1]>::HostMirror
       source_mirror(Kokkos::create_mirror_view(source));
-
   Kokkos::deep_copy(source_mirror, source);
-
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
     for (int vector_level = 0, level = 0; vector_level < NUM_LEV+1; ++vector_level) {
       for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            if(level <  (NUM_PHYSICAL_LEV+1) )
+            if(level < (NUM_INTERFACE_LEV) )
               dest(ie, level, igp, jgp) = source_mirror(ie, igp, jgp, vector_level)[vector];
           }
         }
