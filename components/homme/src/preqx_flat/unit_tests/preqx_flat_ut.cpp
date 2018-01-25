@@ -462,7 +462,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host div_dp", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
 
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
@@ -996,8 +996,8 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("eta dot", num_elems);
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("eta dot", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
 
   TestType test_functor(elements);
@@ -1039,7 +1039,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                Kokkos::subview(eta_dot, ie, Kokkos::ALL,
                                                Kokkos::ALL, Kokkos::ALL).data());
-    for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
+    for (int level = 0; level < NUM_INTERFACE_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           //compare total eta
@@ -1079,7 +1079,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host div_dp", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
   //random init host views
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
@@ -1098,7 +1098,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
   genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
 
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum_f90("tavd f90", num_elems);
 
   deep_copy(eta_dot_f90, eta_dot);
@@ -1134,7 +1134,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                                Kokkos::ALL, Kokkos::ALL).data(),
                                hybrid_bi_mirror.data());
 
-    for (int level = 0; level < NUM_PHYSICAL_LEV+1; ++level) {
+    for (int level = 0; level < NUM_INTERFACE_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           //compare eta
@@ -1144,6 +1144,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
           REQUIRE(!std::isnan(computed));
           const Real rel_error = compare_answers(correct, computed);
           REQUIRE(rel_threshold >= rel_error);
+
         }
       }
     }//level loop
@@ -1187,11 +1188,11 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot("host t_vadv", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
 
-//what is the good strategy for NAN values? tails of NUM_PHYSICAL_LEVEL+1 vars
+//what is the good strategy for NAN values? tails of NUM_INTERFACE_LEV vars
 //should be init-ed to nans. the rest can be random...
 //how to implement it -- to have a method that will assign quiet nans to tail of eta_dot
 //in elments?
@@ -1203,7 +1204,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
   sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
 
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV+1][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
   HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
