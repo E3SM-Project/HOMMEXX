@@ -311,62 +311,39 @@ void euler_exchange_qdp_dss_var_c ()
   // TODO: move this setup in init_control_euler and move that function one stack frame up
   //       of euler_step in F90, making it set the common parameters to all euler_steps
   //       calls (nets, nete, dt, nu_p, nu_q)
-  std::shared_ptr<BoundaryExchange> be_qdp_dss_var;
-  switch (data.DSSopt) {
-    case Control::DSSOption::eta:
-      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp eta");
-      break;
-    case Control::DSSOption::omega:
-      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp omega");
-      break;
-    case Control::DSSOption::div_vdp_ave:
-      be_qdp_dss_var = Context::singleton().get_boundary_exchange("exchange qdp div_vdp_ave");
-      break;
-  }
+
+  std::stringstream ss;
+  ss << "exchange qdp "
+     << (data.DSSopt == Control::DSSOption::eta ?
+         "eta" :
+         data.DSSopt == Control::DSSOption::omega ?
+         "omega" :
+         "div_vdp_ave")
+     << " " << data.np1_qdp;
+
+  const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+    Context::singleton().get_boundary_exchange(ss.str());
 
   // Sanity check (we must have selected one DSS variable!)
   assert (be_qdp_dss_var);
+
+  const auto& dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
+                         (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p   :
+                          elements.m_derived_divdp_proj));
 
   if (!be_qdp_dss_var->is_registration_completed()) {
     // If it is the first time we call this method, we need to set up the BE
     std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
     be_qdp_dss_var->set_buffers_manager(buffers_manager);
-
     be_qdp_dss_var->set_num_fields(0,0,data.qsize+1);
     be_qdp_dss_var->register_field(elements.m_qdp,data.np1_qdp,data.qsize,0);
-
-    switch (data.DSSopt) {
-      case Control::DSSOption::eta:
-        be_qdp_dss_var->register_field(elements.m_eta_dot_dpdn);
-        break;
-      case Control::DSSOption::omega:
-        be_qdp_dss_var->register_field(elements.m_omega_p);
-        break;
-      case Control::DSSOption::div_vdp_ave:
-        be_qdp_dss_var->register_field(elements.m_derived_divdp_proj);
-        break;
-    }
+    be_qdp_dss_var->register_field(dss_var);
     be_qdp_dss_var->registration_completed();
   }
 
   be_qdp_dss_var->exchange();
 
-  // Rescale by rspheremp
-  MDRangePolicy<ExecSpace,5> policy5({0,0,0,0,0},{data.num_elems,data.qsize,NP,NP,NUM_LEV}, {1,1,1,1,1});
-  Kokkos::Experimental::md_parallel_for(
-    policy5,KOKKOS_LAMBDA(int ie, int q, int igp, int jgp, int ilev) {
-       elements.m_qdp(ie,data.np1_qdp,q,igp,jgp,ilev) *= elements.m_rspheremp(ie,igp,jgp);
-  });
-  auto dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
-                 (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p    : elements.m_derived_divdp_proj));
-
-  MDRangePolicy<ExecSpace,4> policy4({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
-  Kokkos::Experimental::md_parallel_for(
-    policy4,KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
-       dss_var(ie,igp,jgp,ilev) *= elements.m_rspheremp(ie,igp,jgp);
-  });
-  ExecSpace::fence();
-
+  EulerStepFunctor::apply_rspheremp();
 }
 
 } // extern "C"
