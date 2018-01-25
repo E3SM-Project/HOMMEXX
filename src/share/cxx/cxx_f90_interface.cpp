@@ -146,7 +146,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
 
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_INTERFACE_LEV][NP][NP]>(
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_eta_dot_dpdn_ptr, data.num_elems),
                  elements.m_eta_dot_dpdn);
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
@@ -173,17 +173,6 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
                    Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
                  elements.buffers.qtens_biharmonic);
-
-  // NOTE: this will be removed as soon as PR ?? (change dimension of derived eta dot) gets in
-  if (data.DSSopt==Control::DSSOption::eta && NUM_LEV!=NUM_LEV_P) {
-    // Copy from eta_dot (NUM_PHYSICAL_LEV+1) to derived_eta_dot (NUM_PHYSICAL_LEV)
-    MDRangePolicy<ExecSpace,4> policy({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
-    Kokkos::Experimental::md_parallel_for(
-      policy,KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
-         elements.m_derived_eta_dot_dpdn(ie,igp,jgp,ilev) = elements.m_eta_dot_dpdn(ie,igp,jgp,ilev);
-    });
-    ExecSpace::fence();
-  }
 }
 
 void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_derived_omega_p_ptr,
@@ -192,16 +181,6 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
 {
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
-  // NOTE: this will be removed as soon as PR ?? (change dimension of derived eta dot) gets in
-  if (data.DSSopt==Control::DSSOption::eta && NUM_LEV!=NUM_LEV_P) {
-    // Copy from eta_dot (NUM_PHYSICAL_LEV+1) to derived_eta_dot (NUM_PHYSICAL_LEV)
-    MDRangePolicy<ExecSpace,4> policy({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
-    Kokkos::Experimental::md_parallel_for(
-      policy,KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
-         elements.m_eta_dot_dpdn(ie,igp,jgp,ilev) = elements.m_derived_eta_dot_dpdn(ie,igp,jgp,ilev);
-    });
-    ExecSpace::fence();
-  }
   elements.push_qdp(elem_state_Qdp_ptr);
   sync_to_host(elements.buffers.qlim,
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
@@ -209,7 +188,7 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
                  qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
   sync_to_host(elements.m_eta_dot_dpdn,
-               HostViewUnmanaged<Real*[NUM_INTERFACE_LEV][NP][NP]>(
+               HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_eta_dot_dpdn_ptr, data.num_elems));
   sync_to_host(elements.m_omega_p,
                HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
@@ -361,7 +340,7 @@ void euler_exchange_qdp_dss_var_and_rescale_qdp_c ()
 
     switch (data.DSSopt) {
       case Control::DSSOption::eta:
-        be_qdp_dss_var->register_field(elements.m_derived_eta_dot_dpdn);
+        be_qdp_dss_var->register_field(elements.m_eta_dot_dpdn);
         break;
       case Control::DSSOption::omega:
         be_qdp_dss_var->register_field(elements.m_omega_p);

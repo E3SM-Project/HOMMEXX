@@ -153,7 +153,7 @@ public:
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
-  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dpdn;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> eta_dpdn;
   HostViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
   qdp;
   HostViewManaged<Real * [NP][NP]> metdet;
