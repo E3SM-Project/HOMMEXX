@@ -242,7 +242,6 @@ contains
     enddo
 
     ! Perform min/max boundary exchange
-    write (*,*) 'amb',qsize
     if (minmax_split .eq. 0) then
       call neighbor_minmax (hybrid, edgeMinMax, 1, nelemd, field_min_1d, field_max_1d)
     else
