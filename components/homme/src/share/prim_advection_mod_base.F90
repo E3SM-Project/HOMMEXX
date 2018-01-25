@@ -1500,9 +1500,6 @@ end subroutine ALE_parametric_coords
 !    call extrae_user_function(0)
 
     call t_stopf('prim_advec_tracers_remap_rk2')
-!print *, "+------------------------+"
-!print *, "|  end of advec tracers  |"
-!print *, "+------------------------+"
 
   end subroutine prim_advec_tracers_remap_rk2
 
@@ -1873,14 +1870,6 @@ OMP_SIMD
   ! end of limiter_option == 8
 
   call t_startf('eus_2d_advec')
-!!!!!!!!!!!!!!!!!!!!!!!!!
-print *, "PRE"
-print *, "DSSopt =", DSSopt
-print *, "|qdp| =", FrobeniusNorm(elem_state_Qdp)
-print *, "|eta| =", FrobeniusNorm(elem_derived_eta_dot_dpdn)
-print *, "|omega| =", FrobeniusNorm(elem_derived_omega_p)
-print *, "|div_vdp| =", FrobeniusNorm(elem_derived_divdp_proj)
-!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifdef USE_KOKKOS_KERNELS
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
@@ -1937,18 +1926,6 @@ OMP_SIMD
 #endif
 #endif
 #endif
-!!!!!!!!!!!!!!!!!!!!!
-print *, "POST"
-print *, "DSSopt =", DSSopt
-print *, "|qdp| =", FrobeniusNorm(elem_state_Qdp)
-print *, "|eta| =", FrobeniusNorm(elem_derived_eta_dot_dpdn)
-print *, "|omega| =", FrobeniusNorm(elem_derived_omega_p)
-print *, "|div_vdp| =", FrobeniusNorm(elem_derived_divdp_proj)
-!!!!!!!!!!!!!!!!!!!!!
-
-!print *, "+---------------------+"
-!print *, "|  end of euler step  |"
-!print *, "+---------------------+"
 
   call t_stopf('eus_2d_advec')
 !pw call t_stopf('euler_step')
