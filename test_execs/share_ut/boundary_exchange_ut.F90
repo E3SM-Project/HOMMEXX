@@ -80,7 +80,7 @@ contains
 
   subroutine init_connectivity_f90 (num_min_max_fields_1d_in,num_scalar_fields_2d,num_scalar_fields_3d,num_vector_fields_3d,vector_dim) bind(c)
     use iso_c_binding,  only : c_int
-    use dimensions_mod, only : nelem, nelemd, nlev
+    use dimensions_mod, only : nelem, nelemd, nlev, qsize
     use edge_mod_base,  only : initEdgeBuffer, initEdgeSBuffer
     use element_mod,    only : allocate_element_desc
     use metagraph_mod,  only : initMetaGraph, LocalElemCount
@@ -105,6 +105,8 @@ contains
     call initMetaGraph(iam,MetaVertex,GridVertex,GridEdge)
 
     nelemd = LocalElemCount(MetaVertex)
+
+    qsize = num_min_max_fields_1d_in
 
     allocate (num_elems(par%nprocs))
     my_num_elems_ptr => my_num_elems
@@ -186,7 +188,7 @@ contains
                                          inner_dim_4d, num_time_levels,            &
                                          idim_2d, idim_3d, idim_4d, minmax_split) bind(c)
     use iso_c_binding,      only : c_ptr, c_f_pointer, c_int
-    use dimensions_mod,     only : np, nlev, nelemd
+    use dimensions_mod,     only : np, nlev, nelemd, qsize
     use edge_mod_base,      only : edgevpack, edgevunpack
     use bndry_mod,          only : bndry_exchangev
     use viscosity_mod_base, only : neighbor_minmax, neighbor_minmax_start, neighbor_minmax_finish
@@ -240,6 +242,7 @@ contains
     enddo
 
     ! Perform min/max boundary exchange
+    write (*,*) 'amb',qsize
     if (minmax_split .eq. 0) then
       call neighbor_minmax (hybrid, edgeMinMax, 1, nelemd, field_min_1d, field_max_1d)
     else
