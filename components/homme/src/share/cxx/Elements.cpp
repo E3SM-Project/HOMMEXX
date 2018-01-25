@@ -44,6 +44,8 @@ void Elements::init(const int num_elems) {
           "qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdn",
                                                                  m_num_elems);
+  m_derived_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("derived eta_dot_dpdn",
+                                                                 m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
