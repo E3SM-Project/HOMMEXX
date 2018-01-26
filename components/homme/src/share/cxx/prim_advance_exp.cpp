@@ -1,57 +1,64 @@
+#include "CaarFunctor.hpp"
 #include "Control.hpp"
 #include "Context.hpp"
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 #include "mpi/ErrorDefs.hpp"
-
-#include <iostream>
+#include "mpi/BoundaryExchange.hpp"
+#include "mpi/BuffersManager.hpp"
 
 namespace Homme
 {
 
-void u3_5stage_timestep_c(const bool);
+void u3_5stage_timestep_c(const Real, const bool);
+void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
+                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
+                       MDRangePolicy<ExecSpace,4> policy_post);
+void prim_advance_exp_c(const Real dt, const bool compute_diagnostics);
+void prim_advance_hypervis_dp_c (const int np1, const Real dt, const Real eta_ave_w);
 
-extern "C" {
+// -------------- IMPLEMENTATIONS -------------- //
 
-void prim_advance_exp_c(const bool compute_diagnostics)
+void prim_advance_exp_c(const Real dt, const bool compute_diagnostics)
 {
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
+  assert(params.params_set);
 
   // Get the time level info
   TimeLevel& tl = Context::singleton().get_time_level();
 
   // Assume dry. If not dry, compute current qdp timelevel
   tl.n0_qdp = -1;
-  if (params.moisture==MoistDry::Moist) {
+  if (params.moisture==MoistDry::MOIST) {
     tl.update_tracers_levels(params.qsplit);
   }
 
   // Establish time advance method and set eta_ave_w
   int method = params.time_step_type;
   data.eta_ave_w = 1.0/params.qsplit;
-  if (params.time_step_type==0 && nstep==0) {
+  if (params.time_step_type==0 && tl.nstep==0) {
     // 0: use leapfrog, but RK2 on first step
     method = 1;
   } else if (params.time_step_type==1) {
     // 1: use leapfrog, but RK2 on first qsplit stage
     method = 0;
-    int qsplit_stage = nstep%params.qsplit;           // get qsplit stage
-    if (qsplit_stage==0) {
-      method=1;                 // use RK2 on first stage
-    }
+    int qsplit_stage = tl.nstep % params.qsplit;  // get qsplit stage
+    method = qsplit_stage==0 ? 1 : 0;             // use RK2 on first stage
 
     std::vector<double> ur_weights(params.qsplit,0.0);
     if (params.qsplit%2==0) {
       ur_weights[0] = 1.0/params.qsplit;
-      for (int q=2,; q<qsplit; q+=2) {
-        ur_weights[i] = 2.0/params.qsplit;
+      for (int q=2; q<params.qsplit; q+=2) {
+        ur_weights[q] = 2.0/params.qsplit;
       }
     } else {
-      for (int q=1,; q<qsplit; q+=2) {
-        ur_weights[i] = 2.0/params.qsplit;
+      for (int q=1; q<params.qsplit; q+=2) {
+        ur_weights[q] = 2.0/params.qsplit;
       }
     }
-    data.eta_ave_w = ur_weights(qsplit_stage); // RK2 + LF scheme has tricky weights
+    data.eta_ave_w = ur_weights[qsplit_stage]; // RK2 + LF scheme has tricky weights
   }
 
   if (params.prescribed_wind) {
@@ -61,7 +68,7 @@ void prim_advance_exp_c(const bool compute_diagnostics)
 
   switch (method) {
     case 5:
-      u3_5stage_timestep_c(compute_diagnostics);
+      u3_5stage_timestep_c(dt, compute_diagnostics);
       break;
 
     default:
@@ -86,9 +93,7 @@ void prim_advance_exp_c(const bool compute_diagnostics)
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (method<=10) {
-    Errors::runtime_abort("'advance hypervis lf' functionality not yet available in C++ build.\n",
-                          Errors::functionality_not_yet_implemented);
-    // call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
+    prim_advance_hypervis_dp_c(tl.np1,dt,data.eta_ave_w);
   }
 
 #ifdef ENERGY_DIAGNOSTICS
@@ -112,9 +117,7 @@ void prim_advance_exp_c(const bool compute_diagnostics)
   tl.tevolve += params.time_step;
 }
 
-} // extern "C"
-
-void u3_5stage_timestep_c(const bool compute_diagonstics)
+void u3_5stage_timestep_c(const Real dt, const bool compute_diagonstics)
 {
   // Get control and elements structures
   Control& data  = Context::singleton().get_control();
@@ -157,7 +160,6 @@ void u3_5stage_timestep_c(const bool compute_diagonstics)
   const int nm1 = tl.nm1;
   const int n0  = tl.n0;
   const int np1 = tl.np1;
-  const Real dt = params.time_step;
 
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
   functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,data.eta_ave_w/4.0,compute_diagonstics);
@@ -189,6 +191,28 @@ void u3_5stage_timestep_c(const bool compute_diagonstics)
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*data.eta_ave_w/4.0,false);
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+}
+
+void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
+                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
+                       MDRangePolicy<ExecSpace,4> policy_post)
+{
+  // --- Pre boundary exchange
+  profiling_resume();
+  Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
+  ExecSpace::fence();
+  profiling_pause();
+
+  // Do the boundary exchange
+  start_timer("caar_bexchV");
+  be.exchange();
+
+  // --- Post boundary echange
+  profiling_resume();
+  Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
+  ExecSpace::fence();
+  profiling_pause();
+  stop_timer("caar_bexchV");
 }
 
 

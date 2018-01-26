@@ -1,5 +1,8 @@
 #include "Control.hpp"
 #include "Context.hpp"
+#include "Elements.hpp"
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 
 #include "mpi/ErrorDefs.hpp"
 
@@ -8,44 +11,51 @@
 namespace Homme
 {
 
-// NOTE: This do-nothing function should do something if the test case is one of the dcmip ones
-void apply_test_forcing () {}
+void apply_test_forcing_c ();
 
-void prim_step_c (const bool);
+void prim_step_c (const Real, const bool);
 
 extern "C" {
 
-void prim_run_subcycle ()
+void vertical_remap_c(const Real);
+
+void prim_run_subcycle_c (const int& nets, const int& nete, const Real& dt)
 {
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
+  assert(params.params_set);
+
+  // Set elements range info in the control
+  data.nets = nets-1;
+  data.nete = nete-1;
 
   // Get time info and compute dt for tracers and remap
   TimeLevel& tl = Context::singleton().get_time_level();
-  const Real dt_q = params.time_step*params.qsplit;
-  const Real dt_remap = dt_q;
-  int nstep_end = tl.nstep + param.qsplit;
+  const Real dt_q = dt*params.qsplit;
+  Real dt_remap = dt_q;
+  int nstep_end = tl.nstep + params.qsplit;
   if (params.rsplit>0) {
-    dt_remap  = dt_q*rsplit;
-    nstep_end = dl.nstep + qsplit*rsplit;
+    dt_remap  = dt_q*params.rsplit;
+    nstep_end = tl.nstep + params.qsplit*params.rsplit;
   }
 
   // Check if needed to compute diagnostics or energy
-  bool compute_diagonstics = false;
+  bool compute_diagnostics = false;
   bool compute_energy      = params.energy_fixer;
   if (nstep_end%params.state_frequency==0 || nstep_end==tl.nstep0) {
-    compute_diagonstics = true;
+    compute_diagnostics = true;
     compute_energy      = true;
   }
 
   if (params.disable_diagnostics) {
-    compute_diagnostics = false
+    compute_diagnostics = false;
   }
 
-  if (compute_diagonstics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+  if (compute_diagnostics) {
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::functionality_not_yet_implemented);
+    // call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
   }
 
   // Apply forcing
@@ -66,7 +76,7 @@ void prim_run_subcycle ()
   // endif
 
 #else
-  apply_test_forcing ();
+  apply_test_forcing_c ();
 #endif
 
   if (compute_energy) {
@@ -76,41 +86,35 @@ void prim_run_subcycle ()
   }
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::functionality_not_yet_implemented);
     // call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
   }
 
   // Initialize dp3d from ps
   Elements& elements = Context::singleton().get_elements();
-  auto dp3d = elements.m_dp3d;
-  auto ps_v = elements.m_ps_v;
-  ExecViewUnmanaged<Scalar[NUM_LEV]> hyai    (reinterpret_cast<Scalar*>(control.hybrid_a.data()));
-  ExecViewUnmanaged<Scalar[NUM_LEV]> hybi    (reinterpret_cast<Scalar*>(control.hybrid_b.data()));
-  ExecViewUnmanaged<Scalar[NUM_LEV]> hyai_p1 (reinterpret_cast<Scalar*>(control.hybrid_a.data()+1));
-  ExecViewUnmanaged<Scalar[NUM_LEV]> hybi_p1 (reinterpret_cast<Scalar*>(control.hybrid_b.data()+1));
   int n0 = tl.n0;
   auto policy = Homme::get_default_team_policy<ExecSpace>(data.num_elems);
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember& team) {
     const int ie = team.league_rank();
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
                            KOKKOS_LAMBDA (const int& ilev) {
-        dp3d(ie,n0,igp,jgp,ilev) = (hyai_p1[ilev]-hyai[ilev])*ps0
-                                 + (hybi_p1[ilev]-hybi[ilev])*ps_v(ie,n0,igp,jgp);
+        elements.m_dp3d(ie,n0,igp,jgp,ilev) = data.hybrid_a_delta[ilev]*data.ps0
+                                            + data.hybrid_b_delta[ilev]*elements.m_ps_v(ie,n0,igp,jgp);
       });
     });
   });
 
   // Loop over rsplit vertically lagrangian timesteps
-  prim_step_c(compute_diagnostics);
+  prim_step_c(dt,compute_diagnostics);
   for (int r=1; r<params.rsplit; ++r) {
     tl.update_dynamics_levels(UpdateType::LEAPFROG);
-    prim_step_c(false);
+    prim_step_c(dt,false);
   }
 
   ////////////////////////////////////////////////////////////////////////
@@ -119,37 +123,35 @@ void prim_run_subcycle ()
   // if rsplit>0:  also remap dynamics and compute reference level ps_v
   ////////////////////////////////////////////////////////////////////////
   tl.update_tracers_levels(params.qsplit);
-  vertical_remap_c();
+  vertical_remap_c(dt_remap);
 
   ////////////////////////////////////////////////////////////////////////
   // time step is complete.  update some diagnostic variables:
   // lnps (we should get rid of this)
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
-  auto lnps = elements.m_lnps;
-  auto Q = elements.m_Q;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember& team) {
     const int ie = team.league_rank();
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      lnps(ie,tl.np1,igp,jgp) = log(ps_v(ie,tl.np1,igp,jgp));
+      elements.m_lnps(ie,tl.np1,igp,jgp) = log(elements.m_ps_v(ie,tl.np1,igp,jgp));
 
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV*data.qsize),
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV*data.qsize),
                            KOKKOS_LAMBDA (const int& idx) {
         const int ilev = idx / data.qsize;
         const int iq   = idx % data.qsize;
-        Q(ie,iq,igp,jgp,ilev) = qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) \
-                                 ( (hyai_p1[ilev]-hyai[ilev])*ps0 +
-                                   (hybi_p1[ilev]-hybi[ilev])*ps_v(ie,tl.np1,igp,jgp));
+        elements.m_Q(ie,iq,igp,jgp,ilev) = elements.m_qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) /
+                                             ( data.hybrid_a_delta[ilev]*data.ps0 +
+                                               data.hybrid_b_delta[ilev]*elements.m_ps_v(ie,tl.np1,igp,jgp));
       });
     });
   });
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::functionality_not_yet_implemented);
     // call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
   }
@@ -167,7 +169,7 @@ void prim_run_subcycle ()
   }
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::functionality_not_yet_implemented);
     // call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
     // call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
@@ -180,13 +182,23 @@ void prim_run_subcycle ()
   // Print some diagnostic information
   // ============================================================
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::functionality_not_yet_implemented);
     // call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete, fvm)
   }
-
 }
 
 } // extern "C"
+
+void apply_test_forcing_c () {
+  // Get simulation params
+  SimulationParams& params = Context::singleton().get_simulation_params();
+
+  if (params.test_case==TestCase::DCMIP2012_TEST2_1 ||
+      params.test_case==TestCase::DCMIP2012_TEST2_2) {
+    Errors::runtime_abort("Test case not yet available in C++ build.\n",
+                          Errors::functionality_not_yet_implemented);
+  }
+}
 
 } // namespace Homme
