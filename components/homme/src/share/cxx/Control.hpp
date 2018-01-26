@@ -16,6 +16,9 @@ struct Control {
   Control() = default;
 
   // This constructor should only be used by the host
+  void init_hvcoord(const Real ps0_in, CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr);
+
+  // This constructor should only be used by the host
   void init(const int nets, const int nete, const int num_elems,
             const int qn0_in, const Real ps0_in, int rsplit_in,
             CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr);
@@ -68,8 +71,10 @@ struct Control {
 
   // hybrid a
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_a;
+  ExecViewManaged<Scalar[NUM_LEV]>         hybrid_a_delta;
   // hybrid b
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_b;
+  ExecViewManaged<Scalar[NUM_LEV]>         hybrid_b_delta;
 };
 
 } // Namespace Homme
