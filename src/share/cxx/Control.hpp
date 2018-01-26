@@ -74,9 +74,9 @@ struct Control {
   // hybrid coefficients
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_am;
   Real hybrid_ai0;
-  ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_ai;
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_bm;
-  ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]> hybrid_bi;
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
 
 };
 

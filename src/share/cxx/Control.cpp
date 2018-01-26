@@ -21,13 +21,13 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
 
   //hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient A_midpoints");
-  hybrid_ai = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
+  hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid coordinates; coefficient A_interfaces");
   //hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient B_midpoints");
 
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
-  HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_ai(hybrid_ai_ptr);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_ai(hybrid_ai_ptr);
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
 
   //dest, source
@@ -41,9 +41,9 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
   }
 
 //  if (rsplit == 0) {
-    hybrid_bi = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
+    hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid coordinates; coefficient B_interfaces");
-    HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_bi(hybrid_bi_ptr);
+    HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_bi(hybrid_bi_ptr);
     Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
 //  }
 
