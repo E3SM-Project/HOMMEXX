@@ -86,6 +86,25 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
   be.recv_and_unpack_min_max(nets-1, nete);
 }
 
+void euler_minmax_and_biharmonic (const int& nets, const int& nete) {
+  euler_neighbor_minmax_start_c(nets, nete);
+  EulerStepFunctor::compute_biharmonic_pre();
+  {
+    Control& c = Context::singleton().get_control();
+    Elements& e = Context::singleton().get_elements();
+    const auto be = Context::singleton().get_boundary_exchange("qtens_biharmonic");
+    if ( ! be->is_registration_completed()) {
+      be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+      be->set_num_fields(0, 0, c.qsize);
+      be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
+      be->registration_completed();
+    }
+    be->exchange();
+  }
+  EulerStepFunctor::compute_biharmonic_post();
+  euler_neighbor_minmax_finish_c(nets, nete);
+}
+
 void init_derivative_c (CF90Ptr& dvv)
 {
   Derivative& deriv = Context::singleton().get_derivative ();
@@ -296,7 +315,7 @@ void advance_qdp_c(const int& rhs_viss)
   Control& control = Context::singleton().get_control ();
   control.rhs_viss = rhs_viss;
 
-  EulerStepFunctor::run();
+  EulerStepFunctor::advect_and_limit();
 }
 
 void euler_exchange_qdp_dss_var_c ()
