@@ -1577,7 +1577,7 @@ end subroutine ALE_parametric_coords
        elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
        elem_derived_divdp, elem_derived_dpdiss_biharmonic
   use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, &
-       laplace_sphere_wk
+       divergence_sphere_wk
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
@@ -1779,9 +1779,9 @@ OMP_SIMD
       ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
       ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
       if ( nu_p > 0 ) then
-        do ie = nets , nete
-          do k = 1 , nlev
-            do q = 1 , qsize
+        do ie = nets, nete
+          do k = 1, nlev
+            do q = 1, qsize
               ! NOTE: divide by dp0 since we multiply by dp0 below
               Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)&
                 *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
@@ -1790,15 +1790,16 @@ OMP_SIMD
         enddo ! ie loop
       endif ! nu_p > 0
       call euler_neighbor_minmax_start_c(nets,nete)
-      
-      
+
+      !call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
       do ie = nets,nete
          do q = 1,qsize      
             do k = 1,nlev
-               lap_p(:,:) = qtens(:,:,k,q,ie)
-               qtens(:,:,k,q,ie) = laplace_sphere_wk(lap_p,deriv,elem(ie),.false.)
+               lap_p(:,:) = qtens_biharmonic(:,:,k,q,ie)
+               grads = gradient_sphere(lap_p,deriv,elem(ie)%Dinv)
+               qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads,deriv,elem(ie))
             enddo
-            call edgeVpack(edgeAdv, qtens(:,:,:,q,ie),nlev,nlev*(q-1),ie)
+            call edgeVpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie),nlev,nlev*(q-1),ie)
          enddo
       enddo
       call t_startf('biwksc_bexchV')
@@ -1806,19 +1807,18 @@ OMP_SIMD
       call t_stopf('biwksc_bexchV')
       do ie = nets,nete
          do q = 1,qsize      
-            call edgeVunpack(edgeAdv, qtens(:,:,:,q,ie),nlev,nlev*(q-1),ie)
+            call edgeVunpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie),nlev,nlev*(q-1),ie)
             do k = 1,nlev
-               lap_p(:,:) = elem(ie)%rspheremp(:,:)*qtens(:,:,k,q,ie)
-               qtens(:,:,k,q,ie) = laplace_sphere_wk(lap_p,deriv,elem(ie),.false.)
+               lap_p(:,:) = elem(ie)%rspheremp(:,:)*qtens_biharmonic(:,:,k,q,ie)
+               grads = gradient_sphere(lap_p,deriv,elem(ie)%Dinv)
+               qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads,deriv,elem(ie))
             enddo
          enddo
       enddo
 
-
-      !call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
-      do ie = nets , nete
-        do q = 1 , qsize
-          do k = 1 , nlev    !  Loop inversion (AAM)
+      do ie = nets, nete
+        do q = 1, qsize
+          do k = 1, nlev    !  Loop inversion (AAM)
             ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
             qtens_biharmonic(:,:,k,q,ie) = &
                      -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
