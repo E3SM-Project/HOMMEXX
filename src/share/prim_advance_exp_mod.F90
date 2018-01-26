@@ -353,6 +353,8 @@ module prim_advance_exp_mod
       hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
       ! In F, elem range is [nets,nete]. In C, elem range is [nets,nete).
       ! Also, F has index base 1, C has index base 0.
+
+
       call init_control_caar_c(nets-1,nete,nelemd,qn0-1,hvcoord%ps0,rsplit, &
                                hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
 

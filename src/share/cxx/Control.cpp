@@ -40,12 +40,12 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
     hybrid_ai0 = hybrid_ai_ptr[0];
   }
 
-  if (rsplit == 0) {
+//  if (rsplit == 0) {
     hybrid_bi = ExecViewManaged<Real[NUM_PHYSICAL_LEV+1]>(
       "Hybrid coordinates; coefficient B_interfaces");
     HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV+1]> host_hybrid_bi(hybrid_bi_ptr);
     Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
-  }
+//  }
 
 //  assert(hybrid_am_ptr != nullptr);
   assert(hybrid_ai_ptr != nullptr);
