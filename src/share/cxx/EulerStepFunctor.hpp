@@ -58,7 +58,13 @@ public:
     stop_timer("esf-fused compute");
   }
 
-  static void run () {
+  static void compute_biharmonic_pre () {
+  }
+
+  static void compute_biharmonic_post () {
+  }
+
+  static void advect_and_limit () {
     Control& data = Context::singleton().get_control();
     EulerStepFunctor func(data);
 
