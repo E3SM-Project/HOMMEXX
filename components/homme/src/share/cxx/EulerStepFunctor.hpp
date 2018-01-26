@@ -28,72 +28,92 @@ public:
    , m_deriv   (Context::singleton().get_derivative())
   {}
 
-  struct SetupPhase {};
-  struct TracerPhase {};
-  struct FusedPhases {};
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const SetupPhase&, const TeamMember& team) const {
-    start_timer("esf-noq compute");
-    KernelVariables kv(team);
-    run_setup_phase(kv);
-    stop_timer("esf-noq compute");
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const TracerPhase&, const TeamMember& team) const {
-    start_timer("esf-q compute");
-    KernelVariables kv(team, m_data.qsize);
-    run_tracer_phase(kv);
-    stop_timer("esf-q compute");
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const FusedPhases&, const TeamMember& team) const {
-    start_timer("esf-fused compute");
-    KernelVariables kv(team);
-    run_setup_phase(kv);
-    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
-      run_tracer_phase(kv);
-    stop_timer("esf-fused compute");
-  }
-
   static void compute_biharmonic_pre () {
+    profiling_resume();
+    start_timer("esf-bih-pre run");
+
+    Control& c = Context::singleton().get_control();
+    if (c.rhs_multiplier != 2) return;
+    Elements& e = Context::singleton().get_elements();
+
+    EulerStepFunctor func(c);
+    c.rhs_viss = 3;
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(c.num_elems * c.qsize),
+      func);
+    stop_timer("esf-bih-pre run");
+    profiling_pause();
   }
 
   static void compute_biharmonic_post () {
+    Control& c = Context::singleton().get_control();
+    Elements& e = Context::singleton().get_elements();
+    if (c.rhs_multiplier != 2) return;
+
   }
 
+  struct AALSetupPhase {};
+  struct AALTracerPhase {};
+  struct AALFusedPhases {};
+
   static void advect_and_limit () {
+    profiling_resume();
+    start_timer("esf-aal-tot run");
     Control& data = Context::singleton().get_control();
     EulerStepFunctor func(data);
-
-    profiling_resume();
-    start_timer("esf-tot run");
     if (OnGpu<ExecSpace>::value) {
-      start_timer("esf-noq run");
+      start_timer("esf-aal-noq run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, SetupPhase>(data.num_elems),
+        Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
         func);
-      stop_timer("esf-noq run");
+      stop_timer("esf-aal-noq run");
       ExecSpace::fence();
-      start_timer("esf-q run");
+      start_timer("esf-aal-q run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, TracerPhase>(data.num_elems * data.qsize),
+        Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
         func);
-      stop_timer("esf-q run");
+      stop_timer("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, FusedPhases>(data.num_elems),
+        Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
         func);
     }
-    stop_timer("esf-tot run");
+    stop_timer("esf-aal-tot run");
 
     ExecSpace::fence();
     profiling_pause();
   }
 
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALSetupPhase&, const TeamMember& team) const {
+    start_timer("esf-aal-noq compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    stop_timer("esf-aal-noq compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALTracerPhase&, const TeamMember& team) const {
+    start_timer("esf-aal-q compute");
+    KernelVariables kv(team, m_data.qsize);
+    run_tracer_phase(kv);
+    stop_timer("esf-aal-q compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALFusedPhases&, const TeamMember& team) const {
+    start_timer("esf-aal-fused compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
+      run_tracer_phase(kv);
+    stop_timer("esf-aal-fused compute");
+  }
+
   static void apply_rspheremp () {
+    profiling_resume();
+    start_timer("esf-rspheremp run");
+
     Control& c = Context::singleton().get_control();
     Elements& e = Context::singleton().get_elements();
 
@@ -119,7 +139,9 @@ public:
         f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
       });
 
+    stop_timer("esf-rspheremp run");
     ExecSpace::fence();
+    profiling_pause();
   }
 
 private:
