@@ -40,17 +40,22 @@ public:
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
   // ???
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+  ExecViewManaged<Real   * [NUM_TIME_LEVELS][NP][NP]         > m_ps_v;
+  ExecViewManaged<Real   * [NUM_TIME_LEVELS][NP][NP]         > m_lnps;
 
   // q is the specific humidity
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
+  ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>                    m_Q;
   // eta is the vertical coordinate
   // eta dot is the flux through the vertical level interface
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vstar;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
     m_derived_dp,                // for dp_tracers at physics timestep
     m_derived_divdp,             // divergence of dp
     m_derived_divdp_proj,        // DSSed divdp
+    m_derived_dpdiss_ave,        // mean dp dissipation tendency, if nu_p>0
     m_derived_dpdiss_biharmonic; // mean dp dissipation tendency, if nu_p>0
 
   struct BufferViews {

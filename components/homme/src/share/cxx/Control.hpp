@@ -58,6 +58,7 @@ struct Control {
   Real eta_ave_w;
 
   int compute_diagonstics;
+  bool use_semi_lagrangian_transport;
 
   Real ps0;
 
