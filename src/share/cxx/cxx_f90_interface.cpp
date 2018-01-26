@@ -324,9 +324,6 @@ void euler_exchange_qdp_dss_var_c ()
   const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
     Context::singleton().get_boundary_exchange(ss.str());
 
-  // Sanity check (we must have selected one DSS variable!)
-  assert (be_qdp_dss_var);
-
   const auto& dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
                          (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p   :
                           elements.m_derived_divdp_proj));
