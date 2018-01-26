@@ -1776,20 +1776,14 @@ OMP_SIMD
     if ( rhs_multiplier == 2 ) then
       call euler_neighbor_minmax_start_c(nets,nete)
       rhs_viss = 3
-      if ( nu_p > 0 ) then
-        do ie = nets, nete
-          do k = 1, nlev
-            do q = 1, qsize
-              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)&
-                *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
-            enddo
-          enddo
-        enddo ! ie loop
-      endif ! nu_p > 0
       do ie = nets,nete
          do q = 1,qsize      
             do k = 1,nlev
-               lap_p(:,:) = Qtens_biharmonic(:,:,k,q,ie)
+               if ( nu_p > 0 ) then
+                  qtens_biharmonic(:,:,k,q,ie) = qtens_biharmonic(:,:,k,q,ie) &
+                       *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+               end if
+               lap_p(:,:) = qtens_biharmonic(:,:,k,q,ie)
                grads = gradient_sphere(lap_p,deriv,elem(ie)%Dinv)
                qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads,deriv,elem(ie))
             enddo
