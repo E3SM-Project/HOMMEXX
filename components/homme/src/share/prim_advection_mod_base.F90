@@ -1652,6 +1652,7 @@ use utils_mod, only: FrobeniusNorm
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
+  real(kind=real_kind) :: grads(np,np,2)
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
        elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
@@ -1768,11 +1769,50 @@ OMP_SIMD
 #endif
 
 
-    ! get niew min/max values, and also compute biharmonic mixing term
+#ifdef USE_KOKKOS_KERNELS
+
+    ! get new min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
       rhs_viss = 3
       ! two scalings depending on nu_p:
-      ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscsoity only to q)
+      ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
+      ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
+      if ( nu_p > 0 ) then
+        do ie = nets , nete
+          do k = 1 , nlev
+            do q = 1 , qsize
+              ! NOTE: divide by dp0 since we multiply by dp0 below
+              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)&
+                *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+            enddo
+          enddo
+        enddo ! ie loop
+      endif ! nu_p > 0
+      call euler_neighbor_minmax_start_c(nets,nete)
+      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
+      do ie = nets , nete
+        do q = 1 , qsize
+          do k = 1 , nlev    !  Loop inversion (AAM)
+            ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
+            qtens_biharmonic(:,:,k,q,ie) = &
+                     -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+          enddo
+        enddo
+      enddo
+      call euler_neighbor_minmax_finish_c(nets,nete)
+    endif
+    call t_stopf('bihmix_qminmax')
+  endif  ! compute biharmonic mixing term and qmin/qmax
+  ! end of limiter_option == 8
+
+! ifdef USE_KOKKOS_KERNELS
+#else
+
+    ! get new min/max values, and also compute biharmonic mixing term
+    if ( rhs_multiplier == 2 ) then
+      rhs_viss = 3
+      ! two scalings depending on nu_p:
+      ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
       ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
       if ( nu_p > 0 ) then
         do ie = nets , nete
@@ -1868,6 +1908,8 @@ OMP_SIMD
     call t_stopf('bihmix_qminmax')
   endif  ! compute biharmonic mixing term and qmin/qmax
   ! end of limiter_option == 8
+! ifdef USE_KOKKOS_KERNELS
+#endif
 
   call t_startf('eus_2d_advec')
 #ifdef USE_KOKKOS_KERNELS
