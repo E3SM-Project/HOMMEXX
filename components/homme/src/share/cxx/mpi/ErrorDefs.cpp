@@ -14,5 +14,5 @@ void runtime_abort(std::string message, int code) {
   finalize_hommexx_session();
   MPI_Abort(MPI_COMM_WORLD, code);
 }
-}
-}
+} // namespace Errors
+} // namespace Homme
