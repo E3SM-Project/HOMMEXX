@@ -2127,7 +2127,7 @@ OMP_SIMD
     type (c_ptr) :: elem_derived_phi_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+!    type (c_ptr) :: hvcoord_ai_ptr, hvcoord_bi_ptr
 
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
