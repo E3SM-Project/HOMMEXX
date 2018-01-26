@@ -589,15 +589,77 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, &
-                                    elem_rspheremp, elem_metdet, elem_state_phis
-    use iso_c_binding,        only: c_ptr, c_loc
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp,      &
+                                    elem_rspheremp, elem_metdet, elem_state_phis,     &
+                                    elem_state_v, elem_state_temp, elem_state_dp3d,   &
+                                    elem_state_Qdp, elem_state_ps_v, elem_state_lnps
+    use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer, &
+                                    nu, nu_p, nu_s, hypervis_order, hypervis_subcycle,              &
+                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport
+    use iso_c_binding,        only: c_ptr, c_loc, c_int, c_bool
 #endif
 
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
 #endif
+
+  interface
+#ifdef TRILINOS
+    subroutine noxinit(vectorSize,vector,comm,v_container,p_container,j_container) &
+        bind(C,name='noxinit')
+      use ,intrinsic :: iso_c_binding
+      integer(c_int)                :: vectorSize,comm
+      real(c_double)  ,dimension(*) :: vector
+      type(c_ptr)                   :: v_container
+      type(c_ptr)                   :: p_container  !precon ptr
+      type(c_ptr)                   :: j_container  !analytic jacobian ptr
+    end subroutine noxinit
+#endif
+#ifdef USE_KOKKOS_KERNELS
+    subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
+                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
+                                         nu, nu_p, nu_s, hypervis_order, hypervis_subcycle,        &
+                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
+      use iso_c_binding, only: c_int, c_bool, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
+      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
+      integer(kind=c_int),  intent(in) :: state_frequency, qsize
+      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s
+      integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
+    end subroutine init_simulation_params_c
+
+    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
+                                   elem_spheremp_ptr, elem_rspheremp_ptr,  &
+                                   elem_metdet_ptr, phis_ptr) bind(c)
+      use iso_c_binding, only : c_ptr, c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int), intent(in) :: nelemd
+      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
+      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_rspheremp_ptr
+      type (c_ptr) , intent(in) :: elem_metdet_ptr, phis_ptr
+    end subroutine init_elements_2d_c
+    subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
+                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+      type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+    end subroutine init_elements_states_c
+
+    subroutine init_boundary_exchanges_c () bind(c)
+    end subroutine init_boundary_exchanges_c
+#endif
+
+  end interface
 
     type (element_t),   intent(inout) :: elem(:)
     type (fvm_struct),  intent(inout) :: fvm(:)
@@ -637,6 +699,10 @@ contains
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
     type (c_ptr) :: elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_state_phis_ptr
+    type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+
+    integer (kind=c_int) :: moisture_int, disable_diagnostics_int
 #endif
 
 #ifdef TRILINOS
@@ -661,36 +727,6 @@ contains
     logical :: compute_diagnostics
     integer :: qn0
     real (kind=real_kind) :: eta_ave_w
-
-  interface
-    subroutine noxinit(vectorSize,vector,comm,v_container,p_container,j_container) &
-        bind(C,name='noxinit')
-    use ,intrinsic :: iso_c_binding
-      integer(c_int)                :: vectorSize,comm
-      real(c_double)  ,dimension(*) :: vector
-      type(c_ptr)                   :: v_container
-      type(c_ptr)                   :: p_container  !precon ptr
-      type(c_ptr)                   :: j_container  !analytic jacobian ptr
-    end subroutine noxinit
-
-  end interface
-#endif
-
-#ifdef USE_KOKKOS_KERNELS
-  interface
-    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
-                                   elem_spheremp_ptr, elem_rspheremp_ptr,  &
-                                   elem_metdet_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr, c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int), intent(in) :: nelemd
-      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
-      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_rspheremp_ptr
-      type (c_ptr) , intent(in) :: elem_metdet_ptr, phis_ptr
-    end subroutine init_elements_2d_c
-  end interface
 #endif
 
     if (topology == "cube") then
@@ -1017,6 +1053,31 @@ contains
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr, &
                              elem_spheremp_ptr, elem_rspheremp_ptr,            &
                              elem_metdet_ptr, elem_state_phis_ptr)
+
+    elem_state_v_ptr    = c_loc(elem_state_v)
+    elem_state_temp_ptr = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    elem_state_lnps_ptr = c_loc(elem_state_lnps)
+    call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
+                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr)
+
+    moisture_int = 0
+    disable_diagnostics_int = 0
+    if (moisture /= "dry") then
+      moisture_int = 1
+    endif
+    if (disable_diagnostics) then
+      disable_diagnostics_int = 1
+    endif
+
+    call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
+                                   prescribed_wind, energy_fixer, qsize, statefreq,               &
+                                   nu, nu_p, nu_s, hypervis_order, hypervis_subcycle,             &
+                                   LOGICAL(moisture/="dry",c_bool),                               &
+                                   LOGICAL(disable_diagnostics,c_bool),                           &
+                                   LOGICAL(use_semi_lagrange_transport,c_bool))
 #endif
 
   end subroutine prim_init2

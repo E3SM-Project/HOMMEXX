@@ -30,6 +30,7 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use iso_c_binding,       only: c_ptr, c_loc
 #endif
 
 #ifdef _REFSOLN
@@ -46,11 +47,41 @@ program prim_main
   implicit none
 #ifdef USE_KOKKOS_KERNELS
   interface
-     subroutine initialize_hommexx_session() bind(c)
-     end subroutine initialize_hommexx_session
+    subroutine initialize_hommexx_session() bind(c)
+    end subroutine initialize_hommexx_session
 
-     subroutine finalize_hommexx_session() bind(c)
-     end subroutine finalize_hommexx_session
+    subroutine init_hvcoord_c (ps0,hyai_ptr,hybi_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_double
+      !
+      ! Inputs
+      !
+      real (kind=c_double),  intent(in) :: ps0
+      type (c_ptr),          intent(in) :: hyai_ptr
+      type (c_ptr),          intent(in) :: hybi_ptr
+    end subroutine init_hvcoord_c
+
+    subroutine init_time_levels_c(nm1,n0,np1) bind(c)
+      use iso_c_binding, only: c_int
+      !
+      ! Inputs
+      !
+      integer(kind=c_int), intent(in) :: nm1, n0, np1
+    end subroutine init_time_levels_c
+
+    subroutine prim_run_subcycle_c(nets,nete,tstep) bind(c)
+      use iso_c_binding, only: c_int, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: nets, nete
+      real (kind=c_double), intent(in) :: tstep
+    end subroutine prim_run_subcycle_c
+
+    subroutine cxx_push_results_to_f90() bind(c)
+    end subroutine cxx_push_results_to_f90
+
+    subroutine finalize_hommexx_session() bind(c)
+    end subroutine finalize_hommexx_session
   end interface
 #endif
 
@@ -61,7 +92,11 @@ program prim_main
   type (domain1d_t), pointer  :: dom_mt(:)
   type (RestartHeader_t)      :: RestartHeader
   type (TimeLevel_t)          :: tl             ! Main time level struct
-  type (hvcoord_t)            :: hvcoord        ! hybrid vertical coordinate struct
+  type (hvcoord_t), target    :: hvcoord        ! hybrid vertical coordinate struct
+
+#ifdef USE_KOKKOS_KERNELS
+  type (c_ptr) :: hyai_ptr, hybi_ptr
+#endif
 
   real*8 timeit, et, st
   integer nets,nete
@@ -149,7 +184,11 @@ program prim_main
      call haltmp("error in hvcoord_init")
   end if
 
-
+#ifdef USE_KOKKOS_KERNELS
+  hyai_ptr = c_loc(hvcoord%hyai)
+  hybi_ptr = c_loc(hvcoord%hybi)
+  call init_hvcoord_c (hvcoord%ps0,hyai_ptr,hybi_ptr)
+#endif
 
 #ifdef PIO_INTERP
   if(runtype<0) then
@@ -239,6 +278,9 @@ program prim_main
      endif
   endif
 
+#ifdef USE_KOKKOS_KERNELS
+  call init_time_levels_c(tl%nm1,tl%n0,tl%np1)
+#endif
 
   if(par%masterproc) print *,"Entering main timestepping loop"
   call t_startf('prim_main_loop')
@@ -257,7 +299,11 @@ program prim_main
      do while(tl%nstep<nstep)
         call t_startf('prim_run')
         if (tstep_type>0) then  ! forward in time subcycled methods
+#ifdef USE_KOKKOS_KERNELS
+           call prim_run_subcycle_c(nets,nete,tstep)
+#else
            call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
+#endif
         else  ! leapfrog
            call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
         endif
@@ -273,6 +319,10 @@ program prim_main
      nets=1
      nete=nelemd
 
+#ifdef USE_KOKKOS_KERNELS
+    !TODO: push results only if it is output step (need to add a query subroutine to interp_movie_mod)
+    call cxx_push_results_to_f90()
+#endif
 
 #ifdef PIO_INTERP
      if (ntrac>0) call fvm_init3(elem,fvm,hybrid,nets,nete,n0_fvm)

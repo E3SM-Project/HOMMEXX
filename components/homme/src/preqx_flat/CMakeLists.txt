@@ -149,6 +149,13 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/cxx_f90_interface.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advec_tracers_remap.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advance_exp.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advance_hypervis.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_driver.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_step.cpp
+  ${SRC_SHARE_DIR}/cxx/vertical_remap.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
