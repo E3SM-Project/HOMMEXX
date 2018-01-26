@@ -783,8 +783,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   build_remap_array(KernelVariables &kv,
                     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>,
                                   remap_dim> &remap_vals) const {
-///////
-//std::cout << "HEY IN build_remap_array \n";
     if (nonzero_rsplit == true) {
       const int num_states = build_remap_array_states(kv, remap_vals);
       const int num_tracers =
@@ -814,8 +812,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       KernelVariables &kv, const int prev_filled,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
           remap_vals) const {
-
-//std::cout << "in build_arr_tracers, qsize " << m_data.qsize << " qn0 "<< m_data.qn0 << "\n";
 
     for (int q = 0; q < m_data.qsize; ++q) {
       remap_vals[prev_filled + q] =
@@ -914,8 +910,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
     remap_vals;
 
-//std::cout << " in ComputeRemapTag() " <<  num_to_remap() << "\n";
-
     DEBUG_EXPECT(build_remap_array(kv, remap_vals), num_to_remap());
 
     this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
@@ -944,9 +938,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     // If there's nothing to remap, it will only perform the verification
     run_functor<ComputeThicknessTag>("Remap Compute Grids Functor",
                                      this->m_data.num_elems);
-
-//std::cout << "IN REMAP " << num_to_remap() << "   ------------ \n";
-
     if (num_to_remap() > 0) {
       // We don't want the latency of launching an empty kernel
       if (nonzero_rsplit) {
@@ -972,9 +963,6 @@ private:
   void run_functor(const std::string functor_name, int num_exec) {
     Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
         Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
-
-//	std::cout << "in run_functor for functor " << functor_name << std::endl;
-
     // Timers don't work on CUDA, so place them here
     GPTLstart(functor_name.c_str());
     profiling_resume();

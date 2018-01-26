@@ -281,7 +281,6 @@ template <bool rsplit, template <int, typename...> class RemapAlg,
 void vertical_remap(Control &sim_state, Real *fort_ps_v) {
   RemapFunctor<rsplit, RemapAlg, RemapOptions...> remap(
       sim_state, Context::singleton().get_elements());
-//std::cout << "HEY IN vertical_remap \n";
   remap.run_remap();
   remap.update_fortran_ps_v(fort_ps_v);
 }
@@ -292,11 +291,7 @@ extern "C" {
 void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
                       const Real &dt, Real *&fort_ps_v) {
 
-//std::cout << "HE YIN interface \n"; 
-
   Control &sim_state = Context::singleton().get_control();
-
-//std::cout << "rsplit= "<< sim_state.rsplit << " remap_alg = " << remap_alg << "\n";
   sim_state.np1 = np1;
   sim_state.qn0 = np1_qdp;
   sim_state.dt = dt;
