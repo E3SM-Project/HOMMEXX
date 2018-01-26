@@ -7,6 +7,8 @@
 #include "BuffersManager.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 
 namespace Homme {
 
@@ -74,6 +76,16 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
   return (*boundary_exchanges_)[name];
 }
 
+SimulationParams& Context::get_simulation_params() {
+  if ( ! simulation_params_) simulation_params_.reset(new SimulationParams());
+  return *simulation_params_;
+}
+
+TimeLevel& Context::get_time_level() {
+  if ( ! time_level_) time_level_.reset(new TimeLevel());
+  return *time_level_;
+}
+
 void Context::clear() {
   comm_ = nullptr;
   control_ = nullptr;
@@ -82,6 +94,7 @@ void Context::clear() {
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
+  simulation_params_ = nullptr;
 }
 
 Context& Context::singleton() {
