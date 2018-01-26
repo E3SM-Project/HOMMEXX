@@ -39,11 +39,16 @@ void Elements::init(const int num_elems) {
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "DP3D", m_num_elems);
 
+  m_ps_v = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("surface pressure", m_num_elems);
+  m_lnps = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("log surface pressure", m_num_elems);
+
   m_qdp =
       ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
           "qdp", m_num_elems);
-  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn",
-                                                               m_num_elems);
+  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("tracer concentration", m_num_elems);
+  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
+  m_derived_vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("velocity on lagrangian surfaces", m_num_elems);
+  m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
