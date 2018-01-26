@@ -1576,7 +1576,8 @@ end subroutine ALE_parametric_coords
   use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
        elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
        elem_derived_divdp, elem_derived_dpdiss_biharmonic
-  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
+  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, &
+       laplace_sphere_wk
   use edge_mod       , only : edgevpack, edgevunpack
   use bndry_mod      , only : bndry_exchangev
   use hybvcoord_mod  , only : hvcoord_t
@@ -1652,7 +1653,7 @@ use utils_mod, only: FrobeniusNorm
   integer :: ie,q,i,j,k, kptr
   integer :: rhs_viss
 #ifdef USE_KOKKOS_KERNELS
-  real(kind=real_kind) :: grads(np,np,2)
+  real(kind=real_kind) :: grads(np,np,2), lap_p(np,np)
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
        elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
@@ -1789,7 +1790,32 @@ OMP_SIMD
         enddo ! ie loop
       endif ! nu_p > 0
       call euler_neighbor_minmax_start_c(nets,nete)
-      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
+      
+      
+      do ie = nets,nete
+         do q = 1,qsize      
+            do k = 1,nlev
+               lap_p(:,:) = qtens(:,:,k,q,ie)
+               qtens(:,:,k,q,ie) = laplace_sphere_wk(lap_p,deriv,elem(ie),.false.)
+            enddo
+            call edgeVpack(edgeAdv, qtens(:,:,:,q,ie),nlev,nlev*(q-1),ie)
+         enddo
+      enddo
+      call t_startf('biwksc_bexchV')
+      call bndry_exchangeV(hybrid,edgeAdv)
+      call t_stopf('biwksc_bexchV')
+      do ie = nets,nete
+         do q = 1,qsize      
+            call edgeVunpack(edgeAdv, qtens(:,:,:,q,ie),nlev,nlev*(q-1),ie)
+            do k = 1,nlev
+               lap_p(:,:) = elem(ie)%rspheremp(:,:)*qtens(:,:,k,q,ie)
+               qtens(:,:,k,q,ie) = laplace_sphere_wk(lap_p,deriv,elem(ie),.false.)
+            enddo
+         enddo
+      enddo
+
+
+      !call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
       do ie = nets , nete
         do q = 1 , qsize
           do k = 1 , nlev    !  Loop inversion (AAM)
@@ -1856,11 +1882,7 @@ OMP_SIMD
 !      call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
 !           nets , nete , qmin(:,:,nets:nete) , qmax(:,:,nets:nete) )
 #ifdef OVERLAP
-#ifdef USE_KOKKOS_KERNELS
-      call euler_neighbor_minmax_start_c(nets,nete)
-#else
       call neighbor_minmax_start(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-#endif
       call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
       do ie = nets , nete
 #if (defined COLUMN_OPENMP_notB4B)
@@ -1874,19 +1896,11 @@ OMP_SIMD
           enddo
         enddo
       enddo
-#ifdef USE_KOKKOS_KERNELS
-      call euler_neighbor_minmax_finish_c(nets,nete)
-#else
       call neighbor_minmax_finish(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-#endif
 #else
 
       call t_startf('eus_neighbor_minmax2')
-#ifdef USE_KOKKOS_KERNELS
-      call euler_neighbor_minmax_c(nets,nete)
-#else
       call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-#endif
       call t_stopf('eus_neighbor_minmax2')
       call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
 
