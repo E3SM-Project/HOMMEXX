@@ -1769,47 +1769,44 @@ OMP_SIMD
     endif
 #endif
 
-
+    
 #ifdef USE_KOKKOS_KERNELS
-
+    
     ! get new min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
-      call euler_neighbor_minmax_start_c(nets,nete)
-      rhs_viss = 3
-      do ie = nets,nete
-         do q = 1,qsize      
-            do k = 1,nlev
-               if ( nu_p > 0 ) then
-                  qtens_biharmonic(:,:,k,q,ie) = qtens_biharmonic(:,:,k,q,ie) &
-                       *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
-               end if
-               lap_p(:,:) = qtens_biharmonic(:,:,k,q,ie)
-               grads = gradient_sphere(lap_p,deriv,elem(ie)%Dinv)
-               qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads,deriv,elem(ie))
-            enddo
-            call edgeVpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie),nlev,nlev*(q-1),ie)
-         enddo
-      enddo
-      call t_startf('biwksc_bexchV')
-      call bndry_exchangeV(hybrid,edgeAdv)
-      call t_stopf('biwksc_bexchV')
-      do ie = nets,nete
-         do q = 1,qsize      
-            call edgeVunpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie),nlev,nlev*(q-1),ie)
-            do k = 1,nlev
-               lap_p(:,:) = elem(ie)%rspheremp(:,:)*qtens_biharmonic(:,:,k,q,ie)
-               grads = gradient_sphere(lap_p,deriv,elem(ie)%Dinv)
-               qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads,deriv,elem(ie))
-               qtens_biharmonic(:,:,k,q,ie) = &
-                    -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
-            enddo
-         enddo
-      enddo
-      call euler_neighbor_minmax_finish_c(nets,nete)
-   endif
-    call t_stopf('bihmix_qminmax')
-  endif  ! compute biharmonic mixing term and qmin/qmax
-  ! end of limiter_option == 8
+       call euler_neighbor_minmax_start_c(nets,nete)
+       rhs_viss = 3
+       do ie = nets,nete
+          do q = 1,qsize      
+             do k = 1,nlev
+                if ( nu_p > 0 ) then
+                   qtens_biharmonic(:,:,k,q,ie) = qtens_biharmonic(:,:,k,q,ie) &
+                        * elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+                end if
+                lap_p(:,:) = qtens_biharmonic(:,:,k,q,ie)
+                grads = gradient_sphere(lap_p, deriv, elem(ie)%Dinv)
+                qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads, deriv, elem(ie))
+             enddo
+             call edgeVpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie), nlev, nlev*(q-1), ie)
+          enddo
+       enddo
+       call t_startf('biwksc_bexchV')
+       call bndry_exchangeV(hybrid,edgeAdv)
+       call t_stopf('biwksc_bexchV')
+       do ie = nets,nete
+          do q = 1,qsize
+             call edgeVunpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie), nlev, nlev*(q-1), ie)
+             do k = 1,nlev
+                lap_p(:,:) = elem(ie)%rspheremp(:,:) * qtens_biharmonic(:,:,k,q,ie)
+                grads = gradient_sphere(lap_p, deriv, elem(ie)%Dinv)
+                qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads, deriv, elem(ie))
+                qtens_biharmonic(:,:,k,q,ie) = &
+                     -rhs_viss * dt * nu_q * dp0(k) * Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+             enddo
+          enddo
+       enddo
+       call euler_neighbor_minmax_finish_c(nets,nete)
+    endif ! rhs_multiplier == 2
 
 ! ifdef USE_KOKKOS_KERNELS
 #else
@@ -1899,11 +1896,12 @@ OMP_SIMD
 #endif
 
     endif
+! ifdef USE_KOKKOS_KERNELS
+#endif
     call t_stopf('bihmix_qminmax')
   endif  ! compute biharmonic mixing term and qmin/qmax
   ! end of limiter_option == 8
-! ifdef USE_KOKKOS_KERNELS
-#endif
+
 
   call t_startf('eus_2d_advec')
 #ifdef USE_KOKKOS_KERNELS
