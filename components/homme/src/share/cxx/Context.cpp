@@ -41,9 +41,15 @@ Derivative& Context::get_derivative() {
   return *derivative_;
 }
 
-std::shared_ptr<BuffersManager> Context::get_buffers_manager() {
-  if ( ! buffers_manager_) buffers_manager_.reset(new BuffersManager());
-  return buffers_manager_;
+std::shared_ptr<BuffersManager> Context::get_buffers_manager(short int exchange_type) {
+  if ( ! buffers_managers_) {
+    buffers_managers_.reset(new BMMap());
+  }
+
+  if (!(*buffers_managers_)[exchange_type]) {
+    (*buffers_managers_)[exchange_type] = std::make_shared<BuffersManager>(get_connectivity());
+  }
+  return (*buffers_managers_)[exchange_type];
 }
 
 std::shared_ptr<Connectivity> Context::get_connectivity() {
@@ -62,6 +68,9 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 
   // Todo: should we accept a bool param 'must_already_exist'
   //       to make sure we are not creating a new BE?
+  if (!(*boundary_exchanges_)[name]) {
+    (*boundary_exchanges_)[name] = std::make_shared<BoundaryExchange>();
+  }
   return (*boundary_exchanges_)[name];
 }
 
@@ -72,7 +81,7 @@ void Context::clear() {
   derivative_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
-  buffers_manager_ = nullptr;
+  buffers_managers_ = nullptr;
 }
 
 Context& Context::singleton() {

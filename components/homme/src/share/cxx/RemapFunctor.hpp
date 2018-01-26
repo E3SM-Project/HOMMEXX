@@ -640,7 +640,7 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
   ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
       KernelVariables &kv, const int &np1, const Real &dt,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
     start_timer("remap compute_source_thickness");
@@ -656,8 +656,11 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
         const int vlev = level % VECTOR_SIZE;
         const int next_ilev = (level + 1) / VECTOR_SIZE;
         const int next_vlev = (level + 1) % VECTOR_SIZE;
+        const auto eta_dot_dpdn_next = (level+1 < NUM_PHYSICAL_LEV ?
+                                        eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] :
+                                        0);
         const Real delta_dpdn =
-            eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] -
+            eta_dot_dpdn_next -
             eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
         src_layer_thickness(igp, jgp, ilev)[vlev] =
             tgt_layer_thickness(igp, jgp, ilev)[vlev] + dt * delta_dpdn;
@@ -701,7 +704,7 @@ template <> struct _RemapFunctorRSplit<true> {
   ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
       KernelVariables &kv, const int np1, const Real dt,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
     return get_source_thickness(kv.ie, np1, dp3d);

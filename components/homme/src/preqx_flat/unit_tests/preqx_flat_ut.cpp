@@ -153,7 +153,7 @@ public:
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
-  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dpdn;
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> eta_dpdn;
   HostViewManaged<Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
   qdp;
   HostViewManaged<Real * [NP][NP]> metdet;
@@ -1058,7 +1058,7 @@ struct LimiterTester {
   void check () {
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
-      Real m = 0, lo = 0, hi = 0;
+      Real m = 0;
       for (int i = 0; i < NP; ++i)
         for (int j = 0; j < NP; ++j) {
           // Check that the mixing ratio is limited.

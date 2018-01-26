@@ -20,23 +20,24 @@ module prim_cxx_driver_mod
 
 contains
 
-  subroutine init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex)
+  subroutine init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex, par)
     use dimensions_mod, only : nelem
     use gridgraph_mod,  only : GridEdge_t
     use metagraph_mod,  only : MetaVertex_t
-    use parallel_mod,   only : parallel_t, abortmp, MPI_INTEGER
+    use parallel_mod,   only : parallel_t
     !
     ! Inputs
     !
     integer, intent(in) :: nelemd
-    type(GridEdge_t), intent(in) :: GridEdge(:)
+    type(GridEdge_t),   intent(in) :: GridEdge(:)
+    type (parallel_t),  intent(in) :: par
     type(MetaVertex_t), intent(in) :: MetaVertex
     !
     ! Locals
     !
     integer :: Global2Local(nelem)
 
-    call generate_global_to_local(MetaVertex,Global2Local)
+    call generate_global_to_local(MetaVertex,Global2Local,par)
 
     call init_c_connectivity (nelemd, Global2Local, Gridedge)
 
@@ -54,24 +55,29 @@ contains
     call cleanup_mpi_structures()
   end subroutine cleanup_cxx_structures
 
-  subroutine generate_global_to_local (MetaVertex, Global2Local)
+  subroutine generate_global_to_local (MetaVertex, Global2Local, par)
     use dimensions_mod, only : nelem
     use metagraph_mod,  only : MetaVertex_t
+    use parallel_mod,   only : parallel_t, MPI_MAX, MPIinteger_t
     !
     ! Inputs
     !
+    type (parallel_t),  intent(in) :: par
     type(MetaVertex_t), intent(in) :: MetaVertex
     integer, intent(out) :: Global2Local(nelem)
     !
     ! Locals
     !
-    integer :: ie
+    integer :: ie, ierr
 
     ! Defaults all local ids to 0 (meaning not on this process)
     Global2Local = 0
     do ie=1,SIZE(MetaVertex%members)
       Global2Local(MetaVertex%members(ie)%number) = ie
     enddo
+
+    call MPI_Allreduce(MPI_IN_PLACE,Global2Local,nelem,MPIinteger_t,MPI_MAX,par%comm,ierr)
+
   end subroutine generate_global_to_local
 
   subroutine init_c_connectivity (nelemd,Global2Local,GridEdge)
@@ -81,12 +87,12 @@ contains
     ! Interfaces
     !
     interface
-      subroutine init_connectivity (nelemd) bind (c)
+      subroutine init_connectivity (num_local_elems) bind (c)
         use iso_c_binding, only : c_int
         !
         ! Inputs
         !
-        integer (kind=c_int), intent(in) :: nelemd
+        integer (kind=c_int), intent(in) :: num_local_elems
       end subroutine init_connectivity
 
       subroutine finalize_connectivity () bind(c)

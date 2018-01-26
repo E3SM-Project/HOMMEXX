@@ -29,7 +29,7 @@ void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
                            const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const double& nu_p, const double& nu_q, const int& rhs_viss,
+                           const int& np1_qdp, const double& nu_p, const double& nu_q,
                            const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
@@ -38,7 +38,6 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
   control.rhs_multiplier = rhs_multiplier;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
-  control.rhs_viss = rhs_viss;
   control.limiter_option = limiter_option;
 
   // Adjust indices
@@ -50,6 +49,41 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
   control.dt    = dt;
 
   control.np1_qdp = np1_qdp-1;
+}
+
+void init_euler_neighbor_minmax_c (const int& qsize)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  if (!be.is_registration_completed()) {
+    Elements& elements = Context::singleton().get_elements();
+
+    std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
+    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
+
+    be.set_connectivity(connectivity);
+    be.set_buffers_manager(buffers_manager);
+    be.set_num_fields(qsize,0,0);
+    be.register_min_max_fields(elements.buffers.qlim,qsize,0);
+    be.registration_completed();
+  }
+}
+
+void euler_neighbor_minmax_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.exchange_min_max(nets-1, nete);
+}
+
+void euler_neighbor_minmax_start_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.pack_and_send_min_max(nets-1, nete);
+}
+
+void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
+{
+  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  be.recv_and_unpack_min_max(nets-1, nete);
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -91,43 +125,11 @@ void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F9
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
-void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_derived_omega_p_ptr,
-                        CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
-                        CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
-                        CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& qmin_ptr,
-                        CF90Ptr& qmax_ptr)
+void euler_pull_qmin_qmax_c (F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
 
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_INTERFACE_LEV][NP][NP]>(
-                   elem_derived_eta_dot_dpdn_ptr, data.num_elems),
-                 r.m_eta_dot_dpdn);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_omega_p_ptr, data.num_elems),
-                 r.m_omega_p);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_divdp_proj_ptr, data.num_elems),
-                 r.m_derived_divdp_proj);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][2][NP][NP]>(
-                   elem_derived_vn0_ptr, data.num_elems),
-                 r.m_derived_vn0);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_dp_ptr, data.num_elems),
-                 r.m_derived_dp);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_divdp_ptr, data.num_elems),
-                 r.m_derived_divdp);
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
-                 r.m_derived_dpdiss_biharmonic);
-
-  r.pull_qdp(elem_state_Qdp_ptr);
-
-  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
-                   Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
-                 r.buffers.qtens_biharmonic);
   sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
                    qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                  HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV]>(
@@ -135,25 +137,63 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                  r.buffers.qlim);
 }
 
+void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_derived_omega_p_ptr,
+                        CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
+                        CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
+                        CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
+                        CF90Ptr& Qtens_biharmonic_ptr)
+{
+  Elements& elements = Context::singleton().get_elements();
+  const Control& data = Context::singleton().get_control();
+
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_eta_dot_dpdn_ptr, data.num_elems),
+                 elements.m_eta_dot_dpdn);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_omega_p_ptr, data.num_elems),
+                 elements.m_omega_p);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_divdp_proj_ptr, data.num_elems),
+                 elements.m_derived_divdp_proj);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][2][NP][NP]>(
+                   elem_derived_vn0_ptr, data.num_elems),
+                 elements.m_derived_vn0);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dp_ptr, data.num_elems),
+                 elements.m_derived_dp);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_divdp_ptr, data.num_elems),
+                 elements.m_derived_divdp);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
+                 elements.m_derived_dpdiss_biharmonic);
+
+  elements.pull_qdp(elem_state_Qdp_ptr);
+
+  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
+                   Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
+                 elements.buffers.qtens_biharmonic);
+}
+
 void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_derived_omega_p_ptr,
                            F90Ptr& elem_derived_divdp_proj_ptr, F90Ptr& elem_state_Qdp_ptr,
                            F90Ptr& qmin_ptr, F90Ptr& qmax_ptr)
 {
-  Elements& r = Context::singleton().get_elements();
+  Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
-  r.push_qdp(elem_state_Qdp_ptr);
-  sync_to_host(r.buffers.qlim,
+  elements.push_qdp(elem_state_Qdp_ptr);
+  sync_to_host(elements.buffers.qlim,
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
                  qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
                  qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
-  sync_to_host(r.m_eta_dot_dpdn,
-               HostViewUnmanaged<Real*[NUM_INTERFACE_LEV][NP][NP]>(
+  sync_to_host(elements.m_eta_dot_dpdn,
+               HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_eta_dot_dpdn_ptr, data.num_elems));
-  sync_to_host(r.m_omega_p,
+  sync_to_host(elements.m_omega_p,
                HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_omega_p_ptr, data.num_elems));
-  sync_to_host(r.m_derived_divdp_proj,
+  sync_to_host(elements.m_derived_divdp_proj,
                HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_divdp_proj_ptr, data.num_elems));
 }
@@ -197,34 +237,23 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Setup the boundary exchange
   std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];
-  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be_map = Context::singleton().get_boundary_exchanges();
   for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
     std::stringstream ss;
     ss << "caar tl " << tl;
-    be[tl] = be_map[ss.str()];
+    be[tl] = Context::singleton().get_boundary_exchange(ss.str());
 
     // If it was not yet created, create it and set it up
-    if (!be[tl]) {
-      std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
-      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager();
-      if (!buffers_manager->is_connectivity_set()) {
-        // TODO: should we do this inside the get_buffers_manager in Context?
-        buffers_manager->set_connectivity(connectivity);
-      }
+    if (!be[tl]->is_registration_completed()) {
+      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+      be[tl]->set_buffers_manager(buffers_manager);
 
       // Set the views of this time level into this time level's boundary exchange
-      be[tl] = std::make_shared<BoundaryExchange>(connectivity,buffers_manager);
-
-      // Setup the boundary exchange
-      be[tl]->set_num_fields(0,4);
+      be[tl]->set_num_fields(0,0,4);
       be[tl]->register_field(elements.m_u,1,tl);
       be[tl]->register_field(elements.m_v,1,tl);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
       be[tl]->registration_completed();
-
-      // Set this BE in the Context's map
-      be_map[ss.str()] = be[tl];
     }
   }
 
@@ -262,9 +291,56 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c()
+void advance_qdp_c(const int& rhs_viss)
 {
+  Control& control = Context::singleton().get_control ();
+  control.rhs_viss = rhs_viss;
+
   EulerStepFunctor::run();
+}
+
+void euler_exchange_qdp_dss_var_c ()
+{
+  Control data = Context::singleton().get_control();
+  Elements& elements = Context::singleton().get_elements();
+
+  // Note: we have three separate BE structures, all of which register qdp. They
+  //       differ only in the last field registered. This allows us to have a SINGLE
+  //       mpi call to exchange qsize+1 fields, rather than one for qdp and one for the
+  //       last DSS variable.
+  // TODO: move this setup in init_control_euler and move that function one stack frame up
+  //       of euler_step in F90, making it set the common parameters to all euler_steps
+  //       calls (nets, nete, dt, nu_p, nu_q)
+
+  std::stringstream ss;
+  ss << "exchange qdp "
+     << (data.DSSopt == Control::DSSOption::eta ?
+         "eta" :
+         data.DSSopt == Control::DSSOption::omega ?
+         "omega" :
+         "div_vdp_ave")
+     << " " << data.np1_qdp;
+
+  const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+    Context::singleton().get_boundary_exchange(ss.str());
+
+  const auto& dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
+                         (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p   :
+                          elements.m_derived_divdp_proj));
+
+  if (!be_qdp_dss_var->is_registration_completed()) {
+    // If it is the first time we call this method, we need to set up the BE
+    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+    be_qdp_dss_var->set_buffers_manager(buffers_manager);
+    be_qdp_dss_var->set_num_fields(0,0,data.qsize+1);
+    be_qdp_dss_var->register_field(elements.m_qdp,data.np1_qdp,data.qsize,0);
+    be_qdp_dss_var->register_field(dss_var);
+    be_qdp_dss_var->registration_completed();
+  }
+
+  be_qdp_dss_var->exchange();
+
+  EulerStepFunctor::apply_rspheremp();
 }
 
 } // extern "C"

@@ -28,6 +28,7 @@ class BuffersManager;
 class Context {
 public:
   using BEMap = std::map<std::string,std::shared_ptr<BoundaryExchange>>;
+  using BMMap = std::map<int,std::shared_ptr<BuffersManager>>;
 
 private:
   // Note: using uniqe_ptr disables copy construction
@@ -36,7 +37,7 @@ private:
   std::unique_ptr<Elements>       elements_;
   std::unique_ptr<Derivative>     derivative_;
   std::shared_ptr<Connectivity>   connectivity_;
-  std::shared_ptr<BuffersManager> buffers_manager_;
+  std::shared_ptr<BMMap>          buffers_managers_;
   std::unique_ptr<BEMap>          boundary_exchanges_;
 
   // Clear the objects Context manages.
@@ -51,8 +52,9 @@ public:
   Control& get_control();
   Elements& get_elements();
   Derivative& get_derivative();
-  std::shared_ptr<BuffersManager> get_buffers_manager();
   std::shared_ptr<Connectivity> get_connectivity();
+  BMMap& get_buffers_managers();
+  std::shared_ptr<BuffersManager> get_buffers_manager(short int exchange_type);
   BEMap& get_boundary_exchanges();
   std::shared_ptr<BoundaryExchange> get_boundary_exchange(const std::string& name);
 
