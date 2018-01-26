@@ -152,7 +152,13 @@ team_num_threads_vectors (const int num_parallel_iterations,
   // Kokkos::Impl::cuda_internal_maximum_grid_count() returns 8. I may be
   // misusing the function. I have an open issue with the Kokkos team to resolve
   // this. For now:
+# ifdef KOKKOS_HAVE_DEBUG
+  // Work around spurious "terminate called after throwing an instance
+  // of 'std::runtime_error'" message.
+  const int max_num_warps = 8;
+# else
   const int max_num_warps = 16; //Kokkos::Impl::cuda_internal_maximum_grid_count();
+# endif
 #else
   // I want thread-distribution rules to be unit-testable even when Cuda is
   // off. Thus, make up a P100-like machine:
