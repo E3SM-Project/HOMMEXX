@@ -30,6 +30,8 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use element_mod,         only: elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                 elem_state_Qdp, elem_state_ps_v
   use iso_c_binding,       only: c_ptr, c_loc
 #endif
 
@@ -77,7 +79,14 @@ program prim_main
       real (kind=c_double), intent(in) :: tstep
     end subroutine prim_run_subcycle_c
 
-    subroutine cxx_push_results_to_f90() bind(c)
+    subroutine cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+      type (c_ptr),          intent(in) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
     end subroutine cxx_push_results_to_f90
 
     subroutine finalize_hommexx_session() bind(c)
@@ -96,6 +105,8 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: hyai_ptr, hybi_ptr
+  type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+  type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
 #endif
 
   real*8 timeit, et, st
@@ -321,7 +332,13 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
     !TODO: push results only if it is output step (need to add a query subroutine to interp_movie_mod)
-    call cxx_push_results_to_f90()
+    elem_state_v_ptr    = c_loc(elem_state_v)
+    elem_state_temp_ptr = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 #endif
 
 #ifdef PIO_INTERP
