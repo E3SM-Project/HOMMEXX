@@ -131,7 +131,7 @@ void Connectivity::finalize()
     for (int ic : corners) {
       if (h_connections(ie,ic).kind == etoi(ConnectionKind::MISSING)) {
 #ifndef NDEBUG
-        missing[ic] = true;
+        missing[ic % NUM_CORNERS] = true;
 #endif
 
         // Just for tracking purposes
