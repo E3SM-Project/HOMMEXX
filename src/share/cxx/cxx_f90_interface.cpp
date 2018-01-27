@@ -203,21 +203,19 @@ void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchang
                        MDRangePolicy<ExecSpace,4> policy_post)
 {
   // --- Pre boundary exchange
-  profiling_resume();
+  GPTLstart("caar_monolithic_c-pre");
   Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
   ExecSpace::fence();
-  profiling_pause();
+  GPTLstop("caar_monolithic_c-pre");
 
   // Do the boundary exchange
-  start_timer("caar_bexchV");
+  GPTLstart("caar_bexchV");
   be.exchange();
 
   // --- Post boundary echange
-  profiling_resume();
   Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
   ExecSpace::fence();
-  profiling_pause();
-  stop_timer("caar_bexchV");
+  GPTLstop("caar_bexchV");
 }
 
 void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
