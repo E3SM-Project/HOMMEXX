@@ -3,6 +3,7 @@
 #include "BuffersManager.hpp"
 #include "Context.hpp"
 #include "Control.hpp"
+#include "profiling.hpp"
 
 #include "vector/VectorUtils.hpp"
 
@@ -268,6 +269,7 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
 
 void BoundaryExchange::pack_and_send (int nets, int nete)
 {
+  GPTLstart("be pack_and_send");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -288,7 +290,9 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
+    GPTLstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
+    GPTLstop("be build_buffer_views_and_requests");
   }
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
@@ -310,17 +314,17 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
 
   // ---- Pack ---- //
   // First, pack 2d fields (if any)...
+  GPTLstart("be pack");
+  const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,NUM_CONNECTIONS,m_num_2d_fields},{1,1,1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
-      ConnectionHelpers helpers;
-
-      const ConnectionInfo info = connections(ie,iconn);
-      const LidGidPos field_lidpos  = info.local;
+      const ConnectionInfo& info = connections(ie,iconn);
+      const LidGidPos& field_lidpos  = info.local;
       // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
       // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
       // for local connections we need to manually copy on the remote element lid. We can do it here
-      const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
       // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
       const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
@@ -333,14 +337,12 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   if (m_num_3d_fields>0) {
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
-      ConnectionHelpers helpers;
-
-      const ConnectionInfo info = connections(ie,iconn);
-      const LidGidPos field_lidpos  = info.local;
+      const ConnectionInfo& info = connections(ie,iconn);
+      const LidGidPos& field_lidpos  = info.local;
       // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
       // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
       // for local connections we need to manually copy on the remote element lid. We can do it here
-      const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
       // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
       const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
@@ -350,17 +352,24 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
     });
   }
   ExecSpace::fence();
+  GPTLstop("be pack");
 
   // ---- Send ---- //
+  GPTLstart("be sync_send_buffer");
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
+  GPTLstop("be sync_send_buffer");
+  GPTLstart("be send");
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
+  GPTLstop("be send");
 
   // Notify a send is ongoing
   m_send_pending = true;
+  GPTLstop("be pack_and_send");
 }
 
 void BoundaryExchange::recv_and_unpack (int nets, int nete)
 {
+  GPTLstart("be recv_and_unpack");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -384,10 +393,14 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   }
 
   // ---- Recv ---- //
+  GPTLstart("be recv waitall");
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   m_recv_pending = false;
+  GPTLstop("be recv waitall");
 
+  GPTLstart("be recv sync_recv_buffer");
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
+  GPTLstop("be recv sync_recv_buffer");
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
   //       capturing the this pointer correctly on the device.
@@ -406,13 +419,13 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   assert (nete>nets);
   assert (nets>=0);
 
+  GPTLstart("be unpack");
   // --- Unpack --- //
   // First, unpack 2d fields (if any)...
+  const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({nets,0},{nete,m_num_2d_fields},{1,1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield) {
-      ConnectionHelpers helpers;
-
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
           fields_2d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += recv_2d_buffers(ie,ifield,iedge)[k];
@@ -429,8 +442,6 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   if (m_num_3d_fields>0) {
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_3d_fields,NUM_LEV},{1,1,1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
-      ConnectionHelpers helpers;
-
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
           fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
@@ -443,15 +454,19 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
     });
   }
   ExecSpace::fence();
+  GPTLstop("be unpack");
 
+  GPTLstart("be recv waitall 2");
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
   // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
   m_send_pending = false;
   m_recv_pending = false;
+  GPTLstop("be recv_and_unpack");
 }
 
 void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
@@ -479,7 +494,9 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange_min_max method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
+    GPTLstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
+    GPTLstop("be build_buffer_views_and_requests");
   }
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
@@ -498,23 +515,27 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   assert (nets>=0);
 
   // ---- Pack ---- //
+  GPTLstart("be pack");
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_1d_fields,NUM_LEV},{1,1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
-    const ConnectionInfo info = connections(ie,iconn);
-    const LidGidPos field_lidpos  = info.local;
+    const ConnectionInfo& info = connections(ie,iconn);
+    const LidGidPos& field_lidpos  = info.local;
     // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
     // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
     // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidGidPos buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
     send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
     send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
   });
   ExecSpace::fence();
+  GPTLstop("be pack");
 
   // ---- Send ---- //
+  GPTLstart("be send");
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
+  GPTLstop("be send");
 
   // Mark send buffer as busy
   m_send_pending = true;
@@ -545,7 +566,9 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   }
 
   // ---- Recv ---- //
+  GPTLstart("be recv waitall");
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  GPTLstop("be recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
@@ -565,6 +588,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   assert (nets>=0);
 
   // --- Unpack --- //
+  GPTLstart("be unpack");
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_1d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
 
@@ -580,10 +604,13 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
     }
   });
   ExecSpace::fence();
+  GPTLstop("be unpack");
 
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
   // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
+  GPTLstart("be recv waitall 2");
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
