@@ -14,6 +14,8 @@ class Derivative;
 class Connectivity;
 class BoundaryExchange;
 class BuffersManager;
+class SimulationParams;
+class TimeLevel;
 
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
@@ -32,13 +34,15 @@ public:
 
 private:
   // Note: using uniqe_ptr disables copy construction
-  std::unique_ptr<Comm>           comm_;
-  std::unique_ptr<Control>        control_;
-  std::unique_ptr<Elements>       elements_;
-  std::unique_ptr<Derivative>     derivative_;
-  std::shared_ptr<Connectivity>   connectivity_;
-  std::shared_ptr<BMMap>          buffers_managers_;
-  std::unique_ptr<BEMap>          boundary_exchanges_;
+  std::unique_ptr<Comm>             comm_;
+  std::unique_ptr<Control>          control_;
+  std::unique_ptr<Elements>         elements_;
+  std::unique_ptr<Derivative>       derivative_;
+  std::shared_ptr<Connectivity>     connectivity_;
+  std::shared_ptr<BMMap>            buffers_managers_;
+  std::unique_ptr<BEMap>            boundary_exchanges_;
+  std::unique_ptr<SimulationParams> simulation_params_;
+  std::unique_ptr<TimeLevel>        time_level_;
 
   // Clear the objects Context manages.
   void clear();
@@ -57,6 +61,8 @@ public:
   std::shared_ptr<BuffersManager> get_buffers_manager(short int exchange_type);
   BEMap& get_boundary_exchanges();
   std::shared_ptr<BoundaryExchange> get_boundary_exchange(const std::string& name);
+  SimulationParams& get_simulation_params();
+  TimeLevel& get_time_level();
 
   // Exactly one singleton.
   static Context& singleton();

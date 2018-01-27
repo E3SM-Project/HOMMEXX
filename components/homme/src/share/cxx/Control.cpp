@@ -5,6 +5,39 @@
 
 namespace Homme {
 
+void Control::init_hvcoord(const Real ps0_in, CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr)
+{
+  ps0 = ps0_in;
+
+  hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid a coordinates; translates between pressure and velocity");
+  hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid b coordinates; translates between pressure and velocity");
+  hybrid_a_delta = ExecViewManaged<Scalar[NUM_LEV]>("Difference in Hybrid a coordinates between consecutive levels");
+  hybrid_b_delta = ExecViewManaged<Scalar[NUM_LEV]>("Difference in Hybrid b coordinates between consecutive levels");
+
+  assert(hybrid_a_ptr != nullptr);
+  assert(hybrid_b_ptr != nullptr);
+
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_a(hybrid_a_ptr);
+  Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_b(hybrid_b_ptr);
+  Kokkos::deep_copy(hybrid_b, host_hybrid_b);
+
+  decltype(hybrid_a_delta)::HostMirror host_hybrid_a_delta = Kokkos::create_mirror_view(hybrid_a_delta);
+  decltype(hybrid_b_delta)::HostMirror host_hybrid_b_delta = Kokkos::create_mirror_view(hybrid_b_delta);
+  for (int level=0;level<NUM_PHYSICAL_LEV; ++level) {
+    const int ilev = level / VECTOR_SIZE;
+    const int ivec = level % VECTOR_SIZE;
+
+    host_hybrid_a_delta(ilev)[ivec] = host_hybrid_a(level+1) - host_hybrid_a(level);
+    host_hybrid_b_delta(ilev)[ivec] = host_hybrid_b(level+1) - host_hybrid_b(level);
+  }
+  Kokkos::deep_copy(hybrid_a_delta,host_hybrid_a_delta);
+  Kokkos::deep_copy(hybrid_b_delta,host_hybrid_b_delta);
+}
+
 void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
                    const int qn0_in, const Real ps0_in, const int rsplit_in,
                    CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr) {
