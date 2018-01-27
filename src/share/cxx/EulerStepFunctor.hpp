@@ -28,6 +28,9 @@ public:
    , m_deriv   (Context::singleton().get_derivative())
   {}
 
+  struct BIHPre {};
+  struct BIHPost {};
+
   static void compute_biharmonic_pre () {
     profiling_resume();
     start_timer("esf-bih-pre run");
@@ -39,17 +42,72 @@ public:
     EulerStepFunctor func(c);
     c.rhs_viss = 3;
     Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(c.num_elems * c.qsize),
+      Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
       func);
+
     stop_timer("esf-bih-pre run");
     profiling_pause();
   }
 
   static void compute_biharmonic_post () {
-    Control& c = Context::singleton().get_control();
-    Elements& e = Context::singleton().get_elements();
-    if (c.rhs_multiplier != 2) return;
+    profiling_resume();
+    start_timer("esf-bih-post run");
 
+    Control& c = Context::singleton().get_control();
+    if (c.rhs_multiplier != 2) return;
+    Elements& e = Context::singleton().get_elements();
+
+    EulerStepFunctor func(c);
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, BIHPost>(c.num_elems * c.qsize),
+      func);
+
+    stop_timer("esf-bih-post run");
+    profiling_pause();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPre&, const TeamMember& team) const {
+    start_timer("esf-bih-pre compute");
+    KernelVariables kv(team, m_data.qsize);
+    const bool nu_p_gt0 = m_data.nu_p > 0;
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    //const auto dpdiss_ave = Homme::subview(e.derived_dpdiss_ave, kv.ie);
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP*NP),
+      [&] (const int loop_idx) {
+        const int i = loop_idx / NP;
+        const int j = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& k) {
+            if (nu_p_gt0) {
+              //const Scalar dp0 = m_data.hybrid_a( );
+              //qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / dp0;
+            }
+            //biharmonic_wk_scalar( );
+          });
+      });
+    stop_timer("esf-bih-pre compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPost&, const TeamMember& team) const {
+    start_timer("esf-bih-post compute");
+    KernelVariables kv(team, m_data.qsize);
+    Kokkos::parallel_for (
+      Kokkos::TeamThreadRange(kv.team, NP*NP),
+      [&] (const int loop_idx) {
+        const int i = loop_idx / NP;
+        const int j = loop_idx % NP;
+        Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+          [&] (const int& k) {
+            //biharmonic_wk_scalar( );
+
+          });
+      });
+    stop_timer("esf-bih-post compute");
   }
 
   struct AALSetupPhase {};
@@ -373,7 +431,7 @@ private:
       });
   }
 
-public:
+public: // Expose for unit testing.
 
   // limiter_option = 8.
   template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
