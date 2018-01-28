@@ -335,6 +335,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   }
   // ...then pack 3d fields (if any).
   if (m_num_3d_fields>0) {
+#ifdef OLD
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
       const ConnectionInfo& info = connections(ie,iconn);
@@ -350,6 +351,29 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
         send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = fields_3d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
       }
     });
+#else
+    const auto num_3d_fields = m_num_3d_fields;
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
+        const int ifield = (it % (num_3d_fields*NUM_CONNECTIONS*NUM_LEV)) / (NUM_CONNECTIONS*NUM_LEV);
+        const int iconn = (it % (NUM_CONNECTIONS*NUM_LEV)) / NUM_LEV;
+        const int ilev = it % NUM_LEV;
+        const ConnectionInfo& info = connections(ie,iconn);
+        const LidGidPos& field_lidpos  = info.local;
+        // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+        // for local connections we need to manually copy on the remote element lid. We can do it here
+        const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+
+        // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
+        const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+        for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+          send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = fields_3d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+        }
+      });
+#endif
   }
   ExecSpace::fence();
   GPTLstop("be pack");
@@ -539,7 +563,8 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   assert (nets>=0);
 
   // ---- Pack ---- //
-  GPTLstart("be pack");
+#ifdef OLD
+  GPTLstart("be pack minmax orig");
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_1d_fields,NUM_LEV},{1,1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
     const ConnectionInfo& info = connections(ie,iconn);
@@ -552,8 +577,29 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
     send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
     send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
   });
-  ExecSpace::fence();
-  GPTLstop("be pack");
+  ExecSpace::fence(); GPTLstop("be pack minmax orig");
+#else
+  GPTLstart("be pack minmax new");
+  const auto num_1d_fields = m_num_1d_fields;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+    KOKKOS_LAMBDA(const int it) {
+      const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
+      const int ifield = (it % (num_1d_fields*NUM_CONNECTIONS*NUM_LEV)) / (NUM_CONNECTIONS*NUM_LEV);
+      const int iconn = (it % (NUM_CONNECTIONS*NUM_LEV)) / NUM_LEV;
+      const int ilev = it % NUM_LEV;
+      const ConnectionInfo& info = connections(ie,iconn);
+      const LidGidPos& field_lidpos  = info.local;
+      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+      // for local connections we need to manually copy on the remote element lid. We can do it here
+      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+      
+      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
+      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
+    });
+  ExecSpace::fence(); GPTLstop("be pack minmax new");
+#endif
 
   // ---- Send ---- //
   GPTLstart("be send");
@@ -628,7 +674,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
       fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
     }
   });
-  ExecSpace::fence(); GPTLstop("be unpack minmax new");
+  ExecSpace::fence(); GPTLstop("be unpack minmax orig");
 #else
   GPTLstart("be unpack minmax new");
   const auto num_1d_fields = m_num_1d_fields;
