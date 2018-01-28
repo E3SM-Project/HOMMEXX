@@ -419,7 +419,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   assert (nete>nets);
   assert (nets>=0);
 
-  GPTLstart("be unpack");
+  GPTLstart("be unpack 2d");
   // --- Unpack --- //
   // First, unpack 2d fields (if any)...
   const ConnectionHelpers helpers;
@@ -438,8 +438,11 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
       }
     });
   }
+  GPTLstop("be unpack 2d");
   // ...then unpack 3d fields.
   if (m_num_3d_fields>0) {
+#ifdef OLD
+    GPTLstart("be unpack 3d orig");
     Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_3d_fields,NUM_LEV},{1,1,1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
       for (int k=0; k<NP; ++k) {
@@ -452,9 +455,30 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
           fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
       }
     });
+    ExecSpace::fence(); GPTLstop("be unpack 3d orig");
+#else
+    GPTLstart("be unpack 3d new");
+    const auto num_3d_fields = m_num_3d_fields;
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = nets + it / (num_3d_fields*NUM_LEV);
+        const int ifield = (it % (num_3d_fields*NUM_LEV)) / NUM_LEV;
+        const int ilev = it % NUM_LEV;
+        for (int k=0; k<NP; ++k) {
+          for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+          }
+        }
+        for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+          if (recv_3d_buffers(ie,ifield,icorner).size() > 0)
+            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+        }        
+      });
+    ExecSpace::fence(); GPTLstop("be unpack 3d new");
+#endif
   }
   ExecSpace::fence();
-  GPTLstop("be unpack");
 
   GPTLstart("be recv waitall 2");
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
@@ -588,7 +612,8 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   assert (nets>=0);
 
   // --- Unpack --- //
-  GPTLstart("be unpack");
+#ifdef OLD
+  GPTLstart("be unpack minmax orig");
   Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_1d_fields,NUM_LEV},{1,1,1}),
                        KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
 
@@ -603,8 +628,29 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
       fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
     }
   });
+  ExecSpace::fence(); GPTLstop("be unpack minmax new");
+#else
+  GPTLstart("be unpack minmax new");
+  const auto num_1d_fields = m_num_1d_fields;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
+    KOKKOS_LAMBDA(const int it) {
+      const int ie = nets + it / (num_1d_fields*NUM_LEV);
+      const int ifield = (it % (num_1d_fields*NUM_LEV)) / NUM_LEV;
+      const int ilev = it % NUM_LEV;
+      for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
+        // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
+        //       the missing recv buffer points to a blackhole fileld with 0's, which do not alter the accummulation)
+        if (connections(ie,neighbor).kind==etoi(ConnectionKind::MISSING)) {
+          continue;
+        }
+        fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
+        fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
+      }
+    });
+    ExecSpace::fence(); GPTLstop("be unpack minmax new");  
+#endif
   ExecSpace::fence();
-  GPTLstop("be unpack");
 
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
   // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
