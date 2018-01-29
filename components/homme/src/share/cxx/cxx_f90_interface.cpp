@@ -247,8 +247,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
       // Set the views of this time level into this time level's boundary exchange
       be[tl]->set_num_fields(0,0,4);
-      be[tl]->register_field(elements.m_u,1,tl);
-      be[tl]->register_field(elements.m_v,1,tl);
+      be[tl]->register_field(elements.m_v,tl,2,0);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
       be[tl]->registration_completed();
@@ -282,8 +281,8 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
        const int jgp = (it / NUM_LEV) % NP;
        const int ilev = it % NUM_LEV;
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,igp,jgp,ilev)-elements.m_v(ie,n0,igp,jgp,ilev))/4.0;
+       elements.m_v(ie,nm1,0,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,0,igp,jgp,ilev)-elements.m_v(ie,n0,0,igp,jgp,ilev))/4.0;
+       elements.m_v(ie,nm1,1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,1,igp,jgp,ilev)-elements.m_v(ie,n0,1,igp,jgp,ilev))/4.0;
        elements.m_dp3d(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_dp3d(ie,nm1,igp,jgp,ilev)-elements.m_dp3d(ie,n0,igp,jgp,ilev))/4.0;
   });
   ExecSpace::fence();
