@@ -15,7 +15,7 @@
 #include <type_traits>
 
 
-#define GR3 1 //GPU_RSPLIT3
+#define GR3 0 //GPU_RSPLIT3
 
 
 namespace Homme {
