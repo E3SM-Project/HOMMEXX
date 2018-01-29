@@ -14,9 +14,13 @@ public:
   // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
   // Differential geometry things
-  ExecViewManaged<Real * [NP][NP]> m_spheremp;
-  ExecViewManaged<Real * [NP][NP]> m_rspheremp;
-  ExecViewManaged<Real * [NP][NP]> m_metdet;
+  ExecViewManaged<Real * [NP][NP]>        m_mp;
+  ExecViewManaged<Real * [NP][NP]>        m_spheremp;
+  ExecViewManaged<Real * [NP][NP]>        m_rspheremp;
+  ExecViewManaged<Real * [2][3][NP][NP]>  m_vec_sph2cart;
+  ExecViewManaged<Real * [2][2][NP][NP]>  m_tensorVisc;
+  ExecViewManaged<Real * [2][2][NP][NP]>  m_metinv;
+  ExecViewManaged<Real * [NP][NP]>        m_metdet;
   // Prescribed surface geopotential height at eta = 1
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
@@ -39,19 +43,23 @@ public:
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
   // ???
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+  ExecViewManaged<Real   * [NUM_TIME_LEVELS][NP][NP]         > m_ps_v;
+  ExecViewManaged<Real   * [NUM_TIME_LEVELS][NP][NP]         > m_lnps;
 
   // q is the specific humidity
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
+  ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>                    m_Q;
   // eta is the vertical coordinate
   // eta dot is the flux through the vertical level interface
   // dpdn is the derivative of pressure with respect to eta
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vstar;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
     m_derived_dp,                // for dp_tracers at physics timestep
     m_derived_divdp,             // divergence of dp
     m_derived_divdp_proj,        // DSSed divdp
-    m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
-    m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
+    m_derived_dpdiss_ave,        // mean dp dissipation tendency, if nu_p>0
+    m_derived_dpdiss_biharmonic; // mean dp dissipation tendency, if nu_p>0
 
   struct BufferViews {
 
@@ -81,7 +89,16 @@ public:
     // Buffers for spherical operators
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> curl_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
+
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> sphere_vector_buf;
+
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> divergence_temp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity_temp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_1;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_2;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_3;
 
     ExecViewManaged<clock_t *> kernel_start_times;
     ExecViewManaged<clock_t *> kernel_end_times;
@@ -96,8 +113,10 @@ public:
   int num_elems() const { return m_num_elems; }
 
   // Fill the exec space views with data coming from F90 pointers
-  void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
-               CF90Ptr &rspheremp, CF90Ptr &metdet, CF90Ptr &phis);
+  void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+               CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
+               CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr& vec_sph2cart,
+               CF90Ptr &tensorVisc, CF90Ptr &phis);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
