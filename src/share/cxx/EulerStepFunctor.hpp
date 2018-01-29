@@ -248,8 +248,8 @@ public:
     Control &state = Context::singleton().get_control();
     Elements &elems = Context::singleton().get_elements();
 
-    Kokkos::RangePolicy<ExecSpace> policy1(0, state.num_elems * state.qsize * NP *
-                                           NP * NUM_LEV);
+    Kokkos::RangePolicy<ExecSpace> policy1(0, state.num_elems * state.qsize *
+                                                  NP * NP * NUM_LEV);
     Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
       const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / state.qsize;
       const int q = (((loop_idx / NUM_LEV) / NP) / NP) % state.qsize;
@@ -261,6 +261,13 @@ public:
                       elems.m_derived_divdp_proj(ie, igp, jgp, lev);
       Scalar tmp = elems.m_qdp(ie, state.qn0, q, igp, jgp, lev) / dp;
       elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
+      if ((ie == 3) && (q == 2) && (igp == 2) && (lev == 3)) {
+        printf("compute_qmin_qmax 1: %d %d %d %d %d %d c++: dp % .17e, qdp % "
+               ".17e, qtens % .17e\n",
+               ie, state.qn0, q, lev, igp, jgp, dp[0],
+               elems.m_qdp(ie, state.qn0, q, igp, jgp, lev)[0],
+               elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev)[0]);
+      }
     });
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *

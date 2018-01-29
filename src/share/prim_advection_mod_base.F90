@@ -1633,6 +1633,13 @@ use utils_mod, only: FrobeniusNorm
       !
       integer (kind=c_int),  intent(in) :: nets, nete
     end subroutine euler_minmax_and_biharmonic_c
+
+    subroutine euler_qmin_qmax_c(derived_dp, derived_divdp_proj, qdp) bind(c)
+      use iso_c_binding, only : c_double
+      real (kind=c_double), intent(in) :: derived_dp(:,:,:,:)
+      real (kind=c_double), intent(in) :: derived_divdp_proj(:,:,:,:)
+      real (kind=c_double), intent(in) :: qdp(:,:,:,:,:,:)
+    end subroutine euler_qmin_qmax_c
   end interface
 
   integer              , intent(in   )         :: np1_qdp, n0_qdp
@@ -1742,6 +1749,11 @@ OMP_SIMD
       do q = 1 , qsize
         do k=1,nlev
           Qtens_biharmonic(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp)/dp(:,:,k)
+          if ((ie == 4) .and. (q == 3) .and. (k == 4)) then
+             do j = 1, np
+                print *, "compute_qmin_qmax 1:", ie - 1, n0_qdp - 1, q - 1, k - 1, 2, j - 1, "f90: dp", dp(j, 3, k), ", qdp", elem(ie)%state%Qdp(j, 3, k, q, n0_qdp), ", qtens", Qtens_biharmonic(j, 3, k, q, ie)
+             end do
+          end if
           if ( rhs_multiplier == 1 ) then
              ! for this stage, we skip neighbor_minmax() call, but update
              ! qmin/qmax with any new local extrema:
@@ -1758,7 +1770,11 @@ OMP_SIMD
     enddo
 
 #ifdef USE_KOKKOS_KERNELS
-    call euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr)
+    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+         Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
+    call euler_qmin_qmax_c(elem_derived_dp, elem_derived_divdp_proj, elem_state_Qdp)
     if ( rhs_multiplier == 0 ) then
       ! update qmin/qmax based on neighbor data for lim8
       call t_startf('eus_neighbor_minmax1')
@@ -1777,13 +1793,8 @@ OMP_SIMD
     endif
 #endif
 
-    
 #ifdef USE_KOKKOS_KERNELS
 
-    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-         Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
     call euler_minmax_and_biharmonic_c(nets, nete)
 
 ! ifdef USE_KOKKOS_KERNELS
@@ -1887,7 +1898,9 @@ OMP_SIMD
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
   call t_startf("advance_qdp")
+
   call advance_qdp_c()
+
   call t_stopf("advance_qdp")
 
   call euler_exchange_qdp_dss_var_c()
