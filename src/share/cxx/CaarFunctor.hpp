@@ -14,6 +14,10 @@
 #include <assert.h>
 #include <type_traits>
 
+
+#define GR3 1 //GPU_RSPLIT3
+
+
 namespace Homme {
 
 struct CaarFunctor {
@@ -108,13 +112,14 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
-/*    if (m_data.rsplit == 0) {
+    if (m_data.rsplit == 0) {
       // vertical Eulerian
       assign_zero_to_sdot_sum(kv);
       compute_eta_dot_dpdn_vertadv_euler(kv);
       preq_vertadv(kv);
       accumulate_eta_dot_dpdn(kv);
-    } // else compute_eta_dot_dpdn(kv); // <- Turns out this isn't needed.
+    } 
+/*
     compute_omega_p(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
@@ -122,16 +127,10 @@ struct CaarFunctor {
     check_dp3d(kv);
 */
 
-////////////// MASTER code
-//this is only in master
-    compute_eta_dpdn_rsplitM(kv);
-//never changed this
     compute_omega_p(kv);
-
-    compute_temperature_np1M(kv);
+    compute_temperature_np1(kv);
     compute_velocity_np1(kv);
-    compute_dp3d_np1M(kv);
-//probably same as in master
+    compute_dp3d_np1(kv);
     check_dp3d(kv);
   } // TRIVIAL
 //is it?
@@ -289,58 +288,35 @@ KOKKOS_INLINE_FUNCTION
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
-//output is:    rsplit_gt0 1
-//std::printf("rsplit %d \n", m_data.rsplit);
-
-/*
+//verified that his makes change in 1-day test
+#if GR3
 if(rsplit_gt0){
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}*/
-
-
-if(rsplit_gt0){
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}else{
-
-//std::printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \n");
-
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) +
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 }
-
-
-
-
-/*
+#else
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-*/
+#endif
+
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
-//if(rsplit_gt0){
+//verified this is needed for a 1-day test
+#if GR3
+if(rsplit_gt0){
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-/*}else{
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)
-            - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}*/
-/*
+}
+#else
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
             m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-*/
+#endif
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             m_elements.m_u(kv.ie, m_data.nm1, igp, jgp, ilev);
@@ -593,8 +569,7 @@ if(rsplit_gt0){
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
-        // t_vadv + vgrad_t + kappa * T_v * omega_p
-
+#if GR3
         Scalar ttens;
         if(rsplit_gt0){ 
            ttens = 
@@ -602,21 +577,15 @@ if(rsplit_gt0){
                   + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-        }else{
-           ttens =- m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)
-                  - vgrad_t
-                  + PhysicalConstants::kappa *
-                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
-                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
         }
-/*
+#else 
         const Scalar ttens = 
               (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
                   - vgrad_t
                   + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-*/
+#endif
         Scalar temp_np1 = ttens * m_data.dt +
                           m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
         temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);

@@ -659,12 +659,6 @@ contains
          end do
       end do vertloop
 
-!if(ie == 1) then
-!print *, 'in F caar'
-!print *, 'u tens', vtens1(1,1,:)
-!print *, 'v tens', vtens2(1,1,:)
-!endif
-
 #ifdef ENERGY_DIAGNOSTICS
       ! =========================================================
       !
