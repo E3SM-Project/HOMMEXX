@@ -363,7 +363,32 @@ void euler_exchange_qdp_dss_var_c ()
   EulerStepFunctor::apply_rspheremp();
 }
 
-void euler_qmin_qmax() {
+void euler_qmin_qmax_c(const Real *&derived_dp, const Real *&derived_divdp_proj,
+                       const Real *&qdp) {
+  const Control &sim_state = Context::singleton().get_control();
+  Elements &elems = Context::singleton().get_elements();
+
+  printf("derived_dp: %p, derived_divdp_proj: %p, qdp: %p\n", derived_dp,
+         derived_divdp_proj, qdp);
+
+  HostViewUnmanaged<
+      const Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
+  qdp_view(qdp, sim_state.num_elems);
+
+  sync_to_device(HostViewUnmanaged<const Real * [NUM_PHYSICAL_LEV][NP][NP]>(
+                     derived_dp, sim_state.num_elems),
+                 elems.m_derived_dp);
+
+  sync_to_device(HostViewUnmanaged<const Real * [NUM_PHYSICAL_LEV][NP][NP]>(
+                     derived_divdp_proj, sim_state.num_elems),
+                 elems.m_derived_divdp_proj);
+
+  sync_to_device(
+      HostViewUnmanaged<
+          const Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(
+          qdp, sim_state.num_elems),
+      elems.m_qdp);
+
   EulerStepFunctor::compute_qmin_qmax();
 }
 
