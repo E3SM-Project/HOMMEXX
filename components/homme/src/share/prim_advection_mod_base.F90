@@ -114,7 +114,7 @@ module prim_advection_mod_base
     subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
          elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
          elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-         elem_state_Qdp_ptr, Qtens_biharmonic_ptr) bind(c)
+         elem_state_Qdp_ptr, Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
@@ -122,7 +122,7 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
            elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-           elem_state_Qdp_ptr,Qtens_biharmonic_ptr
+           elem_state_Qdp_ptr, Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr
     end subroutine euler_pull_data_c
     subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
          elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
@@ -1575,7 +1575,7 @@ end subroutine ALE_parametric_coords
   use hybrid_mod     , only : hybrid_t
   use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
        elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
-       elem_derived_divdp, elem_derived_dpdiss_biharmonic
+       elem_derived_divdp, elem_derived_dpdiss_biharmonic, elem_derived_dpdiss_ave
   use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, &
        divergence_sphere_wk
   use edge_mod       , only : edgevpack, edgevunpack
@@ -1657,7 +1657,8 @@ use utils_mod, only: FrobeniusNorm
   type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
        qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
        elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
-       elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr
+       elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+       elem_derived_dpdiss_ave_ptr
 
   ! Set up the boundary exchange for the minmax calls
   call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
@@ -1674,6 +1675,7 @@ use utils_mod, only: FrobeniusNorm
   elem_derived_dp_ptr                = c_loc(elem_derived_dp)
   elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
   elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+  elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
   elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
   elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
   elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
@@ -1911,7 +1913,7 @@ OMP_SIMD
   call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
        elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
        elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-       Qtens_biharmonic_ptr)
+       Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c(rhs_viss)
   call t_stopf("advance_qdp")
