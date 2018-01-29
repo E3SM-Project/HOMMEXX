@@ -23,6 +23,7 @@ struct CaarFunctor {
 
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
+  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
@@ -72,10 +73,10 @@ struct CaarFunctor {
         // Kinetic energy + PHI (geopotential energy) +
         // PECND (potential energy?)
         Scalar k_energy =
-            0.5 * (m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
-                       m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) +
-                   m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
-                       m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev));
+            0.5 * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
+                       m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) +
+                   m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
+                       m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev));
         m_elements.buffers.ephi(kv.ie, igp, jgp, ilev) =
             k_energy + (m_elements.m_phi(kv.ie, igp, jgp, ilev) +
                         m_elements.m_pecnd(kv.ie, igp, jgp, ilev));
@@ -128,8 +129,8 @@ struct CaarFunctor {
 
     vorticity_sphere(
         kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_u, kv.ie, m_data.n0),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
         m_elements.buffers.vort_buf,
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
@@ -144,27 +145,27 @@ struct CaarFunctor {
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, igp, jgp,
+            /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp,
                                                   ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            /* v_vadv(igp, jgp) + */ -m_elements.m_u(kv.ie, m_data.n0, igp, jgp,
+            /* v_vadv(igp, jgp) + */ -m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp,
                                                    ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            m_elements.m_u(kv.ie, m_data.nm1, igp, jgp, ilev);
+            m_elements.m_v(kv.ie, m_data.nm1, 0, igp, jgp, ilev);
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.nm1, igp, jgp, ilev);
+            m_elements.m_v(kv.ie, m_data.nm1, 1,  igp, jgp, ilev);
 
         // Velocity at np1 = spheremp * buffer
-        m_elements.m_u(kv.ie, m_data.np1, igp, jgp, ilev) =
+        m_elements.m_v(kv.ie, m_data.np1, 0, igp, jgp, ilev) =
             m_elements.m_spheremp(kv.ie, igp, jgp) *
             m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev);
-        m_elements.m_v(kv.ie, m_data.np1, igp, jgp, ilev) =
+        m_elements.m_v(kv.ie, m_data.np1, 1, igp, jgp, ilev) =
             m_elements.m_spheremp(kv.ie, igp, jgp) *
             m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev);
       });
@@ -274,11 +275,11 @@ struct CaarFunctor {
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.buffers.vdp(kv.ie, 0, igp, jgp, ilev) =
-            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         m_elements.buffers.vdp(kv.ie, 1, igp, jgp, ilev) =
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         m_elements.m_derived_vn0(kv.ie, 0, igp, jgp, ilev) +=
@@ -344,9 +345,9 @@ struct CaarFunctor {
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         const Scalar vgrad_t =
-            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 0, igp, jgp, ilev) +
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         // vgrad_t + kappa * T_v * omega_p
@@ -456,12 +457,15 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const int ie, const int igp, const int jgp, const int ilev) const {
-
+  void operator()(const TagPostExchange&, const int it) const {
+    const int ie = it / (NP*NP*NUM_LEV);
+    const int igp = (it / (NP*NUM_LEV)) % NP;
+    const int jgp = (it / NUM_LEV) % NP;
+    const int ilev = it % NUM_LEV;
     // Rescaling tendencies by inverse mass matrix on sphere
     m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_v(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
+    m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
     m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
   }
 
@@ -669,9 +673,9 @@ private:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int ilev) {
           const Scalar vgrad_p =
-            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
             m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
             m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
 
           const auto& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
@@ -709,9 +713,9 @@ private:
                                   VECTOR_SIZE-1);
 
           const Scalar vgrad_p =
-            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
             m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
-            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
             m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
           auto& omega_p = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
           const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);

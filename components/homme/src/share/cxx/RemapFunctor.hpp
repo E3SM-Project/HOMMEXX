@@ -374,7 +374,7 @@ struct PpmVertRemap : public VertRemapAlg {
         } else {
           dma(j) = 0.0;
         }
-													 });
+                           });
     }
     {
       auto bounds = boundaries::ppm_indices_2();
@@ -716,8 +716,8 @@ template <> struct _RemapFunctorRSplit<true> {
                      int np1) const {
     // The states which need to be remapped
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
-    state_remap{ { Homme::subview(elements.m_u, kv.ie, np1),
-                   Homme::subview(elements.m_v, kv.ie, np1),
+    state_remap{ { Homme::subview(elements.m_v, kv.ie, np1, 0),
+                   Homme::subview(elements.m_v, kv.ie, np1, 1),
                    Homme::subview(elements.m_t, kv.ie, np1) } };
     return state_remap;
   }
