@@ -335,21 +335,27 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   }
   // ...then pack 3d fields (if any).
   if (m_num_3d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_3d_fields,NUM_LEV},{1,1,1,1}),
-                         KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
-      const ConnectionInfo& info = connections(ie,iconn);
-      const LidGidPos& field_lidpos  = info.local;
-      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-      // for local connections we need to manually copy on the remote element lid. We can do it here
-      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    const auto num_3d_fields = m_num_3d_fields;
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
+        const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
+        const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
+        const int ilev = it % NUM_LEV;
+        const ConnectionInfo& info = connections(ie,iconn);
+        const LidGidPos& field_lidpos  = info.local;
+        // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+        // for local connections we need to manually copy on the remote element lid. We can do it here
+        const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-      // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
-      const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
-      for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-        send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = fields_3d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
-      }
-    });
+        // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
+        const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+        for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+          send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = fields_3d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+        }
+      });
   }
   ExecSpace::fence();
   GPTLstop("be pack");
@@ -440,27 +446,30 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   }
   // ...then unpack 3d fields.
   if (m_num_3d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_3d_fields,NUM_LEV},{1,1,1}),
-                         KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
-      for (int k=0; k<NP; ++k) {
-        for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-          fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+    const auto num_3d_fields = m_num_3d_fields;
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = nets + it / (num_3d_fields*NUM_LEV);
+        const int ifield = (it / NUM_LEV) % num_3d_fields;
+        const int ilev = it % NUM_LEV;
+        for (int k=0; k<NP; ++k) {
+          for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+          }
         }
-      }
-      for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-        if (recv_3d_buffers(ie,ifield,icorner).size() > 0)
-          fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
-      }
-    });
+        for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+          if (recv_3d_buffers(ie,ifield,icorner).size() > 0)
+            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+        }        
+      });
   }
   ExecSpace::fence();
   GPTLstop("be unpack");
 
-  GPTLstart("be recv waitall 2");
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
   // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
   HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
@@ -515,21 +524,27 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   assert (nets>=0);
 
   // ---- Pack ---- //
-  GPTLstart("be pack");
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,4>({nets,0,0,0},{nete,NUM_CONNECTIONS,m_num_1d_fields,NUM_LEV},{1,1,1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield, const int ilev) {
-    const ConnectionInfo& info = connections(ie,iconn);
-    const LidGidPos& field_lidpos  = info.local;
-    // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-    // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-    // for local connections we need to manually copy on the remote element lid. We can do it here
-    const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
-
-    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
-    send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
-  });
+  GPTLstart("be pack minmax");
+  const auto num_1d_fields = m_num_1d_fields;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+    KOKKOS_LAMBDA(const int it) {
+      const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
+      const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
+      const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
+      const int ilev = it % NUM_LEV;
+      const ConnectionInfo& info = connections(ie,iconn);
+      const LidGidPos& field_lidpos  = info.local;
+      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+      // for local connections we need to manually copy on the remote element lid. We can do it here
+      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+      
+      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
+      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
+    });
   ExecSpace::fence();
-  GPTLstop("be pack");
+  GPTLstop("be pack minmax");
 
   // ---- Send ---- //
   GPTLstart("be send");
@@ -588,23 +603,26 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   assert (nets>=0);
 
   // --- Unpack --- //
-  GPTLstart("be unpack");
-  Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,m_num_1d_fields,NUM_LEV},{1,1,1}),
-                       KOKKOS_LAMBDA(const int ie, const int ifield, const int ilev) {
-
-    for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
-
-      // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
-      //       the missing recv buffer points to a blackhole fileld with 0's, which do not alter the accummulation)
-      if (connections(ie,neighbor).kind==etoi(ConnectionKind::MISSING)) {
-        continue;
+  GPTLstart("be unpack minmax");
+  const auto num_1d_fields = m_num_1d_fields;
+  Kokkos::parallel_for(
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
+    KOKKOS_LAMBDA(const int it) {
+      const int ie = nets + it / (num_1d_fields*NUM_LEV);
+      const int ifield = (it / NUM_LEV) % num_1d_fields;
+      const int ilev = it % NUM_LEV;
+      for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
+        // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
+        //       the missing recv buffer points to a blackhole fileld with 0's, which do not alter the accummulation)
+        if (connections(ie,neighbor).kind==etoi(ConnectionKind::MISSING)) {
+          continue;
+        }
+        fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
+        fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
       }
-      fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
-      fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
-    }
-  });
+    });
   ExecSpace::fence();
-  GPTLstop("be unpack");
+  GPTLstop("be unpack minmax");
 
   // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
   // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
