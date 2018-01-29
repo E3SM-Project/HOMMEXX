@@ -858,11 +858,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap > 0);
-    if (this->num_states_remap == 0) {
-      return;
-    }
-    const int var = kv.ie % this->num_states_remap;
-    kv.ie /= this->num_states_remap;
+    const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
+    const int var = kv.ie % den;
+    kv.ie /= den;
     assert(kv.ie < m_data.num_elems);
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
@@ -898,10 +896,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
 
     assert(num_to_remap() != 0);
-    if (this->num_states_remap == 0) {
-      return;
-    }
     const int var = kv.ie % num_to_remap();
+    const int den = (num_to_remap() > 0) ? num_to_remap() : 1;
     kv.ie /= num_to_remap();
     assert(kv.ie < m_data.num_elems);
 
@@ -921,11 +917,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap != 0);
-    if (this->num_states_remap == 0) {
-      return;
-    }
-    const int var = kv.ie % this->num_states_remap;
-    kv.ie /= this->num_states_remap;
+    const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
+    const int var = kv.ie % den;
+    kv.ie /= den;
     assert(kv.ie < m_data.num_elems);
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
