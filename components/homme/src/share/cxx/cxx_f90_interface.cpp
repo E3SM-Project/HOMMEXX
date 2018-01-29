@@ -200,7 +200,7 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
                        Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
-                       MDRangePolicy<ExecSpace,4> policy_post)
+                       Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post)
 {
   // --- Pre boundary exchange
   GPTLstart("caar_monolithic_c-pre");
@@ -228,7 +228,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Setup the policies
   auto policy_pre = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(data.num_elems);
-  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
+  Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post(0, data.num_elems*NP*NP*NUM_LEV);
 
   // Create the functor
   CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
@@ -274,9 +274,13 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
-  Kokkos::Experimental::md_parallel_for(
+  Kokkos::parallel_for(
     policy_post,
-    KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
+    KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
+       const int ie = it / (NP*NP*NUM_LEV);
+       const int igp = (it / (NP*NUM_LEV)) % NP;
+       const int jgp = (it / NUM_LEV) % NP;
+       const int ilev = it % NUM_LEV;
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
        elements.m_v(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,igp,jgp,ilev)-elements.m_v(ie,n0,igp,jgp,ilev))/4.0;
