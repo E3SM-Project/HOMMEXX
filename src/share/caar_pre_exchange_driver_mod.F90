@@ -71,14 +71,14 @@ contains
   subroutine caar_compute_dp3d_np1_c_int(np1, nm1, dt2, spheremp, divdp, eta_dot_dpdn, dp3d) bind(c)
     use kinds, only : real_kind
     use element_mod, only : timelevels
-    use dimensions_mod, only : np, nlev
+    use dimensions_mod, only : np, nlev, nlevp
 
     integer, value, intent(in) :: np1, nm1
     real (kind=real_kind), intent(in) :: dt2
     ! Note: These array dims are explicitly specified so they can be passed directly from C
     real (kind=real_kind), intent(in) :: spheremp(np, np)
     real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
-    real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlev)
+    real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlevp)
     real (kind=real_kind), intent(out) :: dp3d(np, np, nlev, timelevels)
     real (kind=real_kind) :: eta_dot_dpdn_kp1
 

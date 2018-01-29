@@ -219,24 +219,22 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
 
 void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
                        Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
-                       MDRangePolicy<ExecSpace,4> policy_post)
+                       Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post)
 {
   // --- Pre boundary exchange
-  profiling_resume();
+  GPTLstart("caar_monolithic_c-pre");
   Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
   ExecSpace::fence();
-  profiling_pause();
+  GPTLstop("caar_monolithic_c-pre");
 
   // Do the boundary exchange
-  start_timer("caar_bexchV");
+  GPTLstart("caar_bexchV");
   be.exchange();
 
   // --- Post boundary echange
-  profiling_resume();
   Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
   ExecSpace::fence();
-  profiling_pause();
-  stop_timer("caar_bexchV");
+  GPTLstop("caar_bexchV");
 }
 
 void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
@@ -249,7 +247,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
   // Setup the policies
   auto policy_pre = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(data.num_elems);
-  MDRangePolicy<ExecSpace,4> policy_post({0,0,0,0},{data.num_elems,NP,NP,NUM_LEV}, {1,1,1,1});
+  Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post(0, data.num_elems*NP*NP*NUM_LEV);
 
   // Create the functor
   CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
@@ -268,8 +266,7 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
 
       // Set the views of this time level into this time level's boundary exchange
       be[tl]->set_num_fields(0,0,4);
-      be[tl]->register_field(elements.m_u,1,tl);
-      be[tl]->register_field(elements.m_v,1,tl);
+      be[tl]->register_field(elements.m_v,tl,2,0);
       be[tl]->register_field(elements.m_t,1,tl);
       be[tl]->register_field(elements.m_dp3d,1,tl);
       be[tl]->registration_completed();
@@ -295,12 +292,16 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
-  Kokkos::Experimental::md_parallel_for(
+  Kokkos::parallel_for(
     policy_post,
-    KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
+    KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
+       const int ie = it / (NP*NP*NUM_LEV);
+       const int igp = (it / (NP*NUM_LEV)) % NP;
+       const int jgp = (it / NUM_LEV) % NP;
+       const int ilev = it % NUM_LEV;
        elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_u(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_u(ie,nm1,igp,jgp,ilev)-elements.m_u(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,igp,jgp,ilev)-elements.m_v(ie,n0,igp,jgp,ilev))/4.0;
+       elements.m_v(ie,nm1,0,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,0,igp,jgp,ilev)-elements.m_v(ie,n0,0,igp,jgp,ilev))/4.0;
+       elements.m_v(ie,nm1,1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,1,igp,jgp,ilev)-elements.m_v(ie,n0,1,igp,jgp,ilev))/4.0;
        elements.m_dp3d(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_dp3d(ie,nm1,igp,jgp,ilev)-elements.m_dp3d(ie,n0,igp,jgp,ilev))/4.0;
   });
   ExecSpace::fence();
