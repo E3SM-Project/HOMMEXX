@@ -97,24 +97,6 @@ public:
                          e.m_omega_p :
                          e.m_derived_divdp_proj);
 
-    start_timer("apply_rspheremp");
-#if 0
-    MDRangePolicy<ExecSpace,5> policy5({0,0,0,0,0},
-                                       {c.num_elems, c.qsize, NP, NP, NUM_LEV},
-                                       {1,1,1,1,1});
-    Kokkos::Experimental::md_parallel_for(
-      policy5,KOKKOS_LAMBDA(int ie, int q, int igp, int jgp, int ilev) {
-        e.m_qdp(ie,c.np1_qdp,q,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
-      });
-
-    MDRangePolicy<ExecSpace,4> policy4({0,0,0,0},
-                                       {c.num_elems, NP, NP, NUM_LEV},
-                                       {1,1,1,1});
-    Kokkos::Experimental::md_parallel_for(
-      policy4,KOKKOS_LAMBDA(int ie, int igp, int jgp, int ilev) {
-        f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
-      });
-#else
     Kokkos::parallel_for(
       Kokkos::RangePolicy<ExecSpace>(0, c.num_elems*c.qsize*NP*NP*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
@@ -135,9 +117,7 @@ public:
         const int ilev = it % NUM_LEV;
         f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
       });
-#endif
     ExecSpace::fence();
-    stop_timer("apply_rspheremp");
   }
 
 private:
