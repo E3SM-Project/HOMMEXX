@@ -2145,43 +2145,9 @@ OMP_SIMD
     np1_c = np1 - 1
     np1_qdp_c = np1_qdp - 1
 
-!    real (kind=real_kind) :: v   (np,np,2,nlev,timelevels)            !
-!    velocity                           1
-!    real (kind=real_kind) :: T   (np,np,nlev,timelevels)              !
-!temperature                        2
-!    real (kind=real_kind) :: dp3d(np,np,nlev,timelevels) 
-!     real (kind=real_kind) :: Qdp (np,np,nlev,qsize_d,2) 
-!print *, 'in C branch before remap'
-!print *, 'u vel, time1', elem(1)%state%v(1,1,1,:,1)
-!print *, 'u vel, time2', elem(1)%state%v(1,1,1,:,2)
-!print *, 'u vel, time3', elem(1)%state%v(1,1,1,:,3)
-!print *, 'v vel, time1', elem(1)%state%v(1,1,2,:,1)
-!print *, 'v vel, time2', elem(1)%state%v(1,1,2,:,2)
-!print *, 'v vel, time3', elem(1)%state%v(1,1,2,:,3)
-!print *, 'T vel, time1', elem(1)%state%t(1,1,:,1)
-!print *, 'T vel, time2', elem(1)%state%t(1,1,:,2)
-!print *, 'T vel, time3', elem(1)%state%t(1,1,:,3)
-!print *, 'dp vel, time1', elem(1)%state%dp3d(1,1,:,1)
-!print *, 'dp vel, time2', elem(1)%state%dp3d(1,1,:,2)
-!print *, 'dp vel, time3', elem(1)%state%dp3d(1,1,:,3)
-
     call t_startf('total vertical remap time')
     call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
     call t_stopf('total vertical remap time')
-
-!print *, 'in C branch AFTER remap'
-!print *, 'u vel, time1', elem(1)%state%v(1,1,1,:,1)
-!print *, 'u vel, time2', elem(1)%state%v(1,1,1,:,2)
-!print *, 'u vel, time3', elem(1)%state%v(1,1,1,:,3)
-!print *, 'v vel, time1', elem(1)%state%v(1,1,2,:,1)
-!print *, 'v vel, time2', elem(1)%state%v(1,1,2,:,2)
-!print *, 'v vel, time3', elem(1)%state%v(1,1,2,:,3)
-!print *, 'T vel, time1', elem(1)%state%t(1,1,:,1)
-!print *, 'T vel, time2', elem(1)%state%t(1,1,:,2)
-!print *, 'T vel, time3', elem(1)%state%t(1,1,:,3)
-!print *, 'dp vel, time1', elem(1)%state%dp3d(1,1,:,1)
-!print *, 'dp vel, time2', elem(1)%state%dp3d(1,1,:,2)
-!print *, 'dp vel, time3', elem(1)%state%dp3d(1,1,:,3)
 
     call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                               elem_derived_phi_ptr,                                    &
@@ -2206,21 +2172,6 @@ OMP_SIMD
     type (hvcoord_t), intent(in)      :: hvcoord
     real (kind=real_kind), intent(in) :: dt
     integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
-
-
-!print *, 'in FFFFFFFFFFFFFF before remap'
-!print *, 'u vel, time1', elem(1)%state%v(1,1,1,:,1)
-!print *, 'u vel, time2', elem(1)%state%v(1,1,1,:,2)
-!print *, 'u vel, time3', elem(1)%state%v(1,1,1,:,3)
-!print *, 'v vel, time1', elem(1)%state%v(1,1,2,:,1)
-!print *, 'v vel, time2', elem(1)%state%v(1,1,2,:,2)
-!print *, 'v vel, time3', elem(1)%state%v(1,1,2,:,3)
-!print *, 'T vel, time1', elem(1)%state%t(1,1,:,1)
-!print *, 'T vel, time2', elem(1)%state%t(1,1,:,2)
-!print *, 'T vel, time3', elem(1)%state%t(1,1,:,3)
-!print *, 'dp vel, time1', elem(1)%state%dp3d(1,1,:,1)
-!print *, 'dp vel, time2', elem(1)%state%dp3d(1,1,:,2)
-!print *, 'dp vel, time3', elem(1)%state%dp3d(1,1,:,3)
 
     call t_startf('total vertical remap time')
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
