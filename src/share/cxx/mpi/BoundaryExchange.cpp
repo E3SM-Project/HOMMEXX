@@ -340,8 +340,8 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
       Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
-        const int ifield = (it % (num_3d_fields*NUM_CONNECTIONS*NUM_LEV)) / (NUM_CONNECTIONS*NUM_LEV);
-        const int iconn = (it % (NUM_CONNECTIONS*NUM_LEV)) / NUM_LEV;
+        const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
+        const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
         const int ilev = it % NUM_LEV;
         const ConnectionInfo& info = connections(ie,iconn);
         const LidGidPos& field_lidpos  = info.local;
@@ -451,7 +451,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
       Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_LEV);
-        const int ifield = (it % (num_3d_fields*NUM_LEV)) / NUM_LEV;
+        const int ifield = (it / NUM_LEV) % num_3d_fields;
         const int ilev = it % NUM_LEV;
         for (int k=0; k<NP; ++k) {
           for (int iedge : helpers.UNPACK_EDGES_ORDER) {
@@ -530,8 +530,8 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
     Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
-      const int ifield = (it % (num_1d_fields*NUM_CONNECTIONS*NUM_LEV)) / (NUM_CONNECTIONS*NUM_LEV);
-      const int iconn = (it % (NUM_CONNECTIONS*NUM_LEV)) / NUM_LEV;
+      const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
+      const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
       const int ilev = it % NUM_LEV;
       const ConnectionInfo& info = connections(ie,iconn);
       const LidGidPos& field_lidpos  = info.local;
@@ -609,7 +609,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
     Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_LEV);
-      const int ifield = (it % (num_1d_fields*NUM_LEV)) / NUM_LEV;
+      const int ifield = (it / NUM_LEV) % num_1d_fields;
       const int ilev = it % NUM_LEV;
       for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
         // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
