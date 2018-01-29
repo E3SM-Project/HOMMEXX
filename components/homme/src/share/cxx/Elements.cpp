@@ -30,10 +30,8 @@ void Elements::init(const int num_elems) {
   m_derived_vn0 = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
       "Derived Lateral Velocities", m_num_elems);
 
-  m_u = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
-      "Lateral Velocity 1", m_num_elems);
-  m_v = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
-      "Lateral Velocity 2", m_num_elems);
+  m_v = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]>(
+      "Horizontal Velocity", m_num_elems);
   m_t = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "Temperature", m_num_elems);
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
@@ -131,7 +129,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_phi, engine, random_dist);
   genRandArray(m_derived_vn0, engine, random_dist);
 
-  genRandArray(m_u, engine, random_dist);
   genRandArray(m_v, engine, random_dist);
   genRandArray(m_t, engine, random_dist);
 
@@ -296,9 +293,7 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
 
 void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
                        CF90Ptr &state_dp3d) {
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]>::HostMirror h_v =
       Kokkos::create_mirror_view(m_v);
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
       Kokkos::create_mirror_view(m_t);
@@ -316,20 +311,16 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t,
           }
         }
 
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            h_u(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
-          }
-        }
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            h_v(ie, tl, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
+        for (int icomp = 0; icomp<2; ++icomp) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              h_v(ie, tl, icomp, igp, jgp, ilev)[ivector] = state_v[k_4d_vectors];
+            }
           }
         }
       }
     }
   }
-  Kokkos::deep_copy(m_u, h_u);
   Kokkos::deep_copy(m_v, h_v);
   Kokkos::deep_copy(m_t, h_t);
   Kokkos::deep_copy(m_dp3d, h_dp3d);
@@ -433,15 +424,12 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
 
 void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
                        F90Ptr &state_dp3d) const {
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_u =
-      Kokkos::create_mirror_view(m_u);
-  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_v =
+  ExecViewManaged<Scalar *[NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]>::HostMirror h_v =
       Kokkos::create_mirror_view(m_v);
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror h_t =
       Kokkos::create_mirror_view(m_t);
   ExecViewManaged<Scalar *[NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
   h_dp3d = Kokkos::create_mirror_view(m_dp3d);
-  Kokkos::deep_copy(h_u, m_u);
   Kokkos::deep_copy(h_v, m_v);
   Kokkos::deep_copy(h_t, m_t);
   Kokkos::deep_copy(h_dp3d, m_dp3d);
@@ -457,14 +445,11 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t,
           }
         }
 
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            state_v[k_4d_vectors] = h_u(ie, tl, igp, jgp, ilev)[ivector];
-          }
-        }
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
-            state_v[k_4d_vectors] = h_v(ie, tl, igp, jgp, ilev)[ivector];
+        for (int icomp = 0; icomp<2; ++icomp) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_4d_vectors) {
+              state_v[k_4d_vectors] = h_v(ie, tl, icomp, igp, jgp, ilev)[ivector];
+            }
           }
         }
       }
