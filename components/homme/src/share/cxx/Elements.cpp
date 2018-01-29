@@ -13,8 +13,11 @@ void Elements::init(const int num_elems) {
   buffers.init(num_elems);
 
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
+  m_mp = ExecViewManaged<Real * [NP][NP]>("MP", m_num_elems);
   m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
   m_rspheremp = ExecViewManaged<Real * [NP][NP]>("RSPHEREMP", m_num_elems);
+  m_tensorVisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSOR VISC", m_num_elems);
+  m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
@@ -37,11 +40,16 @@ void Elements::init(const int num_elems) {
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "DP3D", m_num_elems);
 
+  m_ps_v = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("surface pressure", m_num_elems);
+  m_lnps = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("log surface pressure", m_num_elems);
+
   m_qdp =
       ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
           "qdp", m_num_elems);
-  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn",
-                                                               m_num_elems);
+  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("tracer concentration", m_num_elems);
+  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
+  m_derived_vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("velocity on lagrangian surfaces", m_num_elems);
+  m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
@@ -55,18 +63,28 @@ void Elements::init(const int num_elems) {
     "derived_dpdiss_ave", m_num_elems);
 }
 
-void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
-                       CF90Ptr &rspheremp, CF90Ptr &metdet, CF90Ptr &phis) {
+void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+                       CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
+                       CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr& vec_sph2cart,
+                       CF90Ptr &tensorVisc, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
       Kokkos::create_mirror_view(m_fcor);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_metdet =
       Kokkos::create_mirror_view(m_metdet);
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_metinv =
+      Kokkos::create_mirror_view(m_metinv);
+  ExecViewManaged<Real *[NP][NP]>::HostMirror h_mp =
+      Kokkos::create_mirror_view(m_mp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_spheremp =
       Kokkos::create_mirror_view(m_spheremp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_rspheremp =
       Kokkos::create_mirror_view(m_rspheremp);
+  ExecViewManaged<Real *[2][3][NP][NP]>::HostMirror h_vec_sph2cart=
+      Kokkos::create_mirror_view(m_vec_sph2cart);
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_tensorVisc =
+      Kokkos::create_mirror_view(m_tensorVisc);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
@@ -75,11 +93,17 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &sphere
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
 
+  HostViewUnmanaged<const Real *[NP][NP]>       h_mp_f90 (mp, m_num_elems);
+  HostViewUnmanaged<const Real *[2][2][NP][NP]> h_metinv_f90 (metinv, m_num_elems);
+  HostViewUnmanaged<const Real *[2][2][NP][NP]> h_tenorVisc_f90 (tensorVisc, m_num_elems);
+  HostViewUnmanaged<const Real *[2][3][NP][NP]> h_vec_sph2cart_f90 (vec_sph2cart, m_num_elems);
+
   // 2d scalars
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp, ++k_scalars) {
         h_fcor(ie, igp, jgp) = fcor[k_scalars];
+        h_mp(ie, igp, jgp) = h_mp_f90(ie, igp, jgp);
         h_spheremp(ie, igp, jgp) = spheremp[k_scalars];
         h_rspheremp(ie, igp, jgp) = rspheremp[k_scalars];
         h_metdet(ie, igp, jgp) = metdet[k_scalars];
@@ -96,16 +120,28 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &sphere
           for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
             h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
             h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
+            h_metinv(ie, idim, jdim, igp, jgp) = h_metinv_f90(ie, idim, jdim, igp, jgp);
+            h_tensorVisc(ie, idim, jdim, igp, jgp) = h_tenorVisc_f90(ie, idim, jdim, igp, jgp);
+            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = h_vec_sph2cart_f90(ie,idim,jdim,igp,jgp);
           }
+        }
+      }
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+          h_vec_sph2cart(ie, idim, 2, igp, jgp) = h_vec_sph2cart_f90(ie,idim,2,igp,jgp);
         }
       }
     }
   }
 
   Kokkos::deep_copy(m_fcor, h_fcor);
+  Kokkos::deep_copy(m_metinv, h_metinv);
   Kokkos::deep_copy(m_metdet, h_metdet);
+  Kokkos::deep_copy(m_mp, h_mp);
   Kokkos::deep_copy(m_spheremp, h_spheremp);
   Kokkos::deep_copy(m_rspheremp, h_rspheremp);
+  Kokkos::deep_copy(m_vec_sph2cart, h_vec_sph2cart);
+  Kokkos::deep_copy(m_tensorVisc, h_tensorVisc);
   Kokkos::deep_copy(m_phis, h_phis);
 
   Kokkos::deep_copy(m_d, h_d);
@@ -121,6 +157,7 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0 / min_value);
 
   genRandArray(m_fcor, engine, random_dist);
+  genRandArray(m_mp, engine, random_dist);
   genRandArray(m_spheremp, engine, random_dist);
   genRandArray(m_rspheremp, engine, random_dist);
   genRandArray(m_metdet, engine, random_dist);
@@ -570,6 +607,16 @@ void Elements::BufferViews::init(int num_elems) {
                                                             num_elems);
   vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
                                                             num_elems);
+
+  sphere_vector_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("laplacian vector Buffer", num_elems);
+
+  divergence_temp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Divergence temporary",
+                                                            num_elems);
+  vorticity_temp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity temporary",
+                                                            num_elems);
+  lapl_buf_1 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
+  lapl_buf_2 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
+  lapl_buf_3 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
