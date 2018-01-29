@@ -172,3 +172,62 @@ ELSE()
   SET (NUM_CPUS 1)
 ENDIF()
 cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDARY_EXCHANGE_UT_CXX_SRCS}" "${BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
+
+### hyperviscosity Functor unit test ###
+
+SET (HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS
+  ${SRC_SHARE_DIR}/control_mod.F90
+  ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
+  ${SRC_SHARE_DIR}/cube_mod.F90
+  ${SRC_SHARE_DIR}/derivative_mod_base.F90
+  ${SRC_SHARE_DIR}/dimensions_mod.F90
+  ${SRC_SHARE_DIR}/edge_mod_base.F90
+  ${SRC_SHARE_DIR}/edgetype_mod.F90
+  ${SRC_SHARE_DIR}/element_mod.F90
+  ${SRC_SHARE_DIR}/gridgraph_mod.F90
+  ${SRC_SHARE_DIR}/kinds.F90
+  ${SRC_SHARE_DIR}/ll_mod.F90
+  ${SRC_SHARE_DIR}/metagraph_mod.F90
+  ${SRC_SHARE_DIR}/parallel_mod.F90
+  ${SRC_SHARE_DIR}/params_mod.F90
+  ${SRC_SHARE_DIR}/physical_constants.F90
+  ${SRC_SHARE_DIR}/quadrature_mod.F90
+  ${SRC_SHARE_DIR}/schedtype_mod.F90
+  ${SRC_SHARE_DIR}/schedule_mod.F90
+  ${SRC_SHARE_DIR}/spacecurve_mod.F90
+  ${SRC_SHARE_DIR}/thread_mod.F90
+  ${UTILS_TIMING_DIR}/perf_mod.F90
+  ${UTILS_TIMING_DIR}/perf_utils.F90
+)
+SET (HYPERVISCOSITY_FUNCTOR_UT_CXX_SRCS
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/Control.cpp
+  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/mpi_cxx_f90_interface.cpp
+  ${SHARE_UT_DIR}/hyperviscosity_functor_ut.cpp
+)
+
+SET (CONFIG_DEFINES NP=4 NC=4 PLEV=16 QSIZE_D=4 _MPI=1 HOMMEXX_MPI_TEST _PRIM)
+SET (HYPERVISCOSITY_FUNCTOR_UT_INCLUDE_DIRS
+  ${CONFIG_DIR}
+  ${SRC_SHARE_DIR}
+  ${SRC_SHARE_DIR}/cxx
+  ${SRC_SHARE_DIR}/cxx/mpi
+  ${SHARE_UT_DIR}
+  ${UTILS_TIMING_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+IF (USE_NUM_PROCS)
+  SET (NUM_CPUS ${USE_NUM_PROCS})
+ELSE()
+  SET (NUM_CPUS 1)
+ENDIF()
+cxx_unit_test (hyperviscosity_functor_ut "${HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS}" "${HYPERVISCOSITY_FUNCTOR_UT_CXX_SRCS}" "${HYPERVISCOSITY_FUNCTOR_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
