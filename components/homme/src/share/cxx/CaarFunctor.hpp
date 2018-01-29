@@ -108,7 +108,7 @@ struct CaarFunctor {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
-    if (m_data.rsplit == 0) {
+/*    if (m_data.rsplit == 0) {
       // vertical Eulerian
       assign_zero_to_sdot_sum(kv);
       compute_eta_dot_dpdn_vertadv_euler(kv);
@@ -116,16 +116,153 @@ struct CaarFunctor {
       accumulate_eta_dot_dpdn(kv);
     } // else compute_eta_dot_dpdn(kv); // <- Turns out this isn't needed.
     compute_omega_p(kv);
-//this accumulates weighted buffer eta_dot to elements m_eta_dot
-//the accumulated value is used in remap to compute dp_star for rsplit=0.
-//this, should this be wrapped into if (!rsplit) or derived%eta_dot is
-//used somewhere else? energy? fortran computes it unconditionally.
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
     check_dp3d(kv);
+*/
+
+////////////// MASTER code
+//this is only in master
+    compute_eta_dpdn_rsplitM(kv);
+//never changed this
+    compute_omega_p(kv);
+
+    compute_temperature_np1M(kv);
+    compute_velocity_np1(kv);
+    compute_dp3d_np1M(kv);
+//probably same as in master
+    check_dp3d(kv);
   } // TRIVIAL
 //is it?
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_eta_dpdn_rsplitM(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
+      });
+    });
+    kv.team_barrier();
+  } // TRIVIAL
+
+
+
+KOKKOS_INLINE_FUNCTION
+  void compute_dp3d_np1M(KernelVariables &kv) const {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        Scalar tmp = m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev);
+        tmp.shift_left(1);
+        tmp[VECTOR_SIZE - 1] =
+          (ilev + 1 < NUM_LEV) ?
+          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0] :
+          0;
+        tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+        tmp -= m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev);
+        tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
+              tmp * m_data.dt;
+
+        m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev) =
+            m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
+      });
+    });
+    kv.team_barrier();
+  } // TESTED 12
+
+/////////////////////////////////////// MASTER CODE 
+
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_velocity_np1M(KernelVariables &kv) const {
+    compute_energy_grad(kv);
+
+    vorticity_sphere(
+        kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_u, kv.ie, m_data.n0),
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
+        m_elements.buffers.vort_buf,
+        Homme::subview(m_elements.buffers.vorticity, kv.ie));
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev) +=
+            m_elements.m_fcor(kv.ie, igp, jgp);
+
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            /* v_vadv(igp, jgp) + */ m_elements.m_v(kv.ie, m_data.n0, igp, jgp,
+                                                  ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+            /* v_vadv(igp, jgp) + */ -m_elements.m_u(kv.ie, m_data.n0, igp, jgp,
+                                                   ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            m_elements.m_u(kv.ie, m_data.nm1, igp, jgp, ilev);
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= m_data.dt;
+        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+            m_elements.m_v(kv.ie, m_data.nm1, igp, jgp, ilev);
+       m_elements.m_u(kv.ie, m_data.np1, igp, jgp, ilev) =
+            m_elements.m_spheremp(kv.ie, igp, jgp) *
+            m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev);
+        m_elements.m_v(kv.ie, m_data.np1, igp, jgp, ilev) =
+            m_elements.m_spheremp(kv.ie, igp, jgp) *
+            m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev);
+      });
+    });
+    kv.team_barrier();
+  } // UNTESTED 2
+
+
+
+  KOKKOS_INLINE_FUNCTION
+  void compute_temperature_np1M(KernelVariables &kv) const {
+    gradient_sphere(
+        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
+        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                        [&](const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        const Scalar vgrad_t =
+            m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
+                m_elements.buffers.temperature_grad(kv.ie, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+                m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
+        const Scalar ttens = -vgrad_t +
+                PhysicalConstants::kappa *
+                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
+                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+        Scalar temp_np1 = ttens * m_data.dt +
+                          m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
+        temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
+        m_elements.m_t(kv.ie, m_data.np1, igp, jgp, ilev) = temp_np1;
+      });
+    });
+    kv.team_barrier();
+  } // TESTED 11
+
+//////////////////////////// END MASTER
+
+
+
+
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
@@ -152,23 +289,52 @@ struct CaarFunctor {
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
+//output is:    rsplit_gt0 1
+//std::printf("rsplit %d \n", m_data.rsplit);
+
+/*
+if(rsplit_gt0){
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+}*/
+
+
+if(rsplit_gt0){
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+}else{
+
+//std::printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \n");
+
+        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
+            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+}
+
+
+
+
+/*
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
             m_elements.m_v(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-
+*/
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
-if(rsplit_gt0){
+//if(rsplit_gt0){
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}else{
+/*}else{
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)
             - m_elements.m_u(kv.ie, m_data.n0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}
+}*/
 /*
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
@@ -428,12 +594,29 @@ if(rsplit_gt0){
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         // t_vadv + vgrad_t + kappa * T_v * omega_p
-        const Scalar ttens = (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
+
+        Scalar ttens;
+        if(rsplit_gt0){ 
+           ttens = 
                   - vgrad_t
                   + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-
+        }else{
+           ttens =- m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)
+                  - vgrad_t
+                  + PhysicalConstants::kappa *
+                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
+                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+        }
+/*
+        const Scalar ttens = 
+              (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
+                  - vgrad_t
+                  + PhysicalConstants::kappa *
+                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
+                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+*/
         Scalar temp_np1 = ttens * m_data.dt +
                           m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
         temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
