@@ -71,7 +71,7 @@ public:
     start_timer("esf-bih-pre compute");
     KernelVariables kv(team, m_data.qsize);
     const bool nu_p_gt0 = m_data.nu_p > 0;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    //const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
     //const auto dpdiss_ave = Homme::subview(e.derived_dpdiss_ave, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP*NP),

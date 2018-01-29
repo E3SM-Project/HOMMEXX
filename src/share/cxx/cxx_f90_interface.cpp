@@ -160,7 +160,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                         CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
                         CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
                         CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                        CF90Ptr& Qtens_biharmonic_ptr)
+                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& elem_derived_dpdiss_ave_ptr)
 {
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -186,6 +186,9 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
                  elements.m_derived_dpdiss_biharmonic);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dpdiss_ave_ptr, data.num_elems),
+                 elements.m_derived_dpdiss_ave);
 
   elements.pull_qdp(elem_state_Qdp_ptr);
 
