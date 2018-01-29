@@ -23,6 +23,7 @@ struct CaarFunctor {
 
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
+  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative)
     : m_data(),
@@ -456,8 +457,11 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const int ie, const int igp, const int jgp, const int ilev) const {
-
+  void operator()(const TagPostExchange&, const int it) const {
+    const int ie = it / (NP*NP*NUM_LEV);
+    const int igp = (it / (NP*NUM_LEV)) % NP;
+    const int jgp = (it / NUM_LEV) % NP;
+    const int ilev = it % NUM_LEV;
     // Rescaling tendencies by inverse mass matrix on sphere
     m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
     m_elements.m_u(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
