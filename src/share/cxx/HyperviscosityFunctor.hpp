@@ -57,31 +57,31 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagFetchStates&, const int idx) const
   {
-    // Apply inverse mass matrix
     const int ie   =  idx / (NP*NP*NUM_LEV);
     const int igp  = (idx / (NP*NUM_LEV)) % NP;
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
 
-    m_elements.buffers.dptens(ie,m_data.np1,  igp,jgp,ilev) = m_elements.m_dp3d(ie,m_data.np1,  igp,jgp,ilev);
-    m_elements.buffers.ttens (ie,m_data.np1,  igp,jgp,ilev) = m_elements.m_t   (ie,m_data.np1,  igp,jgp,ilev);
-    m_elements.buffers.vtens (ie,m_data.np1,0,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,0,igp,jgp,ilev);
-    m_elements.buffers.vtens (ie,m_data.np1,1,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,1,igp,jgp,ilev);
+    // Copy states' timelevel np1 into buffers
+    m_elements.buffers.dptens(ie,  igp,jgp,ilev) = m_elements.m_dp3d(ie,m_data.np1,  igp,jgp,ilev);
+    m_elements.buffers.ttens (ie,  igp,jgp,ilev) = m_elements.m_t   (ie,m_data.np1,  igp,jgp,ilev);
+    m_elements.buffers.vtens (ie,0,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,0,igp,jgp,ilev);
+    m_elements.buffers.vtens (ie,1,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,1,igp,jgp,ilev);
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagApplyInvMass&, const int idx) const
   {
-    // Apply inverse mass matrix
     const int ie   =  idx / (NP*NP*NUM_LEV);
     const int igp  = (idx / (NP*NUM_LEV)) % NP;
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
 
-    m_elements.buffers.dptens(ie,m_data.np1,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.ttens (ie,m_data.np1,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,m_data.np1,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,m_data.np1,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    // Apply inverse mass matrix
+    m_elements.buffers.dptens(ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.ttens (ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.vtens (ie,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.vtens (ie,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
   }
 
 protected:
