@@ -133,12 +133,11 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
-    subroutine advance_qdp_c(rhs_viss) bind(c)
+    subroutine advance_qdp_c() bind(c)
       use iso_c_binding, only : c_int
       !
       ! Inputs
       !
-      integer (kind=c_int),  intent(in) :: rhs_viss
     end subroutine advance_qdp_c
     subroutine euler_exchange_qdp_dss_var_c() bind(c)
     end subroutine euler_exchange_qdp_dss_var_c
@@ -1687,11 +1686,6 @@ use utils_mod, only: FrobeniusNorm
   elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
   elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
   elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-  
-  call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-       elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-       elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-       Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1786,49 +1780,11 @@ OMP_SIMD
     
 #ifdef USE_KOKKOS_KERNELS
 
-# if 0
-    ! get new min/max values, and also compute biharmonic mixing term
-    if ( rhs_multiplier == 2 ) then
-       call euler_neighbor_minmax_start_c(nets,nete)
-       rhs_viss = 3
-       do ie = nets,nete
-          do q = 1,qsize      
-             do k = 1,nlev
-                if ( nu_p > 0 ) then
-                   qtens_biharmonic(:,:,k,q,ie) = qtens_biharmonic(:,:,k,q,ie) &
-                        * elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
-                end if
-                lap_p(:,:) = qtens_biharmonic(:,:,k,q,ie)
-                grads = gradient_sphere(lap_p, deriv, elem(ie)%Dinv)
-                qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads, deriv, elem(ie))
-             enddo
-             call edgeVpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie), nlev, nlev*(q-1), ie)
-          enddo
-       enddo
-       call t_startf('biwksc_bexchV')
-       call bndry_exchangeV(hybrid,edgeAdv)
-       call t_stopf('biwksc_bexchV')
-       do ie = nets,nete
-          do q = 1,qsize
-             call edgeVunpack(edgeAdv, qtens_biharmonic(:,:,:,q,ie), nlev, nlev*(q-1), ie)
-             do k = 1,nlev
-                lap_p(:,:) = elem(ie)%rspheremp(:,:) * qtens_biharmonic(:,:,k,q,ie)
-                grads = gradient_sphere(lap_p, deriv, elem(ie)%Dinv)
-                qtens_biharmonic(:,:,k,q,ie) = divergence_sphere_wk(grads, deriv, elem(ie))
-                qtens_biharmonic(:,:,k,q,ie) = &
-                     -rhs_viss * dt * nu_q * dp0(k) * Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
-             enddo
-          enddo
-       enddo
-       call euler_neighbor_minmax_finish_c(nets,nete)
-    endif ! rhs_multiplier == 2
     call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
          elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
          elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
          Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
-# else
     call euler_minmax_and_biharmonic_c(nets, nete)
-# endif
 
 ! ifdef USE_KOKKOS_KERNELS
 #else
@@ -1931,7 +1887,7 @@ OMP_SIMD
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
   call t_startf("advance_qdp")
-  call advance_qdp_c(rhs_viss)
+  call advance_qdp_c()
   call t_stopf("advance_qdp")
 
   call euler_exchange_qdp_dss_var_c()

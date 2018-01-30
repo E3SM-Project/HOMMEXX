@@ -31,6 +31,13 @@ public:
   struct BIHPre {};
   struct BIHPost {};
 
+  /*
+    ! get new min/max values, and also compute biharmonic mixing term
+
+    ! two scalings depending on nu_p:
+    ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
+    ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
+   */
   static void compute_biharmonic_pre () {
     profiling_resume();
     GPTLstart("esf-bih-pre run");

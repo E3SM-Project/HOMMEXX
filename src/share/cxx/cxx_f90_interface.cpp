@@ -36,6 +36,7 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
 
   control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
+  control.rhs_viss = 0;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
   control.limiter_option = limiter_option;
@@ -69,6 +70,7 @@ void init_euler_neighbor_minmax_c (const int& qsize)
 void euler_neighbor_minmax_c (const int& nets, const int& nete)
 {
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  assert(be.is_registration_completed());
   be.exchange_min_max(nets-1, nete);
 }
 
@@ -87,20 +89,18 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
 void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
   const auto& c = Context::singleton().get_control();
   if (c.rhs_multiplier != 2) return;
+  const auto& e = Context::singleton().get_elements();
+  const auto be = Context::singleton().get_boundary_exchange(
+    "Euler step: min/max & qtens_biharmonic");
+  if ( ! be->is_registration_completed()) {
+    be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+    be->set_num_fields(0, 0, c.qsize);
+    be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
+    be->registration_completed();
+  }
   euler_neighbor_minmax_start_c(nets, nete);
   EulerStepFunctor::compute_biharmonic_pre();
-  {
-    const auto& e = Context::singleton().get_elements();
-    const auto be = Context::singleton().get_boundary_exchange(
-      "euler_neighbor_minmax_start_c qtens_biharmonic");
-    if ( ! be->is_registration_completed()) {
-      be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
-      be->set_num_fields(0, 0, c.qsize);
-      be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
-      be->registration_completed();
-    }
-    be->exchange();
-  }
+  be->exchange();
   EulerStepFunctor::compute_biharmonic_post();
   euler_neighbor_minmax_finish_c(nets, nete);
 }
@@ -314,11 +314,8 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c(const int& rhs_viss)
+void advance_qdp_c()
 {
-  Control& control = Context::singleton().get_control ();
-  control.rhs_viss = rhs_viss;
-
   EulerStepFunctor::advect_and_limit();
 }
 
