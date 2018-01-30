@@ -475,7 +475,9 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
         }
       }
     }
-    k_eta_dot_dp_dn += NP*NP;
+    for (int igp = 0; igp < NP; ++igp)
+      for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn)
+        derived_eta_dot_dpdn[k_eta_dot_dp_dn] = 0;
   }
 }
 
