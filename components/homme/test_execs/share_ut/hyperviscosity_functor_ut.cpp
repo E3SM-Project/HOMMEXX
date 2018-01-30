@@ -17,12 +17,7 @@ extern "C" {
 void setup_test_f90 (const int& ne_in, CF90Ptr& h_d_ptr, CF90Ptr& h_dinv_ptr, CF90Ptr& h_mp_ptr,
                      CF90Ptr& h_spheremp_ptr, CF90Ptr& h_rspheremp_ptr, CF90Ptr& h_metdet_ptr,
                      CF90Ptr& h_metinv_ptr, CF90Ptr& h_vec_sph2cart_ptr, CF90Ptr& h_tensorVisc_ptr);
-
-void hyperviscosity_test_f90(F90Ptr& field_min_1d_ptr, F90Ptr& field_max_1d_ptr,
-                             F90Ptr& field_2d_ptr, F90Ptr& field_3d_ptr, F90Ptr& field_4d_ptr,
-                             const int& inner_dim_4d, const int& num_time_levels,
-                             const int& idim_2d, const int& idim_3d, const int& idim_4d,
-                             const int& minmax_split);
+void hyperviscosity_test_f90(F90Ptr& temperature_ptr, F90Ptr& dp3d_ptr, F90Ptr& velocity_ptr, const int& itl);
 void cleanup_f90 ();
 
 } // extern "C"
@@ -58,14 +53,14 @@ TEST_CASE ("HyperviscosityFunctor", "Testing the biharmonic functor class")
 
   // Setup the F90
   decltype(elements.m_d)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_d);
-  decltype(elements.m_dinv)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_dinv);
-  decltype(elements.m_mp)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_mp);
-  decltype(elements.m_spheremp)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_spheremp);
-  decltype(elements.m_rspheremp)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_rspheremp);
-  decltype(elements.m_metdet)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_metdet);
-  decltype(elements.m_metinv)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_metinv);
-  decltype(elements.m_vec_sph2cart)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_vec_sph2cart);
-  decltype(elements.m_tensorVisc)::HostMirror h_d = Kokkos::create_mirror_view(elements.m_tensorVisc);
+  decltype(elements.m_dinv)::HostMirror h_dinv = Kokkos::create_mirror_view(elements.m_dinv);
+  decltype(elements.m_mp)::HostMirror h_mp = Kokkos::create_mirror_view(elements.m_mp);
+  decltype(elements.m_spheremp)::HostMirror h_spheremp = Kokkos::create_mirror_view(elements.m_spheremp);
+  decltype(elements.m_rspheremp)::HostMirror h_rspheremp = Kokkos::create_mirror_view(elements.m_rspheremp);
+  decltype(elements.m_metdet)::HostMirror h_metdet = Kokkos::create_mirror_view(elements.m_metdet);
+  decltype(elements.m_metinv)::HostMirror h_metinv = Kokkos::create_mirror_view(elements.m_metinv);
+  decltype(elements.m_vec_sph2cart)::HostMirror h_vec_sph2cart = Kokkos::create_mirror_view(elements.m_vec_sph2cart);
+  decltype(elements.m_tensorVisc)::HostMirror h_tensorVisc = Kokkos::create_mirror_view(elements.m_tensorVisc);
   Real* h_d_ptr = reinterpret_cast<Real*>(h_d.data();
   Real* h_dinv_ptr = reinterpret_cast<Real*>(h_dinv.data();
   Real* h_mp_ptr = reinterpret_cast<Real*>(h_mp.data();

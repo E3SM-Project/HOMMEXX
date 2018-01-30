@@ -1,12 +1,14 @@
 module hyperviscosity_functor_ut
 
-  use edgetype_mod,   only : EdgeBuffer_t
-  use element_mod,    only : element_t
-  use gridgraph_mod,  only : GridVertex_t, GridEdge_t
-  use hybrid_mod,     only : hybrid_t
-  use kinds,          only : real_kind
-  use metagraph_mod,  only : MetaVertex_t
-  use parallel_mod,   only : parallel_t
+  use derivative_mod_base, only : derivative_t
+  use edgetype_mod,        only : EdgeBuffer_t
+  use element_mod,         only : element_t
+  use gridgraph_mod,       only : GridVertex_t, GridEdge_t
+  use hybrid_mod,          only : hybrid_t
+  use kinds,               only : real_kind
+  use metagraph_mod,       only : MetaVertex_t
+  use parallel_mod,        only : parallel_t
+  use quadrature_mod,      only : quadrature_t
 
   implicit none
 
@@ -17,6 +19,8 @@ module hyperviscosity_functor_ut
   type (parallel_t)   :: par
   type (hybrid_t)     :: hybrid
   type (EdgeBuffer_t) :: edge
+  type (derivative_t) :: deriv
+  type (quadrature_t) :: gp
 
   type (element_t), dimension(:), allocatable :: elem
 
@@ -28,7 +32,9 @@ contains
 
   subroutine setup_test_f90 (ne_in, h_d_ptr, h_dinv_ptr, h_mp_ptr, h_spheremp_ptr, h_rspheremp_ptr, &
                              h_metdet_ptr, h_metinv_ptr, h_vec_sph2cart_ptr, h_tensorVisc_ptr) bind(c)
-    use iso_c_binding, only: c_ptr, c_f_pointer
+    use iso_c_binding,  only : c_ptr, c_f_pointer, c_int, c_double
+    use dimensions_mod, only : np
+    use quadrature_mod, only : gausslobatto
     !
     ! Inputs
     !
@@ -38,24 +44,38 @@ contains
     !
     ! Locals
     !
-    real(kind=c_double), pointer, dimension(np,np,    nelemd) :: mp, spheremp, rspheremp, metdet
-    real(kind=c_double), pointer, dimension(np,np,2,2,nelemd) :: d, dinv, metinv, tensorVisc
-    real(kind=c_double), pointer, dimension(np,np,3,2,nelemd) :: vec_sph2cart
+    real(kind=c_double), pointer, dimension(:,:,:)     :: mp, spheremp, rspheremp, metdet
+    real(kind=c_double), pointer, dimension(:,:,:,:,:) :: d, dinv, metinv, tensorVisc
+    real(kind=c_double), pointer, dimension(:,:,:,:,:) :: vec_sph2cart
+    integer :: ie
 
     call initmp_f90()
+    gp = gausslobatto(np)
     call init_cube_geometry_f90(ne_in)
+    call init_derivative_f90()
     call init_connectivity_f90()
 
     call c_f_pointer(h_d_ptr,            d,              [np,np,2,2,nelemd]);
     call c_f_pointer(h_dinv_ptr,         dinv,           [np,np,2,2,nelemd]);
-    call c_f_pointer(h_mp_ptr,           mp,             [np,np,2,2,nelemd]);
-    call c_f_pointer(h_spheremp_ptr,     spheremp,       [np,np,2,2,nelemd]);
-    call c_f_pointer(h_rspheremp_ptr,    rspheremp,      [np,np,2,2,nelemd]);
-    call c_f_pointer(h_metdet_ptr,       metdet,         [np,np,2,2,nelemd]);
+    call c_f_pointer(h_mp_ptr,           mp,             [np,np,    nelemd]);
+    call c_f_pointer(h_spheremp_ptr,     spheremp,       [np,np,    nelemd]);
+    call c_f_pointer(h_rspheremp_ptr,    rspheremp,      [np,np,    nelemd]);
+    call c_f_pointer(h_metdet_ptr,       metdet,         [np,np,    nelemd]);
     call c_f_pointer(h_metinv_ptr,       metinv,         [np,np,2,2,nelemd]);
-    call c_f_pointer(h_vec_sph2cart_ptr, vec_sph2cart,   [np,np,2,2,nelemd]);
+    call c_f_pointer(h_vec_sph2cart_ptr, vec_sph2cart,   [np,np,3,2,nelemd]);
     call c_f_pointer(h_tensorVisc_ptr,   tensorVisc,     [np,np,2,2,nelemd]);
 
+    do ie=1,nelemd
+      elem(ie)%d(:,:,:,:)               = d(:,:,:,:,ie)
+      elem(ie)%dinv(:,:,:,:)            = dinv(:,:,:,:,ie)
+      elem(ie)%mp(:,:)                  = mp(:,:,ie)
+      elem(ie)%spheremp(:,:)            = spheremp(:,:,ie)
+      elem(ie)%rspheremp(:,:)           = rspheremp(:,:,ie)
+      elem(ie)%metdet(:,:)              = metdet(:,:,ie)
+      elem(ie)%metinv(:,:,:,:)          = metinv(:,:,:,:,ie)
+      elem(ie)%vec_sphere2cart(:,:,:,:) = vec_sph2cart(:,:,:,:,ie)
+      elem(ie)%tensorVisc(:,:,:,:)      = tensorVisc(:,:,:,:,ie)
+    enddo
   end subroutine setup_test_f90
 
   subroutine initmp_f90 () bind(c)
@@ -68,14 +88,14 @@ contains
     hybrid = hybrid_create(par,0,1)
   end subroutine initmp_f90
 
-
   subroutine init_cube_geometry_f90 (ne_in) bind(c)
-    use iso_c_binding,  only : c_int
-    use cube_mod,       only : CubeTopology, CubeElemCount, CubeEdgeCount
-    use dimensions_mod, only : nelem, npart
-    use dimensions_mod, only : ne
-    use gridgraph_mod,  only : allocate_gridvertex_nbrs
-    use spacecurve_mod, only : genspacepart
+    use iso_c_binding,   only : c_int
+    use cube_mod,        only : CubeTopology, CubeElemCount, CubeEdgeCount
+    use dimensions_mod,  only : nelem, npart
+    use dimensions_mod,  only : ne
+    use gridgraph_mod,   only : allocate_gridvertex_nbrs
+    use mass_matrix_mod, only : mass_matrix
+    use spacecurve_mod,  only : genspacepart
     !
     ! Inputs
     !
@@ -106,10 +126,30 @@ contains
     ! Partition mesh among processes
     call genspacepart(GridEdge, GridVertex)
 
+    do ie=1,nelemd
+      call set_corner_coordinates(elem(ie))
+    enddo
+    call assign_node_numbers_to_elem(elem,GridVertex)
+
+    do ie=1,nelemd
+      call cube_init_atomic(elem(ie),gp%points)
+    enddo
+
+    call mass_matrix(par,elem)
+
   end subroutine init_cube_geometry_f90
 
-  subroutine init_connectivity_f90 () bind(c)
-    use iso_c_binding,  only : c_int
+  subroutine init_derivative_f90()
+    use derivative_mod_base, only: derivinit
+    use dimensions_mod,      only: np
+    !
+    ! Locals
+    !
+
+
+  end subroutine init_derivative_f90
+
+  subroutine init_connectivity_f90 ()
     use dimensions_mod, only : nelem, nelemd, nlev
     use edge_mod_base,  only : initEdgeBuffer, initEdgeSBuffer
     use element_mod,    only : allocate_element_desc
@@ -205,72 +245,53 @@ contains
     call finalize_connectivity()
   end subroutine init_c_connectivity_f90
 
-  subroutine hyperviscosity_functor_test_f90 (field_min_1d_ptr, field_max_1d_ptr,       &
-                                         field_2d_ptr, field_3d_ptr, field_4d_ptr, &
-                                         inner_dim_4d, num_time_levels,            &
-                                         idim_2d, idim_3d, idim_4d, minmax_split) bind(c)
+  subroutine hyperviscosity_test_f90(temperature_ptr, dp3d_ptr, velocity_ptr, itl) bind(c)
     use iso_c_binding,      only : c_ptr, c_f_pointer, c_int
-    use dimensions_mod,     only : np, nlev, nelemd, qsize
-    use edge_mod_base,      only : edgevpack, edgevunpack
-    use bndry_mod,          only : bndry_exchangev
-    use viscosity_mod_base, only : neighbor_minmax, neighbor_minmax_start, neighbor_minmax_finish
+    use dimensions_mod,     only : nc, np, nlev
+    use element_mod,        only : timelevels
+    use viscosity_mod_base, only : biharmonic_wk_dp3d
     !
     ! Inputs
     !
-    type (c_ptr), intent(in) :: field_min_1d_ptr, field_max_1d_ptr
-    type (c_ptr), intent(in) :: field_2d_ptr, field_3d_ptr, field_4d_ptr
-    integer (kind=c_int), intent(in) :: inner_dim_4d, num_time_levels
-    integer (kind=c_int), intent(in) :: idim_2d, idim_3d, idim_4d
-    integer (kind=c_int), intent(in) :: minmax_split
+    type (c_ptr), intent(in) :: temperature_ptr, dp3d_ptr, velocity_ptr
+    integer(kind=c_int), intent(in) :: itl
     !
     ! Locals
     !
-    real (kind=real_kind), dimension(:,:,:),       pointer :: field_min_1d
-    real (kind=real_kind), dimension(:,:,:),       pointer :: field_max_1d
-    real (kind=real_kind), dimension(:,:,:,:),     pointer :: field_2d
-    real (kind=real_kind), dimension(:,:,:,:,:),   pointer :: field_3d
-    real (kind=real_kind), dimension(:,:,:,:,:,:), pointer :: field_4d
-    integer :: ie, kptr
+    real (kind=real_kind), dimension(:,:,:,:,:),    pointer :: temperature
+    real (kind=real_kind), dimension(:,:,:,:,:),    pointer :: dp3d
+    real (kind=real_kind), dimension(:,:,:,:,:,:),  pointer :: velocity
+    integer :: ie,k
+    real (kind=real_kind), dimension(np,np,  nlev,nelemd) :: ttens,dptens
+    real (kind=real_kind), dimension(np,np,2,nlev,nelemd) :: vtens
+    real (kind=real_kind), dimension(nc,nc,2,nlev,nelemd) :: dpflux ! Unused, really, but it is in biharmonic_wk_dp3d signature
 
-    call c_f_pointer(field_min_1d_ptr, field_min_1d, [nlev,num_min_max_fields_1d,nelemd])
-    call c_f_pointer(field_max_1d_ptr, field_max_1d, [nlev,num_min_max_fields_1d,nelemd])
-    call c_f_pointer(field_2d_ptr,     field_2d,     [np,np,num_time_levels,nelemd])
-    call c_f_pointer(field_3d_ptr,     field_3d,     [np,np,nlev,num_time_levels,nelemd])
-    call c_f_pointer(field_4d_ptr,     field_4d,     [np,np,nlev,inner_dim_4d,num_time_levels,nelemd])
+    call c_f_pointer(temperature_ptr, temperature, [nlev,np,np,  timelevels,nelemd])
+    call c_f_pointer(dp3d_ptr,        dp3d,        [nlev,np,np,  timelevels,nelemd])
+    call c_f_pointer(velocity_ptr,    velocity,    [nlev,np,np,2,timelevels,nelemd])
 
-    ! Perform 'standard' 2d/3d boundary exchange
+    ! Set states in the elements
     do ie=1,nelemd
-      kptr = 0
-      call edgeVpack(edge,field_2d(:,:,idim_2d,ie),1,kptr,ie)
-
-      kptr = 1
-      call edgeVpack(edge,field_3d(:,:,:,idim_3d,ie),nlev,kptr,ie)
-
-      kptr = 1 + nlev
-      call edgeVpack(edge,field_4d(:,:,:,:,idim_4d,ie),inner_dim_4d*nlev,kptr,ie)
+      do k=1,nlev
+        elem(ie)%state%v(:,:,:,k,itl)  = velocity(k,:,:,:,itl,ie)
+        elem(ie)%state%T(:,:,k,itl)    = temperature(k,:,:,itl,ie)
+        elem(ie)%state%dp3d(:,:,k,itl) = dp3d(k,:,:,itl,ie)
+      enddo
     enddo
 
-    call bndry_exchangev(hybrid,edge)
+    ! Call f90 biharmonic_wk_dp3d subroutine
+    call biharmonic_wk_dp3d(elem,dptens,dpflux,ttens,vtens,deriv,edge,hybrid,itl,1,nelemd)
 
+    ! Overwrite input arrays with results
     do ie=1,nelemd
-      kptr = 0
-      call edgeVunpack(edge,field_2d(:,:,idim_2d,ie),1,kptr,ie)
-
-      kptr = 1
-      call edgeVunpack(edge,field_3d(:,:,:,idim_3d,ie),nlev,kptr,ie)
-
-      kptr = 1 + nlev
-      call edgeVunpack(edge,field_4d(:,:,:,:,idim_4d,ie),inner_dim_4d*nlev,kptr,ie)
+      do k=1,nlev
+        velocity(k,:,:,:,itl,ie)  = vtens(:,:,:,k,ie)
+        temperature(k,:,:,itl,ie) = ttens(:,:,k,ie)
+        dp3d(k,:,:,itl,ie)        = dptens(:,:,k,ie)
+      enddo
     enddo
 
-    ! Perform min/max boundary exchange
-    if (minmax_split .eq. 0) then
-      call neighbor_minmax (hybrid, edgeMinMax, 1, nelemd, field_min_1d, field_max_1d)
-    else
-      call neighbor_minmax_start  (hybrid, edgeMinMax, 1, nelemd, field_min_1d, field_max_1d)
-      call neighbor_minmax_finish (hybrid, edgeMinMax, 1, nelemd, field_min_1d, field_max_1d)
-    endif
-  end subroutine hyperviscosity_functor_test_f90
+  end subroutine hyperviscosity_test_f90
 
   subroutine cleanup_f90 () bind(c)
     use schedtype_mod, only : Schedule

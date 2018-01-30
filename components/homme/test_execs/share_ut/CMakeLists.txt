@@ -176,6 +176,7 @@ cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDA
 ### hyperviscosity Functor unit test ###
 
 SET (HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS
+  ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
   ${SRC_SHARE_DIR}/cube_mod.F90
@@ -185,8 +186,10 @@ SET (HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS
   ${SRC_SHARE_DIR}/edgetype_mod.F90
   ${SRC_SHARE_DIR}/element_mod.F90
   ${SRC_SHARE_DIR}/gridgraph_mod.F90
+  ${SRC_SHARE_DIR}/hybrid_mod.F90
   ${SRC_SHARE_DIR}/kinds.F90
   ${SRC_SHARE_DIR}/ll_mod.F90
+  ${SRC_SHARE_DIR}/mass_matrix_mod.F90
   ${SRC_SHARE_DIR}/metagraph_mod.F90
   ${SRC_SHARE_DIR}/parallel_mod.F90
   ${SRC_SHARE_DIR}/params_mod.F90
@@ -196,6 +199,10 @@ SET (HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS
   ${SRC_SHARE_DIR}/schedule_mod.F90
   ${SRC_SHARE_DIR}/spacecurve_mod.F90
   ${SRC_SHARE_DIR}/thread_mod.F90
+  ${SRC_SHARE_DIR}/viscosity_mod_base.F90
+  ${SRC_PREQX_DIR}/bndry_mod.F90
+  ${SRC_PREQX_DIR}/derivative_mod.F90
+  ${SRC_PREQX_DIR}/edge_mod.F90
   ${SHARE_UT_DIR}/hyperviscosity_functor_ut.F90
   ${UTILS_TIMING_DIR}/perf_mod.F90
   ${UTILS_TIMING_DIR}/perf_utils.F90
