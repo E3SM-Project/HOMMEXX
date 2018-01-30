@@ -16,6 +16,7 @@ public:
 
   struct TagFetchStates {};
   struct TagLaplace {};
+  struct TagUpdateStates {};
   struct TagApplyInvMass {};
 
   HyperviscosityFunctor (const Control& data, const Elements& elements, const Derivative& deriv);
@@ -52,6 +53,25 @@ public:
                               m_elements.buffers.sphere_vector_buf,
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const TagUpdateStates&, const int idx) const {
+    const int ie   =  idx / (NP*NP*NUM_LEV);
+    const int igp  = (idx / (NP*NUM_LEV)) % NP;
+    const int jgp  = (idx / NUM_LEV) % NP;
+    const int ilev =  idx % NUM_LEV;
+
+    m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
+    m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
+
+    Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev)
+                   + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev);
+    heating /= PhysicalConstants::cp;
+    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) += m_elements.buffers.ttens(ie,igp,jgp,ilev);
+    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) -= heating;
+
+    m_elements.m_dp3d(ie,m_data.np1,igp,jgp,ilev) = m_elements.buffers.dptens(ie,igp,jgp,ilev);
   }
 
   KOKKOS_INLINE_FUNCTION
