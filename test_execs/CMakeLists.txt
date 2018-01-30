@@ -164,45 +164,20 @@ ENDIF()
 
 IF(${BUILD_HOMME_SWEQX_FLAT})
   ADD_SUBDIRECTORY(sweqx_flat_ut)
-  ADD_SUBDIRECTORY(swtcA_flat)
-  ADD_SUBDIRECTORY(swtcB_flat)
   ADD_SUBDIRECTORY(swtcA_flat_c)
   ADD_SUBDIRECTORY(swtcB_flat_c)
 ENDIF()
 
 # Add the test exec subdirs for the preqx executable
 IF(${BUILD_HOMME_PREQX})
-#  ADD_SUBDIRECTORY(baroC)
-#  ADD_SUBDIRECTORY(baroCam)
-#  ADD_SUBDIRECTORY(preqx-nlev20-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev20-native)
-#  ADD_SUBDIRECTORY(preqx-nlev30-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev30-native)
-#  ADD_SUBDIRECTORY(preqx-nlev60-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev60-native)
-#  IF(${BUILD_HOMME_PREQX_ACC})
-#    ADD_SUBDIRECTORY(baroCam-acc)
-#  ENDIF()
    ADD_SUBDIRECTORY(prtcA)
    ADD_SUBDIRECTORY(prtcB)
 ENDIF()
 
 IF(${BUILD_HOMME_PREQX_FLAT})
   ADD_SUBDIRECTORY(preqx_flat_ut)
-  ADD_SUBDIRECTORY(prtcA_flat)
   ADD_SUBDIRECTORY(prtcA_flat_c)
-  ADD_SUBDIRECTORY(prtcB_flat)
   ADD_SUBDIRECTORY(prtcB_flat_c)
-ENDIF()
-
-# Add the test exec subdirs for the prim executable
-IF(${BUILD_HOMME_PRIM})
-  ADD_SUBDIRECTORY(primA)
-ENDIF()
-
-# Add the test exec subdirs for the swim executable
-IF(${BUILD_HOMME_SWIM})
-  ADD_SUBDIRECTORY(swim5)
 ENDIF()
 
 # Read the test-list.cmake file to get the HOMME_TESTS list
