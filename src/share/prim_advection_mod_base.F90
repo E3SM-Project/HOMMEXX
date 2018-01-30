@@ -1687,6 +1687,11 @@ use utils_mod, only: FrobeniusNorm
   elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
   elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
   elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+  
+  call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+       elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+       Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
 #endif
 
 !  call t_barrierf('sync_euler_step', hybrid%par%comm)
@@ -1780,7 +1785,7 @@ OMP_SIMD
 
     
 #ifdef USE_KOKKOS_KERNELS
-    
+
 # if 0
     ! get new min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
@@ -1817,6 +1822,10 @@ OMP_SIMD
        enddo
        call euler_neighbor_minmax_finish_c(nets,nete)
     endif ! rhs_multiplier == 2
+    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+         Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
 # else
     call euler_minmax_and_biharmonic_c(nets, nete)
 # endif
@@ -1921,10 +1930,6 @@ OMP_SIMD
   if ( limiter_option == 4 ) then
      call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
   endif
-  call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-       elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-       elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-       Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
   call t_startf("advance_qdp")
   call advance_qdp_c(rhs_viss)
   call t_stopf("advance_qdp")

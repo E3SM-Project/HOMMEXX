@@ -57,10 +57,8 @@ void init_euler_neighbor_minmax_c (const int& qsize)
   if (!be.is_registration_completed()) {
     Elements& elements = Context::singleton().get_elements();
 
-    std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
     std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
-    be.set_connectivity(connectivity);
     be.set_buffers_manager(buffers_manager);
     be.set_num_fields(qsize,0,0);
     be.register_min_max_fields(elements.buffers.qlim,qsize,0);
@@ -87,12 +85,14 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
 }
 
 void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
+  const auto& c = Context::singleton().get_control();
+  if (c.rhs_multiplier != 2) return;
   euler_neighbor_minmax_start_c(nets, nete);
   EulerStepFunctor::compute_biharmonic_pre();
   {
-    Control& c = Context::singleton().get_control();
-    Elements& e = Context::singleton().get_elements();
-    const auto be = Context::singleton().get_boundary_exchange("qtens_biharmonic");
+    const auto& e = Context::singleton().get_elements();
+    const auto be = Context::singleton().get_boundary_exchange(
+      "euler_neighbor_minmax_start_c qtens_biharmonic");
     if ( ! be->is_registration_completed()) {
       be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       be->set_num_fields(0, 0, c.qsize);
