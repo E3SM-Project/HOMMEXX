@@ -15,6 +15,8 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
 
 void HyperviscosityFunctor::run (const int hypervis_subcycle) const
 {
+  Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
+  Kokkos::RangePolicy<ExecSpace,TagUpdateStates> policy_update_states(0, m_data.num_elems*NP*NP*NUM_LEV);
   for (int icycle=0; icycle<hypervis_subcycle; ++icycle) {
     biharmonic_wk_dp3d ();
     // dispatch parallel_for for first kernel
@@ -27,7 +29,11 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle) const
     // Exchange
     be.exchange(m_data.nets, m_data.nete);
 
-    // dispatch parallel_for for second kernel
+    // Apply inverse mass matrix
+    Kokkos::parallel_for(policy_mass, *this);
+
+    // Update states
+    Kokkos::parallel_for(policy_update_states, *this);
   }
 }
 
