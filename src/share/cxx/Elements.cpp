@@ -587,6 +587,10 @@ void Elements::BufferViews::init(int num_elems) {
   vorticity =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
+  ttens  = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for temperature",num_elems);
+  dptens = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for dp3d",num_elems);
+  vtens  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for velocity",num_elems);
+
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for tracers", num_elems);
   qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
