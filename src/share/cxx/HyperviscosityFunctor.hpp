@@ -20,6 +20,10 @@ public:
 
   HyperviscosityFunctor (const Control& data, const Elements& elements, const Derivative& deriv);
 
+  void run (const int itl, const Real dt, const Real eta_ave_w) {
+    // ADD IMPLEMENTATION
+  }
+
   void biharmonic_wk_dp3d (const int m_itl);
 
   ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>  m_ttens;
@@ -30,14 +34,14 @@ public:
   void operator() (const TagLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    ttensensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
+    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    m_elements.m_tensorVisc,
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_ttens,kv.ie),
                    m_elements.buffers.sphere_vector_buf,
                    Homme::subview(m_ttens,kv.ie));
     // Laplacian of pressure
-    ttensensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
+    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    m_elements.m_tensorVisc,
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_dptens,kv.ie),

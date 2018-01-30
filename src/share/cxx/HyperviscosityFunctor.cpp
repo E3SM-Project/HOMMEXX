@@ -32,17 +32,7 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d(const int itl)
   // Get be structure
   std::string be_name = "HyperviscosityFunctor:biharmonic_wk_dp3d";
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
-  if (!be.is_registration_completed()) {
-    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-    be.set_buffers_manager(buffers_manager);
-
-    // Set the views of this time level into this time level's boundary exchange
-    be.set_num_fields(0,0,4);
-    be.register_field(m_vtens,2,0);
-    be.register_field(m_ttens);
-    be.register_field(m_dptens);
-    be.registration_completed();
-  }
+  assert (be.is_registration_completed());
 
   // Exchange
   be.exchange(m_data.nets, m_data.nete);
