@@ -114,7 +114,7 @@ module prim_advection_mod_base
     subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
          elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
          elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-         elem_state_Qdp_ptr, Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr) bind(c)
+         elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
@@ -122,7 +122,7 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
            elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-           elem_state_Qdp_ptr, Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr
+           elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
     end subroutine euler_pull_data_c
     subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
          elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
@@ -1634,11 +1634,7 @@ use utils_mod, only: FrobeniusNorm
       integer (kind=c_int),  intent(in) :: nets, nete
     end subroutine euler_minmax_and_biharmonic_c
 
-    subroutine euler_qmin_qmax_c(derived_dp, derived_divdp_proj, qdp) bind(c)
-      use iso_c_binding, only : c_double
-      real (kind=c_double), intent(in) :: derived_dp(:,:,:,:)
-      real (kind=c_double), intent(in) :: derived_divdp_proj(:,:,:,:)
-      real (kind=c_double), intent(in) :: qdp(:,:,:,:,:,:)
+    subroutine euler_qmin_qmax_c() bind(c)
     end subroutine euler_qmin_qmax_c
   end interface
 
@@ -1737,6 +1733,21 @@ OMP_SIMD
     !        for nu_p=nu_q>0, we need to apply dissipation to Q * diffusion_dp
     !
     ! initialize dp, and compute Q from Qdp (and store Q in Qtens_biharmonic)
+#ifdef USE_KOKKOS_KERNELS
+    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+         elem_derived_dpdiss_ave_ptr)
+    call euler_qmin_qmax_c()
+    if ( rhs_multiplier == 0 ) then
+      ! update qmin/qmax based on neighbor data for lim8
+      call t_startf('eus_neighbor_minmax1')
+      call euler_neighbor_minmax_c(nets,nete)
+      call t_stopf('eus_neighbor_minmax1')
+    endif
+  !call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+       !elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
+#else
     do ie = nets , nete
       ! add hyperviscosity to RHS.  apply to Q at timelevel n0, Qdp(n0)/dp
 OMP_SIMD
@@ -1749,11 +1760,6 @@ OMP_SIMD
       do q = 1 , qsize
         do k=1,nlev
           Qtens_biharmonic(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp)/dp(:,:,k)
-          if ((ie == 4) .and. (q == 3) .and. (k == 4)) then
-             do j = 1, np
-                print *, "compute_qmin_qmax 1:", ie - 1, n0_qdp - 1, q - 1, k - 1, 2, j - 1, "f90: dp", dp(j, 3, k), ", qdp", elem(ie)%state%Qdp(j, 3, k, q, n0_qdp), ", qtens", Qtens_biharmonic(j, 3, k, q, ie)
-             end do
-          end if
           if ( rhs_multiplier == 1 ) then
              ! for this stage, we skip neighbor_minmax() call, but update
              ! qmin/qmax with any new local extrema:
@@ -1768,22 +1774,6 @@ OMP_SIMD
         enddo
       enddo
     enddo
-
-#ifdef USE_KOKKOS_KERNELS
-    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-         Qtens_biharmonic_ptr, elem_derived_dpdiss_ave_ptr)
-    call euler_qmin_qmax_c(elem_derived_dp, elem_derived_divdp_proj, elem_state_Qdp)
-    if ( rhs_multiplier == 0 ) then
-      ! update qmin/qmax based on neighbor data for lim8
-      call t_startf('eus_neighbor_minmax1')
-      call euler_neighbor_minmax_c(nets,nete)
-      call t_stopf('eus_neighbor_minmax1')
-    endif
-  !call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-       !elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
-#else
     ! compute element qmin/qmax
     if ( rhs_multiplier == 0 ) then
       ! update qmin/qmax based on neighbor data for lim8

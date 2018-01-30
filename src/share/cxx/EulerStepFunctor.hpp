@@ -256,54 +256,58 @@ public:
       const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
       const int jgp = (loop_idx / NUM_LEV) % NP;
       const int lev = loop_idx % NUM_LEV;
+
       Scalar dp = elems.m_derived_dp(ie, igp, jgp, lev) -
                   state.rhs_multiplier * state.dt *
                       elems.m_derived_divdp_proj(ie, igp, jgp, lev);
+
       Scalar tmp = elems.m_qdp(ie, state.qn0, q, igp, jgp, lev) / dp;
       elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
-      if ((ie == 3) && (q == 2) && (igp == 2) && (lev == 3)) {
-        printf("compute_qmin_qmax 1: %d %d %d %d %d %d c++: dp % .17e, qdp % "
-               ".17e, qtens % .17e\n",
-               ie, state.qn0, q, lev, igp, jgp, dp[0],
-               elems.m_qdp(ie, state.qn0, q, igp, jgp, lev)[0],
-               elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev)[0]);
-      }
     });
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *
-                                           NUM_LEV);
+                                                  NUM_LEV);
     if (state.rhs_multiplier == 1.0) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic =
-            elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
-        for (int igp = 1; igp < NP; ++igp) {
-          for (int jgp = 1; jgp < NP; ++jgp) {
+        Scalar min_biharmonic = std::numeric_limits<Real>::infinity();
+        Scalar max_biharmonic = -std::numeric_limits<Real>::infinity();
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
             min_biharmonic =
                 min(min_biharmonic,
+                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
+            max_biharmonic =
+                max(max_biharmonic,
                     elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
           }
         }
         elems.buffers.qlim(ie, q, 0, lev) =
             min(elems.buffers.qlim(ie, q, 0, lev), min_biharmonic);
+        elems.buffers.qlim(ie, q, 1, lev) =
+            max(elems.buffers.qlim(ie, q, 1, lev), max_biharmonic);
       });
     } else {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic =
-            elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
-        for (int igp = 1; igp < NP; ++igp) {
-          for (int jgp = 1; jgp < NP; ++jgp) {
+        Scalar min_biharmonic = std::numeric_limits<Real>::infinity();
+        Scalar max_biharmonic = -std::numeric_limits<Real>::infinity();
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
             min_biharmonic =
                 min(min_biharmonic,
+                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
+            max_biharmonic =
+                max(max_biharmonic,
                     elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
           }
         }
         elems.buffers.qlim(ie, q, 0, lev) = min_biharmonic;
+        elems.buffers.qlim(ie, q, 1, lev) = max_biharmonic;
       });
     }
   }
