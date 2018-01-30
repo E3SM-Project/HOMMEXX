@@ -66,6 +66,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::runtime_check(hypervis_scaling>0,"[init_simulation_params_c]",Errors::err_unsupported_option);
   Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_unsupported_option);
   Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_unsupported_option);
 
   // Now this structure can be used safely
   params.params_set = true;
