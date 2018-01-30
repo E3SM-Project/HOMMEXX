@@ -39,12 +39,9 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle) const
 
 void HyperviscosityFunctor::biharmonic_wk_dp3d() const
 {
-  // Extract requested time level, and stuff it into members (will be overwritten with laplacian)
-  Kokkos::RangePolicy<ExecSpace,TagFetchStates> policy_fetch(0, m_data.num_elems*NP*NP*NUM_LEV);
-  Kokkos::parallel_for(policy_fetch, *this);
-
-  // Compute first laplacian
-  auto policy_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_data.num_elems);
+  // For the first laplacian we use a differnt kernel, which uses directly the states
+  // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
+  auto policy_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_data.num_elems);
   Kokkos::parallel_for(policy_laplace, *this);
 
   // Get be structure
