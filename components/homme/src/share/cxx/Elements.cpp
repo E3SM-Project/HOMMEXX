@@ -161,6 +161,9 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_spheremp, engine, random_dist);
   genRandArray(m_rspheremp, engine, random_dist);
   genRandArray(m_metdet, engine, random_dist);
+  genRandArray(m_metinv, engine, random_dist);
+  genRandArray(m_vec_sph2cart, engine, random_dist);
+  genRandArray(m_tensorVisc, engine, random_dist);
   genRandArray(m_phis, engine, random_dist);
 
   genRandArray(m_omega_p, engine, random_dist);
@@ -605,7 +608,7 @@ void Elements::BufferViews::init(int num_elems) {
                                                            num_elems);
   grad_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Gradient Buffer",
                                                             num_elems);
-  vort_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
+  curl_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Vorticity Buffer",
                                                             num_elems);
 
   sphere_vector_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("laplacian vector Buffer", num_elems);
