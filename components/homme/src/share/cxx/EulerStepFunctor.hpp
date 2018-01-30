@@ -36,10 +36,10 @@ public:
     GPTLstart("esf-bih-pre run");
 
     Control& c = Context::singleton().get_control();
-    if (c.rhs_multiplier != 2) return;
+    assert(c.rhs_multiplier == 2);
+    c.rhs_viss = 3;
 
     EulerStepFunctor func(c);
-    c.rhs_viss = 3;
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
       func);
@@ -53,7 +53,7 @@ public:
     GPTLstart("esf-bih-post run");
 
     Control& c = Context::singleton().get_control();
-    if (c.rhs_multiplier != 2) return;
+    assert(c.rhs_multiplier == 2);
 
     EulerStepFunctor func(c);
     Kokkos::parallel_for(
@@ -119,7 +119,7 @@ public:
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
                    qtens_biharmonic);
-    // laplace_simple provided the barrier.
+    // laplace_simple provides the barrier.
     {
       const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
       Kokkos::parallel_for (
@@ -130,7 +130,7 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = (m_data.rhs_viss * m_data.dt * m_data.nu_q *
+              qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
                                          m_data.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
