@@ -10,17 +10,29 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
  , m_elements (elements)
  , m_deriv    (deriv)
 {
-  // TODO: so far in our tests, we use the same nu_ratio in the 1st and 2nd laplacian, and it is always 1.0.
-  //       If there are other test cases, load this from parameters, and differentiate between 1st and 2nd sweep.
-  //       If not, remove it alltogether (also from SphereOperators)
-  m_nu_ratio = 1.0;
+  // Nothing to be done here
 }
 
-void HyperviscosityFunctor::biharmonic_wk_dp3d(const int itl)
+void HyperviscosityFunctor::run (const int hypervis_subcycle) const
 {
-  // Store the time level and nu_ratio
-  m_itl = itl;
+  for (int icycle=0; icycle<hypervis_subcycle; ++icycle) {
+    biharmonic_wk_dp3d ();
+    // dispatch parallel_for for first kernel
 
+    // Boundary Echange
+    std::string be_name = "HyperviscosityFunctor";
+    BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
+    assert (be.is_registration_completed());
+
+    // Exchange
+    be.exchange(m_data.nets, m_data.nete);
+
+    // dispatch parallel_for for second kernel
+  }
+}
+
+void HyperviscosityFunctor::biharmonic_wk_dp3d() const
+{
   // Extract requested time level, and stuff it into members (will be overwritten with laplacian)
   Kokkos::RangePolicy<ExecSpace,TagFetchStates> policy_fetch(0, m_data.num_elems*NP*NP*NUM_LEV);
   Kokkos::parallel_for(policy_fetch, *this);
@@ -30,7 +42,7 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d(const int itl)
   Kokkos::parallel_for(policy_laplace, *this);
 
   // Get be structure
-  std::string be_name = "HyperviscosityFunctor:biharmonic_wk_dp3d";
+  std::string be_name = "HyperviscosityFunctor";
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
   assert (be.is_registration_completed());
 
@@ -41,6 +53,7 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d(const int itl)
   Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
   Kokkos::parallel_for(policy_mass, *this);
 
+  // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
   Kokkos::parallel_for(policy_laplace, *this);
 }
