@@ -37,7 +37,6 @@ public:
 
     Control& c = Context::singleton().get_control();
     if (c.rhs_multiplier != 2) return;
-    Elements& e = Context::singleton().get_elements();
 
     EulerStepFunctor func(c);
     c.rhs_viss = 3;
@@ -55,7 +54,6 @@ public:
 
     Control& c = Context::singleton().get_control();
     if (c.rhs_multiplier != 2) return;
-    Elements& e = Context::singleton().get_elements();
 
     EulerStepFunctor func(c);
     Kokkos::parallel_for(
@@ -70,9 +68,14 @@ public:
   void operator() (const BIHPre&, const TeamMember& team) const {
     start_timer("esf-bih-pre compute");
     KernelVariables kv(team, m_data.qsize);
+    const auto& e = m_elements;
     const bool nu_p_gt0 = m_data.nu_p > 0;
-    //const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
-    //const auto dpdiss_ave = Homme::subview(e.derived_dpdiss_ave, kv.ie);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
+    const auto qwrk = Homme::subview(e.buffers.qwrk, kv.ie, kv.iq);
+    const auto grad = Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq);
+    const auto dvv = m_deriv.get_dvv();
+
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP*NP),
       [&] (const int loop_idx) {
@@ -82,10 +85,11 @@ public:
           Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
           [&] (const int& k) {
             if (nu_p_gt0) {
-              //const Scalar dp0 = m_data.hybrid_a( );
-              //qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / dp0;
+              const Scalar dp0 = 1; //m_data.hybrid_a( );
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / dp0;
             }
-            //biharmonic_wk_scalar( );
+            laplace_simple(kv, e.m_dinv, e.m_spheremp, dvv, grad, qtens_biharmonic, qwrk,
+                           qtens_biharmonic);
           });
       });
     stop_timer("esf-bih-pre compute");
