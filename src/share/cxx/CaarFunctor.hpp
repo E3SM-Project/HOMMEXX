@@ -15,9 +15,6 @@
 #include <type_traits>
 
 
-#define GR3 0 //GPU_RSPLIT3
-
-
 namespace Homme {
 
 struct CaarFunctor {
@@ -125,54 +122,38 @@ struct CaarFunctor {
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
     check_dp3d(kv);
-
-#if 0
-std::cout << "------------------------\n";
-    print_debug(kv, 0, 0);
-    print_debug(kv, 0, 1);
-    print_debug(kv, 0, 2);
-    print_debug(kv, 0, 3);
-std::cout << "------------------------\n";
-#endif
   } // TRIVIAL
-//is it?
-
-
+  //is it?
 
   KOKKOS_INLINE_FUNCTION
   void print_debug(KernelVariables &kv, const int ie, const int which) const {
     if( kv.ie == ie ){
-    for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
-      const int ilev = k / VECTOR_SIZE;
-      const int ivec = k % VECTOR_SIZE;
-      int igp = 0, jgp = 0;
-      Real val;
-      if( which == 0)
-      val = m_elements.m_t(ie, m_data.np1, igp, jgp, ilev)[ivec];
-      if( which == 1)
-      val = m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev)[ivec];
-      if( which == 2)
-      val = m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev)[ivec];
-      if( which == 3)
-      val = m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev)[ivec];
-      Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+      for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
+        const int ilev = k / VECTOR_SIZE;
+        const int ivec = k % VECTOR_SIZE;
+        int igp = 0, jgp = 0;
+        Real val;
         if( which == 0)
-        std::printf("m_t %d (%d %d): % .17e \n", k, ilev, ivec, val);
+          val = m_elements.m_t(ie, m_data.np1, igp, jgp, ilev)[ivec];
         if( which == 1)
-        std::printf("m_v(0) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+          val = m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev)[ivec];
         if( which == 2)
-        std::printf("m_v(1) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+          val = m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev)[ivec];
         if( which == 3)
-        std::printf("m_dp3d %d (%d %d): % .17e \n", k, ilev, ivec, val);
-      });
-   }
+          val = m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev)[ivec];
+        Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+            if( which == 0)
+              std::printf("m_t %d (%d %d): % .17e \n", k, ilev, ivec, val);
+            if( which == 1)
+              std::printf("m_v(0) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+            if( which == 2)
+              std::printf("m_v(1) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+            if( which == 3)
+              std::printf("m_dp3d %d (%d %d): % .17e \n", k, ilev, ivec, val);
+          });
+      }
+    }
   }
-  }
-
-
-
-
-
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
@@ -199,34 +180,18 @@ std::cout << "------------------------\n";
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
-#if GR3
-if(rsplit_gt0){
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}
-#else
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-#endif
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
-//verified this is needed for a 1-day test
-#if GR3
-if(rsplit_gt0){
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            - m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-}
-#else
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
-#endif
+
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             m_elements.m_v(kv.ie, m_data.nm1, 0, igp, jgp, ilev);
@@ -245,7 +210,7 @@ if(rsplit_gt0){
     });
     kv.team_barrier();
   } // UNTESTED 2
-//og: i'd better make a test for this
+  //og: i'd better make a test for this
 
   //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
@@ -309,15 +274,10 @@ if(rsplit_gt0){
            m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
-//      constexpr const int Np1 = NUM_PHYSICAL_LEV;
-//      const int ilevNp1 = Np1 / VECTOR_SIZE;
-//      const int ivecNp1 = Np1 % VECTOR_SIZE;
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
-//      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
     });//NP*NP loop
     kv.team_barrier();
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
-
 
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
@@ -472,23 +432,12 @@ if(rsplit_gt0){
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
-#if GR3
-        Scalar ttens;
-        if(rsplit_gt0){ 
-           ttens = 
-                  - vgrad_t
-                  + PhysicalConstants::kappa *
-                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
-                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-        }
-#else 
         const Scalar ttens = 
               (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
                   - vgrad_t
                   + PhysicalConstants::kappa *
                     m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                     m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-#endif
         Scalar temp_np1 = ttens * m_data.dt +
                           m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
         temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
@@ -544,7 +493,7 @@ if(rsplit_gt0){
       const int ilevp1 = kp1 / VECTOR_SIZE;
       const int ivecp1 = kp1 % VECTOR_SIZE;
 
-//lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
+      //lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                        * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
       Real facm;
@@ -621,7 +570,6 @@ if(rsplit_gt0){
      kv.team_barrier();
   } // TESTED against preq_vertadv 
 
-
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagPreExchange&, const TeamMember& team) const {
     start_timer("caar compute");
@@ -635,14 +583,6 @@ if(rsplit_gt0){
 
     compute_phase_3(kv);
     stop_timer("caar compute");
-
-#if 0
-std::cout << "AFTER THE END OF CAAR\n";
-    print_debug(kv, 0, 0);
-    print_debug(kv, 0, 1);
-    print_debug(kv, 0, 2);
-    print_debug(kv, 0, 3);
-#endif
   }
 
   KOKKOS_INLINE_FUNCTION
