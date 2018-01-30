@@ -69,6 +69,7 @@ struct Control {
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_a;
   // hybrid b
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_b;
+  ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 
 } // Namespace Homme

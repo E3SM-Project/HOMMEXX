@@ -80,29 +80,16 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
             [&] (const int& k) {
-              const Scalar dp0 = 1; //m_data.hybrid_a( );
-              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / dp0;
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
             });
         });
       kv.team_barrier();
     }
-    {
-      const auto qwrk = Homme::subview(e.buffers.qwrk, kv.ie, kv.iq);
-      const auto grad = Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq);
-      const auto dvv = m_deriv.get_dvv();
-      Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
-        [&] (const int loop_idx) {
-          const int i = loop_idx / NP;
-          const int j = loop_idx % NP;
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-            [&] (const int& k) {
-              laplace_simple(kv, e.m_dinv, e.m_spheremp, dvv, grad, qtens_biharmonic, qwrk,
-                             qtens_biharmonic);
-            });
-        });
-    }
+    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+                   qtens_biharmonic,
+                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   qtens_biharmonic);
     stop_timer("esf-bih-pre compute");
   }
 
@@ -122,32 +109,17 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
             [&] (const int& k) {
-              const Scalar dp0 = 1; //m_data.hybrid_a( );
               qtens_biharmonic(i,j,k) *= rspheremp(i,j);
             });
         });
     }
     kv.team_barrier();
-    {
-      const auto qwrk = Homme::subview(e.buffers.qwrk, kv.ie, kv.iq);
-      const auto grad = Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq);
-      const auto dvv = m_deriv.get_dvv();
-
-      Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
-        [&] (const int loop_idx) {
-          const int i = loop_idx / NP;
-          const int j = loop_idx % NP;
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-            [&] (const int& k) {
-              laplace_simple(kv, e.m_dinv, e.m_spheremp, dvv, grad, qtens_biharmonic, qwrk,
-                             qtens_biharmonic);
-
-            });
-        });
-    }
-    kv.team_barrier();
+    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+                   qtens_biharmonic,
+                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   qtens_biharmonic);
+    // laplace_simple provided the barrier.
     {
       const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
       Kokkos::parallel_for (
@@ -158,9 +130,9 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
             [&] (const int& k) {
-              const Scalar dp0 = 1; //m_data.hybrid_a( );
-              qtens_biharmonic(i,j,k) = (m_data.rhs_viss * m_data.dt * m_data.nu_q * dp0 *
-                                         qtens_biharmonic(i,j,k) / spheremp(i,j));
+              qtens_biharmonic(i,j,k) = (m_data.rhs_viss * m_data.dt * m_data.nu_q *
+                                         m_data.dp0(k) * qtens_biharmonic(i,j,k) /
+                                         spheremp(i,j));
             });
         });
     }
