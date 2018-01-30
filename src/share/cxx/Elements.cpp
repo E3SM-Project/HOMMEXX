@@ -20,6 +20,7 @@ void Elements::init(const int num_elems) {
   m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
+  m_vec_sph2cart = ExecViewManaged<Real * [2][3][NP][NP]>("VEC SPHERE2CART", m_num_elems);
 
   m_d =
       ExecViewManaged<Real * [2][2][NP][NP]>("D - metric tensor", m_num_elems);
