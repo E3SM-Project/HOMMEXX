@@ -73,11 +73,14 @@ struct Control {
 
   // hybrid coefficients
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_am;
-  Real hybrid_ai0;
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
   //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_bm;
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
 
+  Real hybrid_ai0;
+  // hybrid ai
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
+  // hybrid bi
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
+  ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 
 } // Namespace Homme

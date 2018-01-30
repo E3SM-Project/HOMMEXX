@@ -230,7 +230,7 @@ gradient_sphere(const KernelVariables &kv,
                 const ExecViewUnmanaged<const Real*  [2][2][NP][NP]>          dinv,
                 const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
                 const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> scalar,
-                      ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> v_buf,
+                      ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> v_buf,
                       ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> grad_s)
 {
   constexpr int contra_iters = NP * NP;
@@ -244,8 +244,8 @@ gradient_sphere(const KernelVariables &kv,
         dsdx += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
         dsdy += dvv(jgp, kgp) * scalar(kgp, igp, ilev);
       }
-      v_buf(kv.ie, 0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
-      v_buf(kv.ie, 1, jgp, igp, ilev) = dsdy * PhysicalConstants::rrearth;
+      v_buf(0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
+      v_buf(1, jgp, igp, ilev) = dsdy * PhysicalConstants::rrearth;
     });
   });
   kv.team_barrier();
@@ -258,11 +258,11 @@ gradient_sphere(const KernelVariables &kv,
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
       grad_s(0, igp, jgp, ilev) =
-          dinv(kv.ie, 0, 0, igp, jgp) * v_buf(kv.ie, 0, igp, jgp, ilev) +
-          dinv(kv.ie, 0, 1, igp, jgp) * v_buf(kv.ie, 1, igp, jgp, ilev);
+          dinv(kv.ie, 0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+          dinv(kv.ie, 0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
       grad_s(1, igp, jgp, ilev) =
-          dinv(kv.ie, 1, 0, igp, jgp) * v_buf(kv.ie, 0, igp, jgp, ilev) +
-          dinv(kv.ie, 1, 1, igp, jgp) * v_buf(kv.ie, 1, igp, jgp, ilev);
+          dinv(kv.ie, 1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+          dinv(kv.ie, 1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
     });
   });
   kv.team_barrier();
@@ -496,7 +496,7 @@ divergence_sphere_wk(const KernelVariables &kv,
                      const ExecViewUnmanaged<const Real*        [NP][NP]>          spheremp,
                      const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
                      const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> v,
-                           ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> sphere_buf,
+                           ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
                            ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> div_v)
 {
   constexpr int contra_iters = NP * NP;
@@ -505,10 +505,10 @@ divergence_sphere_wk(const KernelVariables &kv,
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      sphere_buf(kv.ie,0,igp,jgp,ilev) = dinv(kv.ie, 0, 0, igp, jgp) * v(0, igp, jgp, ilev)
-                                       + dinv(kv.ie, 1, 0, igp, jgp) * v(1, igp, jgp, ilev);
-      sphere_buf(kv.ie,1,igp,jgp,ilev) = dinv(kv.ie, 0, 1, igp, jgp) * v(0, igp, jgp, ilev)
-                                       + dinv(kv.ie, 1, 1, igp, jgp) * v(1, igp, jgp, ilev);
+      sphere_buf(0,igp,jgp,ilev) = dinv(kv.ie, 0, 0, igp, jgp) * v(0, igp, jgp, ilev)
+                                 + dinv(kv.ie, 1, 0, igp, jgp) * v(1, igp, jgp, ilev);
+      sphere_buf(1,igp,jgp,ilev) = dinv(kv.ie, 0, 1, igp, jgp) * v(0, igp, jgp, ilev)
+                                 + dinv(kv.ie, 1, 1, igp, jgp) * v(1, igp, jgp, ilev);
     });
   });
   kv.team_barrier();
@@ -522,8 +522,8 @@ divergence_sphere_wk(const KernelVariables &kv,
       Scalar dd;
       // TODO: move multiplication by rrearth outside the loop
       for (int jgp = 0; jgp < NP; ++jgp) {
-        dd -= (spheremp(kv.ie, ngp, jgp) * sphere_buf(kv.ie, 0, ngp, jgp, ilev) * dvv(jgp, mgp) +
-               spheremp(kv.ie, jgp, mgp) * sphere_buf(kv.ie, 1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
+        dd -= (spheremp(kv.ie, ngp, jgp) * sphere_buf(0, ngp, jgp, ilev) * dvv(jgp, mgp) +
+               spheremp(kv.ie, jgp, mgp) * sphere_buf(1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
               PhysicalConstants::rrearth;
       }
       div_v(ngp, mgp, ilev) = dd;
@@ -541,7 +541,7 @@ laplace_simple(const KernelVariables &kv,
                const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
                      ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
                const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> field,         // input
-                     ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> sphere_buf,
+                     ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
                      ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace)
 {
     // let's ignore var coef and tensor hv
@@ -563,7 +563,8 @@ laplace_tensor(const KernelVariables &kv,
                      ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> sphere_buf,
                      ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace)
 {
-  gradient_sphere(kv, DInv, dvv, field, sphere_buf, grad_s);
+  const auto sb = Homme::subview(sphere_buf, kv.ie);
+  gradient_sphere(kv, DInv, dvv, field, sb, grad_s);
 //now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
 //but it requires a temp var to store a result. the result is then placed to grad_s,
 //or should it be an extra temp var instead of an extra loop?
@@ -573,10 +574,10 @@ laplace_tensor(const KernelVariables &kv,
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      sphere_buf(kv.ie,0,igp,jgp,ilev) = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                                       + tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp,ilev);
-      sphere_buf(kv.ie,1,igp,jgp,ilev) = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                                       + tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp,ilev);
+      sb(0,igp,jgp,ilev) = tensorVisc(kv.ie,0,0,igp,jgp) * grad_s(0,igp,jgp,ilev)
+                         + tensorVisc(kv.ie,1,0,igp,jgp) * grad_s(1,igp,jgp,ilev);
+      sb(1,igp,jgp,ilev) = tensorVisc(kv.ie,0,1,igp,jgp) * grad_s(0,igp,jgp,ilev)
+                         + tensorVisc(kv.ie,1,1,igp,jgp) * grad_s(1,igp,jgp,ilev);
     });
   });
   kv.team_barrier();
@@ -592,7 +593,7 @@ laplace_tensor(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
+  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sb, laplace);
 }//end of laplace_tensor
 
 //a version of laplace_tensor where input is replaced by output
@@ -606,7 +607,7 @@ laplace_tensor_replace(const KernelVariables &kv,
                              ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> sphere_buf,
                              ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace) //input/output
 {
-  gradient_sphere(kv, DInv, dvv, laplace, sphere_buf, grad_s);
+  gradient_sphere(kv, DInv, dvv, laplace, Homme::subview(sphere_buf, kv.ie), grad_s);
   constexpr int num_iters = NP * NP;
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_iters),
                      [&](const int loop_idx) {
@@ -632,7 +633,7 @@ laplace_tensor_replace(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
+  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, Homme::subview(sphere_buf, kv.ie), laplace);
 }//end of laplace_tensor_replace
 
 //check mp, why is it an ie quantity?
