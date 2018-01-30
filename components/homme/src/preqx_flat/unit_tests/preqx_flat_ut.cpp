@@ -26,7 +26,6 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 void caar_compute_energy_grad_c_int(const Real *dvv,
                                     const Real *Dinv,
-                                    const Real *pecnd,
                                     const Real *phi,
                                     const Real *velocity,
                                     Real *tvirt,
@@ -72,6 +71,18 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
                                     const Real *t_current,
                                     Real *t_future);
 
+void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn, 
+                                                   Real *sdot_sum, 
+                                                   const Real *divdp, 
+                                                   const Real *hybi);
+
+void preq_vertadv(const Real *temperature, const Real *velocity,
+                  const Real *eta_dot_dpdn, const Real *recipr_density,
+                  Real *t_vadv, Real *v_vadv);
+
+void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
+                                    Real *eta_dot_total, const Real *eta_dot);
+
 }  // extern C
 
 /* compute_subfunctor_test
@@ -89,26 +100,38 @@ public:
       : functor(elements, Context::singleton().get_derivative()),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
-        dp3d("DP3D", elements.num_elems()), phi("Phi", elements.num_elems()),
-        phis("Phis?", elements.num_elems()),
-        pecnd("Potential Energy CND?", elements.num_elems()),
+        dp3d("DP3D", elements.num_elems()), 
+        phi("Phi", elements.num_elems()),
+        phis("Phi_surf", elements.num_elems()),
         omega_p("Omega_P", elements.num_elems()),
-        derived_v("Derived V?", elements.num_elems()),
+        derived_v("Derived V", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
-        qdp("QDP", elements.num_elems()), metdet("metdet", elements.num_elems()),
+        qdp("QDP", elements.num_elems()), 
+        metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
-        spheremp("SphereMP", elements.num_elems()), dvv("dvv"), nets(1),
-        nete(elements.num_elems()) {
-    Real hybrid_a[NUM_LEV_P] = { 0 };
-    Real hybrid_b[NUM_LEV_P] = { 0 };
+        spheremp("SphereMP", elements.num_elems()), dvv("dvv"), 
+        //nets(1),
+        //nete(elements.num_elems()), 
+        rsplit(0) {
+
+//make these random
+    Real hybrid_am[NUM_PHYSICAL_LEV] = { 0 };
+    Real hybrid_ai[NUM_INTERFACE_LEV] = { 0 };
+    Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
+    Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
+
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
-                        qn0, ps0, 1, hybrid_a, hybrid_b);
+                        qn0, ps0, 
+                        0, //for rsplit
+                        hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
+
     functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
+//is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
-                                dp3d.data(), phi.data(), pecnd.data(),
+                                dp3d.data(), phi.data(), 
                                 omega_p.data(), derived_v.data(),
                                 eta_dpdn.data(), qdp.data());
 
@@ -150,7 +173,6 @@ public:
   HostViewManaged<Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]> dp3d;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> phi;
   HostViewManaged<Real * [NP][NP]> phis;
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pecnd;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p;
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> derived_v;
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dpdn;
@@ -161,8 +183,8 @@ public:
   HostViewManaged<Real * [NP][NP]> spheremp;
   HostViewManaged<Real[NP][NP]> dvv;
 
-  const int nets;
-  const int nete;
+//  const int nets;
+//  const int nete;
 
   static constexpr int nm1 = 0;
   static constexpr int nm1_f90 = nm1 + 1;
@@ -174,6 +196,19 @@ public:
   static constexpr Real ps0 = 1.0;
   static constexpr Real dt = 1.0;
   static constexpr Real eta_ave_w = 1.0;
+
+private:
+  int rsplit;
+
+public:
+  int return_rsplit(){
+    return rsplit;
+  }
+
+  void set_rsplit(int _rsplit){
+    assert(_rsplit >= 0);
+    rsplit = _rsplit;
+  };
 };
 
 class compute_energy_grad_test {
@@ -237,8 +272,6 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
         caar_compute_energy_grad_c_int(
             test_functor.dvv.data(),
                 Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data(),
-                Kokkos::subview(test_functor.pecnd, ie, level * VECTOR_SIZE + v,
                                 Kokkos::ALL, Kokkos::ALL).data(),
                 Kokkos::subview(test_functor.phi, ie, level * VECTOR_SIZE + v,
                                 Kokkos::ALL, Kokkos::ALL).data(),
@@ -429,8 +462,13 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
+
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+
   sync_to_device(div_vdp, elements.buffers.div_vdp);
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
 
   compute_subfunctor_test<dp3d_test> test_functor(elements);
 
@@ -451,7 +489,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
             .data(),
         Kokkos::subview(div_vdp, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
             .data(),
-        Kokkos::subview(test_functor.eta_dpdn, ie, Kokkos::ALL, Kokkos::ALL,
+        Kokkos::subview(eta_dot, ie, Kokkos::ALL, Kokkos::ALL,
                         Kokkos::ALL).data(),
         Kokkos::subview(dp3d_f90, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                         Kokkos::ALL).data());
@@ -536,6 +574,9 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                 REQUIRE(!std::isnan(correct));
                 Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
                 REQUIRE(!std::isnan(computed));
+
+//og why is this if? what is special about correct=0? 
+//i see this can backfire
                 if (correct != 0.0) {
                   Real rel_error = compare_answers(correct, computed);
                   REQUIRE(rel_threshold >= rel_error);
@@ -596,18 +637,34 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_a_mirror("hybrid_a_host");
-  genRandArray(hybrid_a_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_b_mirror("hybrid_b_host");
-  genRandArray(hybrid_b_mirror, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+
+//OG coefficients A and B increase is not taken into here...
+//probably, does not matter
+//this test takes in only ai, so others should be made quiet_nans?
+  genRandArray(hybrid_am_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_ai_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bm_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bi_mirror, engine,
+               std::uniform_real_distribution<Real>(0.0125, 10.0));
+
+//OG does init use any of hybrid coefficients? do they need to be generated?
+//init makes device copies
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
-                                   TestType::ps0, 1, hybrid_a_mirror.data(),
-                                   hybrid_b_mirror.data());
-  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0,
-                                                TestType::np1, TestType::dt,
-                                                TestType::eta_ave_w, false);
+                                   TestType::ps0,  
+                                   0, //0 for rsplit
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bi_mirror.data());
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                   TestType::dt, TestType::eta_ave_w, false);
 
   test_functor.run_functor();
 
@@ -621,7 +678,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
-        hybrid_a_mirror(0), test_functor.functor.m_data.ps0,
+        hybrid_ai_mirror(0), test_functor.functor.m_data.ps0,
         Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL).data(),
         pressure_f90.data());
@@ -677,17 +734,15 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
   sync_to_device(omega_p, elements.buffers.omega_p);
 
+  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror t_vadv_f90("t_vadv", num_elems);
+  genRandArray(t_vadv_f90, engine, std::uniform_real_distribution<Real>(-100, 100));
+  sync_to_device(t_vadv_f90, elements.buffers.t_vadv_buf);
+
   TestType test_functor(elements);
   test_functor.run_functor();
 
   sync_to_host(elements.m_t, test_functor.temperature);
 
-  HostViewManaged<Real [NP][NP]> temperature_vadv("Temperature Vertical Advection");
-  for(int i = 0; i < NP; ++i) {
-    for(int j = 0; j < NP; ++j) {
-      temperature_vadv(i, j) = 0.0;
-    }
-  }
   HostViewManaged<Real [NP][NP]> temperature_f90("Temperature f90");
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
@@ -708,7 +763,8 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
                                                      Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(omega_p, ie, level,
                                                      Kokkos::ALL, Kokkos::ALL).data(),
-                                     temperature_vadv.data(),
+                                     Kokkos::subview(t_vadv_f90, ie, level, 
+                                                     Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(test_functor.temperature, ie,
                                                      test_functor.nm1, level, Kokkos::ALL,
                                                      Kokkos::ALL).data(),
@@ -795,7 +851,8 @@ public:
   }
 };
 
-TEST_CASE("virtual temperature with tracers",
+
+TEST_CASE("moist virtual temperature",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
@@ -873,6 +930,8 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
+//which omega_p should survive? buffers or m_omega_p?
+//sort it out
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
       "source omega p", num_elems);
   genRandArray(source_omega_p, engine,
@@ -916,6 +975,298 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
     }
   }
 }
+
+
+class accumulate_eta_dot_dpdn_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.accumulate_eta_dot_dpdn(kv);
+  }
+};
+
+TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+  std::random_device rd;
+  rngAlg engine(rd());
+  using TestType = compute_subfunctor_test<accumulate_eta_dot_dpdn_test>;
+
+  Elements &elements = Context::singleton().get_elements();
+  elements.random_init(num_elems);
+
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("eta dot", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+
+  TestType test_functor(elements);
+
+//check rsplit in m_data init!!! set to zero?
+//wahts going on with eta_ave_w? should be random
+//zeored, we don't need them in this test
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+
+//  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
+//       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
+//       TestType::eta_ave_w, test_functor.return_rsplit(),
+//       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
+//       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
+
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0,
+                                   test_functor.return_rsplit(), //0 for rsplit
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bi_mirror.data());
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                                TestType::dt, TestType::eta_ave_w, false);
+
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  sync_to_host_p2i(elements.m_eta_dot_dpdn, eta_dot_total_f90);
+  //will run on device
+  test_functor.run_functor();
+
+  sync_to_host_p2i(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_adjust_eta_dot_dpdn_c_int(test_functor.eta_ave_w,
+                               Kokkos::subview(eta_dot_total_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(eta_dot, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data());
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          //compare total eta
+          const Real correct = eta_dot_total_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = test_functor.eta_dpdn(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+        }
+      }
+    }//level loop
+  }//ie loop
+};//end of accumulate_eta_dot_dpdn test
+
+
+class eta_dot_dpdn_vertadv_euler_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.compute_eta_dot_dpdn_vertadv_euler(kv);
+  }
+};
+
+// computing eta_dot_dpdn: (eta_dot, divdp, sdot_sum) --> (eta_dot, sdot_sum)
+// affects only buf value of eta, sdot
+TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+  std::random_device rd;
+  rngAlg engine(rd());
+  using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  // on host first
+  Elements &elements = Context::singleton().get_elements();
+  elements.random_init(num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
+  HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
+  //random init host views
+  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  sync_to_device(div_vdp, elements.buffers.div_vdp);
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  sync_to_device(sdot_sum, elements.buffers.sdot_sum);
+//only hybi is used, should the rest be quiet_nans? yes
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
+  ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
+  genRandArray(hybrid_am_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_ai_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bm_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+  genRandArray(hybrid_bi_mirror, engine, std::uniform_real_distribution<Real>(0.0125, 10.0));
+
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
+  HostViewManaged<Real * [NP][NP]> sdot_sum_f90("tavd f90", num_elems);
+
+  deep_copy(eta_dot_f90, eta_dot);
+  deep_copy(sdot_sum_f90, sdot_sum);
+
+  TestType test_functor(elements);
+  const int rsplit = 0;
+  test_functor.set_rsplit(rsplit);
+
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
+                                   TestType::ps0,
+                                   test_functor.return_rsplit(), //0 for rsplit
+                                   hybrid_am_mirror.data(),
+                                   hybrid_ai_mirror.data(),
+                                   hybrid_bm_mirror.data(),
+                                   hybrid_bi_mirror.data());  
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,                                                TestType::dt, TestType::eta_ave_w, false);
+
+
+  //will run on device
+  test_functor.run_functor();
+
+  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
+  sync_to_host(elements.buffers.sdot_sum, sdot_sum);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
+                               Kokkos::subview(eta_dot_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
+                                               Kokkos::ALL).data(),
+                               Kokkos::subview(div_vdp, ie, Kokkos::ALL,
+                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               hybrid_bi_mirror.data());
+
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          //compare eta
+          const Real correct = eta_dot_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = eta_dot(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+
+        }
+      }
+    }//level loop
+
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        //compare sdot
+        const Real correct = sdot_sum_f90(ie, igp, jgp);
+        REQUIRE(!std::isnan(correct));
+        const Real computed = sdot_sum(ie, igp, jgp);
+        REQUIRE(!std::isnan(computed));
+        const Real rel_error = compare_answers(correct, computed);
+        REQUIRE(rel_threshold >= rel_error);
+      }
+    }
+  }//ie loop
+};//end of compute_eta_dot_dpdn_vertadv_euler test
+
+
+class preq_vertadv_test {
+public:
+  KOKKOS_INLINE_FUNCTION
+  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+    functor.preq_vertadv(kv);
+  }
+};
+
+//preq_vertadv: (T, eta_dot, v, 1/dp3d) --> t_vadv, v_vadv
+//takes in only buf value of eta, m values T, v, dp3d
+TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
+  constexpr const Real rel_threshold =
+      std::numeric_limits<Real>::epsilon() * 0.0;
+  constexpr const int num_elems = 10;
+  std::random_device rd;
+  rngAlg engine(rd());
+
+  using TestType = compute_subfunctor_test<preq_vertadv_test>;
+  // This must be a reference to ensure the views are initialized in the
+  // singleton
+  // on host first
+  Elements &elements = Context::singleton().get_elements();
+  elements.random_init(num_elems);
+
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host t_vadv", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv("host v_vadv", num_elems);
+
+//what is the good strategy for NAN values? tails of NUM_INTERFACE_LEV vars
+//should be init-ed to nans. the rest can be random...
+//how to implement it -- to have a method that will assign quiet nans to tail of eta_dot
+//in elments?
+  genRandArray(t_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+  genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
+  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
+
+  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
+  sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
+
+  HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
+  HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
+
+  deep_copy(eta_dot_f90, eta_dot);
+  deep_copy(t_vadv_f90, t_vadv);
+  deep_copy(v_vadv_f90, v_vadv);
+
+  TestType test_functor(elements);
+  test_functor.run_functor();
+
+  //now copy buffer vals back to test values
+  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
+  sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
+  sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
+
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+        for (int i = 0; i < NP; i++) {
+          for (int j = 0; j < NP; j++) {
+            rdp_f90(level, i, j) = 1/test_functor.dp3d(ie, test_functor.n0, level, i, j);
+          }
+        }
+    }//level loop
+    preq_vertadv(
+        Kokkos::subview(test_functor.temperature, ie, test_functor.n0, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Kokkos::subview(test_functor.velocity, ie, test_functor.n0, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Kokkos::subview(eta_dot_f90, ie, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        rdp_f90.data(),
+        Kokkos::subview(t_vadv_f90, ie, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Kokkos::subview(v_vadv_f90, ie, 
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data()
+    );//preq vertadv call
+
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          //errors for t_vadv
+          const Real correct = t_vadv_f90(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(correct));
+          const Real computed = t_vadv(ie, level, igp, jgp);
+          REQUIRE(!std::isnan(computed));
+          const Real rel_error = compare_answers(correct, computed);
+          REQUIRE(rel_threshold >= rel_error);
+          //errors for v_vadv
+          for (int dim = 0; dim < 2; dim ++){
+            const Real correct = v_vadv_f90(ie, level, dim, igp, jgp);
+            REQUIRE(!std::isnan(correct));
+            const Real computed = v_vadv(ie, level, dim, igp, jgp);
+            REQUIRE(!std::isnan(computed));
+            const Real rel_error = compare_answers(correct, computed);
+            REQUIRE(rel_threshold >= rel_error);
+          }//end of dim loop
+        }
+      }
+    }//level loop
+  }//ie loop
+}//end of test case preq_vertadv
 
 struct LimiterTester {
   static constexpr Real eps { std::numeric_limits<Real>::epsilon() };

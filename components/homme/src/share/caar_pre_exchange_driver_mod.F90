@@ -10,7 +10,7 @@ module caar_pre_exchange_driver_mod
 contains
 
   ! An interface to enable access from C/C++
-  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, pecnd, phi, v, tvirt, press, press_grad, vtemp) bind(c)
+  subroutine caar_compute_energy_grad_c_int(dvv, Dinv, phi, v, tvirt, press, press_grad, vtemp) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use physical_constants, only : Rgas
@@ -18,7 +18,6 @@ contains
 
     real (kind=real_kind), intent(in) :: dvv(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2) ! (np, np, 2, 2)
-    real (kind=real_kind), intent(in) :: pecnd(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: phi(np, np) ! (np, np)
     real (kind=real_kind), intent(in) :: v(np, np, 2) ! (np, np, 2)
     real (kind=real_kind), intent(in) :: tvirt(np, np) ! (np, np)
@@ -32,8 +31,9 @@ contains
 
     deriv%dvv = dvv
 
-    call caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+    call caar_compute_energy_grad(deriv, Dinv, phi, v, vtemp)
 
+!why are these lines here in presumably a wrapper function-interface for c?
     do i=1,np
       do j=1,np
         vtemp(i,j,1) = vtemp(i,j,1) + Rgas*(tvirt(i,j)/press(i,j))*press_grad(i,j,1)
@@ -42,14 +42,13 @@ contains
     enddo
   end subroutine caar_compute_energy_grad_c_int
 
-  subroutine caar_compute_energy_grad(deriv, Dinv, pecnd, phi, v, vtemp)
+  subroutine caar_compute_energy_grad(deriv, Dinv, phi, v, vtemp)
     use kinds, only : real_kind
     use dimensions_mod, only : np
     use derivative_mod, only : derivative_t, gradient_sphere
     use physical_constants, only : Rgas
     type (derivative_t), intent(in) :: deriv
     real (kind=real_kind), intent(in) :: Dinv(np, np, 2, 2)
-    real (kind=real_kind), intent(in) :: pecnd(np, np)
     real (kind=real_kind), intent(in) :: phi(np, np)
     real (kind=real_kind), intent(in) :: v(np, np, 2)
     real (kind=real_kind), intent(out) :: vtemp(np, np, 2)
@@ -62,7 +61,7 @@ contains
         v1 = v(i, j, 1)
         v2 = v(i, j, 2)
         E = 0.5D0 * (v1 * v1 + v2 * v2)
-        Ephi(i, j)=E + (phi(i, j) + pecnd(i, j))
+        Ephi(i, j)=E + phi(i, j) 
       end do
     end do
     vtemp = gradient_sphere(Ephi, deriv, Dinv)
@@ -143,6 +142,11 @@ contains
 #endif
   end subroutine caar_compute_divdp_c_int
 
+
+!OG this routine is not really used in F code? if so, it cannot be used as
+!a baseline for C code as well (it is not really verified except very implicitly
+!since total executable F flat = total executable C with bfb, so, this routine
+!must be ok. )
   subroutine caar_compute_pressure_c_int(hyai, ps0, dp, pressure) bind(c)
     use kinds, only : real_kind
     use dimensions_mod, only : np, nlev
@@ -180,7 +184,6 @@ contains
 
     type(element_t), intent(in) :: elem
     type(derivative_t), intent(in) :: deriv
-
     real (kind=real_kind), intent(in) :: eta_ave_w
     real (kind=real_kind), intent(in) :: dp3d(np, np)
     real (kind=real_kind), intent(in) :: velocity(np, np, 2)
@@ -350,6 +353,69 @@ contains
     end do
   end subroutine caar_compute_temperature
 
+
+!computes eta_dot_dpdn, T_vadv, V_vadv if rsplit>0
+!since it is so simple, there is only c_int version
+  subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hybi) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np,nlev
+    implicit none
+
+    real (kind=real_kind), intent(in) :: hybi(nlev+1)
+! halflevel vertical velocity on p-grid
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_dot_dpdn
+    real (kind=real_kind), intent(in),    dimension(np,np,nlev)   :: divdp
+    real (kind=real_kind), intent(inout), dimension(np,np)        :: sdot_sum  
+    integer :: k
+
+    do k=1,nlev
+    ! ==================================================
+    ! add this term to PS equation so we exactly conserve dry mass
+    ! ==================================================
+       sdot_sum(:,:) = sdot_sum(:,:) + divdp(:,:,k)
+       eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
+       ! can this be replaced with
+       ! eta_dot_dpdn(:,:,k+1) = eta_dot_dpdn(:,:,k) + divdp(:,:,k) ?
+    end do
+
+    ! ===========================================================
+    ! at this point, eta_dot_dpdn contains integral_etatop^eta[ divdp ]
+    ! compute at interfaces:
+    !    eta_dot_dpdn = -dp/dt - integral_etatop^eta[ divdp ]
+    ! for reference: at mid layers we have:
+    !    omega = v grad p  - integral_etatop^eta[ divdp ]
+    ! ===========================================================
+
+
+    do k=1,nlev-1
+       eta_dot_dpdn(:,:,k+1) = hybi(k+1)*sdot_sum(:,:)-eta_dot_dpdn(:,:,k+1)
+    end do
+
+    eta_dot_dpdn(:,:,1     ) = 0.0D0
+    eta_dot_dpdn(:,:,nlev+1) = 0.0D0
+
+  end subroutine caar_compute_eta_dot_dpdn_vertadv_euler_c_int
+
+
+  subroutine caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,eta_accum,eta) bind(c)
+    use kinds, only : real_kind
+    use dimensions_mod, only : np,nlev
+    implicit none
+
+    real (kind=real_kind), intent(inout), dimension(np,np,nlev+1) :: eta_accum
+    real (kind=real_kind), intent(in),    dimension(np,np,nlev+1) :: eta
+    real (kind=real_kind), value, intent(in)                      :: eta_ave_w
+    integer :: k
+
+#if (defined COLUMN_OPENMP)
+       !$omp parallel do private(k)
+#endif
+    do k=1,nlev+1  !  Loop index added (AAM)
+       eta_accum(:,:,k) = eta_accum(:,:,k) + eta_ave_w*eta(:,:,k)
+    enddo
+  end subroutine caar_adjust_eta_dot_dpdn_c_int
+
+
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
@@ -480,6 +546,7 @@ contains
 
       ! compute T_v for timelevel n0
       !if ( moisture /= "dry") then
+
       if (qn0 == -1 ) then
         call caar_compute_temperature_no_tracers_c_int(elem(ie)%state%T(:, :, :, n0), T_v)
 #if (defined COLUMN_OPENMP)
@@ -526,6 +593,9 @@ contains
       !    (div(v_k) + v_k.grad(lnps))*dsigma_k = div( v dp )
       ! used by eta_dot_dpdn and lnps tendency
       ! ==================================================
+      !it is used in energy diagnostics, too, so, it cannot be moved in 
+      !caar_compute_eta_dot_dpdn_... unless we recompute it 
+      !(probably, the best solution assuming divdp does not change before energy)
       sdot_sum=0
 
 
@@ -539,52 +609,25 @@ contains
          T_vadv=0
          v_vadv=0
       else
-         do k=1,nlev
-            ! ==================================================
-            ! add this term to PS equation so we exactly conserve dry mass
-            ! ==================================================
-            sdot_sum(:,:) = sdot_sum(:,:) + divdp(:,:,k)
-            eta_dot_dpdn(:,:,k+1) = sdot_sum(:,:)
-         end do
 
-         ! ===========================================================
-         ! at this point, eta_dot_dpdn contains integral_etatop^eta[ divdp ]
-         ! compute at interfaces:
-         !    eta_dot_dpdn = -dp/dt - integral_etatop^eta[ divdp ]
-         ! for reference: at mid layers we have:
-         !    omega = v grad p  - integral_etatop^eta[ divdp ]
-         ! ===========================================================
-         do k=1,nlev-1
-            eta_dot_dpdn(:,:,k+1) = hvcoord%hybi(k+1)*sdot_sum(:,:) -eta_dot_dpdn(:,:,k+1)
-         end do
-
-         eta_dot_dpdn(:,:,1     ) = 0.0D0
-         eta_dot_dpdn(:,:,nlev+1) = 0.0D0
+         ! compute eta_dot_dpdn
+         call caar_compute_eta_dot_dpdn_vertadv_euler_c_int(eta_dot_dpdn, sdot_sum, divdp, hvcoord%hybi)
 
          ! ===========================================================
          ! Compute vertical advection of T and v from eq. CCM2 (3.b.1)
          ! ==============================================
+
          call preq_vertadv(elem(ie)%state%T(:,:,:,n0),elem(ie)%state%v(:,:,:,:,n0), &
               eta_dot_dpdn,rdp,T_vadv,v_vadv)
+
       endif
 
       ! ================================
       ! accumulate mean vertical flux:
       ! ================================
       call caar_compute_omega_p_c_int(eta_ave_w, omega_p, elem(ie)%derived%omega_p)
-#if (defined COLUMN_OPENMP)
-       !$omp parallel do private(k)
-#endif
-      do k=1,nlev  !  Loop index added (AAM)
-         elem(ie)%derived%eta_dot_dpdn(:,:,k) = &
-              elem(ie)%derived%eta_dot_dpdn(:,:,k) + eta_ave_w*eta_dot_dpdn(:,:,k)
-      enddo
-      elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) = &
-           elem(ie)%derived%eta_dot_dpdn(:,:,nlev+1) + eta_ave_w*eta_dot_dpdn(:,:,nlev+1)
 
-
-
-
+      call caar_adjust_eta_dot_dpdn_c_int(eta_ave_w,elem(ie)%derived%eta_dot_dpdn,eta_dot_dpdn)
 
       ! ==============================================
       ! Compute phi + kinetic energy term: 10*nv*nv Flops
@@ -601,7 +644,7 @@ contains
                                        elem(ie)%state%T(:, :, k, n0), &
                                        elem(ie)%state%T(:, :, k, np1))
          ! vtemp = grad ( E + PHI )
-         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, elem(ie)%derived%pecnd(:,:,k), phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
+         call caar_compute_energy_grad(deriv, elem(ie)%Dinv, phi(:,:,k), elem(ie)%state%v(:,:,:,k,n0), vtemp)
 
          do j=1,np
             do i=1,np
@@ -621,6 +664,7 @@ contains
             end do
          end do
       end do vertloop
+
 #ifdef ENERGY_DIAGNOSTICS
       ! =========================================================
       !
