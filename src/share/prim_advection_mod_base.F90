@@ -1627,6 +1627,13 @@ use utils_mod, only: FrobeniusNorm
       !
       integer (kind=c_int),  intent(in) :: nets, nete
     end subroutine euler_neighbor_minmax_finish_c
+    subroutine euler_minmax_and_biharmonic_c(nets, nete) bind(c)
+      use iso_c_binding, only : c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int),  intent(in) :: nets, nete
+    end subroutine euler_minmax_and_biharmonic_c
   end interface
 
   integer              , intent(in   )         :: np1_qdp, n0_qdp
@@ -1774,6 +1781,7 @@ OMP_SIMD
     
 #ifdef USE_KOKKOS_KERNELS
     
+# if 0
     ! get new min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
        call euler_neighbor_minmax_start_c(nets,nete)
@@ -1809,6 +1817,9 @@ OMP_SIMD
        enddo
        call euler_neighbor_minmax_finish_c(nets,nete)
     endif ! rhs_multiplier == 2
+# else
+    call euler_minmax_and_biharmonic_c(nets, nete)
+# endif
 
 ! ifdef USE_KOKKOS_KERNELS
 #else
