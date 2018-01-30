@@ -33,7 +33,7 @@ public:
 
   static void compute_biharmonic_pre () {
     profiling_resume();
-    start_timer("esf-bih-pre run");
+    GPTLstart("esf-bih-pre run");
 
     Control& c = Context::singleton().get_control();
     if (c.rhs_multiplier != 2) return;
@@ -44,13 +44,13 @@ public:
       Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
       func);
 
-    stop_timer("esf-bih-pre run");
+    GPTLstop("esf-bih-pre run");
     profiling_pause();
   }
 
   static void compute_biharmonic_post () {
     profiling_resume();
-    start_timer("esf-bih-post run");
+    GPTLstart("esf-bih-post run");
 
     Control& c = Context::singleton().get_control();
     if (c.rhs_multiplier != 2) return;
@@ -60,7 +60,7 @@ public:
       Homme::get_default_team_policy<ExecSpace, BIHPost>(c.num_elems * c.qsize),
       func);
 
-    stop_timer("esf-bih-post run");
+    GPTLstop("esf-bih-post run");
     profiling_pause();
   }
 
@@ -173,27 +173,27 @@ public:
 
   static void advect_and_limit () {
     profiling_resume();
-    start_timer("esf-aal-tot run");
+    GPTLstart("esf-aal-tot run");
     Control& data = Context::singleton().get_control();
     EulerStepFunctor func(data);
     if (OnGpu<ExecSpace>::value) {
-      start_timer("esf-aal-noq run");
+      GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
         func);
-      stop_timer("esf-aal-noq run");
+      GPTLstop("esf-aal-noq run");
       ExecSpace::fence();
-      start_timer("esf-aal-q run");
+      GPTLstart("esf-aal-q run");
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
         func);
-      stop_timer("esf-aal-q run");
+      GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
         func);
     }
-    stop_timer("esf-aal-tot run");
+    GPTLstop("esf-aal-tot run");
 
     ExecSpace::fence();
     profiling_pause();
@@ -227,7 +227,7 @@ public:
 
   static void apply_rspheremp () {
     profiling_resume();
-    start_timer("esf-rspheremp run");
+    GPTLstart("esf-rspheremp run");
 
     Control& c = Context::singleton().get_control();
     Elements& e = Context::singleton().get_elements();
@@ -260,7 +260,7 @@ public:
       });
 
     ExecSpace::fence();
-    stop_timer("esf-rspheremp run");
+    GPTLstop("esf-rspheremp run");
     profiling_pause();
   }
 
