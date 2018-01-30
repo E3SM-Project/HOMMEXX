@@ -51,6 +51,8 @@ void Elements::init(const int num_elems) {
     "derived_divdp_proj", m_num_elems);
   m_derived_dpdiss_biharmonic = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dpdiss_biharmonic", m_num_elems);
+  m_derived_dpdiss_ave = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+    "derived_dpdiss_ave", m_num_elems);
 }
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,

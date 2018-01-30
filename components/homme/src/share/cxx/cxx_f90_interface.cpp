@@ -36,6 +36,7 @@ void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
 
   control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
+  control.rhs_viss = 0;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
   control.limiter_option = limiter_option;
@@ -57,10 +58,8 @@ void init_euler_neighbor_minmax_c (const int& qsize)
   if (!be.is_registration_completed()) {
     Elements& elements = Context::singleton().get_elements();
 
-    std::shared_ptr<Connectivity> connectivity = Context::singleton().get_connectivity();
     std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
-    be.set_connectivity(connectivity);
     be.set_buffers_manager(buffers_manager);
     be.set_num_fields(qsize,0,0);
     be.register_min_max_fields(elements.buffers.qlim,qsize,0);
@@ -71,6 +70,7 @@ void init_euler_neighbor_minmax_c (const int& qsize)
 void euler_neighbor_minmax_c (const int& nets, const int& nete)
 {
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
+  assert(be.is_registration_completed());
   be.exchange_min_max(nets-1, nete);
 }
 
@@ -84,6 +84,25 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
 {
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
   be.recv_and_unpack_min_max(nets-1, nete);
+}
+
+void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
+  const auto& c = Context::singleton().get_control();
+  if (c.rhs_multiplier != 2) return;
+  const auto& e = Context::singleton().get_elements();
+  const auto be = Context::singleton().get_boundary_exchange(
+    "Euler step: min/max & qtens_biharmonic");
+  if ( ! be->is_registration_completed()) {
+    be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+    be->set_num_fields(0, 0, c.qsize);
+    be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
+    be->registration_completed();
+  }
+  euler_neighbor_minmax_start_c(nets, nete);
+  EulerStepFunctor::compute_biharmonic_pre();
+  be->exchange();
+  EulerStepFunctor::compute_biharmonic_post();
+  euler_neighbor_minmax_finish_c(nets, nete);
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -141,7 +160,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                         CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
                         CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
                         CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                        CF90Ptr& Qtens_biharmonic_ptr)
+                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& elem_derived_dpdiss_ave_ptr)
 {
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -167,6 +186,9 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_dpdiss_biharmonic_ptr, data.num_elems),
                  elements.m_derived_dpdiss_biharmonic);
+  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_dpdiss_ave_ptr, data.num_elems),
+                 elements.m_derived_dpdiss_ave);
 
   elements.pull_qdp(elem_state_Qdp_ptr);
 
@@ -292,12 +314,9 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c(const int& rhs_viss)
+void advance_qdp_c()
 {
-  Control& control = Context::singleton().get_control ();
-  control.rhs_viss = rhs_viss;
-
-  EulerStepFunctor::run();
+  EulerStepFunctor::advect_and_limit();
 }
 
 void euler_exchange_qdp_dss_var_c ()
