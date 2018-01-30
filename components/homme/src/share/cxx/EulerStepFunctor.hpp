@@ -28,66 +28,186 @@ public:
    , m_deriv   (Context::singleton().get_derivative())
   {}
 
-  struct SetupPhase {};
-  struct TracerPhase {};
-  struct FusedPhases {};
+  struct BIHPre {};
+  struct BIHPost {};
 
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const SetupPhase&, const TeamMember& team) const {
-    start_timer("esf-noq compute");
-    KernelVariables kv(team);
-    run_setup_phase(kv);
-    stop_timer("esf-noq compute");
+  /*
+    ! get new min/max values, and also compute biharmonic mixing term
+
+    ! two scalings depending on nu_p:
+    ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
+    ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
+   */
+  static void compute_biharmonic_pre () {
+    profiling_resume();
+    GPTLstart("esf-bih-pre run");
+
+    Control& c = Context::singleton().get_control();
+    assert(c.rhs_multiplier == 2);
+    c.rhs_viss = 3;
+
+    EulerStepFunctor func(c);
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
+      func);
+
+    GPTLstop("esf-bih-pre run");
+    profiling_pause();
+  }
+
+  static void compute_biharmonic_post () {
+    profiling_resume();
+    GPTLstart("esf-bih-post run");
+
+    Control& c = Context::singleton().get_control();
+    assert(c.rhs_multiplier == 2);
+
+    EulerStepFunctor func(c);
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, BIHPost>(c.num_elems * c.qsize),
+      func);
+
+    GPTLstop("esf-bih-post run");
+    profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TracerPhase&, const TeamMember& team) const {
-    start_timer("esf-q compute");
+  void operator() (const BIHPre&, const TeamMember& team) const {
+    start_timer("esf-bih-pre compute");
     KernelVariables kv(team, m_data.qsize);
-    run_tracer_phase(kv);
-    stop_timer("esf-q compute");
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    if (m_data.nu_p > 0) {
+      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
+      Kokkos::parallel_for (
+        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        [&] (const int loop_idx) {
+          const int i = loop_idx / NP;
+          const int j = loop_idx % NP;
+          Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            [&] (const int& k) {
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
+            });
+        });
+      kv.team_barrier();
+    }
+    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+                   qtens_biharmonic,
+                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   qtens_biharmonic);
+    stop_timer("esf-bih-pre compute");
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const FusedPhases&, const TeamMember& team) const {
-    start_timer("esf-fused compute");
-    KernelVariables kv(team);
-    run_setup_phase(kv);
-    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
-      run_tracer_phase(kv);
-    stop_timer("esf-fused compute");
+  void operator() (const BIHPost&, const TeamMember& team) const {
+    start_timer("esf-bih-post compute");
+    KernelVariables kv(team, m_data.qsize);
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    {
+      const auto rspheremp = Homme::subview(e.m_rspheremp, kv.ie);
+      Kokkos::parallel_for (
+        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        [&] (const int loop_idx) {
+          const int i = loop_idx / NP;
+          const int j = loop_idx % NP;
+          Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            [&] (const int& k) {
+              qtens_biharmonic(i,j,k) *= rspheremp(i,j);
+            });
+        });
+    }
+    kv.team_barrier();
+    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+                   qtens_biharmonic,
+                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   qtens_biharmonic);
+    // laplace_simple provides the barrier.
+    {
+      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+      Kokkos::parallel_for (
+        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        [&] (const int loop_idx) {
+          const int i = loop_idx / NP;
+          const int j = loop_idx % NP;
+          Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            [&] (const int& k) {
+              qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
+                                         m_data.dp0(k) * qtens_biharmonic(i,j,k) /
+                                         spheremp(i,j));
+            });
+        });
+    }
+    stop_timer("esf-bih-post compute");
   }
 
-  static void run () {
+  struct AALSetupPhase {};
+  struct AALTracerPhase {};
+  struct AALFusedPhases {};
+
+  static void advect_and_limit () {
+    profiling_resume();
+    GPTLstart("esf-aal-tot run");
     Control& data = Context::singleton().get_control();
     EulerStepFunctor func(data);
-
-    profiling_resume();
-    start_timer("esf-tot run");
     if (OnGpu<ExecSpace>::value) {
-      start_timer("esf-noq run");
+      GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, SetupPhase>(data.num_elems),
+        Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
         func);
-      stop_timer("esf-noq run");
+      GPTLstop("esf-aal-noq run");
       ExecSpace::fence();
-      start_timer("esf-q run");
+      GPTLstart("esf-aal-q run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, TracerPhase>(data.num_elems * data.qsize),
+        Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
         func);
-      stop_timer("esf-q run");
+      GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, FusedPhases>(data.num_elems),
+        Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
         func);
     }
-    stop_timer("esf-tot run");
+    GPTLstop("esf-aal-tot run");
 
     ExecSpace::fence();
     profiling_pause();
   }
 
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALSetupPhase&, const TeamMember& team) const {
+    start_timer("esf-aal-noq compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    stop_timer("esf-aal-noq compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALTracerPhase&, const TeamMember& team) const {
+    start_timer("esf-aal-q compute");
+    KernelVariables kv(team, m_data.qsize);
+    run_tracer_phase(kv);
+    stop_timer("esf-aal-q compute");
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALFusedPhases&, const TeamMember& team) const {
+    start_timer("esf-aal-fused compute");
+    KernelVariables kv(team);
+    run_setup_phase(kv);
+    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
+      run_tracer_phase(kv);
+    stop_timer("esf-aal-fused compute");
+  }
+
   static void apply_rspheremp () {
+    profiling_resume();
+    GPTLstart("esf-rspheremp run");
+
     Control& c = Context::singleton().get_control();
     Elements& e = Context::singleton().get_elements();
 
@@ -117,7 +237,10 @@ public:
         const int ilev = it % NUM_LEV;
         f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
       });
+
     ExecSpace::fence();
+    GPTLstop("esf-rspheremp run");
+    profiling_pause();
   }
 
 private:
@@ -349,7 +472,7 @@ private:
       });
   }
 
-public:
+public: // Expose for unit testing.
 
   // limiter_option = 8.
   template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>

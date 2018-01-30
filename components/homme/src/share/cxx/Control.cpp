@@ -23,34 +23,39 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
   //    "Hybrid coordinates; coefficient A_midpoints");
   hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid coordinates; coefficient A_interfaces");
+  hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid coordinates; coefficient B_interfaces");
   //hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient B_midpoints");
 
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
-  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_ai(hybrid_ai_ptr);
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
-
-  //dest, source
-  //Kokkos::deep_copy(hybrid_am, host_hybrid_am);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_ai(hybrid_ai_ptr);
   Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
-  //Kokkos::deep_copy(hybrid_bm, host_hybrid_bm);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_bi(hybrid_bi_ptr);
+  Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
+
+//i don't think this saves us much now
+//  {
+    // Only hybrid_ai(0) is needed.
+//    hybrid_ai0 = hybrid_ai_ptr[0];
+//  }
+//this is not in master anymore?
+//  assert(hybrid_ai_ptr != nullptr);
+//  assert(hybrid_bi_ptr != nullptr);
 
   {
-    // Only hybrid_ai(0) is needed.
-    hybrid_ai0 = hybrid_ai_ptr[0];
+    dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
+    const auto hdp0 = Kokkos::create_mirror_view(dp0);
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int ilev = k / VECTOR_SIZE;
+      const int ivec = k % VECTOR_SIZE;
+      // BFB way of writing it.
+      hdp0(ilev)[ivec] = ((hybrid_ai_ptr[k+1] - hybrid_ai_ptr[k])*ps0 +
+                          (hybrid_bi_ptr[k+1] - hybrid_bi_ptr[k])*ps0);
+    }
+    Kokkos::deep_copy(dp0, hdp0);
   }
-
-//  if (rsplit == 0) {
-    hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid coordinates; coefficient B_interfaces");
-    HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_bi(hybrid_bi_ptr);
-    Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
-//  }
-
-//  assert(hybrid_am_ptr != nullptr);
-  assert(hybrid_ai_ptr != nullptr);
-//  assert(hybrid_bm_ptr != nullptr);
-  assert(hybrid_bi_ptr != nullptr);
 }
 
 void Control::random_init(int num_elems_in, int seed) {

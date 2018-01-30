@@ -146,7 +146,7 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
       gradient_sphere(kv, D_exec, dvv_exec,
-                      subview(input_exec, kv.ie, ALL, ALL, ALL), buffer,
+                      subview(input_exec, kv.ie, ALL, ALL, ALL), Homme::subview(buffer, kv.ie),
                       subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
     });
 
