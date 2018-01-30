@@ -159,6 +159,21 @@ module prim_advance_exp_mod
         logical,               intent(in) :: compute_diagnostics
         real (kind=c_double),  intent(in) :: dt, eta_ave_w
       end subroutine u3_5stage_timestep_c
+
+      subroutine pull_hypervis_data_c() bind(c)
+      end subroutine pull_hypervis_data_c
+
+      subroutine advance_hypervis_dp_c(np1,nets,nete,dt,eta_ave_w) bind(c)
+        use iso_c_binding, only : c_int, c_double
+        !
+        ! Inputs
+        !
+        integer (kind=c_int),  intent(in) :: np1,nets,nete
+        real (kind=c_double),  intent(in) :: dt, eta_ave_w
+      end subroutine advance_hypervis_dp_c
+
+      subroutine push_hypervis_results_c() bind(c)
+      end subroutine push_hypervis_results_c
 #endif
 
 #ifdef TRILINOS
@@ -571,7 +586,13 @@ module prim_advance_exp_mod
       call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
     else if (method<=10) then ! not implicit
       ! forward-in-time, hypervis applied to dp3d
+#ifdef USE_KOKKOS_KERNELS
+      call pull_hypervis_data_c()
+      call advance_hypervis_dp_c(np1,nets,nete,dt_vis,eta_ave_w)
+      call push_hypervis_results_c()
+#else
       call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
+#endif
     endif
 
 #ifdef ENERGY_DIAGNOSTICS
