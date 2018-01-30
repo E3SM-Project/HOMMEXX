@@ -48,6 +48,11 @@ struct Control {
   int rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
+  // Hyperviscosity options
+  Real hypervis_scaling;
+  Real nu;
+  Real nu_s;
+
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;
 
