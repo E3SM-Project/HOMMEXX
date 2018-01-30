@@ -160,7 +160,12 @@ module prim_advance_exp_mod
         real (kind=c_double),  intent(in) :: dt, eta_ave_w
       end subroutine u3_5stage_timestep_c
 
-      subroutine pull_hypervis_data_c() bind(c)
+      subroutine pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_dp3d_ptr, elem_state_v_ptr
       end subroutine pull_hypervis_data_c
 
       subroutine advance_hypervis_dp_c(np1,nets,nete,dt,eta_ave_w) bind(c)
@@ -172,7 +177,12 @@ module prim_advance_exp_mod
         real (kind=c_double),  intent(in) :: dt, eta_ave_w
       end subroutine advance_hypervis_dp_c
 
-      subroutine push_hypervis_results_c() bind(c)
+      subroutine push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr) bind(c)
+        use iso_c_binding , only : c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_dp3d_ptr, elem_state_v_ptr
       end subroutine push_hypervis_results_c
 #endif
 
@@ -587,9 +597,9 @@ module prim_advance_exp_mod
     else if (method<=10) then ! not implicit
       ! forward-in-time, hypervis applied to dp3d
 #ifdef USE_KOKKOS_KERNELS
-      call pull_hypervis_data_c()
+      call pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr)
       call advance_hypervis_dp_c(np1,nets,nete,dt_vis,eta_ave_w)
-      call push_hypervis_results_c()
+      call push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr)
 #else
       call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
 #endif
