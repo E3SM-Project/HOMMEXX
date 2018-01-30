@@ -125,8 +125,52 @@ struct CaarFunctor {
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
     check_dp3d(kv);
+
+std::cout << "------------------------\n";
+    print_debug(kv, 0, 0);
+    print_debug(kv, 0, 1);
+    print_debug(kv, 0, 2);
+    print_debug(kv, 0, 3);
+std::cout << "------------------------\n";
+
   } // TRIVIAL
 //is it?
+
+
+
+  KOKKOS_INLINE_FUNCTION
+  void print_debug(KernelVariables &kv, const int ie, const int which) const {
+    if( kv.ie == ie ){
+    for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
+      const int ilev = k / VECTOR_SIZE;
+      const int ivec = k % VECTOR_SIZE;
+      int igp = 0, jgp = 0;
+      Real val;
+      if( which == 0)
+      val = m_elements.m_t(ie, m_data.np1, igp, jgp, ilev)[ivec];
+      if( which == 1)
+      val = m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev)[ivec];
+      if( which == 2)
+      val = m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev)[ivec];
+      if( which == 3)
+      val = m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev)[ivec];
+      Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
+        if( which == 0)
+        std::printf("m_t %d (%d %d): % .17e \n", k, ilev, ivec, val);
+        if( which == 1)
+        std::printf("m_v(0) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+        if( which == 2)
+        std::printf("m_v(1) %d (%d %d): % .17e \n", k, ilev, ivec, val);
+        if( which == 3)
+        std::printf("m_dp3d %d (%d %d): % .17e \n", k, ilev, ivec, val);
+      });
+   }
+  }
+  }
+
+
+
+
 
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -223,7 +267,7 @@ if(rsplit_gt0){
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      for(int k = 0; k < NUM_LEV_P; ++k){
+      for(int k = 0; k < NUM_LEV; ++k){
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) += 
            m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k); 
       }//k loop
@@ -251,7 +295,7 @@ if(rsplit_gt0){
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      for(int k = 0; k < NUM_PHYSICAL_LEV; ++k){
+      for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
         const int kp1 = k+1;
@@ -262,6 +306,14 @@ if(rsplit_gt0){
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
       }//k loop
+      //one more entry for sdot, separately, cause eta_dot_ is not of size LEV+1
+      {
+        const int ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
+        const int ivec = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) +=
+           m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+      }      
+
       //note that index starts from 1
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
@@ -270,11 +322,11 @@ if(rsplit_gt0){
            m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
-      constexpr const int Np1 = NUM_PHYSICAL_LEV;
-      const int ilevNp1 = Np1 / VECTOR_SIZE;
-      const int ivecNp1 = Np1 % VECTOR_SIZE;
+//      constexpr const int Np1 = NUM_PHYSICAL_LEV;
+//      const int ilevNp1 = Np1 / VECTOR_SIZE;
+//      const int ivecNp1 = Np1 % VECTOR_SIZE;
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
-      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
+//      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevNp1)[ivecNp1] = 0.0;
     });//NP*NP loop
     kv.team_barrier();
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
@@ -596,6 +648,13 @@ if(rsplit_gt0){
 
     compute_phase_3(kv);
     stop_timer("caar compute");
+
+std::cout << "AFTER THE END OF CAAR\n";
+    print_debug(kv, 0, 0);
+    print_debug(kv, 0, 1);
+    print_debug(kv, 0, 2);
+    print_debug(kv, 0, 3);
+
   }
 
   KOKKOS_INLINE_FUNCTION
