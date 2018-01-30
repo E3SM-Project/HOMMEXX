@@ -5,9 +5,9 @@
 module viscosity_mod_base
 !
 !  This module should be renamed "global_deriv_mod.F90"
-! 
-!  It is a collection of derivative operators that must be applied to the field 
-!  over the sphere (as opposed to derivative operators that can be applied element 
+!
+!  It is a collection of derivative operators that must be applied to the field
+!  over the sphere (as opposed to derivative operators that can be applied element
 !  by element)
 !
 !
@@ -93,7 +93,7 @@ real (kind=real_kind), dimension(np,np,2) :: v
 real (kind=real_kind) ::  nu_ratio1,nu_ratio2
 logical var_coef1
 
-   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad) 
+   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad)
    !so tensor is only used on second call to laplace_sphere_wk
    var_coef1 = .true.
    if(hypervis_scaling > 0)  var_coef1= .false.
@@ -119,12 +119,12 @@ logical var_coef1
 
 
    do ie=nets,nete
-      
+
 #ifdef _PRIM
       ! should filter lnps + PHI_s/RT?
       pstens(:,:,ie)=laplace_sphere_wk(elem(ie)%state%ps_v(:,:,nt),deriv,elem(ie),var_coef=var_coef1)
 #endif
-      
+
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, j, i)
 #endif
@@ -132,14 +132,14 @@ logical var_coef1
          do j=1,np
             do i=1,np
 #ifdef _PRIM
-               T(i,j,k)=elem(ie)%state%T(i,j,k,nt) 
+               T(i,j,k)=elem(ie)%state%T(i,j,k,nt)
 #else
                ! filter surface height, not thickness
                T(i,j,k)=elem(ie)%state%p(i,j,k,nt) + elem(ie)%state%ps(i,j)
 #endif
             enddo
          enddo
-        
+
          ptens(:,:,k,ie)=laplace_sphere_wk(T(:,:,k),deriv,elem(ie),var_coef=var_coef1)
          vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,nt),deriv,&
               elem(ie),var_coef=var_coef1,nu_ratio=nu_ratio1)
@@ -155,19 +155,19 @@ logical var_coef1
       call edgeVpack(edge3, pstens(1,1,ie),1,kptr,ie)
 #endif
    enddo
-   
+
    call t_startf('biwk_bexchV')
    call bndry_exchangeV(hybrid,edge3)
    call t_stopf('biwk_bexchV')
-   
+
    do ie=nets,nete
       rspheremv     => elem(ie)%rspheremp(:,:)
-      
+
       kptr=0
       call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
       kptr=nlev
       call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
-      
+
       ! apply inverse mass matrix, then apply laplace again
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, j, i)
@@ -184,7 +184,7 @@ logical var_coef1
          vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v(:,:,:),deriv,elem(ie),var_coef=.true.,&
               nu_ratio=nu_ratio2)
       enddo
-         
+
 #ifdef _PRIM
       kptr=3*nlev
       call edgeVunpack(edge3, pstens(1,1,ie), 1, kptr, ie)
@@ -231,8 +231,88 @@ real (kind=real_kind), dimension(np,np,2) :: v
 real (kind=real_kind) :: nu_ratio1, nu_ratio2
 logical var_coef1
 
+#ifdef USE_KOKKOS_KERNELS
+#if 0
+
+   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad)
+   !so tensor is only used on second call to laplace_sphere_wk
+   var_coef1 = .true.
+   ! hypervis_scaling>0 ALWAYS in our tests
+   if(hypervis_scaling > 0)    var_coef1 = .false.
+
+   ! note: there is a scaling bug in the treatment of nu_div
+   ! nu_ratio is applied twice, once in each laplace operator
+   ! so in reality:   nu_div_actual = (nu_div/nu)**2 nu
+   ! We should fix this, but it requires adjusting all CAM defaults
+   nu_ratio1=1
+   nu_ratio2=1
+   ! nu_div==nu ALWAYS in our tests
+   if (nu_div/=nu) then
+      if(hypervis_scaling /= 0) then
+         ! we have a problem with the tensor in that we cant seperate
+         ! div and curl components.  So we do, with tensor V:
+         ! nu * (del V del ) * ( nu_ratio * grad(div) - curl(curl))
+         nu_ratio1=(nu_div/nu)**2   ! preserve buggy scaling
+         nu_ratio2=1
+      else
+         nu_ratio1=nu_div/nu
+         nu_ratio2=nu_div/nu
+      endif
+   endif
+
+
+   ! In our tests, you will have var_coef1=true, and nu_ratio1=nu_ratio2=1
+   do ie=nets,nete
+
+      do k=1,nlev
+         tmp=elem(ie)%state%T(:,:,k,nt)
+         ptens(:,:,k,ie)=laplace_sphere_wk(tmp,deriv,elem(ie),var_coef=var_coef1)
+         tmp=elem(ie)%state%dp3d(:,:,k,nt)
+         dptens(:,:,k,ie)=laplace_sphere_wk(tmp,deriv,elem(ie),var_coef=var_coef1)
+         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,nt),deriv,elem(ie),&
+              var_coef=var_coef1,nu_ratio=nu_ratio1)
+      enddo
+      kptr=0
+      call edgeVpack(edge3, ptens(1,1,1,ie),nlev,kptr,ie)
+      kptr=nlev
+      call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,ie)
+      kptr=3*nlev
+      call edgeVpack(edge3, dptens(1,1,1,ie),nlev,kptr,ie)
+
+   enddo
+
+   call t_startf('biwkdp3d_bexchV')
+   call bndry_exchangeV(hybrid,edge3)
+   call t_stopf('biwkdp3d_bexchV')
+
+   do ie=nets,nete
+      rspheremv     => elem(ie)%rspheremp(:,:)
+
+      kptr=0
+      call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
+      kptr=nlev
+      call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
+      kptr=3*nlev
+      call edgeVunpack(edge3, dptens(1,1,1,ie), nlev, kptr, ie)
+
+      ! apply inverse mass matrix, then apply laplace again
+      do k=1,nlev
+         tmp(:,:)=rspheremv(:,:)*ptens(:,:,k,ie)
+         ptens(:,:,k,ie)=laplace_sphere_wk(tmp,deriv,elem(ie),var_coef=.true.)
+         tmp2(:,:)=rspheremv(:,:)*dptens(:,:,k,ie)
+         dptens(:,:,k,ie)=laplace_sphere_wk(tmp2,deriv,elem(ie),var_coef=.true.)
+         v(:,:,1)=rspheremv(:,:)*vtens(:,:,1,k,ie)
+         v(:,:,2)=rspheremv(:,:)*vtens(:,:,2,k,ie)
+         vtens(:,:,:,k,ie)=vlaplace_sphere_wk(v(:,:,:),deriv,elem(ie),&
+              var_coef=.true.,nu_ratio=nu_ratio2)
+
+      enddo
+   enddo
+#endif
+#endif
+
    if (ntrac>0) dpflux = 0
-   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad) 
+   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad)
    !so tensor is only used on second call to laplace_sphere_wk
    var_coef1 = .true.
    if(hypervis_scaling > 0)    var_coef1 = .false.
@@ -263,9 +343,9 @@ logical var_coef1
 !$omp parallel do default(shared), private(k,tmp)
 #endif
       do k=1,nlev
-         tmp=elem(ie)%state%T(:,:,k,nt) 
+         tmp=elem(ie)%state%T(:,:,k,nt)
          ptens(:,:,k,ie)=laplace_sphere_wk(tmp,deriv,elem(ie),var_coef=var_coef1)
-         tmp=elem(ie)%state%dp3d(:,:,k,nt) 
+         tmp=elem(ie)%state%dp3d(:,:,k,nt)
          dptens(:,:,k,ie)=laplace_sphere_wk(tmp,deriv,elem(ie),var_coef=var_coef1)
          vtens(:,:,:,k,ie)=vlaplace_sphere_wk(elem(ie)%state%v(:,:,:,k,nt),deriv,elem(ie),&
               var_coef=var_coef1,nu_ratio=nu_ratio1)
@@ -278,26 +358,26 @@ logical var_coef1
       call edgeVpack(edge3, dptens(1,1,1,ie),nlev,kptr,ie)
 
    enddo
-   
+
    call t_startf('biwkdp3d_bexchV')
    call bndry_exchangeV(hybrid,edge3)
    call t_stopf('biwkdp3d_bexchV')
-   
+
    do ie=nets,nete
       rspheremv     => elem(ie)%rspheremp(:,:)
-      
+
       kptr=0
       call edgeVunpack(edge3, ptens(1,1,1,ie), nlev, kptr, ie)
       kptr=nlev
       call edgeVunpack(edge3, vtens(1,1,1,1,ie), 2*nlev, kptr, ie)
       kptr=3*nlev
       call edgeVunpack(edge3, dptens(1,1,1,ie), nlev, kptr, ie)
-      
+
 
       if (ntrac>0) then
       do k=1,nlev
          tmp(:,:)=rspheremv(:,:)*dptens(:,:,k,ie)
-         dpflux(:,:,:,k,ie) = subcell_Laplace_fluxes(tmp, deriv, elem(ie), np, nc) 
+         dpflux(:,:,:,k,ie) = subcell_Laplace_fluxes(tmp, deriv, elem(ie), np, nc)
       enddo
       endif
 
@@ -345,7 +425,7 @@ integer :: k,kptr,i,j,ie,ic,q
 real (kind=real_kind), dimension(np,np) :: lap_p
 logical var_coef1
 
-   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad) 
+   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad)
    !so tensor is only used on second call to laplace_sphere_wk
    var_coef1 = .true.
    if(hypervis_scaling > 0)    var_coef1 = .false.
@@ -356,7 +436,7 @@ logical var_coef1
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
+      do q=1,qsize
          do k=1,nlev    !  Potential loop inversion (AAM)
             lap_p(:,:)=qtens(:,:,k,q,ie)
 ! Original use of qtens on left and right hand sides caused OpenMP errors (AAM)
@@ -369,14 +449,14 @@ logical var_coef1
    call t_startf('biwksc_bexchV')
    call bndry_exchangeV(hybrid,edgeq)
    call t_stopf('biwksc_bexchV')
-   
+
    do ie=nets,nete
 
       ! apply inverse mass matrix, then apply laplace again
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
+      do q=1,qsize
         call edgeVunpack(edgeq, qtens(:,:,:,q,ie),nlev,nlev*(q-1),ie)
         do k=1,nlev    !  Potential loop inversion (AAM)
            lap_p(:,:)=elem(ie)%rspheremp(:,:)*qtens(:,:,k,q,ie)
@@ -398,7 +478,7 @@ subroutine biharmonic_wk_scalar_minmax(elem,qtens,deriv,edgeq,edgeminmax,hybrid,
 !    input:  qtens = Q
 !    output: qtens = weak biharmonic of Q and Q element min/max
 !
-!    note: emin/emax must be initialized with Q element min/max.  
+!    note: emin/emax must be initialized with Q element min/max.
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 type (hybrid_t)      , intent(in) :: hybrid
@@ -417,7 +497,7 @@ real (kind=real_kind) :: Qmin(np,np,nlev,qsize)
 real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
 logical var_coef1
 
-   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad) 
+   !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad)
    !so tensor is only used on second call to laplace_sphere_wk
    var_coef1 = .true.
    if(hypervis_scaling > 0)    var_coef1 = .false.
@@ -428,7 +508,7 @@ logical var_coef1
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
+      do q=1,qsize
       do k=1,nlev    !  Potential loop inversion (AAM)
          Qmin(:,:,k,q)=emin(k,q,ie)  ! need to set all values in element for
          Qmax(:,:,k,q)=emax(k,q,ie)  ! edgeVpack routine below
@@ -441,13 +521,13 @@ logical var_coef1
       call edgeVpack(edgeq,Qmin,nlev*qsize,nlev*qsize,ie)
       call edgeVpack(edgeq,Qmax,nlev*qsize,2*nlev*qsize,ie)
    enddo
-   
+
    call t_startf('biwkscmm_bexchV')
    call bndry_exchangeV(hybrid,edgeq)
    call t_stopf('biwkscmm_bexchV')
-   
+
    do ie=nets,nete
-      do q=1,qsize      
+      do q=1,qsize
       do k=1,nlev
          Qmin(:,:,k,q)=emin(k,q,ie)  ! restore element data.  we could avoid
          Qmax(:,:,k,q)=emax(k,q,ie)  ! this by adding a "ie" index to Qmin/max
@@ -462,7 +542,7 @@ logical var_coef1
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
+      do q=1,qsize
         do k=1,nlev    !  Potential loop inversion (AAM)
            lap_p(:,:)=elem(ie)%rspheremp(:,:)*qtens(:,:,k,q,ie)
            qtens(:,:,k,q,ie)=laplace_sphere_wk(lap_p,deriv,elem(ie),var_coef=.true.)
@@ -491,7 +571,7 @@ end subroutine
 
 subroutine make_C0_par(zeta,elem,par)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! apply DSS (aka assembly procedure) to zeta.  
+! apply DSS (aka assembly procedure) to zeta.
 ! this is a low-performance routine used for I/O and analysis.
 ! no need to optimize
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -515,7 +595,7 @@ end subroutine
 
 subroutine make_C0_hybrid(zeta,elem,hybrid,nets,nete)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! apply DSS (aka assembly procedure) to zeta.  
+! apply DSS (aka assembly procedure) to zeta.
 ! this is a low-performance routine used for I/O and analysis.
 ! no need to optimize
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -549,7 +629,7 @@ do ie=nets,nete
    enddo
 enddo
 
-call FreeEdgeBuffer(edge1) 
+call FreeEdgeBuffer(edge1)
 
 end subroutine
 
@@ -572,11 +652,11 @@ real (kind=real_kind), dimension(np,np,nlev,nets:nete) :: v1
 
 v1(:,:,:,:) = v(:,:,1,:,:)
 call make_C0(v1,elem,hybrid,nets,nete)
-v(:,:,1,:,:) = v1(:,:,:,:) 
+v(:,:,1,:,:) = v1(:,:,:,:)
 
 v1(:,:,:,:) = v(:,:,2,:,:)
 call make_C0(v1,elem,hybrid,nets,nete)
-v(:,:,2,:,:) = v1(:,:,:,:) 
+v(:,:,2,:,:) = v1(:,:,:,:)
 
 end subroutine
 
@@ -587,11 +667,11 @@ end subroutine
 
 subroutine compute_zeta_C0_contra(zeta,elem,par,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 vorticity.  That is, solve:  
+! compute C0 vorticity.  That is, solve:
 !     < PHI, zeta > = <PHI, curl(elem%state%v >
 !
 !    input:  v (stored in elem()%, in contra-variant coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -627,11 +707,11 @@ end subroutine
 
 subroutine compute_div_C0_contra(zeta,elem,par,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 divergence. That is, solve:  
+! compute C0 divergence. That is, solve:
 !     < PHI, zeta > = <PHI, div(elem%state%v >
 !
 !    input:  v (stored in elem()%, in contra-variant coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -665,11 +745,11 @@ end subroutine
 
 subroutine compute_zeta_C0_par(zeta,elem,par,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 vorticity.  That is, solve:  
+! compute C0 vorticity.  That is, solve:
 !     < PHI, zeta > = <PHI, curl(elem%state%v >
 !
 !    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 type (parallel_t) :: par
@@ -692,11 +772,11 @@ end subroutine
 
 subroutine compute_div_C0_par(zeta,elem,par,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 divergence. That is, solve:  
+! compute C0 divergence. That is, solve:
 !     < PHI, zeta > = <PHI, div(elem%state%v >
 !
 !    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -721,11 +801,11 @@ end subroutine
 
 subroutine compute_zeta_C0_hybrid(zeta,elem,hybrid,nets,nete,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 vorticity.  That is, solve:  
+! compute C0 vorticity.  That is, solve:
 !     < PHI, zeta > = <PHI, curl(elem%state%v >
 !
 !    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -757,11 +837,11 @@ end subroutine
 
 subroutine compute_div_C0_hybrid(zeta,elem,hybrid,nets,nete,nt)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! compute C0 divergence. That is, solve:  
+! compute C0 divergence. That is, solve:
 !     < PHI, zeta > = <PHI, div(elem%state%v >
 !
 !    input:  v (stored in elem()%, in lat-lon coordinates)
-!    output: zeta(:,:,:,:)   
+!    output: zeta(:,:,:,:)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -800,24 +880,24 @@ end subroutine
 #ifdef _PRIM
 
 subroutine neighbor_minmax(hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh)
- 
+
    type (hybrid_t)      , intent(in) :: hybrid
    type (EdgeBuffer_t)  , intent(inout) :: edgeMinMax
    integer :: nets,nete
    real (kind=real_kind) :: min_neigh(nlev,qsize,nets:nete)
    real (kind=real_kind) :: max_neigh(nlev,qsize,nets:nete)
 
-   ! local 
+   ! local
    integer :: ie,q, k,kptr
 
-   
+
    do ie=nets,nete
       kptr = 0
       call  edgeSpack(edgeMinMax,min_neigh(:,:,ie),qsize*nlev,kptr,ie)
       kptr = qsize*nlev
       call  edgeSpack(edgeMinMax,max_neigh(:,:,ie),qsize*nlev,kptr,ie)
    enddo
-   
+
    call t_startf('nmm_bexchV')
    call bndry_exchangeS(hybrid,edgeMinMax)
    call t_stopf('nmm_bexchV')
@@ -833,7 +913,7 @@ subroutine neighbor_minmax(hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh)
       enddo
       enddo
    enddo
-  
+
 end subroutine neighbor_minmax
 
 subroutine neighbor_minmax_start(hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh)
@@ -844,7 +924,7 @@ subroutine neighbor_minmax_start(hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh
    real (kind=real_kind) :: min_neigh(nlev,qsize,nets:nete)
    real (kind=real_kind) :: max_neigh(nlev,qsize,nets:nete)
 
-   ! local 
+   ! local
    integer :: ie,q, k,kptr
 
 
@@ -868,7 +948,7 @@ subroutine neighbor_minmax_finish(hybrid,edgeMinMax,nets,nete,min_neigh,max_neig
    real (kind=real_kind) :: min_neigh(nlev,qsize,nets:nete)
    real (kind=real_kind) :: max_neigh(nlev,qsize,nets:nete)
 
-   ! local 
+   ! local
    integer :: ie,q, k,kptr
 
    call t_startf('nmm_bexchS_fini')
@@ -946,11 +1026,11 @@ integer :: ie,k,q
        call edgeVpack(edgebuf,Qmin,nlev,nlev,ie)
        call edgeVpack(edgebuf,Qvar,nlev,2*nlev,ie)
     enddo
-    
+
     call t_startf('nmm_bexchV')
     call bndry_exchangeV(hybrid,edgebuf)
     call t_stopf('nmm_bexchV')
-       
+
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
@@ -1007,10 +1087,10 @@ integer :: ie,k,q
           max_neigh(k,ie)=maxval(Qmax(:,:,k))
           min_neigh(k,ie)=minval(Qmin(:,:,k))
        enddo
-       
+
     end do
 
-    call FreeEdgeBuffer(edgebuf) 
+    call FreeEdgeBuffer(edgebuf)
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
 !$OMP BARRIER

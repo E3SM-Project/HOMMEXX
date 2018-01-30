@@ -196,6 +196,7 @@ SET (HYPERVISCOSITY_FUNCTOR_UT_F90_SRCS
   ${SRC_SHARE_DIR}/schedule_mod.F90
   ${SRC_SHARE_DIR}/spacecurve_mod.F90
   ${SRC_SHARE_DIR}/thread_mod.F90
+  ${SHARE_UT_DIR}/hyperviscosity_functor_ut.F90
   ${UTILS_TIMING_DIR}/perf_mod.F90
   ${UTILS_TIMING_DIR}/perf_utils.F90
 )
