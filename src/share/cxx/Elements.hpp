@@ -34,8 +34,7 @@ public:
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vn0;
 
   // Velocity in lon lat basis
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_u;
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_v;
+  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> m_v;
   // Temperature
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
   // dp ( it is dp/d\eta * delta(eta)), or pseudodensity
@@ -46,7 +45,7 @@ public:
   // eta=$\eta$ is the vertical coordinate
   // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$ 
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]> m_eta_dot_dpdn;
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
     m_derived_dp,                // for dp_tracers at physics timestep
     m_derived_divdp,             // divergence of dp

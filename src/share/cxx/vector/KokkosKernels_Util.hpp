@@ -14,10 +14,6 @@ namespace KokkosKernels {
 namespace Batched {
 namespace Experimental {
 
-using std::abs;
-using std::min;
-using std::max;
-
 // view manipulation
 template <typename MemoryTraitsType, Kokkos::MemoryTraitsFlags flag>
 using MemoryTraits = Kokkos::MemoryTraits<MemoryTraitsType::Unmanaged |

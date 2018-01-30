@@ -87,6 +87,39 @@ public:
     profiling_pause();
   }
 
+  static void apply_rspheremp () {
+    Control& c = Context::singleton().get_control();
+    Elements& e = Context::singleton().get_elements();
+
+    const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
+                         e.m_eta_dot_dpdn :
+                         c.DSSopt == Control::DSSOption::omega ?
+                         e.m_omega_p :
+                         e.m_derived_divdp_proj);
+
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, c.num_elems*c.qsize*NP*NP*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = it / (c.qsize*NP*NP*NUM_LEV);
+        const int q = (it / (NP*NP*NUM_LEV)) % c.qsize;
+        const int igp = (it / (NP*NUM_LEV)) % NP;
+        const int jgp = (it / NUM_LEV) % NP;
+        const int ilev = it % NUM_LEV;
+        e.m_qdp(ie,c.np1_qdp,q,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
+      });
+
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, c.num_elems*NP*NP*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = it / (NP*NP*NUM_LEV);
+        const int igp = (it / (NP*NUM_LEV)) % NP;
+        const int jgp = (it / NUM_LEV) % NP;
+        const int ilev = it % NUM_LEV;
+        f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
+      });
+    ExecSpace::fence();
+  }
+
 private:
 
   KOKKOS_INLINE_FUNCTION
@@ -107,7 +140,7 @@ private:
       limiter_optim_iter_full(kv);
       kv.team_barrier();
     }
-    apply_mass_matrix(kv);
+    apply_spheremp(kv);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -117,6 +150,11 @@ private:
     const bool lim8 = c.limiter_option == 8;
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
+    const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
+                         e.m_eta_dot_dpdn :
+                         c.DSSopt == Control::DSSOption::omega ?
+                         e.m_omega_p :
+                         e.m_derived_divdp_proj);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP*NP),
       [&] (const int loop_idx) {
@@ -147,18 +185,7 @@ private:
             //! also DSS extra field
             //! note: eta_dot_dpdn is actually dimension nlev+1, but nlev+1 data is
             //! all zero so we only have to DSS 1:nlev
-            // Need to differentiate between eta_dot_dpdn and the other two
-            // because the note above implies auto& won't capture all three.
-            switch (c.DSSopt) {
-            case Control::DSSOption::eta:
-              e.m_eta_dot_dpdn(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
-              break;
-            default:
-              auto& v = (c.DSSopt == Control::DSSOption::omega ?
-                         e.m_omega_p :
-                         e.m_derived_divdp_proj);
-              v(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
-            }
+            f_dss(kv.ie,i,j,k) *= e.m_spheremp(kv.ie,i,j);
           });
       });
   }
@@ -235,7 +262,7 @@ private:
   //! dont do this earlier, since we allow np1_qdp == n0_qdp
   //! and we dont want to overwrite n0_qdp until we are done using it
   KOKKOS_INLINE_FUNCTION
-  void apply_mass_matrix (const KernelVariables& kv) const {
+  void apply_spheremp (const KernelVariables& kv) const {
     const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
     const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);

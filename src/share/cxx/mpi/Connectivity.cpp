@@ -8,7 +8,7 @@ namespace Homme
 Connectivity::Connectivity ()
  : m_finalized    (false)
  , m_initialized  (false)
- , m_num_elements (-1)
+ , m_num_local_elements (-1)
 {
   // Nothing to be done here
 }
@@ -21,16 +21,19 @@ void Connectivity::set_comm (const Comm& comm)
   m_comm = comm;
 }
 
-void Connectivity::set_num_elements (const int num_elements)
+void Connectivity::set_num_elements (const int num_local_elements)
 {
   // We don't allow to change the number of elements once set. There may be downstream classes
   // that already read num_elements from this class, and would not be informed of the change.
   // Besides, does it really make sense? Does it add an interesting feature? I don't think so.
   assert (!m_initialized);
 
-  m_num_elements = num_elements;
+  // Safety check
+  assert (num_local_elements>=0);
 
-  m_connections = ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("Connections", m_num_elements);
+  m_num_local_elements  = num_local_elements;
+
+  m_connections = ExecViewManaged<ConnectionInfo*[NUM_CONNECTIONS]>("Connections", m_num_local_elements);
   h_connections = Kokkos::create_mirror_view(m_connections);
 
   m_num_connections = ExecViewManaged<int[NUM_CONNECTION_SHARINGS+1][NUM_CONNECTION_KINDS+1]>("Connections counts");
@@ -39,7 +42,7 @@ void Connectivity::set_num_elements (const int num_elements)
   // Initialize all connections to MISSING
   // Note: we still include local element/position, since we need that even for
   //       missing connections! Everything else is set to invalid numbers (for safety)
-  for (int ie=0; ie<m_num_elements; ++ie) {
+  for (int ie=0; ie<m_num_local_elements; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
       ConnectionInfo& info = h_connections(ie,iconn);
 
@@ -53,6 +56,7 @@ void Connectivity::set_num_elements (const int num_elements)
       info.remote.lid = INVALID_ID;
       info.remote.gid = INVALID_ID;
       info.remote.pos = INVALID_ID;
+
     }
   }
 
@@ -123,9 +127,9 @@ void Connectivity::finalize()
   // should have at most ONE missing connection
   constexpr int corners[NUM_CORNERS] = { etoi(ConnectionName::SWEST), etoi(ConnectionName::SEAST), etoi(ConnectionName::NWEST), etoi(ConnectionName::NEAST)};
 
-  for (int ie=0; ie<m_num_elements; ++ie) {
+  for (int ie=0; ie<m_num_local_elements; ++ie) {
 #ifndef NDEBUG
-    bool missing[NUM_CORNERS] = {false, false, false, false};
+    std::array<bool,NUM_CORNERS> missing = {{false, false, false, false}};
 #endif
 
     for (int ic : corners) {
@@ -135,10 +139,11 @@ void Connectivity::finalize()
 #endif
 
         // Just for tracking purposes
-        ++h_num_connections(etoi(ConnectionSharing::MISSING),etoi(ConnectionKind::MISSING));
+        //++h_num_connections(etoi(ConnectionSharing::MISSING),etoi(ConnectionKind::MISSING));
+        h_num_connections(2,2) += 1;//etoi(ConnectionSharing::MISSING),etoi(ConnectionKind::MISSING)) += 1;
       }
     }
-    assert (std::count(missing,missing+NUM_CORNERS,true)<=1);
+    assert (std::count(missing.cbegin(),missing.cend(),true)<=1);
   }
 
   // Updating counters for groups with same sharing/kind

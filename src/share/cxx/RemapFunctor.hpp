@@ -374,7 +374,7 @@ struct PpmVertRemap : public VertRemapAlg {
         } else {
           dma(j) = 0.0;
         }
-													 });
+                           });
     }
     {
       auto bounds = boundaries::ppm_indices_2();
@@ -640,7 +640,7 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
   ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
       KernelVariables &kv, const int &np1, const Real &dt,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
     start_timer("remap compute_source_thickness");
@@ -656,8 +656,11 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
         const int vlev = level % VECTOR_SIZE;
         const int next_ilev = (level + 1) / VECTOR_SIZE;
         const int next_vlev = (level + 1) % VECTOR_SIZE;
+        const auto eta_dot_dpdn_next = (level+1 < NUM_PHYSICAL_LEV ?
+                                        eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] :
+                                        0);
         const Real delta_dpdn =
-            eta_dot_dpdn(kv.ie, igp, jgp, next_ilev)[next_vlev] -
+            eta_dot_dpdn_next -
             eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
         src_layer_thickness(igp, jgp, ilev)[vlev] =
             tgt_layer_thickness(igp, jgp, ilev)[vlev] + dt * delta_dpdn;
@@ -701,7 +704,7 @@ template <> struct _RemapFunctorRSplit<true> {
   ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> compute_source_thickness(
       KernelVariables &kv, const int np1, const Real dt,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
-      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV_P]> eta_dot_dpdn,
+      ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
     return get_source_thickness(kv.ie, np1, dp3d);
@@ -713,8 +716,8 @@ template <> struct _RemapFunctorRSplit<true> {
                      int np1) const {
     // The states which need to be remapped
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, num_states_remap>
-    state_remap{ { Homme::subview(elements.m_u, kv.ie, np1),
-                   Homme::subview(elements.m_v, kv.ie, np1),
+    state_remap{ { Homme::subview(elements.m_v, kv.ie, np1, 0),
+                   Homme::subview(elements.m_v, kv.ie, np1, 1),
                    Homme::subview(elements.m_t, kv.ie, np1) } };
     return state_remap;
   }
@@ -856,11 +859,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap > 0);
-    if (this->num_states_remap == 0) {
-      return;
-    }
-    const int var = kv.ie % this->num_states_remap;
-    kv.ie /= this->num_states_remap;
+    const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
+    const int var = kv.ie % den;
+    kv.ie /= den;
     assert(kv.ie < m_data.num_elems);
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
@@ -896,10 +897,8 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     }
 
     assert(num_to_remap() != 0);
-    if (num_to_remap() == 0) {
-      return;
-    }
     const int var = kv.ie % num_to_remap();
+    const int den = (num_to_remap() > 0) ? num_to_remap() : 1;
     kv.ie /= num_to_remap();
     assert(kv.ie < m_data.num_elems);
 
@@ -920,11 +919,9 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
 
     assert(this->num_states_remap != 0);
-    if (this->num_states_remap == 0) {
-      return;
-    }
-    const int var = kv.ie % this->num_states_remap;
-    kv.ie /= this->num_states_remap;
+    const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
+    const int var = kv.ie % den;
+    kv.ie /= den;
     assert(kv.ie < m_data.num_elems);
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);

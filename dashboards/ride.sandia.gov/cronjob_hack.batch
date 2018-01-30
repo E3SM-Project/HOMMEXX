@@ -30,4 +30,4 @@ bash send_email_ctest_cuda.sh
 
 # recursively resubmit this script
 X=$( date -d "1 days 8 am" "+%m:%d:%H:%M" )
-bsub -b $X -q rhel7F < /ascldap/users/ikalash/nightlyHOMMEXXCDash/cronjob_hack.batch
+bsub -b $X -q rhel7G < /ascldap/users/ikalash/nightlyHOMMEXXCDash/cronjob_hack.batch
