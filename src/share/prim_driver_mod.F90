@@ -593,7 +593,10 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
                                     elem_metdet, elem_metinv, elem_vec_sphere2cart, &
                                     elem_tensorVisc, elem_state_phis
-    use iso_c_binding,        only: c_ptr, c_loc
+    use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
+                                    nu, nu_p, nu_s, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
+                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport
+    use iso_c_binding,        only: c_ptr, c_loc, c_bool
 #endif
 
 #ifdef TRILINOS
@@ -681,6 +684,22 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
   interface
+    subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
+                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
+                                         nu, nu_p, nu_s, nu_div,                                   &
+                                         hypervis_order, hypervis_subcycle, hypervis_scaling,      &
+                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
+      use iso_c_binding, only: c_int, c_bool, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
+      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
+      integer(kind=c_int),  intent(in) :: state_frequency, qsize
+      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, hypervis_scaling
+      integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
+    end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
                                    elem_metdet_ptr, elem_metinv_ptr, elem_vec_sph2cart_ptr, &
@@ -1027,6 +1046,14 @@ contains
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
                                    elem_metdet_ptr, elem_metinv_ptr, elem_vec_sph2cart_ptr, &
                                    elem_tensorVisc_ptr, elem_state_phis_ptr)
+
+    call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
+                                   prescribed_wind, energy_fixer, qsize, statefreq,               &
+                                   nu, nu_p, nu_s, nu_div,                                        &
+                                   hypervis_order, hypervis_subcycle, hypervis_scaling,           &
+                                   LOGICAL(moisture/="dry",c_bool),                               &
+                                   LOGICAL(disable_diagnostics,c_bool),                           &
+                                   LOGICAL(use_semi_lagrange_transport,c_bool))
 #endif
 
   end subroutine prim_init2
