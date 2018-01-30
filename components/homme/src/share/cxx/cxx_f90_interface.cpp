@@ -86,7 +86,7 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
   be.recv_and_unpack_min_max(nets-1, nete);
 }
 
-void euler_minmax_and_biharmonic (const int& nets, const int& nete) {
+void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
   euler_neighbor_minmax_start_c(nets, nete);
   EulerStepFunctor::compute_biharmonic_pre();
   {
