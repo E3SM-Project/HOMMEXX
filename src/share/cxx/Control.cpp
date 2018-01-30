@@ -36,10 +36,10 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
   Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
 
 //i don't think this saves us much now
-//  {
+  {
     // Only hybrid_ai(0) is needed.
-//    hybrid_ai0 = hybrid_ai_ptr[0];
-//  }
+    hybrid_ai0 = hybrid_ai_ptr[0];
+  }
 //this is not in master anymore?
 //  assert(hybrid_ai_ptr != nullptr);
 //  assert(hybrid_bi_ptr != nullptr);
