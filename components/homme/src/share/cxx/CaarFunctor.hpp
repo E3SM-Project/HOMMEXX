@@ -126,13 +126,14 @@ struct CaarFunctor {
     compute_dp3d_np1(kv);
     check_dp3d(kv);
 
+#if 0
 std::cout << "------------------------\n";
     print_debug(kv, 0, 0);
     print_debug(kv, 0, 1);
     print_debug(kv, 0, 2);
     print_debug(kv, 0, 3);
 std::cout << "------------------------\n";
-
+#endif
   } // TRIVIAL
 //is it?
 
@@ -245,20 +246,6 @@ if(rsplit_gt0){
     kv.team_barrier();
   } // UNTESTED 2
 //og: i'd better make a test for this
-
-  // Currently not needed. Ever needed?
-  KOKKOS_INLINE_FUNCTION
-  void compute_eta_dot_dpdn(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev) = 0;
-      });
-    });
-    kv.team_barrier();
-  } //tested against caar_adjust_eta_dot_dpdn_c_int
 
   //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
@@ -524,7 +511,7 @@ if(rsplit_gt0){
         tmp.shift_left(1);
         tmp[VECTOR_SIZE - 1] =
           (ilev + 1 < NUM_LEV) ?
-          m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, ilev + 1)[0] :
+          m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
           0;
         // Add div_vdp before subtracting the previous value to eta_dot_dpdn
         // This will hopefully reduce numeric error
@@ -649,12 +636,13 @@ if(rsplit_gt0){
     compute_phase_3(kv);
     stop_timer("caar compute");
 
+#if 0
 std::cout << "AFTER THE END OF CAAR\n";
     print_debug(kv, 0, 0);
     print_debug(kv, 0, 1);
     print_debug(kv, 0, 2);
     print_debug(kv, 0, 3);
-
+#endif
   }
 
   KOKKOS_INLINE_FUNCTION
