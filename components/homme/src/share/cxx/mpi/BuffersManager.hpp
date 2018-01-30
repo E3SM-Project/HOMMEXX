@@ -86,18 +86,26 @@ public:
   void check_for_reallocation ();
 
   // Check that the allocated views can handle the requested number of 2d/3d fields
-  bool check_views_capacity (const int num_2d_fields,  const int num_3d_fields) const;
+  bool check_views_capacity (const int num_1d_fields, const int num_2d_fields,  const int num_3d_fields) const;
 
   // Allocate the buffers (overwriting possibly already allocated ones if needed)
   void allocate_buffers ();
 
-  ExecViewManaged<Real*> get_send_buffer           () const;
-  ExecViewManaged<Real*> get_recv_buffer           () const;
-  ExecViewManaged<Real*> get_local_buffer          () const;
-  MPIViewManaged<Real*>  get_mpi_send_buffer       () const;
-  MPIViewManaged<Real*>  get_mpi_recv_buffer       () const;
-  ExecViewManaged<Real*> get_blackhole_send_buffer () const;
-  ExecViewManaged<Real*> get_blackhole_recv_buffer () const;
+  // Lock/unlock the buffers are busy
+  void lock_buffers ();
+  void unlock_buffers ();
+
+  bool are_buffers_busy () const { return m_buffers_busy; }
+
+  ExecViewUnmanaged<Real*> get_send_buffer           () const;
+  ExecViewUnmanaged<Real*> get_recv_buffer           () const;
+  ExecViewUnmanaged<Real*> get_local_buffer          () const;
+  MPIViewUnmanaged<Real*>  get_mpi_send_buffer       () const;
+  MPIViewUnmanaged<Real*>  get_mpi_recv_buffer       () const;
+  ExecViewUnmanaged<Real*> get_blackhole_send_buffer () const;
+  ExecViewUnmanaged<Real*> get_blackhole_recv_buffer () const;
+
+  std::shared_ptr<Connectivity> get_connectivity () const { return m_connectivity; }
 
 private:
 
@@ -129,7 +137,8 @@ private:
   void update_requested_sizes (std::map<BoundaryExchange*,CustomerNeeds>::value_type& customer);
 
   // Computes the required storages
-  void required_buffer_sizes (const int num_2d_fields, const int num_3d_fields, size_t& mpi_buffer_size, size_t& local_buffer_size) const;
+  void required_buffer_sizes (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields,
+                              size_t& mpi_buffer_size, size_t& local_buffer_size) const;
 
   // The number of customers
   size_t m_num_customers;
@@ -137,6 +146,9 @@ private:
   // The sizes of the buffer
   size_t m_mpi_buffer_size;
   size_t m_local_buffer_size;
+
+  // Used to check whether buffers are busy
+  bool m_buffers_busy;
 
   // Used to check whether user can still request different sizes
   bool m_views_are_valid;
@@ -193,7 +205,7 @@ inline void BuffersManager::sync_recv_buffer (BoundaryExchange* customer)
   }
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_send_buffer () const
 {
   // We ensure that the buffers are valid
@@ -201,7 +213,7 @@ BuffersManager::get_send_buffer () const
   return m_send_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_recv_buffer () const
 {
   // We ensure that the buffers are valid
@@ -209,7 +221,7 @@ BuffersManager::get_recv_buffer () const
   return m_recv_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_local_buffer () const
 {
   // We ensure that the buffers are valid
@@ -217,7 +229,7 @@ BuffersManager::get_local_buffer () const
   return m_local_buffer;
 }
 
-inline MPIViewManaged<Real*>
+inline MPIViewUnmanaged<Real*>
 BuffersManager::get_mpi_send_buffer() const
 {
   // We ensure that the buffers are valid
@@ -225,7 +237,7 @@ BuffersManager::get_mpi_send_buffer() const
   return m_mpi_send_buffer;
 }
 
-inline MPIViewManaged<Real*>
+inline MPIViewUnmanaged<Real*>
 BuffersManager::get_mpi_recv_buffer() const
 {
   // We ensure that the buffers are valid
@@ -233,7 +245,7 @@ BuffersManager::get_mpi_recv_buffer() const
   return m_mpi_recv_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_blackhole_send_buffer () const
 {
   // We ensure that the buffers are valid
@@ -241,7 +253,7 @@ BuffersManager::get_blackhole_send_buffer () const
   return m_blackhole_send_buffer;
 }
 
-inline ExecViewManaged<Real*>
+inline ExecViewUnmanaged<Real*>
 BuffersManager::get_blackhole_recv_buffer () const
 {
   // We ensure that the buffers are valid

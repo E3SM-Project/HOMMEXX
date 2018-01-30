@@ -70,15 +70,16 @@ contains
   subroutine caar_compute_dp3d_np1_c_int(np1, nm1, dt2, spheremp, divdp, eta_dot_dpdn, dp3d) bind(c)
     use kinds, only : real_kind
     use element_mod, only : timelevels
-    use dimensions_mod, only : np, nlev
+    use dimensions_mod, only : np, nlev, nlevp
 
     integer, value, intent(in) :: np1, nm1
     real (kind=real_kind), intent(in) :: dt2
     ! Note: These array dims are explicitly specified so they can be passed directly from C
     real (kind=real_kind), intent(in) :: spheremp(np, np)
     real (kind=real_kind), intent(in) :: divdp(np, np, nlev)
-    real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlev)
+    real (kind=real_kind), intent(in) :: eta_dot_dpdn(np, np, nlevp)
     real (kind=real_kind), intent(out) :: dp3d(np, np, nlev, timelevels)
+    real (kind=real_kind) :: eta_dot_dpdn_kp1
 
     ! locals
     integer :: i, j, k
@@ -86,9 +87,14 @@ contains
     do k = 1, nlev
       do j = 1, np
         do i = 1, np
+          if (k < nlev) then
+            eta_dot_dpdn_kp1 = eta_dot_dpdn(i, j, k + 1)
+          else
+            eta_dot_dpdn_kp1 = 0.0d0
+          end if
           dp3d(i, j, k, np1) = &
                spheremp(i, j) * (dp3d(i, j, k, nm1) - &
-               dt2 * (divdp(i, j, k) + eta_dot_dpdn(i, j, k + 1) - eta_dot_dpdn(i, j, k)))
+               dt2 * (divdp(i, j, k) + eta_dot_dpdn_kp1 - eta_dot_dpdn(i, j, k)))
         end do
       end do
     end do

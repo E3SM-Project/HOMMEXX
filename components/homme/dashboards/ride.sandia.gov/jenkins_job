@@ -21,7 +21,7 @@ cd ..
 
 cp ${jenkins_hommexx_dir}/components/homme/dashboards/ride.sandia.gov/* .
 
-bsub -Is -x -n 16 -W 04:00 -J $BUILD_TAG -q rhel7F ./run_all_lsf.sh
+bsub -Is -x -n 16 -W 04:00 -J $BUILD_TAG -q rhel7G ./run_all_lsf.sh
 
 echo "Sending email..."
 bash send_email_ctest_cuda.sh
