@@ -335,7 +335,7 @@ struct CaarFunctor {
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
-        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -653,7 +653,7 @@ private:
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -697,7 +697,7 @@ private:
     gradient_sphere(
         kv, m_elements.m_dinv, m_deriv.get_dvv(),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),

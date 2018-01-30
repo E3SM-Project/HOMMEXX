@@ -379,7 +379,7 @@ class compute_sphere_operator_test_ml {
 
     gradient_sphere(kv, dinv_d, dvv_d,
                     local_scalar_input_d,
-                    sphere_buf,
+                    Homme::subview(sphere_buf, kv.ie),
                     local_vector_output_d);
 
   }  // end of op() for grad_sphere_ml
@@ -402,7 +402,7 @@ class compute_sphere_operator_test_ml {
 
     divergence_sphere_wk(kv, dinv_d, spheremp_d,
                          dvv_d, local_vector_input_d,
-                         sphere_buf,
+                         Homme::subview(sphere_buf, kv.ie),
                          local_scalar_output_d);
   }  // end of op() for divergence_sphere_wk_ml
 
@@ -429,7 +429,7 @@ class compute_sphere_operator_test_ml {
 
     laplace_simple(
         kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-        local_scalar_input_d, sphere_buf, local_scalar_output_d);
+        local_scalar_input_d, Homme::subview(sphere_buf, kv.ie), local_scalar_output_d);
   }  // end of op() for laplace_wk_ml
 
   KOKKOS_INLINE_FUNCTION
