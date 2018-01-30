@@ -20,11 +20,9 @@ public:
 
   HyperviscosityFunctor (const Control& data, const Elements& elements, const Derivative& deriv);
 
-  void run (const int itl, const Real dt, const Real eta_ave_w) {
-    // ADD IMPLEMENTATION
-  }
+  void run (const int hypervis_subcycle) const;
 
-  void biharmonic_wk_dp3d (const int m_itl);
+  void biharmonic_wk_dp3d () const;
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const TagLaplace&, const TeamMember& team) const {
@@ -46,7 +44,7 @@ public:
 
     // Laplacian of velocity
     vlaplace_sphere_wk_contra(kv,m_elements.m_d,m_elements.m_dinv,m_elements.m_mp,m_elements.m_spheremp,
-                              m_elements.m_metinv, m_elements.m_metdet, m_deriv.get_dvv(), m_nu_ratio,
+                              m_elements.m_metinv, m_elements.m_metdet, m_deriv.get_dvv(), m_data.nu_ratio,
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
                               Homme::subview(m_elements.buffers.vorticity_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
@@ -65,10 +63,10 @@ public:
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
 
-    m_elements.buffers.dptens(ie,m_itl,  igp,jgp,ilev) = m_elements.m_dp3d(ie,m_itl,  igp,jgp,ilev);
-    m_elements.buffers.ttens (ie,m_itl,  igp,jgp,ilev) = m_elements.m_t   (ie,m_itl,  igp,jgp,ilev);
-    m_elements.buffers.vtens (ie,m_itl,0,igp,jgp,ilev) = m_elements.m_v   (ie,m_itl,0,igp,jgp,ilev);
-    m_elements.buffers.vtens (ie,m_itl,1,igp,jgp,ilev) = m_elements.m_v   (ie,m_itl,1,igp,jgp,ilev);
+    m_elements.buffers.dptens(ie,m_data.np1,  igp,jgp,ilev) = m_elements.m_dp3d(ie,m_data.np1,  igp,jgp,ilev);
+    m_elements.buffers.ttens (ie,m_data.np1,  igp,jgp,ilev) = m_elements.m_t   (ie,m_data.np1,  igp,jgp,ilev);
+    m_elements.buffers.vtens (ie,m_data.np1,0,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,0,igp,jgp,ilev);
+    m_elements.buffers.vtens (ie,m_data.np1,1,igp,jgp,ilev) = m_elements.m_v   (ie,m_data.np1,1,igp,jgp,ilev);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -80,16 +78,13 @@ public:
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
 
-    m_elements.buffers.dptens(ie,m_itl,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.ttens (ie,m_itl,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,m_itl,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,m_itl,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.dptens(ie,m_data.np1,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.ttens (ie,m_data.np1,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.vtens (ie,m_data.np1,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+    m_elements.buffers.vtens (ie,m_data.np1,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
   }
 
 protected:
-
-  int           m_itl;
-  Real          m_nu_ratio;
 
   Control       m_data;
   Elements      m_elements;

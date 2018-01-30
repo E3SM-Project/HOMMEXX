@@ -52,6 +52,7 @@ struct Control {
   Real hypervis_scaling;
   Real nu;
   Real nu_s;
+  Real nu_ratio;
 
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;
