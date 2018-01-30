@@ -90,7 +90,6 @@ public:
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> curl_buf;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
 
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> sphere_vector_buf;
 
