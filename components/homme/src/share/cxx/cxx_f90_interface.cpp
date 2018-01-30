@@ -2,12 +2,14 @@
 #include "Elements.hpp"
 #include "Control.hpp"
 #include "Context.hpp"
-
+#include "SimulationParams.hpp"
+#include "HommexxEnums.hpp"
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "RemapFunctor.hpp"
-#include "BoundaryExchange.hpp"
-#include "BuffersManager.hpp"
+#include "mpi/BoundaryExchange.hpp"
+#include "mpi/BuffersManager.hpp"
+#include "mpi/ErrorDefs.hpp"
 
 #include "Utility.hpp"
 
@@ -18,6 +20,63 @@ namespace Homme
 
 extern "C"
 {
+
+void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
+                               const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
+                               const int& qsize, const int& state_frequency,
+                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div,
+                               const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
+                               const bool& disable_diagnostics, const bool& moisture, const bool& use_semi_lagrangian_transport)
+{
+  // Get the simulation params struct
+  SimulationParams& params = Context::singleton().get_simulation_params();
+
+  if (remap_alg==1) {
+    params.remap_alg = RemapAlg::PPM_MIRRORED;
+  } else if (remap_alg==2) {
+    params.remap_alg = RemapAlg::PPM_FIXED;
+  } else {
+    Errors::runtime_abort("Error in init_simulation_params_c: unknown remap algorithm.\n",
+                           Errors::err_unknown_option);
+  }
+
+  params.limiter_option                = limiter_option;
+  params.rsplit                        = rsplit;
+  params.qsplit                        = qsplit;
+  params.time_step_type                = time_step_type;
+  params.prescribed_wind               = (prescribed_wind>0);
+  params.energy_fixer                  = (energy_fixer>0);
+  params.state_frequency               = state_frequency;
+  params.qsize                         = qsize;
+  params.nu                            = nu;
+  params.nu_p                          = nu_p;
+  params.nu_s                          = nu_s;
+  params.nu_div                        = nu_div;
+  params.hypervis_order                = hypervis_order;
+  params.hypervis_subcycle             = hypervis_subcycle;
+  params.disable_diagnostics           = disable_diagnostics;
+  params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
+  params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
+
+  // Check that the simulation options are supported. This helps us in the future, since we
+  // are currently 'assuming' some option have/not have certain values. As we support for more
+  // options in the C++ build, we will remove some checks
+  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(hypervis_scaling>0,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_unsupported_option);
+
+  // Now this structure can be used safely
+  params.params_set = true;
+
+  // Set some parameters in the Control structure already
+  Control& data = Context::singleton().get_control();
+  data.nu   = params.nu;
+  data.nu_s = params.nu_s;
+  data.nu_p = params.nu_p;
+  data.hypervis_scaling = params.hypervis_scaling;
+}
 
 void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
                          const int &qn0, const Real &ps0, const int &rsplit,
