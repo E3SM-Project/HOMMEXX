@@ -27,6 +27,19 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
 
   HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_b(hybrid_b_ptr);
   Kokkos::deep_copy(hybrid_b, host_hybrid_b);
+
+  {
+    dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
+    const auto hdp0 = Kokkos::create_mirror_view(dp0);
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int ilev = k / VECTOR_SIZE;
+      const int ivec = k % VECTOR_SIZE;
+      // BFB way of writing it.
+      hdp0(ilev)[ivec] = ((hybrid_a_ptr[k+1] - hybrid_a_ptr[k])*ps0 +
+                          (hybrid_b_ptr[k+1] - hybrid_b_ptr[k])*ps0);
+    }
+    Kokkos::deep_copy(dp0, hdp0);
+  }
 }
 
 void Control::random_init(int num_elems_in, int seed) {
