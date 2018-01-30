@@ -897,7 +897,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
     assert(num_to_remap() != 0);
     const int var = kv.ie % num_to_remap();
-    const int den = (num_to_remap() > 0) ? num_to_remap() : 1;
     kv.ie /= num_to_remap();
     assert(kv.ie < m_data.num_elems);
 

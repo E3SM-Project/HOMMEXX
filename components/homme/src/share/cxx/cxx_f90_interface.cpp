@@ -160,7 +160,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                         CF90Ptr& elem_derived_divdp_proj_ptr, CF90Ptr& elem_derived_vn0_ptr,
                         CF90Ptr& elem_derived_dp_ptr, CF90Ptr& elem_derived_divdp_ptr,
                         CF90Ptr& elem_derived_dpdiss_biharmonic_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                        CF90Ptr& Qtens_biharmonic_ptr, CF90Ptr& elem_derived_dpdiss_ave_ptr)
+                        CF90Ptr& elem_derived_dpdiss_ave_ptr)
 {
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
@@ -191,10 +191,6 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
                  elements.m_derived_dpdiss_ave);
 
   elements.pull_qdp(elem_state_Qdp_ptr);
-
-  sync_to_device(HostViewUnmanaged<const Real**[NUM_PHYSICAL_LEV][NP][NP]>(
-                   Qtens_biharmonic_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV, NP, NP),
-                 elements.buffers.qtens_biharmonic);
 }
 
 void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_derived_omega_p_ptr,
@@ -361,6 +357,10 @@ void euler_exchange_qdp_dss_var_c ()
   be_qdp_dss_var->exchange();
 
   EulerStepFunctor::apply_rspheremp();
+}
+
+void euler_qmin_qmax_c() {
+  EulerStepFunctor::compute_qmin_qmax();
 }
 
 } // extern "C"
