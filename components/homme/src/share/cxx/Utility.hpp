@@ -315,6 +315,51 @@ sync_to_host(Source_T source, Dest_T dest) {
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
+  (exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV]>::value &&
+   host_view_mappable<Dest_T, Real * [NUM_INTERFACE_LEV][NP][NP]>::value),
+  void>::type
+sync_to_host_p2i(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int k = 0; k < dest.extent_int(1); ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          if (k+1 == dest.extent_int(1))
+            dest(ie, k, igp, jgp) = 0;
+          else
+            dest(ie, k, igp, jgp) =
+              source_mirror(ie, igp, jgp, vi)[si];
+        }
+      }
+    }
+  }
+}
+
+//this is for sdot =  ExecViewManaged<Real* [NP][NP]> 
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Real * [NP][NP]>::value &&
+        host_view_mappable<Dest_T, Real * [NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Real * [NP][NP]>::HostMirror source_mirror(
+      Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        dest(ie, igp, jgp) = source_mirror(ie, igp, jgp);
+      }
+    }
+  }
+}
+
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
   (exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV_P]>::value &&
    host_view_mappable<Dest_T, Real * [NUM_INTERFACE_LEV][NP][NP]>::value),
   void>::type
@@ -334,6 +379,7 @@ sync_to_host(Source_T source, Dest_T dest) {
     }
   }
 }
+
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
@@ -415,7 +461,7 @@ template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::
         value &&host_view_mappable<
-            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][NP][NP]>::value,
+            Dest_T, Real * [NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][2][NP][NP]>::value,
     void>::type
 sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>::HostMirror
@@ -470,6 +516,34 @@ sync_to_host(Source_T source_1, Source_T source_2, Dest_T dest) {
   }
 }
 
+//this version is for using NLEV+1 variables, like eta_dot_dpdn
+//source is Scalar*NUM_LEV+1, dest is Real*NUM_INTERFACE_LEV
+/*
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV+1]>::
+        value &&host_view_mappable< Dest_T, Real * [NUM_INTERFACE_LEV][NP][NP]>::value,
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  ExecViewUnmanaged<Scalar * [NP][NP][NUM_LEV+1]>::HostMirror
+      source_mirror(Kokkos::create_mirror_view(source));
+  Kokkos::deep_copy(source_mirror, source);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV+1; ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            if(level < (NUM_INTERFACE_LEV) )
+              dest(ie, level, igp, jgp) = source_mirror(ie, igp, jgp, vector_level)[vector];
+          }
+        }
+      }
+    }
+  }
+}*/
+
+
+
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
   exec_view_mappable<Source_T, Scalar*[QSIZE_D][2][NUM_LEV]>::value &&
@@ -487,6 +561,35 @@ sync_to_host(Source_T source, Dest_T dest0, Dest_T dest1) {
     }
   }
 }
+
+
+//to copy num_phys_lev+1 to ...
+/*template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NUM_PHYSICAL_LEV+1][NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Scalar * [NP][NP][NUM_LEV_P]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest) {
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int vector_level = 0, level = 0; vector_level < NUM_LEV_P;
+         ++vector_level) {
+      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+if( level < (NUM_PHYSICAL_LEV+1) ){
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest_mirror(ie, igp, jgp, vector_level)[vector] =
+                source(ie, level, igp, jgp);
+          }
+        }
+}
+      }
+    }
+  }
+  Kokkos::deep_copy(dest, dest_mirror);
+}*/
+
+
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
@@ -534,6 +637,24 @@ sync_to_device(Source_T source, Dest_T dest) {
               source(ie, k, dim, igp, jgp);
           }
         }
+      }
+    }
+  }
+  Kokkos::deep_copy(dest, dest_mirror);
+}
+
+//adding one for arrays ie,np,np without vertical index, like sdot_sum
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    host_view_mappable<Source_T, Real * [NP][NP]>::value &&
+        exec_view_mappable<Dest_T, Real * [NP][NP]>::value,
+    void>::type
+sync_to_device(Source_T source, Dest_T dest) {
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int igp = 0; igp < NP; ++igp) {
+      for (int jgp = 0; jgp < NP; ++jgp) {
+        dest_mirror(ie, igp, jgp) = source(ie, igp, jgp);
       }
     }
   }
