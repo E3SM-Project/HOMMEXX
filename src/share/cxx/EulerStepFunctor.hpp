@@ -272,8 +272,8 @@ public:
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = std::numeric_limits<Real>::infinity();
-        Scalar max_biharmonic = -std::numeric_limits<Real>::infinity();
+        Scalar min_biharmonic = elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
+        Scalar max_biharmonic = min_biharmonic;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             min_biharmonic =
@@ -294,8 +294,8 @@ public:
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = std::numeric_limits<Real>::infinity();
-        Scalar max_biharmonic = -std::numeric_limits<Real>::infinity();
+        Scalar min_biharmonic = elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
+        Scalar max_biharmonic = min_biharmonic;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             min_biharmonic =
