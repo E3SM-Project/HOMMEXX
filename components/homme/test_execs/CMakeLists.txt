@@ -190,11 +190,6 @@ createTests(HOMME_TESTS ${HOMME_TESTING_PROFILE})
 
 CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST ${HOMME_TESTING_PROFILE})
 
-IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
-  # add a test dependency here:
-  set_property(TEST baroCamMoist-acc APPEND PROPERTY DEPENDS baroCamMoist)
-ENDIF()
-
 # End the file with the total number of test files
 FILE (APPEND ${HOMME_TEST_LIST} "\n")
 FILE (APPEND ${HOMME_TEST_LIST} "NUM_TEST_FILES=${NUM_TEST_FILES}\n")
