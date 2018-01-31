@@ -52,6 +52,7 @@ public:
       Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
       func);
 
+    ExecSpace::fence();
     GPTLstop("esf-bih-pre run");
     profiling_pause();
   }
@@ -68,6 +69,7 @@ public:
       Homme::get_default_team_policy<ExecSpace, BIHPost>(c.num_elems * c.qsize),
       func);
 
+    ExecSpace::fence();
     GPTLstop("esf-bih-post run");
     profiling_pause();
   }
@@ -161,21 +163,21 @@ public:
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
         func);
-      GPTLstop("esf-aal-noq run");
       ExecSpace::fence();
+      GPTLstop("esf-aal-noq run");
       GPTLstart("esf-aal-q run");
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
         func);
+      ExecSpace::fence();
       GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
         func);
     }
-    GPTLstop("esf-aal-tot run");
-
     ExecSpace::fence();
+    GPTLstop("esf-aal-tot run");
     profiling_pause();
   }
 
@@ -264,6 +266,7 @@ public:
       Scalar tmp = elems.m_qdp(ie, state.qn0, q, igp, jgp, lev) / dp;
       elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
     });
+    ExecSpace::fence();
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *
                                                   NUM_LEV);
@@ -310,6 +313,7 @@ public:
         elems.buffers.qlim(ie, q, 1, lev) = max_biharmonic;
       });
     }
+    ExecSpace::fence();
   }
 
 private:
