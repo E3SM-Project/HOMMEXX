@@ -1,5 +1,6 @@
 #include "Connectivity.hpp"
 
+#include <array>
 #include <algorithm>
 
 namespace Homme
