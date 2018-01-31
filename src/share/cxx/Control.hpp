@@ -16,9 +16,13 @@ struct Control {
   Control() = default;
 
   // This constructor should only be used by the host
-  void init(const int nets, const int nete, const int num_elems,
-            const int qn0_in, const Real ps0_in, int rsplit_in,
-            CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr);
+  void init (const int nets, const int nete, const int num_elems,
+             const int qn0,  const Real ps0, 
+             const int rsplit,
+             CRCPtr hybrid_am_ptr,
+             CRCPtr hybrid_ai_ptr,
+             CRCPtr hybrid_bm_ptr,
+             CRCPtr hybrid_bi_ptr);
 
   void random_init(int num_elems, int seed);
 
@@ -39,6 +43,7 @@ struct Control {
   int np1;
 
   // Tracers timelevel, inclusive range of 0-1
+  // or time level for moist temp?
   int qn0;
   int np1_qdp;
 
@@ -52,6 +57,7 @@ struct Control {
   int qsize;
 
   // Time step
+  // OG for dynamics?
   Real dt;
 
   // Weight for eta_dot_dpdn mean flux
@@ -65,10 +71,15 @@ struct Control {
   // apply remap every rsplit tracer timesteps
   int rsplit;
 
-  // hybrid a
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_a;
-  // hybrid b
-  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_b;
+  // hybrid coefficients
+  //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_am;
+  //ExecViewManaged<Real[NUM_PHYSICAL_LEV]> hybrid_bm;
+
+  Real hybrid_ai0;
+  // hybrid ai
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
+  // hybrid bi
+  ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
   ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 

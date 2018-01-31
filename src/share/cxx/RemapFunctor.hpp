@@ -815,6 +815,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       KernelVariables &kv, const int prev_filled,
       Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim> &
           remap_vals) const {
+
     for (int q = 0; q < m_data.qsize; ++q) {
       remap_vals[prev_filled + q] =
           Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
@@ -826,10 +827,10 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   struct ComputeGridsTag {};
   struct ComputeRemapTag {};
   // Computes the extrinsic values of the states in the initial map
-  // i.e. velocity -> total momentum
+  // i.e. velocity -> momentum
   struct ComputeExtrinsicsTag {};
   // Computes the intrinsic values of the states in the final map
-  // i.e. total momentum -> velocity
+  // i.e. momentum -> velocity
   struct ComputeIntrinsicsTag {};
 
   KOKKOS_INLINE_FUNCTION
@@ -906,6 +907,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
     Kokkos::Array<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>, remap_dim>
     remap_vals;
+
     DEBUG_EXPECT(build_remap_array(kv, remap_vals), num_to_remap());
 
     this->m_remap.compute_remap_phase(kv, var, remap_vals[var]);
@@ -957,7 +959,6 @@ private:
   void run_functor(const std::string functor_name, int num_exec) {
     Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
         Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
-
     // Timers don't work on CUDA, so place them here
     GPTLstart(functor_name.c_str());
     profiling_resume();
@@ -986,7 +987,7 @@ private:
           const int vlev = level % VECTOR_SIZE;
           ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
         }
-        ps_v(igp, jgp) += m_data.hybrid_a(0) * m_data.ps0;
+        ps_v(igp, jgp) += m_data.hybrid_ai0 * m_data.ps0;
       });
     });
     kv.team_barrier();
@@ -1043,15 +1044,15 @@ private:
         const int vec_lev = ilevel % VECTOR_SIZE;
         if (kv.ie == 0 && igp == 0 && jgp == 0) {
           DEBUG_PRINT(
-              "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid a: % .17e, "
-              "hybrid b: % .17e\n",
+              "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid ai: % .17e, "
+              "hybrid bi: % .17e\n",
               ilevel, ilev, vec_lev, m_data.ps0, m_ps_v(kv.ie, igp, jgp),
-              m_data.hybrid_a(ilevel), m_data.hybrid_b(ilevel));
+              m_data.hybrid_ai(ilevel), m_data.hybrid_bi(ilevel));
         }
         tgt_layer_thickness(igp, jgp, ilev)[vec_lev] =
-            (m_data.hybrid_a(ilevel + 1) - m_data.hybrid_a(ilevel)) *
+            (m_data.hybrid_ai(ilevel + 1) - m_data.hybrid_ai(ilevel)) *
                 m_data.ps0 +
-            (m_data.hybrid_b(ilevel + 1) - m_data.hybrid_b(ilevel)) *
+            (m_data.hybrid_bi(ilevel + 1) - m_data.hybrid_bi(ilevel)) *
                 m_ps_v(kv.ie, igp, jgp);
       });
     });

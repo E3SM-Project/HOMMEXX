@@ -68,7 +68,6 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_derived_FQ               (:,:,:,:,:,:) ! tracer forcing
   real (kind=real_kind), allocatable, target, public :: elem_derived_FM               (:,:,:,:,:,:) ! momentum forcing
   real (kind=real_kind), allocatable, target, public :: elem_derived_FT               (:,:,:,:,:)   ! temperature forcing
-  real (kind=real_kind), allocatable, target, public :: elem_derived_pecnd            (:,:,:,:)     ! pressure perturbation from condensate
   real (kind=real_kind), allocatable, target, public :: elem_derived_FQps             (:,:,:,:)     ! forcing of FQ on ps_v
 
   ! elem_accum_t arrays
@@ -171,7 +170,6 @@ module element_mod
     ! forcing terms for both CAM and HOMME
     ! FQps for conserving dry mass in the presence of precipitation
 
-    real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate
     real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
   end type derived_state_t
 
@@ -303,10 +301,8 @@ module element_mod
     ! FQps for conserving dry mass in the presence of precipitation
 
 #ifdef HOMME_USE_FLAT_ARRAYS
-    real (kind=real_kind), pointer :: pecnd(:,:,:)                    ! pressure perturbation from condensate
     real (kind=real_kind), pointer :: FQps(:,:,:)                     ! forcing of FQ on ps_v
 #else
-    real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate
     real (kind=real_kind) :: FQps(np,np,timelevels)                   ! forcing of FQ on ps_v
 #endif
 
@@ -861,7 +857,6 @@ contains
     allocate( elem_derived_FQ               (np,np,nlev,qsize_d,timelevels,nelemd) )
     allocate( elem_derived_FM               (np,np,2,nlev,timelevels,nelemd)       )
     allocate( elem_derived_FT               (np,np,nlev,timelevels,nelemd)         )
-    allocate( elem_derived_pecnd            (np,np,nlev,nelemd)                    )
     allocate( elem_derived_FQps             (np,np,timelevels,nelemd)              )
 
     do ie = 1 , nelemd
@@ -882,7 +877,6 @@ contains
       elem(ie)%derived%FQ                   => elem_derived_FQ               (:,:,:,:,:,ie)
       elem(ie)%derived%FM                   => elem_derived_FM               (:,:,:,:,:,ie)
       elem(ie)%derived%FT                   => elem_derived_FT               (:,:,:,:,ie)
-      elem(ie)%derived%pecnd                => elem_derived_pecnd            (:,:,:,ie)
       elem(ie)%derived%FQps                 => elem_derived_FQps             (:,:,:,ie)
     enddo
 
