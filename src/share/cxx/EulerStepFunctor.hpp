@@ -163,19 +163,19 @@ public:
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
         func);
-      GPTLstop("esf-aal-noq run");
       ExecSpace::fence();
+      GPTLstop("esf-aal-noq run");
       GPTLstart("esf-aal-q run");
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
         func);
+      ExecSpace::fence();
       GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
         func);
     }
-
     ExecSpace::fence();
     GPTLstop("esf-aal-tot run");
     profiling_pause();
