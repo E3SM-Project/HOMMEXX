@@ -13,13 +13,18 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
   // Nothing to be done here
 }
 
-void HyperviscosityFunctor::run (const int hypervis_subcycle) const
+void HyperviscosityFunctor::run (const int hypervis_subcycle)
 {
+  m_hypervis_subcycle = hypervis_subcycle;
   Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
   Kokkos::RangePolicy<ExecSpace,TagUpdateStates> policy_update_states(0, m_data.num_elems*NP*NP*NUM_LEV);
-  for (int icycle=0; icycle<hypervis_subcycle; ++icycle) {
+  auto policy_pre_exchange =
+      Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
+          m_data.num_elems);
+  for (int icycle = 0; icycle < hypervis_subcycle; ++icycle) {
     biharmonic_wk_dp3d ();
     // dispatch parallel_for for first kernel
+    Kokkos::parallel_for(policy_pre_exchange, *this);
 
     // Boundary Echange
     std::string be_name = "HyperviscosityFunctor";
