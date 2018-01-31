@@ -46,8 +46,8 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
 {
   // For the first laplacian we use a differnt kernel, which uses directly the states
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
-  auto policy_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_data.num_elems);
-  Kokkos::parallel_for(policy_laplace, *this);
+  auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_data.num_elems);
+  Kokkos::parallel_for(policy_first_laplace, *this);
 
   // Get be structure
   std::string be_name = "HyperviscosityFunctor";
@@ -63,7 +63,8 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
-  Kokkos::parallel_for(policy_laplace, *this);
+  auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_data.num_elems);
+  Kokkos::parallel_for(policy_second_laplace, *this);
 }
 
 } // namespace Homme
