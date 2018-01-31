@@ -626,14 +626,16 @@ endmacro (createTests)
 MACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE TESTS_LIST testProfile)
 
   FOREACH (TEST ${${TESTS_LIST}})
-    SET (TEST_FILE_F90 "${TEST}-f.cmake")
+    #removing -flat from name
+    string(REPLACE "-flat" ""  TESTF "${TEST}" )
+    SET (TEST_FILE_F90 "${TESTF}-f.cmake")
     
     set_homme_tests_parameters(${TEST} ${testProfile})
     set (PROFILE ${testProfile})
     INCLUDE (${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${TEST_FILE_F90})
 
     SET (TEST_NAME_SUFFIX "ne${HOMME_TESTS_NE}-ndays${HOMME_TESTS_NDAYS}")
-    SET (F90_TEST_NAME "${TEST}-f-${TEST_NAME_SUFFIX}")
+    SET (F90_TEST_NAME "${TESTF}-f-${TEST_NAME_SUFFIX}")
     SET (CXX_TEST_NAME "${TEST}-c-${TEST_NAME_SUFFIX}")
     SET (TEST_NAME "${TEST}-${TEST_NAME_SUFFIX}_cxx_vs_f90")
     MESSAGE ("-- Creating cxx-f90 comparison test ${TEST_NAME}")
