@@ -1216,6 +1216,8 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   TestType test_functor(elements);
   test_functor.run_functor();
 
+  const int n0 = test_functor.n0;
+
   //now copy buffer vals back to test values
   sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
   sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
@@ -1225,14 +1227,14 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         for (int i = 0; i < NP; i++) {
           for (int j = 0; j < NP; j++) {
-            rdp_f90(level, i, j) = 1/test_functor.dp3d(ie, test_functor.n0, level, i, j);
+            rdp_f90(level, i, j) = 1/test_functor.dp3d(ie, n0, level, i, j);
           }
         }
     }//level loop
     preq_vertadv(
-        Kokkos::subview(test_functor.temperature, ie, test_functor.n0, 
+        Kokkos::subview(test_functor.temperature, ie, n0, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.velocity, ie, test_functor.n0, 
+        Kokkos::subview(test_functor.velocity, ie, n0, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(eta_dot_f90, ie, 
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
