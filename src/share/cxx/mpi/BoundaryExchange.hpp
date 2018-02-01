@@ -188,10 +188,16 @@ private:
   std::shared_ptr<Connectivity>   m_connectivity;
 
   int                       m_elem_buf_size[2];
-  MPI_Datatype              m_mpi_data_type[2];
 
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
+
+  // Map index into send and recv buffers to [0, get_num_local_elements()) x [0,
+  // NUM_CONNECTIONS). The point is to pack all data corresponding to a
+  // particular remote contiguously.
+  ExecViewManaged<int*> m_i2ec;
+  void init_i2ec(ExecViewManaged<int*>::HostMirror& h_i2ec,
+                 std::vector<int>& pids, std::vector<int>& pids_os);
 
   ExecViewManaged<ExecViewManaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
