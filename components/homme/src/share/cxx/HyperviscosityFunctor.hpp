@@ -30,18 +30,16 @@ public:
   void operator() (const TagFirstLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-                   m_elements.m_tensorVisc,
+    laplace_simple(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
-                   m_elements.buffers.sphere_vector_buf,
+                   Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-                   m_elements.m_tensorVisc,
+    laplace_simple(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
-                   m_elements.buffers.sphere_vector_buf,
+                   Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
@@ -60,18 +58,16 @@ public:
   void operator() (const TagLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-                   m_elements.m_tensorVisc,
+    laplace_simple(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie),
-                   m_elements.buffers.sphere_vector_buf,
+                   Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    laplace_tensor(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-                   m_elements.m_tensorVisc,
+    laplace_simple(kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie),
-                   m_elements.buffers.sphere_vector_buf,
+                   Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
