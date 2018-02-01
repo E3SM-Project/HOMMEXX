@@ -8,6 +8,7 @@
 #include "vector/VectorUtils.hpp"
 
 #define HMCE HOMMEXX_MPI_CHECK_ERROR
+#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
 
 namespace Homme
 {
@@ -147,10 +148,6 @@ void BoundaryExchange::clean_up()
   // Check that we are not still transmitting
   assert (!m_send_pending && !m_recv_pending);
 
-  // Free MPI data types
-  HMCE(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HMCE(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
-
   // Clear stored fields
   m_2d_fields = decltype(m_2d_fields)(0, 0);
   m_3d_fields = decltype(m_3d_fields)(0, 0);
@@ -184,22 +181,12 @@ void BoundaryExchange::registration_completed()
   assert (m_connectivity && m_connectivity->is_finalized());
   assert (m_buffers_manager);
 
-  // Create requests
-  // Note: we put an extra null request at the end, so that if we have no share connections
-  //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
-  m_send_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1, MPI_REQUEST_NULL);
-  m_recv_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1, MPI_REQUEST_NULL);
-
   // Create the MPI data types, for corners and edges
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
   // Note: for 2d/3d fields, we have 1 Real per GP (per level, in 3d). For 1d fields, 
   //       we have 2 Real per level (max and min over element).
   m_elem_buf_size[etoi(ConnectionKind::CORNER)] = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
-  HMCE(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HMCE(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
-  HMCE(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
-  HMCE(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
 
   // Determine what kind of BE is this (exchange or exchange_min_max)
   m_exchange_type = m_num_1d_fields>0 ? MPI_EXCHANGE_MIN_MAX : MPI_EXCHANGE;
@@ -229,7 +216,7 @@ void BoundaryExchange::exchange (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
+  HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -259,7 +246,7 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
+  HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -367,7 +354,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   GPTLstop("be sync_send_buffer");
   GPTLstart("be send");
-  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_send_requests.data())); // Fire off the sends
+  HMCE(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()));
   GPTLstop("be send");
 
   // Notify a send is ongoing
@@ -399,14 +386,13 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
     // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
+    HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                   m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   m_recv_pending = false;
   GPTLstop("be recv waitall");
 
@@ -485,7 +471,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_send_requests.data(),
+  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(),
                    MPI_STATUSES_IGNORE)); // Wait for all data to arrive
 
   // Release the send/recv buffers
@@ -571,8 +557,7 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // ---- Send ---- //
   GPTLstart("be send");
   m_buffers_manager->sync_send_buffer(this);
-  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                    m_send_requests.data()));
+  HMCE(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()));
   GPTLstop("be send");
 
   // Mark send buffer as busy
@@ -601,15 +586,13 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
     // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                      m_recv_requests.data()));
+    HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                   m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   GPTLstop("be recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
@@ -660,8 +643,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
   GPTLstart("be recv waitall 2");
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                   m_send_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
@@ -741,6 +723,10 @@ void BoundaryExchange::build_buffer_views_and_requests()
   m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", nle, m_num_3d_fields);
   m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", nle, m_num_3d_fields);
 
+  ExecViewManaged<int*>::HostMirror h_i2ec;
+  std::vector<int> pids, pids_os;
+  init_i2ec(h_i2ec, pids, pids_os);
+
   // NOTE: I wanted to do this setup in parallel, on the execution space, but there
   //       is a reduction hidden. In particular, we need to access buf_offset atomically, 
   //       so that it is not update while we are still using it. One solution would be to
@@ -756,11 +742,13 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto h_send_3d_buffers = Kokkos::create_mirror_view(m_send_3d_buffers);
   auto h_recv_3d_buffers = Kokkos::create_mirror_view(m_recv_3d_buffers);
   auto h_connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int ie=0; ie<nle; ++ie) {
-    for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
+  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+    const int ie = h_i2ec(k) / NUM_CONNECTIONS;
+    const int iconn = h_i2ec(k) % NUM_CONNECTIONS;
+    {
       const ConnectionInfo& info = h_connections(ie, iconn);
 
-      const LidGidPos local  = info.local;
+      const LidGidPos local = info.local;
 
       auto send_buffer = h_all_send_buffers[info.sharing];
       auto recv_buffer = h_all_recv_buffers[info.sharing];
@@ -815,44 +803,94 @@ void BoundaryExchange::build_buffer_views_and_requests()
   assert (h_buf_offset[etoi(ConnectionSharing::LOCAL)]==local_buffer_size);
   assert (h_buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
 #endif // NDEBUG
-  // TODO: we could make this for into parallel_for if we want. But it is just a setup cost.
-  auto mpi_comm = m_connectivity->get_comm().m_mpi_comm;
-  auto connections = m_connectivity->get_connections<HostMemSpace>();
-  int buf_offset = 0;
-  int irequest   = 0;
-  for (int ie=0; ie<nle; ++ie) {
-    for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
-      const ConnectionInfo& info = connections(ie, iconn);
-      if (info.sharing!=etoi(ConnectionSharing::SHARED)) {
-        continue;
+
+  {
+    auto mpi_comm = m_connectivity->get_comm().m_mpi_comm;
+    const auto& connections = m_connectivity->get_connections<HostMemSpace>();
+    const int npids = pids.size();
+    m_send_requests.resize(npids); // 1 extra, unused, for pointer convenience
+    m_recv_requests.resize(npids);
+    MPIViewManaged<Real*>::pointer_type send_ptr = buffers_manager->get_mpi_send_buffer().data();
+    MPIViewManaged<Real*>::pointer_type recv_ptr = buffers_manager->get_mpi_recv_buffer().data();
+    int os = 0;
+    for (int ip = 1 /* skip local */; ip < npids; ++ip) {
+      const int irequest = ip - 1;
+      int count = 0;
+      for (int k = pids_os[ip]; k < pids_os[ip+1]; ++k) {
+        const int ie = h_i2ec(k) / NUM_CONNECTIONS;
+        const int iconn = h_i2ec(k) % NUM_CONNECTIONS;
+        const ConnectionInfo& info = connections(ie, iconn);
+        count += m_elem_buf_size[info.kind];
       }
-
-      // Reserve the area in the buffers and update the offset
-      MPIViewManaged<Real*>::pointer_type send_ptr = buffers_manager->get_mpi_send_buffer().data() + buf_offset;
-      MPIViewManaged<Real*>::pointer_type recv_ptr = buffers_manager->get_mpi_recv_buffer().data() + buf_offset;
-      buf_offset += m_elem_buf_size[info.kind];
-
-      // If we have more than 1 elem per rank, we may have a pair of rank with multiple connections between them.
-      // In this case, we need to be able to differentiate between messages. We do this by offsetting the exchange
-      // type by the 'local id' of the connection on the send side.
-      int send_tag = m_exchange_type + info.local.lid*NUM_CONNECTIONS + info.local.pos;
-      int recv_tag = m_exchange_type + info.remote.lid*NUM_CONNECTIONS + info.remote.pos;
-
-      // Create the persistent requests
-      HMCE(MPI_Send_init(send_ptr, 1, m_mpi_data_type[info.kind],
-                         info.remote_pid, send_tag, mpi_comm,
+      HMCE(MPI_Send_init(send_ptr + os, count, MPI_DOUBLE,
+                         pids[ip], m_exchange_type, mpi_comm,
                          &m_send_requests[irequest]));
-      HMCE(MPI_Recv_init(recv_ptr, 1, m_mpi_data_type[info.kind],
-                         info.remote_pid, recv_tag, mpi_comm,
+      HMCE(MPI_Recv_init(recv_ptr + os, count, MPI_DOUBLE,
+                         pids[ip], m_exchange_type, mpi_comm,
                          &m_recv_requests[irequest]));
-
-      // Increment the request counter;
-      ++irequest;
+      os += count;
     }
   }
 
   // Now the buffer views and the requests are built
   m_buffer_views_and_requests_built = true;
+}
+
+void BoundaryExchange
+::init_i2ec (ExecViewManaged<int*>::HostMirror& h_i2ec,
+             std::vector<int>& pids, std::vector<int>& pids_os) {
+  const auto nle = m_connectivity->get_num_local_elements();
+  m_i2ec = ExecViewManaged<int*>("i2ec", nle*NUM_CONNECTIONS);
+  h_i2ec = Kokkos::create_mirror_view(m_i2ec);
+
+  struct IP {
+    int i, ord, pid;
+    bool operator< (const IP& o) const {
+      if (pid < o.pid) return true;
+      if (pid > o.pid) return false;
+      return ord < o.ord;
+    }
+  };
+  std::vector<IP> i2remote(nle*NUM_CONNECTIONS);
+
+  const auto& connections = m_connectivity->get_connections<HostMemSpace>();
+  for (int ie = 0; ie < nle; ++ie)
+    for (int iconn = 0; iconn < NUM_CONNECTIONS; ++iconn) {
+      const auto& info = connections(ie, iconn);
+      const int k = ie*NUM_CONNECTIONS + iconn;
+      auto& i2r = i2remote[k];
+      i2r.i = k;
+      if (info.local.gid < info.remote.gid)
+        i2r.ord = info.local.gid*NUM_CONNECTIONS + info.local.pos;
+      else
+        i2r.ord = info.remote.gid*NUM_CONNECTIONS + info.remote.pos;
+      i2r.pid = -1;
+      if (info.sharing != etoi(ConnectionSharing::SHARED)) continue;
+      i2r.pid = info.remote_pid;
+    }
+
+  std::stable_sort(i2remote.begin(), i2remote.end());
+
+  int prev_pid = -2;
+  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+    const auto& i2r = i2remote[k];
+    if (i2r.pid > prev_pid) {
+      pids.push_back(i2r.pid);
+      pids_os.push_back(k);
+      prev_pid = i2r.pid;
+    }
+    const int ie = i2r.i / NUM_CONNECTIONS;
+    const int iconn = i2r.i % NUM_CONNECTIONS;
+    h_i2ec(k) = ie*NUM_CONNECTIONS + iconn;
+  }
+  pids_os.push_back(nle*NUM_CONNECTIONS);
+  assert(static_cast<int>(pids.size()) >= 1);
+  assert(static_cast<int>(pids_os[0]) == 0);
+  mprarr(h_i2ec);
+  mprarr(pids);
+  mprarr(pids_os);
+
+  Kokkos::deep_copy(m_i2ec, h_i2ec);
 }
 
 void BoundaryExchange::clear_buffer_views_and_requests ()
@@ -867,7 +905,7 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
   assert (m_connectivity);
 
   // Destroy each request
-  for (int i=0; i<m_connectivity->get_num_shared_connections<HostMemSpace>(); ++i) {
+  for (size_t i=0; i<m_send_requests.size()-1; ++i) {
     HMCE(MPI_Request_free(&m_send_requests[i]));
     HMCE(MPI_Request_free(&m_recv_requests[i]));
   }
@@ -900,10 +938,8 @@ void BoundaryExchange::waitall()
   // Safety check
   assert (m_buffers_manager->are_buffers_busy());
 
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                   m_send_requests.data(), MPI_STATUSES_IGNORE));
-  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
-                   m_recv_requests.data(), MPI_STATUSES_IGNORE));
+  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE));
+  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE));
 
   m_buffers_manager->unlock_buffers();
 }
