@@ -6,27 +6,43 @@
 namespace Homme {
 
 void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
-                   const int qn0_in, const Real ps0_in, const int rsplit_in,
-                   CRCPtr hybrid_a_ptr, CRCPtr hybrid_b_ptr) {
+                   const int qn0_in, const Real ps0_in, 
+                   const int rsplit_in,
+                   CRCPtr hybrid_am_ptr,
+                   CRCPtr hybrid_ai_ptr,
+                   CRCPtr hybrid_bm_ptr,
+                   CRCPtr hybrid_bi_ptr) {
   nets = nets_in;
   nete = nete_in;
   num_elems = num_elems_in;
   qn0 = qn0_in;
   ps0 = ps0_in;
   rsplit = rsplit_in;
-  hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid a coordinates; translates between pressure and velocity");
-  hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid b coordinates; translates between pressure and velocity");
 
-  assert(hybrid_a_ptr != nullptr);
-  assert(hybrid_b_ptr != nullptr);
+  //hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
+  //    "Hybrid coordinates; coefficient A_midpoints");
+  hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid coordinates; coefficient A_interfaces");
+  hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid coordinates; coefficient B_interfaces");
+  //hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
+  //    "Hybrid coordinates; coefficient B_midpoints");
 
-  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_a(hybrid_a_ptr);
-  Kokkos::deep_copy(hybrid_a, host_hybrid_a);
+  //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
+  //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_ai(hybrid_ai_ptr);
+  Kokkos::deep_copy(hybrid_ai, host_hybrid_ai);
+  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_bi(hybrid_bi_ptr);
+  Kokkos::deep_copy(hybrid_bi, host_hybrid_bi);
 
-  HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_b(hybrid_b_ptr);
-  Kokkos::deep_copy(hybrid_b, host_hybrid_b);
+//i don't think this saves us much now
+  {
+    // Only hybrid_ai(0) is needed.
+    hybrid_ai0 = hybrid_ai_ptr[0];
+  }
+//this is not in master anymore?
+//  assert(hybrid_ai_ptr != nullptr);
+//  assert(hybrid_bi_ptr != nullptr);
 
   {
     dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
@@ -35,8 +51,8 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
       const int ilev = k / VECTOR_SIZE;
       const int ivec = k % VECTOR_SIZE;
       // BFB way of writing it.
-      hdp0(ilev)[ivec] = ((hybrid_a_ptr[k+1] - hybrid_a_ptr[k])*ps0 +
-                          (hybrid_b_ptr[k+1] - hybrid_b_ptr[k])*ps0);
+      hdp0(ilev)[ivec] = ((hybrid_ai_ptr[k+1] - hybrid_ai_ptr[k])*ps0 +
+                          (hybrid_bi_ptr[k+1] - hybrid_bi_ptr[k])*ps0);
     }
     Kokkos::deep_copy(dp0, hdp0);
   }
@@ -45,10 +61,10 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
 void Control::random_init(int num_elems_in, int seed) {
   const int min_value = std::numeric_limits<Real>::epsilon();
   const int max_value = 1.0 - min_value;
-  hybrid_a = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid a coordinates; translates between pressure and velocity");
-  hybrid_b = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid b coordinates; translates between pressure and velocity");
+  hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid a_interface coefs");
+  hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
+      "Hybrid b_interface coefs");
   num_elems = num_elems_in;
 
   std::mt19937_64 engine(seed);
@@ -57,13 +73,15 @@ void Control::random_init(int num_elems_in, int seed) {
   // hybrid_a can technically range from 0 to 1 like hybrid_b,
   // but doing so makes enforcing the monotonicity of p = a + b difficult
   // So only go to 0.25
-  genRandArray(hybrid_a, engine, std::uniform_real_distribution<Real>(
+  genRandArray(hybrid_ai, engine, std::uniform_real_distribution<Real>(
                                      min_value, max_value / 4.0));
 
-  HostViewManaged<Real[NUM_INTERFACE_LEV]> host_hybrid_a("Host hybrid a coordinates");
-  Kokkos::deep_copy(host_hybrid_a, hybrid_a);
+  HostViewManaged<Real[NUM_INTERFACE_LEV]> host_hybrid_ai("Host hybrid ai coefs");
+  Kokkos::deep_copy(host_hybrid_ai, hybrid_ai);
 
   // p = a + b must be monotonically increasing
+  // OG: what is this for? does a test require it?
+  // (not critisizm, but i don't understand)
   const auto check_coords = [=](
       HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) {
     // Enforce the boundaries
@@ -71,14 +89,15 @@ void Control::random_init(int num_elems_in, int seed) {
     coords(1) = 1.0;
     // Put them in order
     std::sort(coords.data(), coords.data() + coords.size());
-    Real p_prev = host_hybrid_a(0) + coords(0);
+//    Real p_prev = host_hybrid_ai(0) + coords(0);
+    Real p_prev = hybrid_ai0 + coords(0);
     // Make certain they're all distinct
     for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
       if (coords(i) <=
           coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
         return false;
       }
-      Real p_cur = coords(i) + host_hybrid_a(i);
+      Real p_cur = coords(i) + host_hybrid_ai(i);
       if (p_cur <= p_prev) {
         return false;
       }
@@ -86,7 +105,7 @@ void Control::random_init(int num_elems_in, int seed) {
     }
     return true;
   };
-  genRandArray(hybrid_b, engine,
+  genRandArray(hybrid_bi, engine,
                std::uniform_real_distribution<Real>(min_value, max_value),
                check_coords);
 }

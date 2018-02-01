@@ -462,7 +462,6 @@ contains
        elem(ie)%derived%FQ=0.0
        elem(ie)%derived%FQps=0.0
        elem(ie)%derived%FT=0.0
-       elem(ie)%derived%pecnd=0.0
 
        elem(ie)%accum%Qvar=0
        elem(ie)%accum%Qmass=0

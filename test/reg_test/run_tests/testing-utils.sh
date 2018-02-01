@@ -238,7 +238,7 @@ runTestsStd() {
     echo -n "Running test ${subJobName} ... "
     echo ""
     # remove suffix '-run' to refer to output files that mpiexec uses in *run.sh
-    subJobName2=${subJobName::-4}
+    subJobName2=${subJobName%????}
     #echo "${subFile} > $THIS_STDOUT 2> $THIS_STDERR"
     chmod u+x ${subFile}
 

@@ -1940,6 +1940,7 @@ OMP_SIMD
 
   call t_stopf('eus_2d_advec')
 !pw call t_stopf('euler_step')
+
   end subroutine euler_step
 !-----------------------------------------------------------------------------
 
@@ -2139,7 +2140,7 @@ OMP_SIMD
     use hybrid_mod,     only: hybrid_t
 
     use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                elem_derived_phi, elem_derived_pecnd,           &
+                                elem_derived_phi,                               &
                                 elem_derived_omega_p, elem_derived_vn0,         &
                                 elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
                                 elem_state_ps_v
@@ -2159,7 +2160,7 @@ OMP_SIMD
       end subroutine vertical_remap_c
 
       subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                   elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                   elem_derived_phi_ptr,                                    &
                                    elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
         use iso_c_binding , only : c_ptr
@@ -2167,13 +2168,13 @@ OMP_SIMD
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
         type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
         type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
       end subroutine caar_pull_data_c
 
       subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                      elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                      elem_derived_phi_ptr,                                    &
                                       elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
         use iso_c_binding , only : c_ptr
@@ -2181,7 +2182,7 @@ OMP_SIMD
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
         type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
         type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
       end subroutine caar_push_results_c
@@ -2197,22 +2198,21 @@ OMP_SIMD
     integer (kind=c_int) :: np1_c, np1_qdp_c
 
     type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_phi_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+!    type (c_ptr) :: hvcoord_ai_ptr, hvcoord_bi_ptr
 
     elem_state_v_ptr              = c_loc(elem_state_v)
     elem_state_t_ptr              = c_loc(elem_state_temp)
     elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
     elem_derived_phi_ptr          = c_loc(elem_derived_phi)
-    elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
     elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
     elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
     elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
     elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
     call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                           elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                           elem_derived_phi_ptr,                                    &
                            elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
 
@@ -2222,8 +2222,9 @@ OMP_SIMD
     call t_startf('total vertical remap time')
     call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
     call t_stopf('total vertical remap time')
+
     call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                              elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                              elem_derived_phi_ptr,                                    &
                               elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
   end subroutine vertical_remap_interface
@@ -2332,6 +2333,7 @@ OMP_SIMD
            dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
         endif
      enddo
+
      if (minval(dp_star)<0) then
         do k=1,nlev
         do i=1,np

@@ -7,10 +7,10 @@
 
 namespace Homme {
 
-void Elements::init(const int num_elems) {
+void Elements::init(const int num_elems, const bool rsplit0) {
   m_num_elems = num_elems;
 
-  buffers.init(num_elems);
+  buffers.init(num_elems, rsplit0);
 
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
   m_mp = ExecViewManaged<Real * [NP][NP]>("MP", m_num_elems);
@@ -20,15 +20,16 @@ void Elements::init(const int num_elems) {
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
+  //D is not a metric tensor, D^tD is
   m_d =
-      ExecViewManaged<Real * [2][2][NP][NP]>("D - metric tensor", m_num_elems);
+      ExecViewManaged<Real * [2][2][NP][NP]>("matrix D", m_num_elems);
   m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
-      "DInv - inverse metric tensor", m_num_elems);
+      "DInv - inverse of matrix D", m_num_elems);
 
   m_omega_p =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Omega P", m_num_elems);
-  m_pecnd = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PECND", m_num_elems);
   m_phi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("PHI", m_num_elems);
+
   m_derived_vn0 = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
       "Derived Lateral Velocities", m_num_elems);
 
@@ -39,16 +40,13 @@ void Elements::init(const int num_elems) {
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "DP3D", m_num_elems);
 
-  m_ps_v = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("surface pressure", m_num_elems);
-  m_lnps = ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>("log surface pressure", m_num_elems);
-
   m_qdp =
       ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
           "qdp", m_num_elems);
-  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("tracer concentration", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
-  m_derived_vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("velocity on lagrangian surfaces", m_num_elems);
   m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
+  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn",
+                                                               m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
@@ -134,7 +132,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
-  init(num_elems);
+  init(num_elems, true);
   std::random_device rd;
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0 / min_value);
@@ -148,7 +146,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_phis, engine, random_dist);
 
   genRandArray(m_omega_p, engine, random_dist);
-  genRandArray(m_pecnd, engine, random_dist);
   genRandArray(m_phi, engine, random_dist);
   genRandArray(m_derived_vn0, engine, random_dist);
 
@@ -265,20 +262,18 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
 
 void Elements::pull_from_f90_pointers(
     CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
-    CF90Ptr &derived_phi, CF90Ptr &derived_pecnd, CF90Ptr &derived_omega_p,
+    CF90Ptr &derived_phi, CF90Ptr &derived_omega_p,
     CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
-  pull_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  pull_3d(derived_phi, derived_omega_p, derived_v);
   pull_4d(state_v, state_t, state_dp3d);
   pull_eta_dot(derived_eta_dot_dpdn);
   pull_qdp(state_qdp);
 }
 
-void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
+void Elements::pull_3d(CF90Ptr &derived_phi, 
                        CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
   ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
@@ -291,7 +286,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
           h_omega_p(ie, igp, jgp, ilev)[ivector] =
               derived_omega_p[k_3d_scalars];
-          h_pecnd(ie, igp, jgp, ilev)[ivector] = derived_pecnd[k_3d_scalars];
           h_phi(ie, igp, jgp, ilev)[ivector] = derived_phi[k_3d_scalars];
         }
       }
@@ -309,7 +303,6 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_pecnd,
     }
   }
   Kokkos::deep_copy(m_omega_p, h_omega_p);
-  Kokkos::deep_copy(m_pecnd, h_pecnd);
   Kokkos::deep_copy(m_phi, h_phi);
   Kokkos::deep_copy(m_derived_vn0, h_derived_vn0);
 }
@@ -393,29 +386,25 @@ void Elements::pull_qdp(CF90Ptr &state_qdp) {
 
 void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
                                     F90Ptr &state_dp3d, F90Ptr &derived_phi,
-                                    F90Ptr &derived_pecnd,
                                     F90Ptr &derived_omega_p, F90Ptr &derived_v,
                                     F90Ptr &derived_eta_dot_dpdn,
                                     F90Ptr &state_qdp) const {
-  push_3d(derived_phi, derived_pecnd, derived_omega_p, derived_v);
+  push_3d(derived_phi, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_eta_dot(derived_eta_dot_dpdn);
   push_qdp(state_qdp);
 }
 
-void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
+void Elements::push_3d(F90Ptr &derived_phi, 
                        F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
-  ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_pecnd =
-      Kokkos::create_mirror_view(m_pecnd);
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_phi =
       Kokkos::create_mirror_view(m_phi);
   ExecViewManaged<Scalar *[2][NP][NP][NUM_LEV]>::HostMirror h_derived_vn0 =
       Kokkos::create_mirror_view(m_derived_vn0);
 
   Kokkos::deep_copy(h_omega_p, m_omega_p);
-  Kokkos::deep_copy(h_pecnd, m_pecnd);
   Kokkos::deep_copy(h_phi, m_phi);
   Kokkos::deep_copy(h_derived_vn0, m_derived_vn0);
   for (int ie = 0, k_3d_scalars = 0, k_3d_vectors = 0; ie < m_num_elems; ++ie) {
@@ -426,7 +415,6 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_pecnd,
         for (int jgp = 0; jgp < NP; ++jgp, ++k_3d_scalars) {
           derived_omega_p[k_3d_scalars] =
               h_omega_p(ie, igp, jgp, ilev)[ivector];
-          derived_pecnd[k_3d_scalars] = h_pecnd(ie, igp, jgp, ilev)[ivector];
           derived_phi[k_3d_scalars] = h_phi(ie, igp, jgp, ilev)[ivector];
         }
       }
@@ -496,7 +484,9 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
         }
       }
     }
-    k_eta_dot_dp_dn += NP*NP;
+    for (int igp = 0; igp < NP; ++igp)
+      for (int jgp = 0; jgp < NP; ++jgp, ++k_eta_dot_dp_dn)
+        derived_eta_dot_dpdn[k_eta_dot_dp_dn] = 0;
   }
 }
 
@@ -547,7 +537,7 @@ void Elements::dinv(Real *dinv_ptr, int ie) const {
   Kokkos::deep_copy(dinv_host, dinv_device);
 }
 
-void Elements::BufferViews::init(int num_elems) {
+void Elements::BufferViews::init(const int num_elems, const bool rsplit0) {
   pressure =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
   pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
@@ -557,10 +547,10 @@ void Elements::BufferViews::init(int num_elems) {
   temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
       "Gradient of temperature", num_elems);
   omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Omega_P why two named the same thing???", num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vdp???", num_elems);
+      "Omega_P = omega/pressure = (Dp/Dt)/pressure", num_elems);
+  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("(u,v)*dp", num_elems);
   div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Divergence of dp3d * u", num_elems);
+      "Divergence of dp3d * (u,v)", num_elems);
   ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
       "Kinetic Energy + Geopotential Energy", num_elems);
   energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
@@ -574,10 +564,10 @@ void Elements::BufferViews::init(int num_elems) {
 
   qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for tracers", num_elems);
+  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
+       num_elems);
   qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
       "buffer for biharmonic term for tracers", num_elems);
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for v/dp",
-                                                         num_elems);
   vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "buffer for vstar*qdp", num_elems);
   qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
@@ -588,6 +578,8 @@ void Elements::BufferViews::init(int num_elems) {
       "qlim: combined qmin, qmax", num_elems);
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
+
+  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum buffer", num_elems);
 
   div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
                                                            num_elems);
@@ -605,6 +597,14 @@ void Elements::BufferViews::init(int num_elems) {
   lapl_buf_1 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
   lapl_buf_2 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
   lapl_buf_3 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
+  if (rsplit0) {
+    v_vadv_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("v_vadv buffer",
+                                                                num_elems);
+    t_vadv_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("t_vadv buffer",
+                                                             num_elems);
+    eta_dot_dpdn_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdpn buffer",
+                                                                     num_elems);
+  }
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);

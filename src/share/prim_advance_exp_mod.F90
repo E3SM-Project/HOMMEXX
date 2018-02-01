@@ -46,7 +46,7 @@ module prim_advance_exp_mod
 #ifdef USE_KOKKOS_KERNELS
     use iso_c_binding,  only: c_ptr, c_loc
     use element_mod,    only: elem_state_v, elem_state_temp, elem_state_dp3d
-    use element_mod,    only: elem_derived_phi, elem_derived_pecnd
+    use element_mod,    only: elem_derived_phi
     use element_mod,    only: elem_derived_omega_p, elem_derived_vn0
     use element_mod,    only: elem_derived_eta_dot_dpdn, elem_state_Qdp
     use element_mod,    only: elem_derived_dpdiss_ave, elem_derived_dpdiss_biharmonic
@@ -86,11 +86,12 @@ module prim_advance_exp_mod
 
 #ifdef USE_KOKKOS_KERNELS
     type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+    type (c_ptr) :: elem_derived_phi_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
     type (c_ptr) :: elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr
-    type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
+    type (c_ptr) :: hvcoord_am_ptr, hvcoord_ai_ptr
+    type (c_ptr) :: hvcoord_bm_ptr, hvcoord_bi_ptr
 #endif
 
 #ifdef TRILINOS
@@ -113,19 +114,21 @@ module prim_advance_exp_mod
     interface
 #ifdef USE_KOKKOS_KERNELS
       subroutine init_control_caar_c (nets,nete,nelemd,qn0,ps0, &
-                                      rsplit,hybrid_a_ptr,hybrid_b_ptr) bind(c)
+                                      rsplit,                   &
+                                      hybrid_am_ptr,hybrid_ai_ptr, &
+                                      hybrid_bm_ptr, hybrid_bi_ptr) bind(c)
         use iso_c_binding , only : c_ptr, c_int, c_double
         !
         ! Inputs
         !
         integer (kind=c_int),  intent(in) :: qn0,nets,nete,nelemd,rsplit
         real (kind=c_double),  intent(in) :: ps0
-        type (c_ptr),          intent(in) :: hybrid_a_ptr
-        type (c_ptr),          intent(in) :: hybrid_b_ptr
+        type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+        type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
       end subroutine init_control_caar_c
 
       subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                   elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                   elem_derived_phi_ptr,                                    &
                                    elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
         use iso_c_binding , only : c_ptr
@@ -133,13 +136,13 @@ module prim_advance_exp_mod
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
         type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
         type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
       end subroutine caar_pull_data_c
 
       subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                      elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                      elem_derived_phi_ptr,                                    &
                                       elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
         use iso_c_binding , only : c_ptr
@@ -147,7 +150,7 @@ module prim_advance_exp_mod
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
+        type (c_ptr), intent(in) :: elem_derived_phi_ptr
         type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
         type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
       end subroutine caar_push_results_c
@@ -375,25 +378,29 @@ module prim_advance_exp_mod
 #else
 #ifdef USE_KOKKOS_KERNELS
       call t_startf("caar_overhead")
-      hvcoord_a_ptr             = c_loc(hvcoord%hyai)
-      hvcoord_b_ptr             = c_loc(hvcoord%hybi)
+      hvcoord_am_ptr             = c_loc(hvcoord%hyam)
+      hvcoord_ai_ptr             = c_loc(hvcoord%hyai)
+      hvcoord_bm_ptr             = c_loc(hvcoord%hybm)
+      hvcoord_bi_ptr             = c_loc(hvcoord%hybi)
       ! In F, elem range is [nets,nete]. In C, elem range is [nets,nete).
       ! Also, F has index base 1, C has index base 0.
-      call init_control_caar_c(nets-1,nete,nelemd,qn0-1,hvcoord%ps0,rsplit,hvcoord_a_ptr,hvcoord_b_ptr)
 
-      elem_state_v_ptr                   = c_loc(elem_state_v)
-      elem_state_t_ptr                   = c_loc(elem_state_temp)
-      elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
-      elem_derived_phi_ptr               = c_loc(elem_derived_phi)
-      elem_derived_pecnd_ptr             = c_loc(elem_derived_pecnd)
-      elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-      elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-      elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+
+      call init_control_caar_c(nets-1,nete,nelemd,qn0-1,hvcoord%ps0,rsplit, &
+                               hvcoord_am_ptr, hvcoord_ai_ptr, hvcoord_bm_ptr, hvcoord_bi_ptr)
+
+      elem_state_v_ptr              = c_loc(elem_state_v)
+      elem_state_t_ptr              = c_loc(elem_state_temp)
+      elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+      elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+      elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+      elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+      elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+      elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
       elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
       elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-      elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
       call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                             elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                             elem_derived_phi_ptr,                                    &
                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
       call t_stopf("caar_overhead")
@@ -404,7 +411,7 @@ module prim_advance_exp_mod
 
       call t_startf("caar_overhead")
       call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
+                                elem_derived_phi_ptr,                                    &
                                 elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
                                 elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
       call t_stopf("caar_overhead")

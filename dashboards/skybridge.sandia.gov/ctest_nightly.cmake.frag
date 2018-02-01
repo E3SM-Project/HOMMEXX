@@ -216,8 +216,8 @@ if (BUILD_HOMMEXX_SERIAL)
   # Configure the HOMMEXX build 
   #
 
-  set_property (GLOBAL PROPERTY SubProject SkybridgeHOMMEXXSerial)
-  set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXSerial)
+  set_property (GLOBAL PROPERTY SubProject SkybridgeHOMMEXXSerialDebug)
+  set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXSerialDebug)
   
   set (CONFIGURE_OPTIONS
     "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
@@ -226,6 +226,8 @@ if (BUILD_HOMMEXX_SERIAL)
     "-DUSE_TRILINOS=FALSE"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
     "-DHOMME_BASELINE_DIR=/projects/hommexx/baseline/HOMMEXX_baseline/build" 
+    "-DCMAKE_CXX_FLAGS:STRING='-std=gnu++11 -g'"
+    "-D CMAKE_BUILD_TYPE:STRING=DEBUG"
     )
   
   if (NOT EXISTS "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild")
@@ -257,8 +259,8 @@ if (BUILD_HOMMEXX_SERIAL)
   # Build the rest of HOMMEXX and install everything
   #
 
-  set_property (GLOBAL PROPERTY SubProject SkybridgeHOMMEXXSerial)
-  set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXSerial)
+  set_property (GLOBAL PROPERTY SubProject SkybridgeHOMMEXXSerialDebug)
+  set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXSerialDebug)
   set (CTEST_BUILD_TARGET all)
   #set (CTEST_BUILD_TARGET install)
 
@@ -295,9 +297,13 @@ if (BUILD_HOMMEXX_SERIAL)
   #
 
   set (CTEST_TEST_TIMEOUT 1200)
+  #IKT: uncomment to exclude r0 tests
+  #CTEST_TEST (
+  #  BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
+  #  EXCLUDE "r0"
+  #  RETURN_VALUE HAD_ERROR)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
-    EXCLUDE "r0"
     RETURN_VALUE HAD_ERROR)
 
   if (CTEST_DO_SUBMIT)
@@ -487,9 +493,13 @@ if (BUILD_HOMMEXX_OPENMP)
   #
 
   set (CTEST_TEST_TIMEOUT 1200)
+  #IKT: uncomment to exclude r0 tests
+  #CTEST_TEST (
+  #  BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
+  #  EXCLUDE "r0"
+  #  RETURN_VALUE HAD_ERROR)
   CTEST_TEST (
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP"
-    EXCLUDE "r0"
     RETURN_VALUE HAD_ERROR)
 
   if (CTEST_DO_SUBMIT)
