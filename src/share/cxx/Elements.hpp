@@ -17,8 +17,6 @@ public:
   ExecViewManaged<Real * [NP][NP]>        m_mp;
   ExecViewManaged<Real * [NP][NP]>        m_spheremp;
   ExecViewManaged<Real * [NP][NP]>        m_rspheremp;
-  ExecViewManaged<Real * [2][3][NP][NP]>  m_vec_sph2cart;
-  ExecViewManaged<Real * [2][2][NP][NP]>  m_tensorVisc;
   ExecViewManaged<Real * [2][2][NP][NP]>  m_metinv;
   ExecViewManaged<Real * [NP][NP]>        m_metdet;
   // Prescribed surface geopotential height at eta = 1
@@ -117,8 +115,7 @@ public:
   // Fill the exec space views with data coming from F90 pointers
   void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
-               CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr& vec_sph2cart,
-               CF90Ptr &tensorVisc, CF90Ptr &phis);
+               CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
