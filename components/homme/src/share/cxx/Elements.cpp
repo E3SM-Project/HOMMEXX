@@ -16,11 +16,9 @@ void Elements::init(const int num_elems) {
   m_mp = ExecViewManaged<Real * [NP][NP]>("MP", m_num_elems);
   m_spheremp = ExecViewManaged<Real * [NP][NP]>("SPHEREMP", m_num_elems);
   m_rspheremp = ExecViewManaged<Real * [NP][NP]>("RSPHEREMP", m_num_elems);
-  m_tensorVisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSOR VISC", m_num_elems);
   m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
-  m_vec_sph2cart = ExecViewManaged<Real * [2][3][NP][NP]>("VEC SPHERE2CART", m_num_elems);
 
   m_d =
       ExecViewManaged<Real * [2][2][NP][NP]>("D - metric tensor", m_num_elems);
@@ -66,8 +64,7 @@ void Elements::init(const int num_elems) {
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                        CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
-                       CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr& vec_sph2cart,
-                       CF90Ptr &tensorVisc, CF90Ptr &phis) {
+                       CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -82,10 +79,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       Kokkos::create_mirror_view(m_spheremp);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_rspheremp =
       Kokkos::create_mirror_view(m_rspheremp);
-  ExecViewManaged<Real *[2][3][NP][NP]>::HostMirror h_vec_sph2cart=
-      Kokkos::create_mirror_view(m_vec_sph2cart);
-  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_tensorVisc =
-      Kokkos::create_mirror_view(m_tensorVisc);
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
@@ -96,8 +89,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 
   HostViewUnmanaged<const Real *[NP][NP]>       h_mp_f90 (mp, m_num_elems);
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_metinv_f90 (metinv, m_num_elems);
-  HostViewUnmanaged<const Real *[2][2][NP][NP]> h_tenorVisc_f90 (tensorVisc, m_num_elems);
-  HostViewUnmanaged<const Real *[2][3][NP][NP]> h_vec_sph2cart_f90 (vec_sph2cart, m_num_elems);
 
   // 2d scalars
   for (int ie = 0; ie < m_num_elems; ++ie) {
@@ -122,14 +113,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
             h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
             h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
             h_metinv(ie, idim, jdim, igp, jgp) = h_metinv_f90(ie, idim, jdim, igp, jgp);
-            h_tensorVisc(ie, idim, jdim, igp, jgp) = h_tenorVisc_f90(ie, idim, jdim, igp, jgp);
-            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = h_vec_sph2cart_f90(ie,idim,jdim,igp,jgp);
           }
-        }
-      }
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-          h_vec_sph2cart(ie, idim, 2, igp, jgp) = h_vec_sph2cart_f90(ie,idim,2,igp,jgp);
         }
       }
     }
@@ -141,8 +125,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_mp, h_mp);
   Kokkos::deep_copy(m_spheremp, h_spheremp);
   Kokkos::deep_copy(m_rspheremp, h_rspheremp);
-  Kokkos::deep_copy(m_vec_sph2cart, h_vec_sph2cart);
-  Kokkos::deep_copy(m_tensorVisc, h_tensorVisc);
   Kokkos::deep_copy(m_phis, h_phis);
 
   Kokkos::deep_copy(m_d, h_d);
@@ -163,8 +145,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_rspheremp, engine, random_dist);
   genRandArray(m_metdet, engine, random_dist);
   genRandArray(m_metinv, engine, random_dist);
-  genRandArray(m_vec_sph2cart, engine, random_dist);
-  genRandArray(m_tensorVisc, engine, random_dist);
   genRandArray(m_phis, engine, random_dist);
 
   genRandArray(m_omega_p, engine, random_dist);
