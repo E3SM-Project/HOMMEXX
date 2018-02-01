@@ -81,12 +81,18 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   data.hypervis_scaling = params.hypervis_scaling;
 }
 
-void init_control_caar_c(const int &nets, const int &nete, const int &num_elems,
-                         const int &qn0, const Real &ps0, const int &rsplit,
-                         CRCPtr &hybrid_a_ptr, CRCPtr &hybrid_b_ptr) {
-  Control &control = Context::singleton().get_control();
-  control.init(nets, nete, num_elems, qn0, ps0, rsplit, hybrid_a_ptr,
-               hybrid_b_ptr);
+void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
+                          const int& qn0, const Real& ps0, 
+                          const int& rsplit,
+                          CRCPtr& hybrid_am_ptr,
+                          CRCPtr& hybrid_ai_ptr,
+                          CRCPtr& hybrid_bm_ptr,
+                          CRCPtr& hybrid_bi_ptr)
+{
+  Control& control = Context::singleton().get_control ();
+
+  control.init(nets, nete, num_elems, qn0, ps0, rsplit, 
+               hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
 }
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
@@ -177,32 +183,33 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
                          CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
 {
+  Control& control = Context::singleton().get_control ();
   Elements& r = Context::singleton().get_elements ();
-  r.init (num_elems);
-  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+  r.init (num_elems, control.rsplit == 0);
+  r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                       CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_pecnd_ptr,
+                       CF90Ptr& elem_derived_phi_ptr,
                        CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
                        CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   // Copy data from f90 pointers to cxx views
   r.pull_from_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
-                           elem_derived_phi_ptr,elem_derived_pecnd_ptr,
+                           elem_derived_phi_ptr,
                            elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
                            elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                          F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_pecnd_ptr,
+                          F90Ptr& elem_derived_phi_ptr, 
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
   Elements& r = Context::singleton().get_elements();
   r.push_to_f90_pointers(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,
-                         elem_derived_phi_ptr,elem_derived_pecnd_ptr,
+                         elem_derived_phi_ptr,
                          elem_derived_omega_p_ptr,elem_derived_vn0_ptr,
                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr);
 }
@@ -228,9 +235,7 @@ void euler_pull_data_c (CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_de
   Elements& elements = Context::singleton().get_elements();
   const Control& data = Context::singleton().get_control();
 
-  sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                   elem_derived_eta_dot_dpdn_ptr, data.num_elems),
-                 elements.m_eta_dot_dpdn);
+  elements.pull_eta_dot(elem_derived_eta_dot_dpdn_ptr);
   sync_to_device(HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                    elem_derived_omega_p_ptr, data.num_elems),
                  elements.m_omega_p);
@@ -268,9 +273,7 @@ void euler_push_results_c (F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_d
                  qmin_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV),
                HostViewUnmanaged<Real**[NUM_PHYSICAL_LEV]>(
                  qmax_ptr, data.num_elems, data.qsize, NUM_PHYSICAL_LEV));
-  sync_to_host(elements.m_eta_dot_dpdn,
-               HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
-                 elem_derived_eta_dot_dpdn_ptr, data.num_elems));
+  elements.push_eta_dot(elem_derived_eta_dot_dpdn_ptr);
   sync_to_host(elements.m_omega_p,
                HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]>(
                  elem_derived_omega_p_ptr, data.num_elems));
@@ -442,6 +445,7 @@ extern "C" {
 // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
 void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
                       const Real &dt, Real *&fort_ps_v) {
+
   Control &sim_state = Context::singleton().get_control();
   sim_state.np1 = np1;
   sim_state.qn0 = np1_qdp;
