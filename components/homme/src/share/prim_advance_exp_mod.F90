@@ -45,6 +45,7 @@ module prim_advance_exp_mod
 
 #ifdef USE_KOKKOS_KERNELS
     use iso_c_binding,  only: c_ptr, c_loc
+    use element_mod,    only: elem_state_v, elem_state_temp, elem_state_dp3d
     use element_mod,    only: elem_derived_phi, elem_derived_pecnd
     use element_mod,    only: elem_derived_omega_p, elem_derived_vn0
     use element_mod,    only: elem_derived_eta_dot_dpdn, elem_state_Qdp
