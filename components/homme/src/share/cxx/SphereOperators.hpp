@@ -974,10 +974,10 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
       laplace(0,igp,jgp,ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,ilev)
-                              *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+                              *(PhysicalConstants::rrearth*PhysicalConstants::rrearth);
 
       laplace(1,igp,jgp,ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,ilev)
-                              *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+                              *(PhysicalConstants::rrearth*PhysicalConstants::rrearth);
 #endif
       laplace(0,igp,jgp,ilev) += (gradcov(0,igp,jgp,ilev) - curlcov(0,igp,jgp,ilev));
       laplace(1,igp,jgp,ilev) += (gradcov(1,igp,jgp,ilev) - curlcov(1,igp,jgp,ilev));

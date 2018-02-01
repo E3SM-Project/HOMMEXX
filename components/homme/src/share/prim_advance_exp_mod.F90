@@ -49,6 +49,7 @@ module prim_advance_exp_mod
     use element_mod,    only: elem_derived_phi, elem_derived_pecnd
     use element_mod,    only: elem_derived_omega_p, elem_derived_vn0
     use element_mod,    only: elem_derived_eta_dot_dpdn, elem_state_Qdp
+    use element_mod,    only: elem_derived_dpdiss_ave, elem_derived_dpdiss_biharmonic
 #endif
 
 #ifdef TRILINOS
@@ -88,6 +89,7 @@ module prim_advance_exp_mod
     type (c_ptr) :: elem_derived_phi_ptr, elem_derived_pecnd_ptr
     type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
     type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+    type (c_ptr) :: elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr
     type (c_ptr) :: hvcoord_a_ptr, hvcoord_b_ptr
 #endif
 
@@ -160,12 +162,14 @@ module prim_advance_exp_mod
         real (kind=c_double),  intent(in) :: dt, eta_ave_w
       end subroutine u3_5stage_timestep_c
 
-      subroutine pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr) bind(c)
+      subroutine pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr, &
+                                      elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr) bind(c)
         use iso_c_binding , only : c_ptr
         !
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_dp3d_ptr, elem_state_v_ptr
+        type (c_ptr), intent(in) :: elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr
       end subroutine pull_hypervis_data_c
 
       subroutine advance_hypervis_dp_c(np1,nets,nete,dt,eta_ave_w) bind(c)
@@ -177,12 +181,14 @@ module prim_advance_exp_mod
         real (kind=c_double),  intent(in) :: dt, eta_ave_w
       end subroutine advance_hypervis_dp_c
 
-      subroutine push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr) bind(c)
+      subroutine push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr, &
+                                   elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr) bind(c)
         use iso_c_binding , only : c_ptr
         !
         ! Inputs
         !
         type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_dp3d_ptr, elem_state_v_ptr
+        type (c_ptr), intent(in) :: elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr
       end subroutine push_hypervis_results_c
 #endif
 
@@ -375,15 +381,17 @@ module prim_advance_exp_mod
       ! Also, F has index base 1, C has index base 0.
       call init_control_caar_c(nets-1,nete,nelemd,qn0-1,hvcoord%ps0,rsplit,hvcoord_a_ptr,hvcoord_b_ptr)
 
-      elem_state_v_ptr              = c_loc(elem_state_v)
-      elem_state_t_ptr              = c_loc(elem_state_temp)
-      elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
-      elem_derived_phi_ptr          = c_loc(elem_derived_phi)
-      elem_derived_pecnd_ptr        = c_loc(elem_derived_pecnd)
-      elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
-      elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
-      elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
-      elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+      elem_state_v_ptr                   = c_loc(elem_state_v)
+      elem_state_t_ptr                   = c_loc(elem_state_temp)
+      elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
+      elem_derived_phi_ptr               = c_loc(elem_derived_phi)
+      elem_derived_pecnd_ptr             = c_loc(elem_derived_pecnd)
+      elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+      elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+      elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+      elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+      elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+      elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
       call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
                              elem_derived_phi_ptr, elem_derived_pecnd_ptr,            &
                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
@@ -597,9 +605,11 @@ module prim_advance_exp_mod
     else if (method<=10) then ! not implicit
       ! forward-in-time, hypervis applied to dp3d
 #ifdef USE_KOKKOS_KERNELS
-      call pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr)
+      call pull_hypervis_data_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr,&
+                                elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr)
       call advance_hypervis_dp_c(np1,nets,nete,dt_vis,eta_ave_w)
-      call push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr)
+      call push_hypervis_results_c(elem_state_v_ptr,elem_state_t_ptr,elem_state_dp3d_ptr, &
+                                   elem_derived_dpdiss_ave_ptr,elem_derived_dpdiss_biharmonic_ptr)
 #else
       call advance_hypervis_dp(edge3p1,elem,hvcoord,hybrid,deriv,np1,nets,nete,dt_vis,eta_ave_w)
 #endif
