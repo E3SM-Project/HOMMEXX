@@ -35,6 +35,7 @@ void advance_hypervis_dp_c (const int& np1, const int& nets, const int& nete,
   // Set elements some inputs into the control
   data.nets      = nets-1;
   data.nete      = nete;  // F90 ranges are closed, c ranges are open on the right, so this can stay the same
+  data.np1       = np1-1;
   data.dt        = dt/params.hypervis_subcycle;
   data.eta_ave_w = eta_ave_w;
   data.nu_ratio  = 1.0;
