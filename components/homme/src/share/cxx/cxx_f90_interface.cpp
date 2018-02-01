@@ -82,7 +82,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 }
 
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0, 
+                          const int& qn0, const Real& ps0,
                           const int& rsplit,
                           CRCPtr& hybrid_am_ptr,
                           CRCPtr& hybrid_ai_ptr,
@@ -91,7 +91,7 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
 {
   Control& control = Context::singleton().get_control ();
 
-  control.init(nets, nete, num_elems, qn0, ps0, rsplit, 
+  control.init(nets, nete, num_elems, qn0, ps0, rsplit,
                hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
 }
 
@@ -186,7 +186,7 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   Control& control = Context::singleton().get_control ();
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, control.rsplit == 0);
-  r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
+  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
@@ -203,7 +203,7 @@ void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF9
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                          F90Ptr& elem_derived_phi_ptr, 
+                          F90Ptr& elem_derived_phi_ptr,
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
