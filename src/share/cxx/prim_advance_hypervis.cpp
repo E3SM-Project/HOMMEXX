@@ -39,6 +39,7 @@ void advance_hypervis_dp_c (const int& np1, const int& nets, const int& nete,
   data.dt        = dt/params.hypervis_subcycle;
   data.eta_ave_w = eta_ave_w;
   data.nu_ratio  = 1.0;
+  data.nu_top    = params.nu_top;
 
   // Make sure all the BE needed by Hyperviscosity
   std::string be_name = "HyperviscosityFunctor";

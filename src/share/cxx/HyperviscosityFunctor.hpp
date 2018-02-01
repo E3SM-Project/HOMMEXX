@@ -192,7 +192,7 @@ public:
       });
 
       if (m_data.nu_top > 0) {
-        const int num_biharmonic = 4;
+        const int num_biharmonic = 3;
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_biharmonic),
                              [&](const int phys_lev) {
           const int lev = phys_lev / VECTOR_SIZE;
@@ -208,11 +208,19 @@ public:
               lev_nu_scale_top[phys_lev] * m_data.nu_top *
               laplace_t(kv.ie, igp, jgp, lev)[vec];
 
-          m_elements.buffers.dptens(kv.ie, 0, igp, jgp, lev)[vec] +=
+          m_elements.buffers.dptens(kv.ie, igp, jgp, lev)[vec] +=
               lev_nu_scale_top[phys_lev] * m_data.nu_top *
               laplace_dp3d(kv.ie, igp, jgp, lev)[vec];
         });
       }
+
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                           [&](const int &lev) {
+          m_elements.buffers.dptens(kv.ie, igp, jgp, lev) *= m_data.dt;
+          m_elements.buffers.dptens(kv.ie, igp, jgp, lev) += m_elements.m_dp3d(kv.ie,m_data.np1,igp,jgp,lev)
+                                                           * m_elements.m_spheremp(kv.ie,igp,jgp);
+      });
+
     });
   }
 
