@@ -7,9 +7,6 @@
 
 #include "vector/VectorUtils.hpp"
 
-#define HMCE HOMMEXX_MPI_CHECK_ERROR
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
-
 namespace Homme
 {
 
@@ -216,7 +213,8 @@ void BoundaryExchange::exchange (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()),
+                          m_connectivity->get_comm().m_mpi_comm);
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -246,7 +244,8 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()),
+                          m_connectivity->get_comm().m_mpi_comm);
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -354,7 +353,8 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   GPTLstop("be sync_send_buffer");
   GPTLstart("be send");
-  HMCE(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()),
+                          m_connectivity->get_comm().m_mpi_comm);
   GPTLstop("be send");
 
   // Notify a send is ongoing
@@ -386,13 +386,15 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
     // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()),
+                            m_connectivity->get_comm().m_mpi_comm);
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   m_recv_pending = false;
   GPTLstop("be recv waitall");
 
@@ -471,8 +473,9 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
-  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(),
-                   MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(),
+                                      MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
@@ -557,7 +560,8 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // ---- Send ---- //
   GPTLstart("be send");
   m_buffers_manager->sync_send_buffer(this);
-  HMCE(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size() - 1, m_send_requests.data()),
+                          m_connectivity->get_comm().m_mpi_comm);
   GPTLstop("be send");
 
   // Mark send buffer as busy
@@ -586,13 +590,15 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
     // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HMCE(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_recv_requests.size() - 1, m_recv_requests.data()),
+                            m_connectivity->get_comm().m_mpi_comm);
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   GPTLstop("be recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
@@ -643,7 +649,8 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
   GPTLstart("be recv waitall 2");
-  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
@@ -822,12 +829,14 @@ void BoundaryExchange::build_buffer_views_and_requests()
         const ConnectionInfo& info = connections(ie, iconn);
         count += m_elem_buf_size[info.kind];
       }
-      HMCE(MPI_Send_init(send_ptr + os, count, MPI_DOUBLE,
-                         pids[ip], m_exchange_type, mpi_comm,
-                         &m_send_requests[irequest]));
-      HMCE(MPI_Recv_init(recv_ptr + os, count, MPI_DOUBLE,
-                         pids[ip], m_exchange_type, mpi_comm,
-                         &m_recv_requests[irequest]));
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr + os, count, MPI_DOUBLE,
+                                            pids[ip], m_exchange_type, mpi_comm,
+                                            &m_send_requests[irequest]),
+                              m_connectivity->get_comm().m_mpi_comm);
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr + os, count, MPI_DOUBLE,
+                                            pids[ip], m_exchange_type, mpi_comm,
+                                            &m_recv_requests[irequest]),
+                              m_connectivity->get_comm().m_mpi_comm);
       os += count;
     }
   }
@@ -886,9 +895,6 @@ void BoundaryExchange
   pids_os.push_back(nle*NUM_CONNECTIONS);
   assert(static_cast<int>(pids.size()) >= 1);
   assert(static_cast<int>(pids_os[0]) == 0);
-  mprarr(h_i2ec);
-  mprarr(pids);
-  mprarr(pids_os);
 
   Kokkos::deep_copy(m_i2ec, h_i2ec);
 }
@@ -906,8 +912,10 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
 
   // Destroy each request
   for (size_t i=0; i<m_send_requests.size()-1; ++i) {
-    HMCE(MPI_Request_free(&m_send_requests[i]));
-    HMCE(MPI_Request_free(&m_recv_requests[i]));
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]),
+                            m_connectivity->get_comm().m_mpi_comm);
+    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]),
+                            m_connectivity->get_comm().m_mpi_comm);
   }
 
   // Clear vectors
@@ -938,8 +946,10 @@ void BoundaryExchange::waitall()
   // Safety check
   assert (m_buffers_manager->are_buffers_busy());
 
-  HMCE(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE));
-  HMCE(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE));
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size() - 1, m_send_requests.data(), MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm);
+  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size() - 1, m_recv_requests.data(), MPI_STATUSES_IGNORE),
+                          m_connectivity->get_comm().m_mpi_comm);
 
   m_buffers_manager->unlock_buffers();
 }
