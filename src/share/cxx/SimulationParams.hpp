@@ -44,6 +44,7 @@ struct SimulationParams
   double    nu;
   double    nu_s;
   double    nu_p;
+  double    nu_top;
   double    nu_div;
   int       hypervis_order;
   int       hypervis_subcycle;

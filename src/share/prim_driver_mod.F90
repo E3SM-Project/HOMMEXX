@@ -593,7 +593,7 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
                                     elem_metdet, elem_metinv, elem_state_phis
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
-                                    nu, nu_p, nu_s, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
+                                    nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
                                     vert_remap_q_alg, statefreq, use_semi_lagrange_transport
     use iso_c_binding,        only: c_ptr, c_loc, c_bool
 #endif
@@ -684,7 +684,7 @@ contains
   interface
     subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
                                          prescribed_wind, energy_fixer, qsize, state_frequency,    &
-                                         nu, nu_p, nu_s, nu_div,                                   &
+                                         nu, nu_p, nu_s, nu_div, nu_top,                           &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
                                          moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
@@ -694,7 +694,7 @@ contains
       integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
       integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
-      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, hypervis_scaling
+      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
       logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
     end subroutine init_simulation_params_c
@@ -1042,7 +1042,7 @@ contains
 
     call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
                                    prescribed_wind, energy_fixer, qsize, statefreq,               &
-                                   nu, nu_p, nu_s, nu_div,                                        &
+                                   nu, nu_p, nu_s, nu_div, nu_top,                                &
                                    hypervis_order, hypervis_subcycle, hypervis_scaling,           &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &

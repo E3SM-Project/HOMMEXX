@@ -24,7 +24,7 @@ extern "C"
 void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
                                const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
                                const int& qsize, const int& state_frequency,
-                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div,
+                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div, const Real& nu_top,
                                const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
                                const bool& disable_diagnostics, const bool& moisture, const bool& use_semi_lagrangian_transport)
 {
@@ -52,6 +52,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.nu_p                          = nu_p;
   params.nu_s                          = nu_s;
   params.nu_div                        = nu_div;
+  params.nu_top                        = nu_top;
   params.hypervis_order                = hypervis_order;
   params.hypervis_subcycle             = hypervis_subcycle;
   params.disable_diagnostics           = disable_diagnostics;
