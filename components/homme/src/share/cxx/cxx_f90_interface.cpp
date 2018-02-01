@@ -74,9 +74,10 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Set some parameters in the Control structure already
   Control& data = Context::singleton().get_control();
-  data.nu   = params.nu;
-  data.nu_s = params.nu_s;
-  data.nu_p = params.nu_p;
+  data.nu     = params.nu;
+  data.nu_s   = params.nu_s;
+  data.nu_p   = params.nu_p;
+  data.nu_top = params.nu_top;
   data.hypervis_scaling = params.hypervis_scaling;
 }
 

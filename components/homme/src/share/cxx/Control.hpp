@@ -44,14 +44,15 @@ struct Control {
 
   // Tracers options;
   DSSOption::Enum DSSopt;
-  Real nu, nu_p, nu_q, nu_s;
-  Real nu_top;
-  Real nu_ratio;
+  Real nu_q;
   int rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
   // Hyperviscosity options
   Real hypervis_scaling;
+  Real nu_top;
+  Real nu_ratio;
+  Real nu, nu_p, nu_s;
 
   // Number of tracers (may be lower than QSIZE_D)
   int qsize;
