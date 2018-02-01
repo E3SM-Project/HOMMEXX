@@ -7,6 +7,8 @@
 
 #include "vector/VectorUtils.hpp"
 
+#define HMCE HOMMEXX_MPI_CHECK_ERROR
+
 namespace Homme
 {
 
@@ -104,14 +106,14 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
 
 void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields)
 {
-  // We don't allow to call this method twice in a row. If you want to change the number of fields,
+  // We don't allow to call this method twice in a row. If you want to change the number of fields, 
   // you need to call clean_up first, to get a fresh new BoundaryExchange.
   // Note: if you do call clean_up and then again set_num_field and the new number of fields
   //       are smaller than the previous ones, BuffersManager will NOT shrink the buffers, so
   //       you may be left with buffers that are larger than what you need.
   assert (m_cleaned_up);
 
-  // Make sure the connectivity is valid: must at least be a valid pointer, and be initialized, i.e.,
+  // Make sure the connectivity is valid: must at least be a valid pointer, and be initialized, i.e., 
   // store a valid number of elements, but may be finalized later (before registration_completed call though)
   assert (m_connectivity && m_connectivity->is_initialized());
 
@@ -119,13 +121,13 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   assert (!(num_1d_fields>0 && (num_2d_fields>0 || num_2d_fields>0)));
 
   // Note: we do not set m_num_1d_fields, m_num_2d_fields and m_num_3d_fields, since we will use them as
-  //       progressive indices while adding fields. Then, during registration_completed,
+  //       progressive indices while adding fields. Then, during registration_completed, 
   //       we will check that they match the 2nd dimension of m_1d_fields, m_2d_fields and m_3d_fields.
 
   // Create the fields views
-  m_1d_fields = decltype(m_1d_fields)("1d fields",m_connectivity->get_num_local_elements(),num_1d_fields);
-  m_2d_fields = decltype(m_2d_fields)("2d fields",m_connectivity->get_num_local_elements(),num_2d_fields);
-  m_3d_fields = decltype(m_3d_fields)("3d fields",m_connectivity->get_num_local_elements(),num_3d_fields);
+  m_1d_fields = decltype(m_1d_fields)("1d fields", m_connectivity->get_num_local_elements(), num_1d_fields);
+  m_2d_fields = decltype(m_2d_fields)("2d fields", m_connectivity->get_num_local_elements(), num_2d_fields);
+  m_3d_fields = decltype(m_3d_fields)("3d fields", m_connectivity->get_num_local_elements(), num_3d_fields);
 
   // Now we can start register fields
   m_registration_started   = true;
@@ -146,12 +148,12 @@ void BoundaryExchange::clean_up()
   assert (!m_send_pending && !m_recv_pending);
 
   // Free MPI data types
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_connectivity->get_comm().m_mpi_comm);
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_connectivity->get_comm().m_mpi_comm);
+  HMCE(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
+  HMCE(MPI_Type_free(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
 
   // Clear stored fields
-  m_2d_fields = decltype(m_2d_fields)(0,0);
-  m_3d_fields = decltype(m_3d_fields)(0,0);
+  m_2d_fields = decltype(m_2d_fields)(0, 0);
+  m_3d_fields = decltype(m_3d_fields)(0, 0);
 
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -185,19 +187,19 @@ void BoundaryExchange::registration_completed()
   // Create requests
   // Note: we put an extra null request at the end, so that if we have no share connections
   //       (1 rank), m_*_requests.data() is not NULL. NULL would cause MPI_Startall to abort
-  m_send_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1,MPI_REQUEST_NULL);
-  m_recv_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1,MPI_REQUEST_NULL);
+  m_send_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1, MPI_REQUEST_NULL);
+  m_recv_requests.resize(m_connectivity->get_num_shared_connections<HostMemSpace>()+1, MPI_REQUEST_NULL);
 
   // Create the MPI data types, for corners and edges
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
-  // Note: for 2d/3d fields, we have 1 Real per GP (per level, in 3d). For 1d fields,
+  // Note: for 2d/3d fields, we have 1 Real per GP (per level, in 3d). For 1d fields, 
   //       we have 2 Real per level (max and min over element).
   m_elem_buf_size[etoi(ConnectionKind::CORNER)] = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_connectivity->get_comm().m_mpi_comm);
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)],   MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_connectivity->get_comm().m_mpi_comm);
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]),m_connectivity->get_comm().m_mpi_comm);
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]),m_connectivity->get_comm().m_mpi_comm);
+  HMCE(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::CORNER)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
+  HMCE(MPI_Type_contiguous(m_elem_buf_size[etoi(ConnectionKind::EDGE)], MPI_DOUBLE, &m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
+  HMCE(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::CORNER)]));
+  HMCE(MPI_Type_commit(&m_mpi_data_type[etoi(ConnectionKind::EDGE)]));
 
   // Determine what kind of BE is this (exchange or exchange_min_max)
   m_exchange_type = m_num_1d_fields>0 ? MPI_EXCHANGE_MIN_MAX : MPI_EXCHANGE;
@@ -227,7 +229,7 @@ void BoundaryExchange::exchange (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
+  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -257,7 +259,7 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
   }
 
   // Hey, if some process can already send me stuff while I'm still packing, that's ok
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
+  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
@@ -317,19 +319,19 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   GPTLstart("be pack");
   const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,3>({nets,0,0},{nete,NUM_CONNECTIONS,m_num_2d_fields},{1,1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({nets, 0, 0}, {nete, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}), 
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
-      const ConnectionInfo& info = connections(ie,iconn);
+      const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
       // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid, 
       // for local connections we need to manually copy on the remote element lid. We can do it here
       const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
       // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
       const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
       for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-        send_2d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k) = fields_2d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp);
+        send_2d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(k) = fields_2d(field_lidpos.lid, ifield)(pts[k].ip, pts[k].jp);
       }
     });
   }
@@ -337,23 +339,23 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   if (m_num_3d_fields>0) {
     const auto num_3d_fields = m_num_3d_fields;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV), 
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
         const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
         const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
         const int ilev = it % NUM_LEV;
-        const ConnectionInfo& info = connections(ie,iconn);
+        const ConnectionInfo& info = connections(ie, iconn);
         const LidGidPos& field_lidpos  = info.local;
         // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid, 
         // for local connections we need to manually copy on the remote element lid. We can do it here
         const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
         // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
         const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
         for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-          send_3d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(k,ilev) = fields_3d(field_lidpos.lid,ifield)(pts[k].ip,pts[k].jp,ilev);
+          send_3d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(k, ilev) = fields_3d(field_lidpos.lid, ifield)(pts[k].ip, pts[k].jp, ilev);
         }
       });
   }
@@ -365,7 +367,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
   GPTLstop("be sync_send_buffer");
   GPTLstart("be send");
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
+  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_send_requests.data())); // Fire off the sends
   GPTLstop("be send");
 
   // Notify a send is ongoing
@@ -383,29 +385,33 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   // Check that this object is setup to perform exchange and not exchange_min_max
   assert (m_exchange_type==MPI_EXCHANGE);
 
-  // I am not sure why and if we could have this scenario, but just in case. I think MPI *may* go bananas in this case
+  // I am not sure why and if we could have this scenario, but just in case. I
+  // think MPI *may* go bananas in this case
   if (m_num_2d_fields+m_num_3d_fields==0) {
     return;
   }
 
-  // If I am doing pack_and_send and recv_and_unpack manually (rather than through 'exchange'),
-  // then I need to start receiving now (otherwise it is done already inside 'exchange')
+  // If I am doing pack_and_send and recv_and_unpack manually (rather than
+  // through 'exchange'), then I need to start receiving now (otherwise it is
+  // done already inside 'exchange')
   if (!m_recv_pending) {
-    // If you are doing send/recv manually, don't call recv without a send, or else you'll be stuck waiting later on
+    // If you are doing send/recv manually, don't call recv without a send, or
+    // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
+    HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_recv_requests.data()));
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                   m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   m_recv_pending = false;
   GPTLstop("be recv waitall");
 
   GPTLstart("be recv sync_recv_buffer");
-  m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
+  m_buffers_manager->sync_recv_buffer(this);
   GPTLstop("be recv sync_recv_buffer");
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
@@ -430,16 +436,20 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   // First, unpack 2d fields (if any)...
   const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace,2>({nets,0},{nete,m_num_2d_fields},{1,1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({nets, 0}, {nete, m_num_2d_fields}, {1, 1}), 
                          KOKKOS_LAMBDA(const int ie, const int ifield) {
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-          fields_2d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp) += recv_2d_buffers(ie,ifield,iedge)[k];
+          fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
+                                helpers.CONNECTION_PTS_FWD[iedge][k].jp)
+            += recv_2d_buffers(ie, ifield, iedge)[k];
         }
       }
       for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-        if (recv_2d_buffers(ie,ifield,icorner).size() > 0) {
-          fields_2d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp) += recv_2d_buffers(ie,ifield,icorner)[0];
+        if (recv_2d_buffers(ie, ifield, icorner).size() > 0) {
+          fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
+                                helpers.CONNECTION_PTS_FWD[icorner][0].jp)
+            += recv_2d_buffers(ie, ifield, icorner)[0];
         }
       }
     });
@@ -448,28 +458,35 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   if (m_num_3d_fields>0) {
     const auto num_3d_fields = m_num_3d_fields;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV), 
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_LEV);
         const int ifield = (it / NUM_LEV) % num_3d_fields;
         const int ilev = it % NUM_LEV;
         for (int k=0; k<NP; ++k) {
           for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,helpers.CONNECTION_PTS_FWD[iedge][k].jp,ilev) += recv_3d_buffers(ie,ifield,iedge)(k,ilev);
+            fields_3d(ie, ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
+                                  helpers.CONNECTION_PTS_FWD[iedge][k].jp, ilev)
+              += recv_3d_buffers(ie, ifield, iedge)(k, ilev);
           }
         }
         for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-          if (recv_3d_buffers(ie,ifield,icorner).size() > 0)
-            fields_3d(ie,ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,helpers.CONNECTION_PTS_FWD[icorner][0].jp,ilev) += recv_3d_buffers(ie,ifield,icorner)(0,ilev);
+          if (recv_3d_buffers(ie, ifield, icorner).size() > 0)
+            fields_3d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
+                                  helpers.CONNECTION_PTS_FWD[icorner][0].jp, ilev)
+              += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
         }        
       });
   }
   ExecSpace::fence();
   GPTLstop("be unpack");
 
-  // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
-  // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  // If another BE structure starts an exchange, it has no way to check that
+  // this object has finished its send requests, and may erroneously reuse the
+  // buffers. Therefore, we must ensure that, upon return, all buffers are
+  // reusable.
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(), m_send_requests.data(),
+                   MPI_STATUSES_IGNORE)); // Wait for all data to arrive
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
@@ -487,7 +504,8 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // Check that this object is setup to perform exchange_min_max and not exchange
   assert (m_exchange_type==MPI_EXCHANGE_MIN_MAX);
 
-  // I am not sure why and if we could have this scenario, but just in case. I think MPI *may* go bananas in this case
+  // I am not sure why and if we could have this scenario, but just in case. I
+  // think MPI *may* go bananas in this case
   if (m_num_1d_fields==0) {
     return;
   }
@@ -527,29 +545,34 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   GPTLstart("be pack minmax");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV), 
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
       const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
       const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
       const int ilev = it % NUM_LEV;
-      const ConnectionInfo& info = connections(ie,iconn);
+      const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
-      // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-      // for local connections we need to manually copy on the remote element lid. We can do it here
+      // For the buffer, in case of local connection, use remote info. In fact,
+      // while with shared connections the mpi call will take care of "copying"
+      // data to the remote recv buffer in the correct remote element lid, for
+      // local connections we need to manually copy on the remote element
+      // lid. We can do it here
       const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
       
-      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MAX_ID) = fields_1d(field_lidpos.lid,ifield,MAX_ID)[ilev];
-      send_1d_buffers(buffer_lidpos.lid,ifield,buffer_lidpos.pos)(ilev,MIN_ID) = fields_1d(field_lidpos.lid,ifield,MIN_ID)[ilev];
+      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MAX_ID) =
+        fields_1d(field_lidpos.lid, ifield, MAX_ID)[ilev];
+      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MIN_ID) =
+        fields_1d(field_lidpos.lid, ifield, MIN_ID)[ilev];
     });
   ExecSpace::fence();
   GPTLstop("be pack minmax");
 
   // ---- Send ---- //
   GPTLstart("be send");
-  m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data()),m_connectivity->get_comm().m_mpi_comm); // Fire off the sends
+  m_buffers_manager->sync_send_buffer(this);
+  HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                    m_send_requests.data()));
   GPTLstop("be send");
 
   // Mark send buffer as busy
@@ -565,24 +588,28 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   // Check that this object is setup to perform exchange_min_max and not exchange
   assert (m_exchange_type==MPI_EXCHANGE_MIN_MAX);
 
-  // I am not sure why and if we could have this scenario, but just in case. I think MPI *may* go bananas in this case
+  // I am not sure why and if we could have this scenario, but just in case. I
+  // think MPI *may* go bananas in this case
   if (m_num_1d_fields==0) {
     return;
   }
 
-  // If I am doing pack_and_send and recv_and_unpack manually (rather than through 'exchange'),
+  // If I am doing pack_and_send and recv_and_unpack manually (rather than through 'exchange'), 
   // then I need to start receiving now (otherwise it is done already inside 'exchange')
   if (!m_recv_pending) {
-    // If you are doing send/recv manually, don't call recv without a send, or else you'll be stuck waiting later on
+    // If you are doing send/recv manually, don't call recv without a send, or
+    // else you'll be stuck waiting later on
     assert (m_send_pending);
 
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data()),m_connectivity->get_comm().m_mpi_comm);
+    HMCE(MPI_Startall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                      m_recv_requests.data()));
     m_recv_pending = true;
   }
 
   // ---- Recv ---- //
   GPTLstart("be recv waitall");
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                   m_recv_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   GPTLstop("be recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
@@ -606,28 +633,35 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   GPTLstart("be unpack minmax");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV), 
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_LEV);
       const int ifield = (it / NUM_LEV) % num_1d_fields;
       const int ilev = it % NUM_LEV;
       for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
-        // Note: for min/max exchange, we really need to skip MISSING connections (while for 'normal' exchange,
-        //       the missing recv buffer points to a blackhole fileld with 0's, which do not alter the accummulation)
-        if (connections(ie,neighbor).kind==etoi(ConnectionKind::MISSING)) {
+        // Note: for min/max exchange, we really need to skip MISSING
+        //       connections (while for 'normal' exchange, the missing recv
+        //       buffer points to a blackhole fileld with 0's, which do not
+        //       alter the accummulation)
+        if (connections(ie, neighbor).kind==etoi(ConnectionKind::MISSING)) {
           continue;
         }
-        fields_1d(ie,ifield,MAX_ID)[ilev] = max(fields_1d(ie,ifield,MAX_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MAX_ID));
-        fields_1d(ie,ifield,MIN_ID)[ilev] = min(fields_1d(ie,ifield,MIN_ID)[ilev],recv_1d_buffers(ie,ifield,neighbor)(ilev,MIN_ID));
+        fields_1d(ie, ifield, MAX_ID)[ilev] = max(fields_1d(ie, ifield, MAX_ID)[ilev],
+                                                  recv_1d_buffers(ie, ifield, neighbor)(ilev, MAX_ID));
+        fields_1d(ie, ifield, MIN_ID)[ilev] = min(fields_1d(ie, ifield, MIN_ID)[ilev],
+                                                  recv_1d_buffers(ie, ifield, neighbor)(ilev, MIN_ID));
       }
     });
   ExecSpace::fence();
   GPTLstop("be unpack minmax");
 
-  // If another BE structure starts an exchange, it has no way to check that this object has finished its send requests,
-  // and may erroneously reuse the buffers. Therefore, we must ensure that, upon return, all buffers are reusable.
+  // If another BE structure starts an exchange, it has no way to check that
+  // this object has finished its send requests, and may erroneously reuse the
+  // buffers. Therefore, we must ensure that, upon return, all buffers are
+  // reusable.
   GPTLstart("be recv waitall 2");
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                   m_send_requests.data(), MPI_STATUSES_IGNORE)); // Wait for all data to arrive
   GPTLstop("be recv waitall 2");
 
   // Release the send/recv buffers
@@ -638,6 +672,8 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
 
 void BoundaryExchange::build_buffer_views_and_requests()
 {
+  const auto nle = m_connectivity->get_num_local_elements();
+
   // If we already set the buffers before, then nothing to be done here
   if (m_buffer_views_and_requests_built) {
     return;
@@ -667,7 +703,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   //       cube's vertices), but it's never written into, so will always contain zeros (set by the constructor).
 
   HostViewManaged<size_t[3]> h_buf_offset("");
-  Kokkos::deep_copy(h_buf_offset,0);
+  Kokkos::deep_copy(h_buf_offset, 0);
 
   // The amount of Real's used in a connection on a single level:
   //  - 2d/3d field exchange 1 Real per GP
@@ -687,8 +723,8 @@ void BoundaryExchange::build_buffer_views_and_requests()
 
   using local_buf_ptr_type = decltype( buffers_manager->get_local_buffer().data());
   using local_buf_val_type = decltype(*buffers_manager->get_local_buffer().data());
-  HostViewManaged<Pointer<local_buf_ptr_type,local_buf_val_type>[3]> h_all_send_buffers("");
-  HostViewManaged<Pointer<local_buf_ptr_type,local_buf_val_type>[3]> h_all_recv_buffers("");
+  HostViewManaged<Pointer<local_buf_ptr_type, local_buf_val_type>[3]> h_all_send_buffers("");
+  HostViewManaged<Pointer<local_buf_ptr_type, local_buf_val_type>[3]> h_all_recv_buffers("");
 
   h_all_send_buffers[etoi(ConnectionSharing::LOCAL)]   = buffers_manager->get_local_buffer().data();
   h_all_send_buffers[etoi(ConnectionSharing::SHARED)]  = buffers_manager->get_send_buffer().data();
@@ -698,19 +734,19 @@ void BoundaryExchange::build_buffer_views_and_requests()
   h_all_recv_buffers[etoi(ConnectionSharing::MISSING)] = buffers_manager->get_blackhole_recv_buffer().data();
 
   // Create buffer views
-  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer",m_connectivity->get_num_local_elements(),m_num_1d_fields);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer",m_connectivity->get_num_local_elements(),m_num_1d_fields);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer",m_connectivity->get_num_local_elements(),m_num_2d_fields);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer",m_connectivity->get_num_local_elements(),m_num_2d_fields);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer",m_connectivity->get_num_local_elements(),m_num_3d_fields);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer",m_connectivity->get_num_local_elements(),m_num_3d_fields);
+  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer", nle, m_num_1d_fields);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer", nle, m_num_1d_fields);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer", nle, m_num_2d_fields);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer", nle, m_num_2d_fields);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", nle, m_num_3d_fields);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", nle, m_num_3d_fields);
 
   // NOTE: I wanted to do this setup in parallel, on the execution space, but there
-  //       is a reduction hidden. In particular, we need to access buf_offset atomically,
+  //       is a reduction hidden. In particular, we need to access buf_offset atomically, 
   //       so that it is not update while we are still using it. One solution would be to
   //       use Kokkos::atomic_fetch_add, but it may kill the concurrency. And given that
   //       we do not have a ton of concurrency in this setup phase, and given that it is
-  //       precisely only a setup phase, we may as well do things serially on the host,
+  //       precisely only a setup phase, we may as well do things serially on the host, 
   //       then deep_copy back to device
   ConnectionHelpers helpers;
   auto h_send_1d_buffers = Kokkos::create_mirror_view(m_send_1d_buffers);
@@ -720,9 +756,9 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto h_send_3d_buffers = Kokkos::create_mirror_view(m_send_3d_buffers);
   auto h_recv_3d_buffers = Kokkos::create_mirror_view(m_recv_3d_buffers);
   auto h_connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+  for (int ie=0; ie<nle; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
-      const ConnectionInfo& info = h_connections(ie,iconn);
+      const ConnectionInfo& info = h_connections(ie, iconn);
 
       const LidGidPos local  = info.local;
 
@@ -730,39 +766,51 @@ void BoundaryExchange::build_buffer_views_and_requests()
       auto recv_buffer = h_all_recv_buffers[info.sharing];
 
       for (int ifield=0; ifield<m_num_1d_fields; ++ifield) {
-        h_send_1d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing]));
-        h_recv_1d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(reinterpret_cast<Scalar*>(recv_buffer.get() + h_buf_offset[info.sharing]));
+        h_send_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(
+          reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing]));
+        h_recv_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(
+          reinterpret_cast<Scalar*>(recv_buffer.get() + h_buf_offset[info.sharing]));
         h_buf_offset[info.sharing] += h_increment_1d[info.kind]*NUM_LEV*VECTOR_SIZE;
       }
       for (int ifield=0; ifield<m_num_2d_fields; ++ifield) {
-        h_send_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(send_buffer.get() + h_buf_offset[info.sharing],helpers.CONNECTION_SIZE[info.kind]);
-        h_recv_2d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Real*>(recv_buffer.get() + h_buf_offset[info.sharing],helpers.CONNECTION_SIZE[info.kind]);
+        h_send_2d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Real*>(
+          send_buffer.get() + h_buf_offset[info.sharing], helpers.CONNECTION_SIZE[info.kind]);
+        h_recv_2d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Real*>(
+          recv_buffer.get() + h_buf_offset[info.sharing], helpers.CONNECTION_SIZE[info.kind]);
         h_buf_offset[info.sharing] += h_increment_2d[info.kind];
       }
       for (int ifield=0; ifield<m_num_3d_fields; ++ifield) {
-        h_send_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing]),helpers.CONNECTION_SIZE[info.kind]);
-        h_recv_3d_buffers(local.lid,ifield,local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(reinterpret_cast<Scalar*>(recv_buffer.get() + h_buf_offset[info.sharing]),helpers.CONNECTION_SIZE[info.kind]);
+        h_send_3d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(
+          reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing]),
+          helpers.CONNECTION_SIZE[info.kind]);
+        h_recv_3d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar*[NUM_LEV]>(
+          reinterpret_cast<Scalar*>(recv_buffer.get() + h_buf_offset[info.sharing]),
+          helpers.CONNECTION_SIZE[info.kind]);
         h_buf_offset[info.sharing] += h_increment_3d[info.kind]*NUM_LEV*VECTOR_SIZE;
       }
     }
   }
-  Kokkos::deep_copy(m_send_1d_buffers,h_send_1d_buffers);
-  Kokkos::deep_copy(m_send_2d_buffers,h_send_2d_buffers);
-  Kokkos::deep_copy(m_send_3d_buffers,h_send_3d_buffers);
-  Kokkos::deep_copy(m_recv_1d_buffers,h_recv_1d_buffers);
-  Kokkos::deep_copy(m_recv_2d_buffers,h_recv_2d_buffers);
-  Kokkos::deep_copy(m_recv_3d_buffers,h_recv_3d_buffers);
+  Kokkos::deep_copy(m_send_1d_buffers, h_send_1d_buffers);
+  Kokkos::deep_copy(m_send_2d_buffers, h_send_2d_buffers);
+  Kokkos::deep_copy(m_send_3d_buffers, h_send_3d_buffers);
+  Kokkos::deep_copy(m_recv_1d_buffers, h_recv_1d_buffers);
+  Kokkos::deep_copy(m_recv_2d_buffers, h_recv_2d_buffers);
+  Kokkos::deep_copy(m_recv_3d_buffers, h_recv_3d_buffers);
 
 #ifndef NDEBUG
   // Sanity check: compute the buffers sizes for this boundary exchange, and checking that the final offsets match them
   size_t mpi_buffer_size = 0;
   size_t local_buffer_size = 0;
 
-  mpi_buffer_size   += m_elem_buf_size[etoi(ConnectionKind::CORNER)] * m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::SHARED,ConnectionKind::CORNER);
-  mpi_buffer_size   += m_elem_buf_size[etoi(ConnectionKind::EDGE)]   * m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::SHARED,ConnectionKind::EDGE);
+  mpi_buffer_size   += m_elem_buf_size[etoi(ConnectionKind::CORNER)] *
+    m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::SHARED, ConnectionKind::CORNER);
+  mpi_buffer_size   += m_elem_buf_size[etoi(ConnectionKind::EDGE)]   *
+    m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::SHARED, ConnectionKind::EDGE);
 
-  local_buffer_size += m_elem_buf_size[etoi(ConnectionKind::CORNER)] * m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::LOCAL,ConnectionKind::CORNER);
-  local_buffer_size += m_elem_buf_size[etoi(ConnectionKind::EDGE)]   * m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::LOCAL,ConnectionKind::EDGE);
+  local_buffer_size += m_elem_buf_size[etoi(ConnectionKind::CORNER)] *
+    m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::LOCAL, ConnectionKind::CORNER);
+  local_buffer_size += m_elem_buf_size[etoi(ConnectionKind::EDGE)]   *
+    m_connectivity->get_num_connections<HostMemSpace>(ConnectionSharing::LOCAL, ConnectionKind::EDGE);
 
   assert (h_buf_offset[etoi(ConnectionSharing::LOCAL)]==local_buffer_size);
   assert (h_buf_offset[etoi(ConnectionSharing::SHARED)]==mpi_buffer_size);
@@ -772,9 +820,9 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto connections = m_connectivity->get_connections<HostMemSpace>();
   int buf_offset = 0;
   int irequest   = 0;
-  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+  for (int ie=0; ie<nle; ++ie) {
     for (int iconn=0; iconn<NUM_CONNECTIONS; ++iconn) {
-      const ConnectionInfo& info = connections(ie,iconn);
+      const ConnectionInfo& info = connections(ie, iconn);
       if (info.sharing!=etoi(ConnectionSharing::SHARED)) {
         continue;
       }
@@ -791,8 +839,12 @@ void BoundaryExchange::build_buffer_views_and_requests()
       int recv_tag = m_exchange_type + info.remote.lid*NUM_CONNECTIONS + info.remote.pos;
 
       // Create the persistent requests
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,send_tag,mpi_comm,&m_send_requests[irequest]),mpi_comm);
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr,1,m_mpi_data_type[info.kind],info.remote_pid,recv_tag,mpi_comm,&m_recv_requests[irequest]),mpi_comm);
+      HMCE(MPI_Send_init(send_ptr, 1, m_mpi_data_type[info.kind],
+                         info.remote_pid, send_tag, mpi_comm,
+                         &m_send_requests[irequest]));
+      HMCE(MPI_Recv_init(recv_ptr, 1, m_mpi_data_type[info.kind],
+                         info.remote_pid, recv_tag, mpi_comm,
+                         &m_recv_requests[irequest]));
 
       // Increment the request counter;
       ++irequest;
@@ -816,8 +868,8 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
 
   // Destroy each request
   for (int i=0; i<m_connectivity->get_num_shared_connections<HostMemSpace>(); ++i) {
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_send_requests[i]),m_connectivity->get_comm().m_mpi_comm);
-    HOMMEXX_MPI_CHECK_ERROR(MPI_Request_free(&m_recv_requests[i]),m_connectivity->get_comm().m_mpi_comm);
+    HMCE(MPI_Request_free(&m_send_requests[i]));
+    HMCE(MPI_Request_free(&m_recv_requests[i]));
   }
 
   // Clear vectors
@@ -825,12 +877,12 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
   m_recv_requests.clear();
 
   // Clear buffer views
-  m_send_1d_buffers = decltype(m_send_1d_buffers)(0,0);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)(0,0);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)(0,0);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)(0,0);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)(0,0);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)(0,0);
+  m_send_1d_buffers = decltype(m_send_1d_buffers)(0, 0);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)(0, 0);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)(0, 0);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)(0, 0);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)(0, 0);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)(0, 0);
 
   // Done
   m_buffer_views_and_requests_built = false;
@@ -848,8 +900,10 @@ void BoundaryExchange::waitall()
   // Safety check
   assert (m_buffers_manager->are_buffers_busy());
 
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_send_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm);
-  HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),m_recv_requests.data(),MPI_STATUSES_IGNORE),m_connectivity->get_comm().m_mpi_comm);
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                   m_send_requests.data(), MPI_STATUSES_IGNORE));
+  HMCE(MPI_Waitall(m_connectivity->get_num_shared_connections<HostMemSpace>(),
+                   m_recv_requests.data(), MPI_STATUSES_IGNORE));
 
   m_buffers_manager->unlock_buffers();
 }
