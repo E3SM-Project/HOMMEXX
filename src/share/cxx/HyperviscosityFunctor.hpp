@@ -89,14 +89,17 @@ public:
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
 
+    m_elements.buffers.vtens(ie,0,igp,jgp,ilev) *= m_data.dt;
+    m_elements.buffers.vtens(ie,1,igp,jgp,ilev) *= m_data.dt;
+    m_elements.buffers.ttens(ie,igp,jgp,ilev) *= m_data.dt;
+
     m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
     m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
 
     Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev)
                    + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev);
-    heating /= PhysicalConstants::cp;
     m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) += m_elements.buffers.ttens(ie,igp,jgp,ilev);
-    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) -= heating;
+    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) -= heating/PhysicalConstants::cp;
 
     m_elements.m_dp3d(ie,m_data.np1,igp,jgp,ilev) = m_elements.buffers.dptens(ie,igp,jgp,ilev);
   }
@@ -178,7 +181,8 @@ public:
     }
     kv.team_barrier();
 
-    const Real lev_nu_scale_top[4] = { 1.0, 4.0, 2.0, 1.0 };
+    constexpr int num_biharmonic_levels = 3;
+    const Real lev_nu_scale_top[num_biharmonic_levels] = { 4.0, 2.0, 1.0 };
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &point_idx) {
       const int igp = point_idx / NP;
@@ -192,8 +196,7 @@ public:
       });
 
       if (m_data.nu_top > 0) {
-        const int num_biharmonic = 3;
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_biharmonic),
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_biharmonic_levels),
                              [&](const int phys_lev) {
           const int lev = phys_lev / VECTOR_SIZE;
           const int vec = phys_lev % VECTOR_SIZE;
@@ -204,7 +207,7 @@ public:
               lev_nu_scale_top[phys_lev] * m_data.nu_top *
               laplace_v(kv.ie, 1, igp, jgp, lev)[vec];
 
-          m_elements.buffers.ttens(kv.ie, 0, igp, jgp, lev)[vec] +=
+          m_elements.buffers.ttens(kv.ie, igp, jgp, lev)[vec] +=
               lev_nu_scale_top[phys_lev] * m_data.nu_top *
               laplace_t(kv.ie, igp, jgp, lev)[vec];
 
@@ -214,13 +217,15 @@ public:
         });
       }
 
+      // While for T and v we exchange the tendencies, for dp3d we exchange the updated state.
+      // However, since the BE structure already has registerd the *tens quantities, we store
+      // the updated state in dptens.
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &lev) {
           m_elements.buffers.dptens(kv.ie, igp, jgp, lev) *= m_data.dt;
           m_elements.buffers.dptens(kv.ie, igp, jgp, lev) += m_elements.m_dp3d(kv.ie,m_data.np1,igp,jgp,lev)
                                                            * m_elements.m_spheremp(kv.ie,igp,jgp);
       });
-
     });
   }
 
