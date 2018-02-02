@@ -30,6 +30,7 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use iso_c_binding,       only: c_ptr, c_loc
 #endif
 
 #ifdef _REFSOLN
@@ -46,11 +47,21 @@ program prim_main
   implicit none
 #ifdef USE_KOKKOS_KERNELS
   interface
-     subroutine initialize_hommexx_session() bind(c)
-     end subroutine initialize_hommexx_session
+    subroutine initialize_hommexx_session() bind(c)
+    end subroutine initialize_hommexx_session
 
-     subroutine finalize_hommexx_session() bind(c)
-     end subroutine finalize_hommexx_session
+    subroutine finalize_hommexx_session() bind(c)
+    end subroutine finalize_hommexx_session
+
+    subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_double
+      !
+      ! Inputs
+      !
+      real (kind=c_double),  intent(in) :: ps0
+      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
+    end subroutine init_hvcoord_c
   end interface
 #endif
 
@@ -62,6 +73,10 @@ program prim_main
   type (RestartHeader_t)      :: RestartHeader
   type (TimeLevel_t)          :: tl             ! Main time level struct
   type (hvcoord_t)            :: hvcoord        ! hybrid vertical coordinate struct
+
+#ifdef USE_KOKKOS_KERNELS
+  type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
+#endif
 
   real*8 timeit, et, st
   integer nets,nete
@@ -149,7 +164,13 @@ program prim_main
      call haltmp("error in hvcoord_init")
   end if
 
-
+#ifdef USE_KOKKOS_KERNELS
+  hybrid_am_ptr = c_loc(hvcoord%hyam)
+  hybrid_ai_ptr = c_loc(hvcoord%hyai)
+  hybrid_bm_ptr = c_loc(hvcoord%hybm)
+  hybrid_bi_ptr = c_loc(hvcoord%hybi)
+  call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
+#endif
 
 #ifdef PIO_INTERP
   if(runtype<0) then

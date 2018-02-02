@@ -68,6 +68,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_unsupported_option);
   Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_unsupported_option);
   Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_unsupported_option);
 
   // Now this structure can be used safely
   params.params_set = true;
@@ -81,18 +82,19 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   data.hypervis_scaling = params.hypervis_scaling;
 }
 
+void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
+                                      CRCPtr& hybrid_bm_ptr, CRCPtr& hybrid_bi_ptr)
+{
+  Control& data = Context::singleton().get_control();
+  data.init_hvcoord(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
+}
+
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0,
-                          const int& rsplit,
-                          CRCPtr& hybrid_am_ptr,
-                          CRCPtr& hybrid_ai_ptr,
-                          CRCPtr& hybrid_bm_ptr,
-                          CRCPtr& hybrid_bi_ptr)
+                          const int& qn0, const int& rsplit)
 {
   Control& control = Context::singleton().get_control ();
 
-  control.init(nets, nete, num_elems, qn0, ps0, rsplit,
-               hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
+  control.init(nets, nete, num_elems, qn0, rsplit);
 }
 
 void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
