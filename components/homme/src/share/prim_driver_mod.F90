@@ -1548,6 +1548,21 @@ contains
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
+#ifdef USE_KOKKOS_KERNELS
+    use iso_c_binding,      only: c_int, c_bool, c_double
+
+    interface
+      subroutine prim_advance_exp_c(nm1, n0, np1, dt, compute_diagnostics) bind(c)
+        use iso_c_binding, only: c_int, c_bool, c_double
+        !
+        ! Inputs
+        !
+        integer (kind=c_int),    intent(in) :: nm1, n0, np1
+        real    (kind=c_double), intent(in) :: dt
+        logical (kind=c_bool),   intent(in) :: compute_diagnostics
+      end subroutine prim_advance_exp_c
+    end interface
+#endif
 
     type(element_t),      intent(inout) :: elem(:)
     type(fvm_struct),     intent(inout) :: fvm(:)
@@ -1627,12 +1642,20 @@ contains
     n_Q = tl%n0  ! n_Q = timelevel of FV tracers at time t.  need to save this
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
+#ifdef USE_KOKKOS_KERNELS
+    call prim_advance_exp_c(tl%nm1, tl%n0, tl%np1, dt, LOGICAL(compute_diagnostics,kind=c_bool))
+#else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
+#endif
     do n=2,qsplit
        call TimeLevel_update(tl,"leapfrog")
+#ifdef USE_KOKKOS_KERNELS
+      call prim_advance_exp_c(tl%nm1, tl%n0, tl%np1, dt, LOGICAL(.false.,kind=c_bool))
+#else
        call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
             hybrid, dt, tl, nets, nete, .false.)
+#endif
        ! defer final timelevel update until after Q update.
     enddo
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
