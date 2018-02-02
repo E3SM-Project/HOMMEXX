@@ -5,19 +5,13 @@
 
 namespace Homme {
 
-void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
-                   const int qn0_in, const Real ps0_in, 
-                   const int rsplit_in,
-                   CRCPtr hybrid_am_ptr,
-                   CRCPtr hybrid_ai_ptr,
-                   CRCPtr hybrid_bm_ptr,
-                   CRCPtr hybrid_bi_ptr) {
-  nets = nets_in;
-  nete = nete_in;
-  num_elems = num_elems_in;
-  qn0 = qn0_in;
+void Control::init_hvcoord(const Real ps0_in,
+                           CRCPtr hybrid_am_ptr,
+                           CRCPtr hybrid_ai_ptr,
+                           CRCPtr hybrid_bm_ptr,
+                           CRCPtr hybrid_bi_ptr)
+{
   ps0 = ps0_in;
-  rsplit = rsplit_in;
 
   //hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient A_midpoints");
@@ -56,6 +50,15 @@ void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
     }
     Kokkos::deep_copy(dp0, hdp0);
   }
+}
+
+void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
+                   const int qn0_in, const int rsplit_in) {
+  nets = nets_in;
+  nete = nete_in;
+  num_elems = num_elems_in;
+  qn0 = qn0_in;
+  rsplit = rsplit_in;
 }
 
 void Control::random_init(int num_elems_in, int seed) {

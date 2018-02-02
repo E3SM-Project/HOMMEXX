@@ -15,14 +15,16 @@ struct Control {
 
   Control() = default;
 
+  // This method should only be called from the host
+  void init_hvcoord(const Real ps0_in,
+                    CRCPtr hybrid_am_ptr,
+                    CRCPtr hybrid_ai_ptr,
+                    CRCPtr hybrid_bm_ptr,
+                    CRCPtr hybrid_bi_ptr);
+
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
-             const int qn0,  const Real ps0, 
-             const int rsplit,
-             CRCPtr hybrid_am_ptr,
-             CRCPtr hybrid_ai_ptr,
-             CRCPtr hybrid_bm_ptr,
-             CRCPtr hybrid_bi_ptr);
+             const int qn0,  const int rsplit);
 
   void random_init(int num_elems, int seed);
 
