@@ -144,6 +144,7 @@ SET(PREQX_FLAT_DEPS_C
 
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/cxx_f90_interface.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advance_exp.cpp
   ${SRC_SHARE_DIR}/cxx/prim_advance_hypervis.cpp
   ${SRC_SHARE_DIR}/cxx/Control.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
