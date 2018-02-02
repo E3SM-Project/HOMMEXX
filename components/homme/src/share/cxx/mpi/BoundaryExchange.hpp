@@ -198,6 +198,7 @@ private:
   ExecViewManaged<int*> m_i2ec;
   void init_i2ec(ExecViewManaged<int*>::HostMirror& h_i2ec,
                  std::vector<int>& pids, std::vector<int>& pids_os);
+  void free_requests();
 
   ExecViewManaged<ExecViewManaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
