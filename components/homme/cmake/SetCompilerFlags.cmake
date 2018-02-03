@@ -241,6 +241,10 @@ ELSE ()
 
 ENDIF ()
 
+OPTION(DEBUG_TRACE "Enables TRACE level debugging checks. Very slow" FALSE)
+IF (${DEBUG_TRACE})
+  SET (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_TRACE")
+ENDIF ()
 
 ##############################################################################
 # OpenMP

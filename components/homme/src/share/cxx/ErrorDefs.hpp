@@ -25,7 +25,7 @@
   } while(false)
 #endif
 
-#ifndef NTRACE
+#ifdef DEBUG_TRACE
 #define TRACE_PRINT(...)
 do {
   printf(__VA_ARGS__);
