@@ -3,6 +3,7 @@
 #include "Control.hpp"
 #include "Context.hpp"
 #include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 #include "HommexxEnums.hpp"
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
@@ -87,6 +88,17 @@ void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_p
 {
   Control& data = Context::singleton().get_control();
   data.init_hvcoord(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
+}
+
+void init_control_c (const int& nets, const int& nete, const int& num_elems)
+{
+  // Setting elements count in the control once and for all
+  Control& control = Context::singleton().get_control ();
+
+  control.nets      = nets-1;
+  control.nete      = nete;       // F90 ranges are closed, c ranges are open on the right, so this can stay the same
+  control.num_elems = num_elems;
+
 }
 
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
@@ -181,6 +193,27 @@ void init_derivative_c (CF90Ptr& dvv)
   deriv.init(dvv);
 }
 
+void init_time_level_c (const int& nm1, const int& n0, const int& np1,
+                        const int& nstep, const int nstep0)
+{
+  TimeLevel& tl = Context::singleton().get_time_level ();
+  tl.nm1    = nm1;
+  tl.n0     = nm1;
+  tl.np1    = nm1;
+  tl.nstep  = nm1;
+  tl.nstep0 = nm1;
+}
+
+void update_time_level_c (const int& update_type)
+{
+  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_unsupported_option);
+
+  TimeLevel& tl = Context::singleton().get_time_level();
+  if (update_type==0) {
+    tl.update_dynamics_levels(UpdateType::LEAPFROG);
+  }
+}
+
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
                          CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
@@ -189,6 +222,11 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, control.rsplit == 0);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+
+  // We also set nets, nete and num_elems in the Control
+  control.nets      = 0;
+  control.nete      = num_elems;
+  control.num_elems = num_elems;
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,

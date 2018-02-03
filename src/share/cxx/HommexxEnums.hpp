@@ -45,6 +45,11 @@ enum class TestCase {
   JW_BAROCLINIC
 };
 
+enum class UpdateType {
+  LEAPFROG,
+  FORWARD
+};
+
 // =================== Mesh connectivity enums ====================== //
 
 // The kind of connection: edge, corner or missing (one of the corner connections on one of the 8 cube vertices)
