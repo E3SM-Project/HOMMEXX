@@ -2,6 +2,7 @@
 #include "Control.hpp"
 #include "Context.hpp"
 #include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 #include "mpi/ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
@@ -9,32 +10,89 @@
 namespace Homme
 {
 
-void u3_5stage_timestep_c(const int nm1, const int n0, const int np1, const Real, const bool);
-void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
-                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
-                       Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post);
-void advance_hypervis_dp_c (const int np1, const Real dt, const Real eta_ave_w);
-
+void u3_5stage_timestep(const int nm1, const int n0, const int np1,
+                        const Real dt, const Real eta_ave_w, const bool compute_diagnostics);
+void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
+                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre,
+                       Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange>& policy_post);
+void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
+void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
+                            const Real dt, const bool compute_diagnostics);
 
 // -------------- IMPLEMENTATIONS -------------- //
 
 extern "C"
 {
 
-void prim_advance_exp_c(const int& nm1, const int& n0, const int& np1,
-                        const Real dt, const bool compute_diagnostics)
+void prim_advance_exp_c(const Real dt, const bool compute_diagnostics)
+{
+  // Get simulation params
+  SimulationParams& params = Context::singleton().get_simulation_params();
+
+  // Sanity check
+  assert(params.params_set);
+
+  // Get time level info
+  TimeLevel& tl = Context::singleton().get_time_level();
+
+  prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
+  for (int iter=1; iter<params.qsplit; ++iter) {
+    // Update time levels
+    tl.update_dynamics_levels(UpdateType::LEAPFROG);
+
+    prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,false);
+  }
+  // Note: Fortran comment says "the last time level update is deferred till after Q update"
+  //       Since I don't knokw exactly when that is, I put a hook in the TimeLevel_update
+  //       subroutine in Fortran for a c function that updates the C++ TimeLevel structure.
+  //       This way, I don't have to worry where that update is. After all, soon enough we
+  //       will convert to C that part too (wherever it is), so this is just temporary.
+}
+
+} // extern "C"
+
+void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
+                            const Real dt, const bool compute_diagnostics)
 {
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
-  assert(params.params_set);
 
-  // Perform RK stages
-  u3_5stage_timestep_c(nm1, n0, np1, dt, compute_diagnostics);
+  // Note: In the following, all the checks are superfluous, since we already check that
+  //       the options are supported when we init the simulation params. However, this way
+  //       we remind ourselves that in these cases there is some missing code to convert from Fortran
+
+  // Set eta_ave_w
+  int method = params.time_step_type;
+  Real eta_ave_w = 1.0/params.qsplit;
+
+  if (params.time_step_type==0) {
+    Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_unsupported_option);
+  } else if (params.time_step_type==1) {
+    Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_unsupported_option);
+  }
+
+#ifndef CAM
+  // if "prescribed wind" set dynamics explicitly and skip time-integration
+  if (params.prescribed_wind) {
+    Errors::runtime_abort("'prescribed wind' functionality not yet available in C++ build.\n",
+                           Errors::err_unsupported_option);
+  }
+#endif
+
+  // Perform time-advance
+  switch (method) {
+    case 5:
+      // Perform RK stages
+      u3_5stage_timestep(nm1, n0, np1, dt, eta_ave_w, compute_diagnostics);
+      break;
+    default:
+      Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_unsupported_option);
+  }
 
 #ifdef ENERGY_DIAGNOSTICS
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::err_unsupported_option);
   }
 #endif
@@ -45,32 +103,19 @@ void prim_advance_exp_c(const int& nm1, const int& n0, const int& np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
-    advance_hypervis_dp_c(np1,dt,data.eta_ave_w);
+    advance_hypervis_dp(np1,dt,data.eta_ave_w);
   }
 
 #ifdef ENERGY_DIAGNOSTICS
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagonstic' functionality not yet available in C++ build.\n",
+    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::err_unsupported_option);
-    //       do ie = nets,nete
-    // #if (defined COLUMN_OPENMP)
-    // !$omp parallel do private(k)
-    // #endif
-    //         do k=1,nlev  !  Loop index added (AAM)
-    //           elem(ie)%accum%DIFF(:,:,:,k)=( elem(ie)%state%v(:,:,:,k,np1) -&
-    //                elem(ie)%accum%DIFF(:,:,:,k) ) / dt_vis
-    //           elem(ie)%accum%DIFFT(:,:,k)=( elem(ie)%state%T(:,:,k,np1) -&
-    //                elem(ie)%accum%DIFFT(:,:,k) ) / dt_vis
-    //         enddo
-    //       enddo
   }
 #endif
 }
 
-} // extern "C"
-
-void u3_5stage_timestep_c(const int nm1, const int n0, const int np1,
-                          const Real dt, const bool compute_diagonstics)
+void u3_5stage_timestep(const int nm1, const int n0, const int np1,
+                        const Real dt, const Real eta_ave_w, const bool compute_diagnostics)
 {
   // Get control and elements structures
   Control& data  = Context::singleton().get_control();
@@ -107,20 +152,20 @@ void u3_5stage_timestep_c(const int nm1, const int n0, const int np1,
   // ===================== RK STAGES ===================== //
 
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
-  functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,data.eta_ave_w/4.0,compute_diagonstics);
-  caar_monolithic_c(elements,functor,*be[nm1],policy_pre,policy_post);
+  functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
+  caar_monolithic(elements,functor,*be[nm1],policy_pre,policy_post);
 
   // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
   functor.set_rk_stage_data(n0,nm1,np1,dt/5.0,0.0,false);
-  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+  caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
   functor.set_rk_stage_data(n0,np1,np1,dt/3.0,0.0,false);
-  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+  caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
   functor.set_rk_stage_data(n0,np1,np1,2.0*dt/3.0,0.0,false);
-  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+  caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   Kokkos::parallel_for(
@@ -138,13 +183,13 @@ void u3_5stage_timestep_c(const int nm1, const int n0, const int np1,
   ExecSpace::fence();
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
-  functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*data.eta_ave_w/4.0,false);
-  caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
+  functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
+  caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void caar_monolithic_c(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
-                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>  policy_pre,
-                       Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post)
+void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
+                     Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre,
+                     Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange>& policy_post)
 {
   // --- Pre boundary exchange
   profiling_resume();
