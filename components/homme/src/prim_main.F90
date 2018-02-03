@@ -62,6 +62,14 @@ program prim_main
       type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
       type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
     end subroutine init_hvcoord_c
+
+    subroutine init_time_level_c(nm1,n0,np1,nstep,nstep0) bind(c)
+      use iso_c_binding, only: c_int
+      !
+      ! Inputs
+      !
+      integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
+    end subroutine init_time_level_c
   end interface
 #endif
 
@@ -72,7 +80,7 @@ program prim_main
   type (domain1d_t), pointer  :: dom_mt(:)
   type (RestartHeader_t)      :: RestartHeader
   type (TimeLevel_t)          :: tl             ! Main time level struct
-  type (hvcoord_t)            :: hvcoord        ! hybrid vertical coordinate struct
+  type (hvcoord_t), target    :: hvcoord        ! hybrid vertical coordinate struct
 
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
@@ -260,6 +268,9 @@ program prim_main
      endif
   endif
 
+#ifdef USE_KOKKOS_KERNELS
+  call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
+#endif
 
   if(par%masterproc) print *,"Entering main timestepping loop"
   call t_startf('prim_main_loop')
