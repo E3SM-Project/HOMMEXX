@@ -665,7 +665,7 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
         src_layer_thickness(igp, jgp, ilev)[vlev] =
             tgt_layer_thickness(igp, jgp, ilev)[vlev] + dt * delta_dpdn;
         if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          DEBUG_PRINT("src/tgt %d (%d %d): % .17e vs % .17e\n", level, ilev,
+          TRACE_PRINT("src/tgt %d (%d %d): % .17e vs % .17e\n", level, ilev,
                       vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
                       tgt_layer_thickness(igp, jgp, ilev)[vlev]);
         }
@@ -838,7 +838,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
     if (kv.ie == 0) {
       Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing thickness\n"); });
+                     []() { TRACE_PRINT("computing thickness\n"); });
     }
     compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
                  Homme::subview(m_ps_v, kv.ie));
@@ -879,7 +879,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
       KernelVariables kv(team);
       if (kv.ie == 0) {
         Kokkos::single(Kokkos::PerTeam(kv.team),
-                       []() { DEBUG_PRINT("computing grids\n"); });
+                       []() { TRACE_PRINT("computing grids\n"); });
       }
       m_remap.compute_grids_phase(
           kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
@@ -893,7 +893,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     KernelVariables kv(team);
     if (kv.ie == 0) {
       Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { DEBUG_PRINT("computing remap<true>\n"); });
+                     []() { TRACE_PRINT("computing remap<true>\n"); });
     }
 
     assert(num_to_remap() != 0);
@@ -1043,7 +1043,7 @@ private:
         const int ilev = ilevel / VECTOR_SIZE;
         const int vec_lev = ilevel % VECTOR_SIZE;
         if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          DEBUG_PRINT(
+          TRACE_PRINT(
               "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid ai: % .17e, "
               "hybrid bi: % .17e\n",
               ilevel, ilev, vec_lev, m_data.ps0, m_ps_v(kv.ie, igp, jgp),
