@@ -893,18 +893,29 @@ void BoundaryExchange
       const auto& info = connections(ie, iconn);
       const int k = ie*NUM_CONNECTIONS + iconn;
       auto& i2r = i2remote[k];
+      // Original sequence through (elements, connection).
       i2r.i = k;
+      // An ordering of the message buffer upon which both members of the
+      // communication pair agree.
       if (info.local.gid < info.remote.gid)
         i2r.ord = info.local.gid*NUM_CONNECTIONS + info.local.pos;
       else
         i2r.ord = info.remote.gid*NUM_CONNECTIONS + info.remote.pos;
+      // If local, indicate with -1, which is < the smallest pid of 0.
       i2r.pid = -1;
       if (info.sharing != etoi(ConnectionSharing::SHARED)) continue;
       i2r.pid = info.remote_pid;
     }
 
+  // Sort so that, first, all (element, connection) pairs having the same
+  // remote_pid are contiguous; second, within such a block, ord is
+  // ascending. The first lets us set up comm buffers so monolithic messages
+  // slot right in. The second means that the send and recv partners agree on
+  // how the monolithic message is packed.
   std::stable_sort(i2remote.begin(), i2remote.end());
 
+  // Collect the unique remote_pids and get the offsets of the contiguous blocks
+  // of them.
   int prev_pid = -2;
   for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
     const auto& i2r = i2remote[k];
