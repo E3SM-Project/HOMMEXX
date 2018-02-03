@@ -1643,21 +1643,24 @@ contains
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
 #ifdef USE_KOKKOS_KERNELS
-    call prim_advance_exp_c(tl%nm1, tl%n0, tl%np1, dt, LOGICAL(compute_diagnostics,kind=c_bool))
+    call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                       elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+    call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
+    call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                          elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
 #else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
-#endif
     do n=2,qsplit
        call TimeLevel_update(tl,"leapfrog")
-#ifdef USE_KOKKOS_KERNELS
-      call prim_advance_exp_c(tl%nm1, tl%n0, tl%np1, dt, LOGICAL(.false.,kind=c_bool))
-#else
        call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
             hybrid, dt, tl, nets, nete, .false.)
-#endif
        ! defer final timelevel update until after Q update.
     enddo
+#endif
+
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
       do ie=nets,nete
