@@ -71,9 +71,9 @@ void caar_compute_temperature_c_int(const Real dt, const Real * spheremp,
                                     const Real *t_current,
                                     Real *t_future);
 
-void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn, 
-                                                   Real *sdot_sum, 
-                                                   const Real *divdp, 
+void caar_compute_eta_dot_dpdn_vertadv_euler_c_int(Real *eta_dot_dpdn,
+                                                   Real *sdot_sum,
+                                                   const Real *divdp,
                                                    const Real *hybi);
 
 void preq_vertadv(const Real *temperature, const Real *velocity,
@@ -100,18 +100,18 @@ public:
       : functor(elements, Context::singleton().get_derivative()),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
-        dp3d("DP3D", elements.num_elems()), 
+        dp3d("DP3D", elements.num_elems()),
         phi("Phi", elements.num_elems()),
         phis("Phi_surf", elements.num_elems()),
         omega_p("Omega_P", elements.num_elems()),
         derived_v("Derived V", elements.num_elems()),
         eta_dpdn("Eta dot dp/deta", elements.num_elems()),
-        qdp("QDP", elements.num_elems()), 
+        qdp("QDP", elements.num_elems()),
         metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
-        spheremp("SphereMP", elements.num_elems()), dvv("dvv"), 
+        spheremp("SphereMP", elements.num_elems()), dvv("dvv"),
         //nets(1),
-        //nete(elements.num_elems()), 
+        //nete(elements.num_elems()),
         rsplit(0) {
 
 //make these random
@@ -120,10 +120,10 @@ public:
     Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
     Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
+    functor.m_data.init_hvcoord(ps0, hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
-                        qn0, ps0, 
-                        0, //for rsplit
-                        hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
+                        qn0,
+                        0); //for rsplit
 
     functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
@@ -131,7 +131,7 @@ public:
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
-                                dp3d.data(), phi.data(), 
+                                dp3d.data(), phi.data(),
                                 omega_p.data(), derived_v.data(),
                                 eta_dpdn.data(), qdp.data());
 
@@ -575,7 +575,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
                 Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
                 REQUIRE(!std::isnan(computed));
 
-//og why is this if? what is special about correct=0? 
+//og why is this if? what is special about correct=0?
 //i see this can backfire
                 if (correct != 0.0) {
                   Real rel_error = compare_answers(correct, computed);
@@ -656,13 +656,12 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
-                                   TestType::ps0,  
-                                   0, //0 for rsplit
-                                   hybrid_am_mirror.data(),
-                                   hybrid_ai_mirror.data(),
-                                   hybrid_bm_mirror.data(),
-                                   hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
+                                           hybrid_am_mirror.data(),
+                                           hybrid_ai_mirror.data(),
+                                           hybrid_bm_mirror.data(),
+                                           hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, 0);
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                    TestType::dt, TestType::eta_ave_w, false);
 
@@ -763,7 +762,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
                                                      Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(omega_p, ie, level,
                                                      Kokkos::ALL, Kokkos::ALL).data(),
-                                     Kokkos::subview(t_vadv_f90, ie, level, 
+                                     Kokkos::subview(t_vadv_f90, ie, level,
                                                      Kokkos::ALL, Kokkos::ALL).data(),
                                      Kokkos::subview(test_functor.temperature, ie,
                                                      test_functor.nm1, level, Kokkos::ALL,
@@ -1016,13 +1015,12 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
 //       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
 
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
-                                   TestType::ps0,
-                                   test_functor.return_rsplit(), //0 for rsplit
-                                   hybrid_am_mirror.data(),
-                                   hybrid_ai_mirror.data(),
-                                   hybrid_bm_mirror.data(),
-                                   hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
+                                           hybrid_am_mirror.data(),
+                                           hybrid_ai_mirror.data(),
+                                           hybrid_bm_mirror.data(),
+                                           hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, test_functor.return_rsplit());
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
 
@@ -1108,14 +1106,15 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   const int rsplit = 0;
   test_functor.set_rsplit(rsplit);
 
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0,
-                                   TestType::ps0,
-                                   test_functor.return_rsplit(), //0 for rsplit
-                                   hybrid_am_mirror.data(),
-                                   hybrid_ai_mirror.data(),
-                                   hybrid_bm_mirror.data(),
-                                   hybrid_bi_mirror.data());  
-  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,                                                TestType::dt, TestType::eta_ave_w, false);
+  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
+                                           hybrid_am_mirror.data(),
+                                           hybrid_ai_mirror.data(),
+                                           hybrid_bm_mirror.data(),
+                                           hybrid_bi_mirror.data());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, test_functor.return_rsplit());
+
+  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                                TestType::dt, TestType::eta_ave_w, false);
 
 
   //will run on device
@@ -1232,16 +1231,16 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
         }
     }//level loop
     preq_vertadv(
-        Kokkos::subview(test_functor.temperature, ie, n0, 
+        Kokkos::subview(test_functor.temperature, ie, n0,
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.velocity, ie, n0, 
+        Kokkos::subview(test_functor.velocity, ie, n0,
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(eta_dot_f90, ie, 
+        Kokkos::subview(eta_dot_f90, ie,
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
         rdp_f90.data(),
-        Kokkos::subview(t_vadv_f90, ie, 
+        Kokkos::subview(t_vadv_f90, ie,
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(v_vadv_f90, ie, 
+        Kokkos::subview(v_vadv_f90, ie,
                         Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data()
     );//preq vertadv call
 
