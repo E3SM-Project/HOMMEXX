@@ -1543,27 +1543,65 @@ contains
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: overwrite_SEdensity
+#ifndef USE_KOKKOS_KERNELS
     use prim_advance_exp_mod, only: prim_advance_exp
+#endif
     use prim_advection_mod, only: prim_advec_tracers_fvm
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
 #ifdef USE_KOKKOS_KERNELS
-    use iso_c_binding,      only: c_int, c_bool, c_double
+    use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                  elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+                                  elem_derived_phi, elem_derived_omega_p,         &
+                                  elem_derived_vn0, elem_derived_dpdiss_ave,      &
+                                  elem_derived_dpdiss_biharmonic
+    use iso_c_binding,      only: c_int, c_bool, c_double, c_ptr, c_loc
 
     interface
-      subroutine prim_advance_exp_c(nm1, n0, np1, dt, compute_diagnostics) bind(c)
-        use iso_c_binding, only: c_int, c_bool, c_double
+      subroutine prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                               elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                               elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+        use iso_c_binding, only: c_ptr
         !
         ! Inputs
         !
-        integer (kind=c_int),    intent(in) :: nm1, n0, np1
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                                    elem_derived_dpdiss_biharmonic_ptr
+      end subroutine prim_advance_exp_pull_data_c
+
+      subroutine prim_advance_exp_c(dt, compute_diagnostics) bind(c)
+        use iso_c_binding, only: c_bool, c_double
+        !
+        ! Inputs
+        !
         real    (kind=c_double), intent(in) :: dt
         logical (kind=c_bool),   intent(in) :: compute_diagnostics
       end subroutine prim_advance_exp_c
+
+      subroutine prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                                  elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                                  elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                                  elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+        use iso_c_binding, only: c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                                    elem_derived_dpdiss_biharmonic_ptr
+      end subroutine prim_advance_exp_push_results_c
     end interface
 #endif
-
+    !
+    ! Inputs/Outputs
+    !
     type(element_t),      intent(inout) :: elem(:)
     type(fvm_struct),     intent(inout) :: fvm(:)
     type(hybrid_t),       intent(in)    :: hybrid   ! distributed parallel structure (shared)
@@ -1573,7 +1611,9 @@ contains
     real(kind=real_kind), intent(in)    :: dt       ! "timestep dependent" timestep
     type(TimeLevel_t),    intent(inout) :: tl
     integer,              intent(in)    :: rstep    ! vertical remap subcycling step
-
+    !
+    ! Locals
+    !
     real(kind=real_kind) :: st, st1, dp, dt_q
     integer :: ie, t, q,k,i,j,n, n_Q
 
@@ -1585,6 +1625,13 @@ contains
 
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
+#ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                    elem_derived_dpdiss_biharmonic_ptr
+#endif
 
     !call t_startf("prim_step_init")
     dt_q = dt*qsplit
@@ -1643,13 +1690,25 @@ contains
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
 #ifdef USE_KOKKOS_KERNELS
+    elem_state_v_ptr                   = c_loc(elem_state_v)
+    elem_state_t_ptr                   = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+    elem_derived_phi_ptr               = c_loc(elem_derived_phi)
+    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
     call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
                                        elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                       elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
     call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
     call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
                                           elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                          elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
 #else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
