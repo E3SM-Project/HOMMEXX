@@ -37,7 +37,7 @@ module shallow_water_mod
   use ref_state_mod, only : ref_state_read, ref_state_write
 #endif
   ! ------------------------
-  use common_io_mod, only: output_prefix     ! Added to support output_prefix
+  use common_io_mod, only: output_prefix     ! Added to support output_prefix 
   ! ------------------------
   use viscosity_mod, only: biharmonic_wk, neighbor_minmax
   ! ------------------------
@@ -50,9 +50,9 @@ module shallow_water_mod
 
   logical :: compute_penst = .true.
   ! ============================================
-  ! Shallow Water Test Case Parameters
-  ! for test case 1 and 2; Cosine Bell and
-  ! Steady State Geostrophic
+  ! Shallow Water Test Case Parameters 
+  ! for test case 1 and 2; Cosine Bell and 
+  ! Steady State Geostrophic 
   ! ============================================
   real (kind=real_kind), private, parameter  :: h0     = 1000.0D0     ! height of cosine bell in meters
   real (kind=real_kind), private, parameter  :: gh0_tc1= g*h0         ! geopotential height of cosine bell
@@ -66,7 +66,7 @@ module shallow_water_mod
   real (kind=real_kind), private, parameter  :: gh0_tc2 = 2.94D4      ! m^2/s^2 (p. 218 of Williamson)
 
   ! ================================================
-  ! Shallow Water Test Case Parameters
+  ! Shallow Water Test Case Parameters 
   ! Parameters for test case 5, Flow over Mountain
   ! ================================================
 
@@ -80,7 +80,7 @@ module shallow_water_mod
   real (kind=real_kind), public,  parameter  :: lon_mtn  = 1.5D0*DD_PI  ! longitude of mountain
 
   ! ============================================
-  ! Shallow Water Test Case Parameters
+  ! Shallow Water Test Case Parameters 
   ! Parameters for test case 6, Rossby-Haurwitz
   ! ============================================
 
@@ -88,11 +88,11 @@ module shallow_water_mod
   real (kind=real_kind), parameter, private :: gh0_tc6  = g*h0_tc6
   real (kind=real_kind), parameter, private :: omega_rh = 7.848D-6
   real (kind=real_kind), parameter, private :: K_rh     = omega_rh
-  real (kind=real_kind), private :: R_rh     = 4
+  real (kind=real_kind), private :: R_rh     = 4 
 
   ! ============================================
-  ! Shallow Water Test Case Parameters
-  ! Parameters for test case 8,
+  ! Shallow Water Test Case Parameters 
+  ! Parameters for test case 8, 
   ! Barotropic Instability.
   ! ============================================
 
@@ -115,12 +115,12 @@ module shallow_water_mod
   real (kind=real_kind), parameter, private :: a_vortex       = rearth
   real (kind=real_kind), private, parameter :: u0_vortex      = 2*DD_PI*a_vortex/10.368D5   ! wind velocity
   real (kind=real_kind), private, parameter :: omega_s_vortex = u0_vortex/a_vortex
-  real (kind=real_kind), private, parameter :: lat0_vort1_vortex=0;
+  real (kind=real_kind), private, parameter :: lat0_vort1_vortex=0; 
   real (kind=real_kind), private, parameter :: lon0_vort1_vortex=DD_PI*0.5D0; !Vortex center at time t=0
   logical, private, parameter               :: static_vortex = .false.
   ! ============================================
-  ! Shallow Water Test Case Parameters
-  ! Parameters for test case SJ1,
+  ! Shallow Water Test Case Parameters 
+  ! Parameters for test case SJ1, 
   ! Strong jet northern hemisphere.
   ! ============================================
   real (kind=real_kind), parameter, private :: h0_sj1    = 10000.0D0     ! mean fluid depth (meters)
@@ -146,45 +146,45 @@ module shallow_water_mod
   real (kind=real_kind), private, parameter :: bellradius=0.50D0
 !gauss bell would use different radius
   real (kind=real_kind), private, parameter :: rotangle=0.0D0 ! IN RADIANS
-  real (kind=real_kind), private, parameter :: tracer_lowest=0.1D0
+  real (kind=real_kind), private, parameter :: tracer_lowest=0.1D0 
   real (kind=real_kind), private, parameter :: tracer_highest=0.9D0
   logical                                   :: add_pure_rotation
 
   real (kind=real_kind) :: lat1, lon1, lat2, lon2, Tperiod, Kcoef
 
   !sub_case = 1
-  real (kind=real_kind), private, parameter :: lon1_case1=DD_PI
-  real (kind=real_kind), private, parameter :: lat1_case1=DD_PI/3.0D0;
-  real (kind=real_kind), private, parameter :: lon2_case1=DD_PI
-  real (kind=real_kind), private, parameter :: lat2_case1=-DD_PI/3.0D0;
+  real (kind=real_kind), private, parameter :: lon1_case1=DD_PI 
+  real (kind=real_kind), private, parameter :: lat1_case1=DD_PI/3.0D0; 
+  real (kind=real_kind), private, parameter :: lon2_case1=DD_PI 
+  real (kind=real_kind), private, parameter :: lat2_case1=-DD_PI/3.0D0; 
 
   !sub_case = 2
-  real (kind=real_kind), private, parameter :: lon1_case2=5.0D0*DD_PI/6.0D0;
-  real (kind=real_kind), private, parameter :: lat1_case2=0.0D0;
-  real (kind=real_kind), private, parameter :: lon2_case2=7.0D0*DD_PI/6.0D0;
+  real (kind=real_kind), private, parameter :: lon1_case2=5.0D0*DD_PI/6.0D0; 
+  real (kind=real_kind), private, parameter :: lat1_case2=0.0D0; 
+  real (kind=real_kind), private, parameter :: lon2_case2=7.0D0*DD_PI/6.0D0; 
   real (kind=real_kind), private, parameter :: lat2_case2=0.0D0;
 
   !sub_case = 3
-  !real (kind=real_kind), private, parameter :: lon1_case3=3.0D0*DD_PI/4.0D0
-  !real (kind=real_kind), private, parameter :: lat1_case3=0.0D0;
-  !real (kind=real_kind), private, parameter :: lon2_case3=5.0D0*DD_PI/4.0D0
+  !real (kind=real_kind), private, parameter :: lon1_case3=3.0D0*DD_PI/4.0D0 
+  !real (kind=real_kind), private, parameter :: lat1_case3=0.0D0; 
+  !real (kind=real_kind), private, parameter :: lon2_case3=5.0D0*DD_PI/4.0D0 
   !real (kind=real_kind), private, parameter :: lat2_case3=0.0D0;
 
 ! i put subcase 2 center data here cause this is what pl uses for paper
-  real (kind=real_kind), private, parameter :: lon1_case3=5.0D0*DD_PI/6.0D0;
-  real (kind=real_kind), private, parameter :: lat1_case3=0.0D0;
-  real (kind=real_kind), private, parameter :: lon2_case3=7.0D0*DD_PI/6.0D0;
+  real (kind=real_kind), private, parameter :: lon1_case3=5.0D0*DD_PI/6.0D0; 
+  real (kind=real_kind), private, parameter :: lat1_case3=0.0D0; 
+  real (kind=real_kind), private, parameter :: lon2_case3=7.0D0*DD_PI/6.0D0; 
   real (kind=real_kind), private, parameter :: lat2_case3=0.0D0;
 
   !subcase 4 is the same as subcase 2 but with added zonal flow, see below
-
+ 
 
   public  :: sweq_invariants
   public  :: tc1_init_state  ! Initialize test case 1: Cosine Bell
   public  :: tc1_init_pmean  ! Initialize pmean for test case 1
   public  :: tc1_velocity
   public  :: tc1_geopotential
-  public  :: tc1_phi         ! test case 1 on unstaggered grid (nair)
+  public  :: tc1_phi         ! test case 1 on unstaggered grid (nair) 
   public  :: grad_cosine_bell
   public  :: tc1_errors
 
@@ -209,7 +209,7 @@ module shallow_water_mod
 #endif
 
   public  :: tc6_init_state  ! Initialize test case 6: Rossby-Haurwitz Wave
-  public  :: tc6_init_pmean
+  public  :: tc6_init_pmean 
   private :: tc6_geopotential
   private :: tc6_velocity
   public  :: tc6_errors
@@ -217,7 +217,7 @@ module shallow_water_mod
   public  :: tc8_init_state  ! Initialize test case 8: Barotropic Instability
   public  :: tc8_init_pmean
   private :: tc8_balance
-  private :: tc8_perturbation
+  private :: tc8_perturbation  
   private :: tc8_integrand
   private :: tc8_velocity
 
@@ -234,7 +234,7 @@ module shallow_water_mod
   public  :: sj1_init_state  ! Initialize strong jet case 1: Galewski et al.
   public  :: sj1_init_pmean
   private :: sj1_balance
-  private :: sj1_perturbation
+  private :: sj1_perturbation  
   private :: sj1_integrand
   private :: sj1_velocity
   private :: sj1_velocity_cubedsphere
@@ -258,7 +258,7 @@ contains
     type(element_t), intent(inout), target :: elem(:)
 
     integer              , intent(in) :: iounit
-    type (TimeLevel_t)  , intent(in) :: tl
+    type (TimeLevel_t)  , intent(in) :: tl    
     real (kind=real_kind), intent(in) :: pmean
     type (EdgeBuffer_t)               :: edge3
     type (derivative_t)               :: deriv
@@ -322,7 +322,7 @@ contains
           do j=1,np
              do i=1,np
                 v1     = elem(ie)%state%v(i,j,1,k,n0)   ! contra
-                v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra
+                v2     = elem(ie)%state%v(i,j,2,k,n0)   ! contra 
                 v(i,j,1)=elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
                 v(i,j,2)=elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
              enddo
@@ -353,8 +353,8 @@ contains
     else
        diss_p=0; diss_v=0;
     endif
-
-    do ie=nets,nete
+    
+    do ie=nets,nete      
        do j=1,np
           do i=1,np
              k1=1
@@ -362,26 +362,26 @@ contains
              v2     = elem(ie)%state%v(i,j,2,k1,n0)   ! contra
              vlatlon(i,j,1) =elem(ie)%D(i,j,1,1)*v1 + elem(ie)%D(i,j,1,2)*v2   ! contra->latlon
              vlatlon(i,j,2) =elem(ie)%D(i,j,2,1)*v1 + elem(ie)%D(i,j,2,2)*v2   ! contra->latlon
-
-             E(i,j) = 0.5D0*(vlatlon(i,j,1)**2 + vlatlon(i,j,2)**2)
+             
+             E(i,j) = 0.5D0*(vlatlon(i,j,1)**2 + vlatlon(i,j,2)**2) 
              hstar         = (elem(ie)%state%p(i,j,1,n0) + pmean)/g
              hs            = elem(ie)%state%ps(i,j)/g
              h             = hstar + hs
 
 
 
-             kenergy(i,j,ie)  = hstar*E(i,j)
+             kenergy(i,j,ie)  = hstar*E(i,j) 
              penergy(i,j,ie)  = 0.5D0*g*(h**2 - hs**2)
              diss_p(i,j,k1,ie) = nu_s*(E(i,j)+g*h)*diss_p(i,j,k1,ie)/g + &
                      nu*hstar*(vlatlon(i,j,1)*diss_v(i,j,1,k1,ie)+ &
                                vlatlon(i,j,2)*diss_v(i,j,2,k1,ie))
              ! weak dissipation operator has mass matrix "built in"
              ! integral will multiply by mass matrix again, so lets remove it:
-             ! note: this is not the same as multiplying by rspheremp()!
-             diss_p(i,j,k1,ie)=diss_p(i,j,k1,ie)/elem(ie)%spheremp(i,j)
+             ! note: this is not the same as multiplying by rspheremp()! 
+             diss_p(i,j,k1,ie)=diss_p(i,j,k1,ie)/elem(ie)%spheremp(i,j)  
 
 !hs etc. is used only from the first level
-!but mass conservation output will be done for all levels
+!but mass conservation output will be done for all levels 
 	     do k=1,nlev
 		mass(i,j,k,ie)    = (elem(ie)%state%p(i,j,k,n0) + pmean)/g
 	     enddo
@@ -390,14 +390,14 @@ contains
        end do
        ! global integral < f*g > is computed correctly if either f or g is continious
        ! enstropy = < PV**2 >, so we need to make the PV continious before computing global integral
-       div(:,:,ie) = divergence_sphere(vlatlon,deriv,elem(ie)) ! latlon vector -> scalar
-       vor(:,:,ie) = vorticity_sphere(vlatlon,deriv,elem(ie)) ! latlon vector -> scalar
+       div(:,:,ie) = divergence_sphere(vlatlon,deriv,elem(ie)) ! latlon vector -> scalar 
+       vor(:,:,ie) = vorticity_sphere(vlatlon,deriv,elem(ie)) ! latlon vector -> scalar 
        penst(:,:,ie) = vor(:,:,ie)*elem(ie)%spheremp(:,:)
        kptr=0
        call edgeVpack(edge3, penst(1,1,ie), 1, kptr,ie)
     end do
     call bndry_exchangeV(hybrid,edge3)
-    do ie=nets,nete
+    do ie=nets,nete      
        kptr=0
        call edgeVunpack(edge3, penst(1,1,ie), 1, kptr, ie)
        penst(:,:,ie) = penst(:,:,ie)*elem(ie)%rspheremp(:,:)
@@ -476,7 +476,7 @@ contains
           if (test_case(1:5) /= "swtc1") then
              write(6,'(a,e11.4,a,e13.6,a,e13.6)') "ENS-ENS0/ENS0=",(Ipenst-Ipenst_init)/Ipenst_init, " dENS/dt /ENS= ",dENS
              write(6,'(a,e11.4,a,e13.6,a,e11.4,a,e11.4,a)') "E-E0/E0      =",(Ienergy-Ienergy_init)/Ienergy_init,&
-                  " dE/dt   /E  = ",dKE+dPE,"  (",dKE,",",dPE,")"
+                  " dE/dt   /E  = ",dKE+dPE,"  (",dKE,",",dPE,")" 
              write(6,'(a,e13.6,f10.3)') "                       Dissipation/E  = ",dissE/(Ikenergy+Ipenergy)
           endif
           dm = (Ipv-Ipv_last)/(time-time_last)
@@ -508,7 +508,7 @@ contains
   ! ===========================================
   function tc1_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
 
     pmean = gh0_tc1
     ! pmean is needed for semi-implicit
@@ -523,7 +523,7 @@ contains
   ! ===========================================
   function tc2_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
 
     pmean = gh0_tc2
   end function tc2_init_pmean
@@ -532,7 +532,7 @@ contains
   ! ===========================================
   function tc5_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
 
     pmean = gh0_tc5
   end function tc5_init_pmean
@@ -541,11 +541,11 @@ contains
   ! ===========================================
   function tc6_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
     ! gh0_tc6  = g*h0_tc6   h0_tc6=8d3
     pmean = gh0_tc6
-    if (sub_case > 1 ) pmean = g*h0_tc6*sub_case
-    if (sub_case < 0 ) then
+    if (sub_case > 1 ) pmean = g*h0_tc6*sub_case 
+    if (sub_case < 0 ) then  
        R_rh = 32
        pmean = g*h0_tc6*abs(sub_case)
     end if
@@ -556,7 +556,7 @@ contains
   ! ===========================================
   function tc8_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
 
     pmean = gh0_tc8
   end function tc8_init_pmean
@@ -566,7 +566,7 @@ contains
   ! ===========================================
   function sj1_init_pmean() result(pmean)
     implicit none
-    real (kind=real_kind) :: pmean
+    real (kind=real_kind) :: pmean 
 
     pmean = gh0_sj1
   end function sj1_init_pmean
@@ -589,8 +589,8 @@ contains
     ! Local variables
 
     integer ie,k,case
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     ! For swtc1 p = -pmean and penst is not well defined
@@ -609,7 +609,7 @@ contains
 !          elem(ie)%state%p(:,:,k,n0)=0.0D0
           elem(ie)%state%p(:,:,k,nm1)=elem(ie)%state%p(:,:,k,n0)
           elem(ie)%state%p(:,:,k,np1)=0.0D0
-
+          
           elem(ie)%state%v(:,:,:,k,n0)=tc1_velocity(elem(ie)%spherep(:,:),elem(ie)%Dinv)
           elem(ie)%state%v(:,:,:,k,nm1)=elem(ie)%state%v(:,:,:,k,n0)
           elem(ie)%state%v(:,:,:,k,np1)=0.0D0
@@ -624,8 +624,8 @@ contains
   !
   ! tc1_velocity:
   !
-  ! Reset velocities to initial values
-  ! for a single layer of one element for
+  ! Reset velocities to initial values 
+  ! for a single layer of one element for 
   ! test case 1, during the timestep.
   !
   ! ===========================================
@@ -902,7 +902,7 @@ contains
          write(6,'(1x,''invalid kcall in turnwi'')')
          STOP
       ENDIF
-    END SUBROUTINE turnwi
+    END SUBROUTINE turnwi  
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -947,7 +947,7 @@ contains
           A    =SIN(latc)*snlat + COS(latc)*cslat*COS(lon - lonc)   ! face 4 this == - cslat*snlon
           r=ACOS(A)
           if (r<rr) then
-             h = (h0/2.0d0)*(1.0D0 + COS(DD_PI*r/rr))
+             h = (h0/2.0d0)*(1.0D0 + COS(DD_PI*r/rr)) 
           else
              h = 0.0D0
           end if
@@ -982,7 +982,7 @@ contains
                    p(i,j)=0.0D0
                 end if
              end if
-
+             
              p(i,j)=g*p(i,j) - pmean
 
           end if
@@ -1043,7 +1043,7 @@ contains
   ! tc1_errors:
   !
   ! Compute Shallow Water Test Case 1 errors
-  !
+  ! 
   ! ===========================================
 
   subroutine tc1_errors(elem, iounit, tl, pmean, hybrid, nets, nete)
@@ -1052,11 +1052,11 @@ contains
     integer                           :: iounit
     type (TimeLevel_t)   , intent(in) :: tl         ! model time struct
     real (kind=real_kind), intent(in) :: pmean      ! mean geopotential
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer, intent(in)               :: nets
     integer, intent(in)               :: nete
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: latc,lonc
     real (kind=real_kind) :: lamdot,lon
@@ -1125,11 +1125,11 @@ contains
           pt(:,:,ie)=pt(:,:,ie) + pmean
           p(:,:,ie) =elem(ie)%state%p(:,:,k,tl%n0) + pmean
        end do
-
+       
        l1   = l1_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
        l2   = l2_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
        linf = linf_snorm(p(:,:,nets:nete),pt(:,:,nets:nete),hybrid,np,nets,nete)
-
+       
        if (k==1) then
        if (hybrid%masterthread) then
           write(iounit+0,30)time_tmp/secpday,l1
@@ -1160,7 +1160,7 @@ contains
   !
   ! grad_cosine_bell:
   !
-  ! Initialize analytic gradient of
+  ! Initialize analytic gradient of 
   ! cosine bell centered at latc, lonc.
   !
   ! ===========================================
@@ -1209,7 +1209,7 @@ contains
              grad(i,j,2) = 0.0D0
           end if
 
-          grad1=D(i,j,1,1)*grad(i,j,1) + D(i,j,1,2)*grad(i,j,2)     ! assumes input is DV = v_i
+          grad1=D(i,j,1,1)*grad(i,j,1) + D(i,j,1,2)*grad(i,j,2)     ! assumes input is DV = v_i 
           grad2=D(i,j,2,1)*grad(i,j,1) + D(i,j,2,2)*grad(i,j,2)     !  "               "     "
 
           grad(i,j,1)=grad1
@@ -1224,7 +1224,7 @@ contains
   !
   ! tc2_init_state:
   !
-  ! Initialize test case 2: Global steady state
+  ! Initialize test case 2: Global steady state 
   ! nonlinear geostrophic flow
   !
   ! ===========================================
@@ -1239,8 +1239,8 @@ contains
     ! Local variables
 
     integer :: ie,k
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     nm1= 1
@@ -1271,7 +1271,7 @@ contains
   !
   ! tc2_geopotential:
   !
-  ! Set geopotential to initial values
+  ! Set geopotential to initial values 
   ! specified on page 218 of Williamson, et al.
   ! eq. 95
   !
@@ -1384,7 +1384,7 @@ contains
   ! tc2_errors:
   !
   ! Compute Shallow Water Test Case 1 errors
-  !
+  ! 
   ! ===========================================
 
   subroutine tc2_errors(elem,iounit, tl, pmean, hybrid, nets, nete)
@@ -1393,11 +1393,11 @@ contains
     integer                           :: iounit
     type (TimeLevel_t)   , intent(in) :: tl         ! model time struct
     real (kind=real_kind), intent(in) :: pmean      ! mean geopotential
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer, intent(in)               :: nets
     integer, intent(in)               :: nete
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: l1,l2,linf,time_tmp
     real (kind=real_kind) :: pt(np,np,nets:nete)
@@ -1467,8 +1467,8 @@ contains
     ! Local variables
 
     integer ie,k
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     real (kind=real_kind) :: pmean_adjust
@@ -1481,7 +1481,7 @@ contains
     ! p 218, for test case 2.
 
     ! default setup gives <hstar + pmean/g>=5619    but pmean = 5960
-    pmean_adjust = 0  ! 340.284*g
+    pmean_adjust = 0  ! 340.284*g 
 
     do ie=nets,nete
        elem(ie)%fcor=tc2_coreolis_init(elem(ie)%spherep)
@@ -1492,13 +1492,13 @@ contains
 #else
        elem(ie)%state%gradps(:,:,:)=gradient(elem(ie)%state%ps,deriv)*rrearth
 #endif
-
+       
        do k=1,nlev
           elem(ie)%state%p(:,:,k,n0)=tc5_geopotential(elem(ie)%spherep(:,:)) + pmean_adjust
           elem(ie)%state%p(:,:,k,nm1)=elem(ie)%state%p(:,:,k,n0)
           elem(ie)%state%p(:,:,k,np1)=0.0D0
 
-          elem(ie)%state%v(:,:,:,k,n0)=tc5_velocity(elem(ie)%spherep(:,:),elem(ie)%Dinv)
+          elem(ie)%state%v(:,:,:,k,n0)=tc5_velocity(elem(ie)%spherep(:,:),elem(ie)%Dinv)  
           elem(ie)%state%v(:,:,:,k,nm1)=elem(ie)%state%v(:,:,:,k,n0)
           elem(ie)%state%v(:,:,:,k,np1)=0.0D0
        end do
@@ -1512,8 +1512,8 @@ contains
   !
   ! tc5_velocity:
   !
-  ! Reset velocities to initial values
-  ! for a single layer of one element for
+  ! Reset velocities to initial values 
+  ! for a single layer of one element for 
   ! test case 5, during the timestep.
   !
   ! ===========================================
@@ -1604,7 +1604,7 @@ contains
   !
   ! tc5_mountain:
   !
-  ! Set surface geopotential to initial values
+  ! Set surface geopotential to initial values 
   ! specified on page 221 of Williamson, et al.
   ! eq. 134
   !
@@ -1675,7 +1675,7 @@ contains
           snlat = SIN(sphere(i,j)%lat)
           cslat = COS(sphere(i,j)%lat)
           cslon = COS(sphere(i,j)%lon)
-          p(i,j)= gh0_tc5 - coef*( -cslon*cslat*snalpha + snlat*csalpha )**2
+          p(i,j)= gh0_tc5 - coef*( -cslon*cslat*snalpha + snlat*csalpha )**2  
        end do
     end do
 
@@ -1686,7 +1686,7 @@ contains
   !
   ! tc5_geopotential:
   !
-  ! Set geopotential to initial values
+  ! Set geopotential to initial values 
   ! specified on page 218 of Williamson, et al.
   ! eq. 95, with h0 = 5960 m and u0 = 20.0 m/s
   !
@@ -1740,12 +1740,12 @@ contains
     real (kind=real_kind), intent(in) :: pmean      ! mean geopotential
     character(len=*)     , intent(in) :: fstub      ! file path stub
     integer              , intent(in) :: simday     ! current day of simulation
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer              , intent(in) :: nets
     integer              , intent(in) :: nete
     type(parallel_t)     , intent(in) :: par
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: pt(np,np,nets:nete)
     real (kind=real_kind) :: p(np,np,nets:nete)
@@ -1826,7 +1826,7 @@ contains
     implicit none
 
     type (hybrid_t) , intent(in) :: hybrid
-    type (TimeLevel_t)  , intent(in) :: tl
+    type (TimeLevel_t)  , intent(in) :: tl    
     integer ,         intent(in) :: iounit
     real(kind=real_kind)         :: time,time_io,tmp
 
@@ -1842,11 +1842,11 @@ contains
        !==================================
        ! If we have a restart run
        !==================================
-       if(tl%nstep .ne. 0) then
+       if(tl%nstep .ne. 0) then 
           !========================================================
-          ! Advance diagnostic output file to the proper time index
+          ! Advance diagnostic output file to the proper time index 
           !========================================================
-          do while ( time_io .lt. time )
+          do while ( time_io .lt. time ) 
              read(iounit+0,*)time_io,tmp,Imass0
              read(iounit+1,*)time_io,tmp,Ienergy0
              read(iounit+2,*)time_io,tmp,Ipenst0
@@ -1871,7 +1871,7 @@ contains
     type(element_t), intent(inout) :: elem(:)
 
     integer              , intent(in) :: iounit
-    type (TimeLevel_t)  , intent(in) :: tl
+    type (TimeLevel_t)  , intent(in) :: tl    
     real (kind=real_kind), intent(in) :: pmean
     type (EdgeBuffer_t)               :: edge2
     type (derivative_t)               :: deriv
@@ -1957,7 +1957,7 @@ contains
 
     call bndry_exchangeV(hybrid,edge2)
 
-    do ie=nets,nete
+    do ie=nets,nete      
 
        kptr=0
        call edgeVunpack(edge2, zeta(1,1,ie), 1, kptr, ie)
@@ -1994,7 +1994,7 @@ contains
              mass(i,j,ie)    = hstar
              energy(i,j,ie)  = hstar*E(i,j) + 0.5D0*g*(h**2 - hs**2)
              penst(i,j,ie)   = penst(i,j,ie)/hstar
-             divsq(i,j,ie)   = div(i,j,ie)*div(i,j,ie)
+             divsq(i,j,ie)   = div(i,j,ie)*div(i,j,ie)  
              vort(i,j,ie)    = zeta(i,j,ie)
           end do
        end do
@@ -2063,8 +2063,8 @@ contains
     ! Local variables
 
     integer :: ie,k
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     nm1= 1
@@ -2094,7 +2094,7 @@ contains
   !
   ! tc6_geopotential:
   !
-  ! Set geopotential to initial values
+  ! Set geopotential to initial values 
   ! specified on page 222 of Williamson, et al.
   ! eqs. 146-149
   !
@@ -2138,13 +2138,13 @@ contains
   !
   ! tc6_velocity:
   !
-  ! Set geopotential to initial values
+  ! Set geopotential to initial values 
   ! specified on page 222 of Williamson, et al.
   ! eqs. 143-144
   !
   ! ===========================================
 
-  function tc6_velocity(sphere,D) result(v)
+  function tc6_velocity(sphere,D) result(v) 
 
     type (spherical_polar_t), intent(in) :: sphere(np,np)
     real (kind=real_kind),    intent(in) :: D(np,np,2,2)
@@ -2187,7 +2187,7 @@ contains
   ! tc6_errors:
   !
   ! Compute Shallow Water Test Case 6 errors
-  !
+  ! 
   ! ===========================================
 
   subroutine tc6_errors(elem, iounit, tl, pmean, fstub, simday, hybrid, nets, nete, par)
@@ -2198,12 +2198,12 @@ contains
     real (kind=real_kind), intent(in) :: pmean      ! mean geopotential
     character(len=*)     , intent(in) :: fstub      ! file path stub
     integer              , intent(in) :: simday     ! current day of simulation
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer              , intent(in) :: nets
     integer              , intent(in) :: nete
     type(parallel_t)     , intent(in) :: par
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: pt(np,np,nets:nete)
     real (kind=real_kind) :: p(np,np,nets:nete)
@@ -2308,8 +2308,8 @@ contains
     type (quadrature_t)   :: gs
 
     integer :: ie,k
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     nm1= 1
@@ -2327,7 +2327,7 @@ contains
 !!!RDL Ibalance_tot = simpsons(tc8_integrand,a,b,eps_tc8)
 
     gs=gauss(Ngs_tc8)
-    Ibalance_tot = gaussian_int(tc8_integrand,a,b,gs)
+    Ibalance_tot = gaussian_int(tc8_integrand,a,b,gs)    
     print *,"Ibalance_tot=",Ibalance_tot
     deallocate(gs%points)
     deallocate(gs%weights)
@@ -2362,8 +2362,8 @@ contains
   ! =======================================================
   !
   ! tc8_integrand:
-  !
-  ! Scaled integrand function needed to integrate the
+  ! 
+  ! Scaled integrand function needed to integrate the 
   ! geostrophic balance equation using the trapezoid rule.
   ! Integrand in units of u0_tc8*f*rearth (m^2/s^2)
   !
@@ -2385,7 +2385,7 @@ contains
     a      = pi2/gamma_tc8
     cs_tc8 = COS(a*(lat - lat_tc8))
     ulat   =  cs_tc8*cs_tc8
-    epsilon = u0_tc8/(rearth*2.0D0*omega)
+    epsilon = u0_tc8/(rearth*2.0D0*omega)    
 
 
     Ival = ulat*(sin(lat) + epsilon*(TAN(lat)*ulat))
@@ -2442,7 +2442,7 @@ contains
                 b = lat
 !!!DBG            Ibalance = trapezoid(tc8_integrand,a,b,eps_tc8)
 !!!DBG            Ibalance = simpsons(tc8_integrand,a,b,eps_tc8)
-                Ibalance = gaussian_int(tc8_integrand,a,b,gs)
+                Ibalance = gaussian_int(tc8_integrand,a,b,gs)    
              end if
 
           end if
@@ -2461,8 +2461,8 @@ contains
   !
   ! tc8_perturbation:
   !
-  ! Compute the geopotential perturbation
-  ! from geostrophic balance for the Barotropic
+  ! Compute the geopotential perturbation 
+  ! from geostrophic balance for the Barotropic 
   ! Instability Test Case of Polvani.
   !
   ! ===========================================
@@ -2492,7 +2492,7 @@ contains
           if(lon.le.DD_PI) alon = alpha_tc8*(lon)
           if(lon.gt.DD_PI) alon = alpha_tc8*(2.0D0*DD_PI - lon)
 
-          blat  = beta_tc8*(lat - lat_tc8)
+          blat  = beta_tc8*(lat - lat_tc8) 
           secha = 2.0D0/(EXP(alon) + EXP(-alon))
           sechb = 2.0D0/(EXP(blat) + EXP(-blat))
 
@@ -2507,12 +2507,12 @@ contains
   !
   ! tc8_velocity:
   !
-  ! Set initial zonal velocity field for barotropic
+  ! Set initial zonal velocity field for barotropic 
   ! instability test case of Polvani.
   !
   ! ===========================================
 
-  function tc8_velocity(sphere,D) result(v)
+  function tc8_velocity(sphere,D) result(v) 
 
     type (spherical_polar_t), intent(in) :: sphere(np,np)
     real (kind=real_kind),    intent(in) :: D(np,np,2,2)
@@ -2530,7 +2530,7 @@ contains
        do i=1,np
           lat   = sphere(i,j)%lat
 
-          if (ABS(lat-lat_tc8) <= gamma_tc8) then
+          if (ABS(lat-lat_tc8) <= gamma_tc8) then 
              cs_tc8 = COS((DD_PI/2.0D0)*((lat - lat_tc8)/gamma_tc8))
              V1 =  u0_tc8*(cs_tc8**2)
           else
@@ -2550,7 +2550,7 @@ contains
     end do
 
   end function tc8_velocity
-
+  
   ! ===========================================
   !
   ! vortex_init_state:
@@ -2567,8 +2567,8 @@ contains
     ! Local variables
 
     integer ie,k, i, j
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
 
     nm1= 1
@@ -2620,7 +2620,7 @@ contains
           p(i,j)=phiuv(1)
        end do
     end do
-
+    
   end function vortex_exact
 
 !----------------------------------------------------------------------
@@ -2688,48 +2688,48 @@ contains
 
   subroutine vortex_rotatedsphere(lc,tc,la,th,rol,rot)
     ! Rotate to new North Pole at (lc,tc)
-    ! (rol,rot) are the rotated coordinates coorsponding to (la,th) in
+    ! (rol,rot) are the rotated coordinates coorsponding to (la,th) in 
     ! the regular sphere
     implicit none
     real (kind=real_kind), intent(in)  :: lc,tc,la,th
     real (kind=real_kind), intent(out) :: rol,rot
-
+    
     real (kind=real_kind) :: cost,sint,sinc,cosc
     real (kind=real_kind) ::  trm, trm1,trm2,trm3
     real (kind=real_kind) ::  pi2
-
+    
     pi2=2.0D0*DD_PI
 
     sinc = sin(tc)
     cosc = cos(tc)
     cost = cos(th)
     sint = sin(th)
-
+    
     trm  = cost * cos(la- lc)
     trm1 = cost * sin(la- lc)
     trm2 = sinc * trm  - cosc * sint
     trm3 = sinc * sint + cosc * trm
-
+    
     rol = atan2(trm1,trm2)
     !if (rol > pi2  ) rol = rol - pi2
     !if (rol < 0.0D0 ) rol = rol + pi2
 
-    rot = asin(trm3)
+    rot = asin(trm3)      
 
   end subroutine vortex_rotatedsphere
-
+  
 !----------------------------------------------------------------------
 
   subroutine vortex_rotatedsphereback(lmc,thc,lam,the,rla,rth)
-
+    
     implicit none
     real (kind=real_kind), intent(in)  :: lmc,thc,lam,the
     real (kind=real_kind), intent(out) :: rla,rth
     !
-    real (kind=real_kind) :: cost,sint,cosp,sinp,clam,slam
+    real (kind=real_kind) :: cost,sint,cosp,sinp,clam,slam 
     real (kind=real_kind) :: trm, t1,t2,t3
     real (kind=real_kind) ::  pi2
-
+    
     pi2=2.0D0*DD_PI
 
     !
@@ -2751,7 +2751,7 @@ contains
     !if (rla > pi2 )   rla = rla - pi2
 
     rth =  asin(t3)
-
+    
   end subroutine vortex_rotatedsphereback
 
 !----------------------------------------------------------------------------
@@ -2762,18 +2762,18 @@ contains
     real (kind=real_kind), intent(in) :: lm_in,th_in,itn,unot,a,lm0,th0
 
     ! itn is the absolute time
-
+ 
     real (kind=real_kind)   :: fld(3), tow
-
+    
     real (kind=real_kind)   :: lm,th,plat, plon, ang
     real (kind=real_kind)   :: rot,rol, ldt,tdt
-
-    real (kind=real_kind)   :: lmc,thc
+    
+    real (kind=real_kind)   :: lmc,thc 
     real (kind=real_kind)   :: pl,pt
-
+    
     real (kind=real_kind)   :: dd,rd, rl,rt, trm
     real (kind=real_kind)   :: tt,tv,st,ct, omg, vmax,rho,lam,the
-
+    
     lm = lm_in
     th = th_in
 
@@ -2789,11 +2789,11 @@ contains
        !  Go to the rotated system
        !
        call vortex_rotatedsphere(lmc,thc,lm,th,rl,rt)
-       lam = rl  + omega_s_vortex*itn
+       lam = rl  + omega_s_vortex*itn  
        the = rt
 
        !
-       !  Back to unrotated system
+       !  Back to unrotated system 
        !
        call vortex_rotatedsphereback(lmc,thc,lam,the,rl,rt)
        lm =  rl
@@ -2803,11 +2803,11 @@ contains
 
     lmc = lm0             !center of the vortex at t=0
     thc = th0
-
+    
     !    Note:  (lmc,thc) is the new north pole position of the rotated coordinates
     !     relative to the given regular (la,th) coordinates.
     pl = lmc
-    pt = thc
+    pt = thc 
 
     ! Vortex parameters
     dd = 5.0D0
@@ -2823,14 +2823,14 @@ contains
     tt = TANH(rho)
     ! eqn 13
     tv = (1.0D0 - tt**2) * tt * vmax
-
+    
     if(ABS(rho)<1.0D-13)then
        omg = 0.0D0
     else
        omg = tv / (rho*a)
     end if
 
-    tow   = itn
+    tow   = itn 
     !Exact soln.
     trm =  rho*sin(rl - tow*omg) / dd
 
@@ -2853,11 +2853,11 @@ contains
           !  Go to the rotated system
           !
           call vortex_rotatedsphere(lmc,thc,lm0,th0,rl,rt)
-          lam = rl  + omega_s_vortex*itn
+          lam = rl  + omega_s_vortex*itn  
           the = rt
-
+          
           !
-          !  Back to unrotated system
+          !  Back to unrotated system 
           !
           call vortex_rotatedsphereback(lmc,thc,lam,the,rl,rt)
           lmc =  rl
@@ -2876,10 +2876,10 @@ contains
 
 !------------------------------------------------------------------------------
 
-  function  dynamic_velocity(lm,th,itn) result(vout)
-
+  function  dynamic_velocity(lm,th,itn) result(vout)      
+    
     implicit none
-
+    
     real (kind=real_kind), intent(in) :: itn
     real (kind=real_kind), intent(in) :: lm,th
     real (kind=real_kind)             :: vout(3)
@@ -2889,15 +2889,15 @@ contains
     real (kind=real_kind) :: sint,cost,tant, tanl,su,sv, rla,rth, trm, c1,c2
     real (kind=real_kind) :: sinp,cosp,slam,clam, x,y , omg, tow, scale
     real (kind=real_kind) :: tt,tv,st,ct, vmax,rho , three , unot, us,vs ,ditn
-
+    
     integer ::   i,j, n1,n2 ,l,k, ip
-
+    
     pi2 = DD_PI * 0.5D0
-
-    !  alpha:  Flow direction and  Rotational parameters (given)
-
+    
+    !  alpha:  Flow direction and  Rotational parameters (given)    
+    
     unot = omega_s_vortex
-
+ 
     !intial center position of the bell
     lm0 = lon0_vort1_vortex
     th0 = lat0_vort1_vortex
@@ -2906,14 +2906,14 @@ contains
 
     c1 = cos(alpha_vortex)
     c2 = sin(alpha_vortex)
-
+    
    !To find the  central position of the distribution as a function of
    !alpha and dt
 
     ditn = itn
-
+    
     if (abs(alpha_vortex)< 1.0D-13) then
-
+       
        ldt = lm0 + unot * ditn
        tdt = th0 + 0.0D0
        rol  = ldt
@@ -2926,79 +2926,79 @@ contains
        ldt = lm0 + unot * ditn
        tdt = th0 + 0.0D0
        call vortex_rotatedsphere(lmc,thc,ldt,tdt,rol,rot)
-
+      
     endif
-
+    
     pl = rol       !center of the solid-body dbn.
     pt = rot
-
+    
     ! Velocity Components in Global (spu,spv) spherical coordinates
     !  & Vortex parameters (see Nair et al. 2002)
-
+    
     ct = cos(pt)
     st = sin(pt)
-
+    
     c1 = cos(alpha_vortex)
     c2 = sin(alpha_vortex)
-
-    dd  = 5.0D0
-    rd  = 3.0D0
+    
+    dd  = 5.0D0      
+    rd  = 3.0D0 
     tow = 0.0D0     !Time units
 
     scale = a_vortex   !vortex rotation rate
     unot  = u0_vortex
 
     vmax = unot*1.5D0 *sqrt(3.0D0)       !Analytically determined
-
+    
     cost = cos(th)
     sint = sin(th)
     clam = cos(lm)
     slam = sin(lm)
     cosp = cos(lm - pl)
     sinp = sin(lm - pl)
-
-
+    
+        
     !!Rotated coordinates w.r.t (pl,pt)
     t1 = sinp * cost
     t2 = st * cosp*cost - ct * sint
     t3 = st * sint + ct * cost*cosp
-    rth = asin(t3)
+    rth = asin(t3)    
     rla = atan2(t1,t2)
     if (rla <  0.0D0) rla = rla + 2.0D0*DD_PI
-
+    
     !! or Call rotated_sphere(pl,pt,lm,th,rla,rth)
     call vortex_rotatedsphere(pl,pt,lm,th,rla,rth)
 
-    rho = rd * cos(rth)
+    rho = rd * cos(rth) 
     tt = tanh(rho)
     tv = (1.0D0  - tt**2) * tt * vmax   !Normalized tangential velocity
-
+    
     if (abs(rho) <1.0D-13 ) then
        omg = 0.0D0
     else
-       omg = tv / (rho*scale)
+       omg = tv / (rho*scale) 
     endif
-
+    
 
     ! Combined velocity (keep us=vs=0.0 for static vortex)
-
-    vout(2) =  scale *omg * (cost*st - cosp*sint*ct)
-    vout(3) =  scale *omg * sinp*ct
-
+    
+    vout(2) =  scale *omg * (cost*st - cosp*sint*ct)  
+    vout(3) =  scale *omg * sinp*ct 
+    
     !call vortex_rotatedsphere(pl,pt,lm,th,rol,rot)
     ! pl,pt,rol,rot
     call vortex_rotatedsphere(pl,pt,lm,th,rla,rth)
 
-    rho = rd * cos(rth)
+    rho = rd * cos(rth) 
     tt  = tanh(rho)
     tv  = (1.0D0  - tt**2) * tt * vmax   !Normalized tangential velocity
-
+    
     if (abs(rho) <1.0D-13 ) then
        omg = 0.0D0
     else
-       omg = tv / (rho*scale)
+       omg = tv / (rho*scale) 
     endif
-
+    
     trm =  rho*sin(rla - ditn*omg) / dd
 
     vout(1) =  (1.0D0 - tanh(trm))
@@ -3014,11 +3014,11 @@ contains
 
     integer                           :: iounit
     type (TimeLevel_t)   , intent(in) :: tl         ! model time struct
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer, intent(in)               :: nets
     integer, intent(in)               :: nete
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: latc,lonc
     real (kind=real_kind) :: lamdot,lon
@@ -3051,11 +3051,11 @@ contains
           pt(:,:,ie)=vortex_exact(time_tmp,elem(ie)%spherep)
           p(:,:,ie) =elem(ie)%state%p(:,:,k,tl%n0)
        end do
-
+       
        l1   = l1_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
        l2   = l2_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
        linf = linf_snorm(p(:,:,nets:nete),pt(:,:,nets:nete),hybrid,np,nets,nete)
-
+       
        if (k==1) then
        if (hybrid%masterthread) then
           write(iounit+0,30)time_tmp/secpday,l1
@@ -3088,12 +3088,12 @@ contains
     type(element_t), intent(inout) :: elem(:)
 
     integer                           :: iounit
-    type (TimeLevel_t)   , intent(in) :: tl
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (TimeLevel_t)   , intent(in) :: tl         
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer, intent(in)               :: nets
     integer, intent(in)               :: nete
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: latc,lonc
     real (kind=real_kind) :: lamdot,lon
@@ -3135,13 +3135,13 @@ contains
             p(:,:,ie) =elem(ie)%state%p(:,:,k,tl%n0)
          end do
        endif
-
+     
        l1   = l1_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
 
        l2   = l2_snorm(elem, p(:,:,nets:nete),  pt(:,:,nets:nete),hybrid,np,nets,nete)
 
        linf = linf_snorm(p(:,:,nets:nete),pt(:,:,nets:nete),hybrid,np,nets,nete)
-
+       
        if (k==1) then
        if (hybrid%masterthread) then
           write(iounit+0,30)time_tmp/secpday,l1
@@ -3187,13 +3187,13 @@ contains
     real (kind=real_kind) :: phiuv(3)
 !I am passing edge3 and hybrid because i want to test limiters
 !this is temporary change though
-    type (EdgeBuffer_t)  , intent(inout),optional :: edge3
-    type (hybrid_t)      , intent(in),optional :: hybrid
+    type (EdgeBuffer_t)  , intent(inout),optional :: edge3 
+    type (hybrid_t)      , intent(in),optional :: hybrid  
 
     ! Local variables
     integer ie,k, i, j
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
     real (kind=real_kind) :: pmin(nlev,nets:nete),pmax(nlev,nets:nete)
 
@@ -3215,19 +3215,19 @@ contains
        lat2=lat2_case1
        Kcoef=2.4  ! dimensionless units
        add_pure_rotation = .false.
-    elseif(sub_case==2)then
+    elseif(sub_case==2)then 
        lon1=lon1_case2
        lat1=lat1_case2
        lon2=lon2_case2
-       lat2=lat2_case2
-       Kcoef=2.0 ! dimensionless units
+       lat2=lat2_case2 
+       Kcoef=2.0 ! dimensionless units   
        add_pure_rotation = .false.
     elseif(sub_case==3)then
        lon1=lon1_case3
        lat1=lat1_case3
        lon2=lon2_case3
        lat2=lat2_case3
-       Kcoef=1.0 ! dimensionless units
+       Kcoef=1.0 ! dimensionless units  
        add_pure_rotation = .true.
 !as subcase 2 but with rotation
     elseif(sub_case==4)then
@@ -3261,7 +3261,7 @@ contains
           elem(ie)%state%v(:,:,:,k,n0)=swirl_velocity(0.0D0,elem(ie)%spherep(:,:),elem(ie)%Dinv)
           elem(ie)%state%v(:,:,:,k,nm1)=elem(ie)%state%v(:,:,:,k,n0)
           elem(ie)%state%v(:,:,:,k,np1)=elem(ie)%state%v(:,:,:,k,n0)
-
+ 
           elem(ie)%state%p(:,:,k,nm1)=elem(ie)%state%p(:,:,k,n0)
           elem(ie)%state%p(:,:,k,np1)=elem(ie)%state%p(:,:,k,n0)
 
@@ -3300,10 +3300,10 @@ contains
     real (kind=real_kind) :: h1,h2
     real (kind=real_kind) :: r1,r2,A1,A2, bellrad, latc, lonc,xc,yc,zc,snlon,cslon,x1,y1,z1
     real (kind=real_kind) :: lon_1,lat_1,lon_2,lat_2
-    real (kind=real_kind) :: k1,k2,r,D,Cly,lat_center,lon_center,density,dminusr(np,np)
+    real (kind=real_kind) :: k1,k2,r,D,Cly,lat_center,lon_center,density,dminusr(np,np) 
     integer i,j,k
 !
-!  Nick Lopez  7/2015  added terminator toy chemistry
+!  Nick Lopez  7/2015  added terminator toy chemistry 
 !
 ! layers in swirl:
 ! lev=1: COS BELLS
@@ -3334,7 +3334,7 @@ contains
              k1 = 0.0d0
           endif
           k2 = 1.0d0
-
+          
           r = k1/(4.0d0*k2)
           D = sqrt(r**2.0d0 + 2.0d0*r*Cly)
           dminusr(i,j) = ( D-r )
@@ -3356,23 +3356,23 @@ contains
 	    lon  =sphere(i,j)%lon
 	    lat  =sphere(i,j)%lat
 
-	    A1=SIN(lat_1)*snlat + COS(lat_1)*cslat*COS(lon - lon_1)
+	    A1=SIN(lat_1)*snlat + COS(lat_1)*cslat*COS(lon - lon_1)   
 	    A2=SIN(lat_2)*snlat + COS(lat_2)*cslat*COS(lon - lon_2)
 	    r1=ACOS(A1)
 	    r2=ACOS(A2)
 
 	    if (r1<bellrad) then
-	      h1 = tracer_lowest+tracer_highest*(1.0d0 + COS(DD_PI*r1/bellrad))
+	      h1 = tracer_lowest+tracer_highest*(1.0d0 + COS(DD_PI*r1/bellrad)) 
 	    else
 	      h1 = tracer_lowest
 	    endif
 	    if (r2<bellrad) then
-	      h2 = tracer_lowest+tracer_highest*(1.0d0 + COS(DD_PI*r2/bellrad))
+	      h2 = tracer_lowest+tracer_highest*(1.0d0 + COS(DD_PI*r2/bellrad)) 
 	    else
 	      h2 = tracer_lowest
 	    endif
 
-	    p(i,j)=(h1+h2)/2.0D0
+	    p(i,j)=(h1+h2)/2.0D0 
 
 	  end do
 	end do
@@ -3417,7 +3417,7 @@ contains
 	h2 = bellrad/6.0d0
 
 	latc  = lat1
-	lonc  = lon1
+	lonc  = lon1  
 
 	do j=1,np
 	  do i=1,np
@@ -3426,7 +3426,7 @@ contains
 	    lon  =sphere(i,j)%lon
 	    lat  =sphere(i,j)%lat
 
-	    A1    =SIN(latc)*snlat + COS(latc)*cslat*COS(lon - lonc)
+	    A1    =SIN(latc)*snlat + COS(latc)*cslat*COS(lon - lonc)   
 
 	    r1=ACOS(A1)
 
@@ -3440,7 +3440,7 @@ contains
 	enddo
 
 	latc  = lat2
-	lonc  = lon2
+	lonc  = lon2 
 
 	do j=1,np
 	  do i=1,np
@@ -3449,7 +3449,7 @@ contains
 	    lon  =sphere(i,j)%lon
 	    lat  =sphere(i,j)%lat
 
-	    A1    =SIN(latc)*snlat + COS(latc)*cslat*COS(lon - lonc)
+	    A1    =SIN(latc)*snlat + COS(latc)*cslat*COS(lon - lonc)   
 
 	    r1=ACOS(A1)
 
@@ -3473,13 +3473,13 @@ contains
 	p(:,:)=swirl_init_tracer(sphere,6)+swirl_init_tracer(sphere,2)
     !this level is for observing metric of level 1
     elseif(level==8)then
-	p(:,:)=0.0d0
+	p(:,:)=0.0d0 
     !this level is for observing metric of level 2
     elseif(level==9)then
-	p(:,:)=0.0d0
+	p(:,:)=0.0d0 
     !this level is for observing metric of level 3
     elseif(level==10)then
-	p(:,:)=0.0d0
+	p(:,:)=0.0d0 
     !this is another level for debugging or for smoothness measure
     !or for int smooth cyllinder
     elseif(level==11)then
@@ -3487,7 +3487,7 @@ contains
 	  do i=1,np
 	      !lon_1=lon1; lat_1=lat1;lon_2=lon2; lat_2=lat2;
 	      lon_1=3.0*DD_PI/4.0; lat_1=0.0;lon_2=5.0*DD_PI/4.0; lat_2=0.0;
-
+	      
 	      snlat=SIN(sphere(i,j)%lat)
 	      cslat=COS(sphere(i,j)%lat)
 	      snlon=SIN(sphere(i,j)%lon)
@@ -3507,12 +3507,12 @@ contains
 	end do
     !this level is for observing limiter applied to level 1
     elseif(level==12)then
-	p(:,:)=0.0d0
+	p(:,:)=0.0d0 
     !this level is for observing limiter applied to level 2
     elseif(level==13)then
-	p(:,:)=0.0d0
+	p(:,:)=0.0d0 
     !this level is for observing limiter applied to level 3
-    elseif(level >= 14)then
+    elseif(level>=14)then
 	p(:,:)=0.0d0 
     endif
   end function swirl_init_tracer
@@ -3567,7 +3567,7 @@ contains
 	  !            clon  = cos(lon-(t)*pi2/tt)!solid-body rotation added
 	  !            clon2 = cos(two*(lon-(t)*pi2/tt))!solid-body rotation added
 	  !            sslm  = (sin(half*(lon-(t)*pi2/tt)))**2
-	  !
+	  ! 
 	  !            uexact =  ck*slon*slon*SIN(two*lat)*COS(t*omega) + clat*pi2/(tt)
 	  !            vexact =  ck*slon2*clat*COS(t*omega)
 	  !            udc    =  two*ck*slon*slon*slat*COS(t*omega) + pi2/tt
@@ -3716,7 +3716,7 @@ contains
   ! Initialize strong jet case 1: Galewski et al.
   !
   ! ===================================================================
-
+ 
   subroutine sj1_init_state(elem,nets,nete,hybrid,pmean,deriv)
 
     type(element_t), target,intent(inout) :: elem(:)
@@ -3727,7 +3727,7 @@ contains
     type (derivative_t)   :: deriv
 
     ! Local variables
-
+  
     real (kind=real_kind) :: a,b
     real (kind=real_kind) :: mean_balance
     real (kind=real_kind) :: pert(np,np)
@@ -3735,8 +3735,8 @@ contains
     type (quadrature_t)   :: gs
 
     integer :: ie,k
-    integer :: nm1
-    integer :: n0
+    integer :: nm1 
+    integer :: n0 
     integer :: np1
     type (element_t), pointer :: pElem,sElem
 
@@ -3750,7 +3750,7 @@ contains
     b = DD_PI/2.0D0
 
     gs=gauss(Ngs_sj1)
-    Ibalance_tot = gaussian_int(sj1_integrand,a,b,gs)
+    Ibalance_tot = gaussian_int(sj1_integrand,a,b,gs)    
     print *,"Ibalance_tot=",Ibalance_tot
     deallocate(gs%points)
     deallocate(gs%weights)
@@ -3798,25 +3798,25 @@ contains
   end subroutine sj1_init_state
 
   function sj1_velocity(lat) result(ulat)
-
+    
     real (kind=real_kind),intent(in) :: lat
     real (kind=real_kind)            :: ulat,en
 
     en    = exp(-((2.0D0/(lat1_sj1 - lat0_sj1))**2.0D0))
-
+        
     if((lat0_sj1.lt.lat).AND.(lat.lt.lat1_sj1))then
        ulat  = (u0_sj1/en)*exp(1.0D0/((lat-lat0_sj1)*(lat-lat1_sj1)))
     else
        ulat  = 0.0_real_kind
     endif
-
+    
   end function sj1_velocity
 
 ! =======================================================
 !
 ! sj1_integrand:
-!
-! Scaled integrand function needed to integrate the
+! 
+! Scaled integrand function needed to integrate the 
 ! geostrophic balance equation using the trapezoid rule.
 ! Integrand in units of u0_sj1*f*rearth (m^2/s^2)
 !
@@ -3826,7 +3826,7 @@ contains
 
     real (kind=real_kind), intent(in) :: lat
     real (kind=real_kind) :: Ival
-
+       
     real (kind=real_kind) :: ulat    ! dimensionless velocity
 
     ulat = sj1_velocity(lat)
@@ -3842,7 +3842,7 @@ contains
 ! Barotropic Instability Test Case of Polvani.
 !
 ! ===========================================================
-
+ 
   function sj1_balance(sphere,npts) result(p)
 
     integer, intent(in)                  :: npts
@@ -3873,12 +3873,12 @@ contains
 
           b = lat
           a = -pi2
-          Ibalance = gaussian_int(sj1_integrand,a,b,gs)
+          Ibalance = gaussian_int(sj1_integrand,a,b,gs)    
           p(i,j)  =  Ibalance
 
        end do
     end do
-
+    
     deallocate(gs%weights)
     deallocate(gs%points)
 
@@ -3888,12 +3888,12 @@ contains
 !
 ! sj1_perturbation:
 !
-! Compute the geopotential perturbation
-! from geostrophic balance for the Barotropic
+! Compute the geopotential perturbation 
+! from geostrophic balance for the Barotropic 
 ! Instability Test Case of Polvani.
 !
 ! ===========================================
-
+ 
   function sj1_perturbation(sphere,npts) result(p)
 
     integer, intent(in)                  :: npts
@@ -3929,12 +3929,12 @@ contains
 !
 ! sj1_velocity:
 !
-! Set initial zonal velocity field for barotropic
+! Set initial zonal velocity field for barotropic 
 ! instability test case of Polvani.
 !
 ! ===========================================
 
-  function sj1_velocity_cubedsphere(sphere,D) result(v)
+  function sj1_velocity_cubedsphere(sphere,D) result(v) 
 
     type (spherical_polar_t), intent(in) :: sphere(np,np)
     real (kind=real_kind),    intent(in) :: D(np,np,2,2)
@@ -3944,14 +3944,14 @@ contains
 
     real (kind=real_kind) :: lat
     real (kind=real_kind) :: V1
-
+        
     integer i,j
 
     do j=1,np
        do i=1,np
-          lat = sphere(i,j)%lat
+          lat = sphere(i,j)%lat        
           V1  = sj1_velocity(lat)
-
+          
           ! Map onto contravariant velocities
           v(i,j,1)= V1*D(i,j,1,1)
           v(i,j,2)= V1*D(i,j,2,1)
@@ -3968,12 +3968,12 @@ contains
     real (kind=real_kind), intent(in) :: pmean      ! mean geopotential
     character(len=*)     , intent(in) :: fstub      ! file path stub
     integer              , intent(in) :: simday     ! current day of simulation
-    type (hybrid_t)      , intent(in) :: hybrid
+    type (hybrid_t)      , intent(in) :: hybrid     
     integer              , intent(in) :: nets
     integer              , intent(in) :: nete
     type(parallel_t)     , intent(in) :: par
 
-    ! Local variables
+    ! Local variables 
 
     real (kind=real_kind) :: pt(np,np,nets:nete)
     real (kind=real_kind) :: p(np,np,nets:nete)
@@ -4069,7 +4069,7 @@ subroutine toy_chemistry_forcing(elem, nets, nete, tl, dt)
   integer, parameter                       :: allowNegChem=1
 
   ! Center of k1. This is essentially a longitude offset of PI from Fig.1 of Lauritzen et. al
-  lat_center = DD_PI/9
+  lat_center = DD_PI/9  
   lon_center = 2*DD_PI/3
 
   cl_index = 5
@@ -4126,7 +4126,7 @@ subroutine toy_chemistry_forcing(elem, nets, nete, tl, dt)
      enddo
   enddo
 
- end subroutine
+ end subroutine 
 
 
 

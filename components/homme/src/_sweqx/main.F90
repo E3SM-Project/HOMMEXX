@@ -35,15 +35,6 @@ program main
   use control_mod, only : integration
 
   implicit none
-
-  interface
-     subroutine initialize_hommexx_session() bind(c)
-     end subroutine initialize_hommexx_session
-
-     subroutine finalize_hommexx_session() bind(c)
-     end subroutine finalize_hommexx_session
-  end interface
-
   type (element_t), pointer :: elem(:)
   type (fvm_struct), pointer  :: fvm(:)
   
@@ -63,18 +54,16 @@ program main
   ! =====================================================
 
   par=initmp()
-
   call t_initf('input.nl',LogPrint=par%masterproc, &
        Mpicom=par%comm, MasterTask=par%masterproc)
   call t_startf('Total')
-
+  
   call init(elem,edge1,edge2,edge3,red,par,dom_mt,fvm)
   ! =====================================================
   ! Allocate state variables
   ! =====================================================
 
   if(par%masterproc) print *,"allocating state variables..."
-
   !JMD allocate(state(nelemd))
 
   ! =====================================
@@ -97,13 +86,6 @@ program main
   ! =====================================
 
   call syncmp(par)
-
-#if DONT_USE_KOKKOS
-  if(par%masterproc) print *, 'FORTRAN kernels only, DONT_USE_KOKKOS is set.'
-#else
-  if(par%masterproc) print *, 'C++ kernels only, DONT_USE_KOKKOS is not set.'
-  call initialize_hommexx_session()
-#endif 
 
   ! =====================================
   ! Begin threaded region...
@@ -135,7 +117,6 @@ program main
   ! ================================================
   ! End distributed memory region
   ! ================================================
-  call finalize_hommexx_session()
   call t_stopf('Total')
   call t_prf('HommeSWTime',par%comm)
   call t_finalizef()

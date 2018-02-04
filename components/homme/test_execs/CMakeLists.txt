@@ -156,28 +156,31 @@ ENDIF ()
 # Test some stuff in the shared folder
 ADD_SUBDIRECTORY (share_ut)
 
+
+########### OG REMOVE
 # Add the test exec subdirs for the sweqx executable
+#IF(${BUILD_HOMME_SWEQX})
+#  ADD_SUBDIRECTORY(swtcA)
+##  ADD_SUBDIRECTORY(swtcB)
+#ENDIF()
+
 IF(${BUILD_HOMME_SWEQX})
-  ADD_SUBDIRECTORY(swtcA)
-#  ADD_SUBDIRECTORY(swtcB)
+  ADD_SUBDIRECTORY(sweqx_ut)
+  ADD_SUBDIRECTORY(swtcA_c)
+  ADD_SUBDIRECTORY(swtcB_c)
 ENDIF()
 
-IF(${BUILD_HOMME_SWEQX_FLAT})
-  ADD_SUBDIRECTORY(sweqx_flat_ut)
-  ADD_SUBDIRECTORY(swtcA_flat_c)
-  ADD_SUBDIRECTORY(swtcB_flat_c)
-ENDIF()
-
+############# OG REMOVE
 # Add the test exec subdirs for the preqx executable
-IF(${BUILD_HOMME_PREQX})
-   ADD_SUBDIRECTORY(prtcA)
-   ADD_SUBDIRECTORY(prtcB)
-ENDIF()
+#IF(${BUILD_HOMME_PREQX})
+#   ADD_SUBDIRECTORY(prtcA)
+#   ADD_SUBDIRECTORY(prtcB)
+#ENDIF()
 
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(preqx_flat_ut)
-  ADD_SUBDIRECTORY(prtcA_flat_c)
-  ADD_SUBDIRECTORY(prtcB_flat_c)
+IF(${BUILD_HOMME_PREQX})
+  ADD_SUBDIRECTORY(preqx_ut)
+  ADD_SUBDIRECTORY(prtcA_c)
+  ADD_SUBDIRECTORY(prtcB_c)
 ENDIF()
 
 # Read the test-list.cmake file to get the HOMME_TESTS list
