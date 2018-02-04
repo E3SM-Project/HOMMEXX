@@ -170,12 +170,11 @@ IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(swtcB_c)
 ENDIF()
 
-############# OG REMOVE
 # Add the test exec subdirs for the preqx executable
-#IF(${BUILD_HOMME_PREQX})
-#   ADD_SUBDIRECTORY(prtcA)
-#   ADD_SUBDIRECTORY(prtcB)
-#ENDIF()
+IF(${BUILD_HOMME_PREQX})
+   ADD_SUBDIRECTORY(prtcA)
+   ADD_SUBDIRECTORY(prtcB)
+ENDIF()
 
 IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(preqx_ut)
