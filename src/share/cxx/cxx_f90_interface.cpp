@@ -76,6 +76,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Set some parameters in the Control structure already
   Control& data = Context::singleton().get_control();
+  data.rsplit = params.rsplit;
   data.nu     = params.nu;
   data.nu_s   = params.nu_s;
   data.nu_p   = params.nu_p;

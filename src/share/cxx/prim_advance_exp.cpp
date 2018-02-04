@@ -24,6 +24,50 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
 extern "C"
 {
 
+void prim_advance_exp_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
+                                   CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
+                                   CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr,
+                                   CF90Ptr& elem_derived_dpdiss_ave_ptr, CF90Ptr& elem_derived_dpdiss_biharmonic_ptr)
+{
+  // Get elements and control structures
+  Elements& elements = Context::singleton().get_elements();
+  Control& control = Context::singleton().get_control ();
+
+  // Push data from Fortran pointers to C++ views
+  elements.pull_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
+  elements.pull_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
+  elements.pull_eta_dot(elem_derived_eta_dot_dpdn_ptr);
+  elements.pull_qdp(elem_state_Qdp_ptr);
+
+  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
+  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
+
+  sync_to_device(dpdiss_ave_f90       , elements.m_derived_dpdiss_ave       );
+  sync_to_device(dpdiss_biharmonic_f90, elements.m_derived_dpdiss_biharmonic);
+}
+
+void prim_advance_exp_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
+                                      F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
+                                      F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr,
+                                      F90Ptr& elem_derived_dpdiss_ave_ptr, F90Ptr& elem_derived_dpdiss_biharmonic_ptr)
+{
+  // Get elements and control structures
+  Elements& elements = Context::singleton().get_elements();
+  Control& control = Context::singleton().get_control ();
+
+  // Push data from C++ views to Fortran pointers
+  elements.push_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
+  elements.push_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
+  elements.push_eta_dot(elem_derived_eta_dot_dpdn_ptr);
+  elements.push_qdp(elem_state_Qdp_ptr);
+
+  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
+  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
+
+  sync_to_host(elements.m_derived_dpdiss_ave,        dpdiss_ave_f90);
+  sync_to_host(elements.m_derived_dpdiss_biharmonic, dpdiss_biharmonic_f90);
+}
+
 void prim_advance_exp_c(const Real dt, const bool compute_diagnostics)
 {
   // Get simulation params
@@ -61,6 +105,14 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
   // Note: In the following, all the checks are superfluous, since we already check that
   //       the options are supported when we init the simulation params. However, this way
   //       we remind ourselves that in these cases there is some missing code to convert from Fortran
+
+  // Get time level info, and determine the tracers time level
+  TimeLevel& tl = Context::singleton().get_time_level();
+  data.qn0 = -1;
+  if (params.moisture == MoistDry::MOIST) {
+    tl.update_tracers_levels(params.qsplit);
+    data.qn0 = tl.n0_qdp;
+  }
 
   // Set eta_ave_w
   int method = params.time_step_type;
@@ -151,18 +203,22 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
 
   // ===================== RK STAGES ===================== //
 
+std::cout << "  RK stage 1\n";
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
   functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
   caar_monolithic(elements,functor,*be[nm1],policy_pre,policy_post);
 
+std::cout << "  RK stage 2\n";
   // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
   functor.set_rk_stage_data(n0,nm1,np1,dt/5.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
+std::cout << "  RK stage 3\n";
   // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
   functor.set_rk_stage_data(n0,np1,np1,dt/3.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
+std::cout << "  RK stage 4\n";
   // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
   functor.set_rk_stage_data(n0,np1,np1,2.0*dt/3.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
@@ -182,6 +238,7 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
   });
   ExecSpace::fence();
 
+std::cout << "  RK stage 5\n";
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
