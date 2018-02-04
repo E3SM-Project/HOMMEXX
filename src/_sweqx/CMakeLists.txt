@@ -1,44 +1,23 @@
 # Relevant Directories within the HOMME repository
 # holding source files needed for building the library
-# and executable sweqx_flat.
+# and executable sweqx.
 
-macro(sweqx_setup FORTRAN_LOOPS)
-
-MESSAGE(STATUS "Executing sweqx_setup -------------")
+macro(sweqx_setup)
 
 SET(TARGET_DIR        ${HOMME_SOURCE_DIR}/src/sweqx)
 SET(SRC_BASE          ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE         ${HOMME_SOURCE_DIR}/src/share)
 SET(SRC_UTILS         ${HOMME_SOURCE_DIR}/utils/csm_share)
 SET(UTILS_TIMING_DIR  ${CMAKE_BINARY_DIR}/utils/timing)
-SET(UTILS_TIMING_SRC_DIR ${HOMME_SOURCE_DIR}/utils/timing)
-SET(SRC_KERNELS_DIR   ${SRC_BASE}/kokkos_kernels)
-SET(UNIT_TEST_DIR     ${TARGET_DIR}/unit_tests)
-SET(HOMME_CONFIG_DIR  ${CMAKE_BINARY_DIR}/src)  # where Hommexx_config.h is located
 
 # Find F90 files in target directory
-SET (TARGET_F90
-  ${TARGET_DIR}/advance_mod.F90
-  ${TARGET_DIR}/bndry_mod.F90
-  ${TARGET_DIR}/derivative_mod.F90
-  ${TARGET_DIR}/edge_mod.F90
-  ${TARGET_DIR}/init_mod.F90
-  ${TARGET_DIR}/main.F90
-  ${TARGET_DIR}/restart_mod.F90
-  ${TARGET_DIR}/rk_mod.F90
-  ${TARGET_DIR}/shallow_water_mod.F90
-  ${TARGET_DIR}/shal_movie_mod.F90
-  ${TARGET_DIR}/solver_init_mod.F90
-  ${TARGET_DIR}/state_mod.F90
-  ${TARGET_DIR}/sweq_mod.F90
-  ${TARGET_DIR}/types_mod.F90
-  ${TARGET_DIR}/viscosity_mod.F90
-)
+FILE(GLOB TARGET_F90  ${TARGET_DIR}/*.F90)
 
 # Make INCLUDE_DIRS global so the tests can access it
-SET (EXEC_INCLUDE_DIRS ${HOMME_CONFIG_DIR} ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} ${UTILS_TIMING_SRC_DIR})
+SET (EXEC_INCLUDE_DIRS ${PIO_INCLUDE_DIRS} ${UTILS_TIMING_DIR} )
 
-SET(SWEQX_DEPS
+SET(SWEQX_SRCS
+  ${TARGET_F90}
   ${SRC_BASE}/checksum_mod.F90
   ${SRC_BASE}/common_io_mod.F90
   ${SRC_BASE}/common_movie_mod.F90
@@ -104,39 +83,8 @@ SET(SWEQX_DEPS
   ${SRC_UTILS}/shr_spfn_mod.F90
   ${SRC_BASE}/ref_state_mod.F90
   ${SRC_BASE}/jrio.c
-  ${SRC_KERNELS_DIR}/recover_q.cpp
-  ${SRC_KERNELS_DIR}/team_parallel.cpp
-  ${SRC_SHARE}/cxx/Hommexx_Session.cpp
-)
-
-SET(SWEQX_SRCS
-  ${TARGET_F90}
-  ${SWEQX_DEPS}
-)
-
-SET(SWEQX_UT_SRCS
-  ${UNIT_TEST_DIR}/advance_rk.cpp
-  ${TARGET_DIR}/advance_mod.F90
-  ${TARGET_DIR}/shallow_water_mod.F90
-  ${TARGET_DIR}/edge_mod.F90
-  ${TARGET_DIR}/bndry_mod.F90
-  ${TARGET_DIR}/derivative_mod.F90
-  ${TARGET_DIR}/viscosity_mod.F90
-  ${TARGET_DIR}/types_mod.F90
-  ${SWEQX_DEPS}
 )
 
 SET(EXEC_SOURCES ${SWEQX_SRCS} )
-
-SET(HOMME_USE_ARRAYS TRUE)
-
-IF (${FORTRAN_LOOPS})
-  SET (DONT_USE_KOKKOS TRUE)
-ELSE ()
-  SET (DONT_USE_KOKKOS FALSE)
-ENDIF ()
-
-MESSAGE(STATUS " Building with DONT_USE_KOKKOS = ${DONT_USE_KOKKOS}")
-MESSAGE(STATUS "End of executing sweqx_setup ------------")
 
 endmacro(sweqx_setup)

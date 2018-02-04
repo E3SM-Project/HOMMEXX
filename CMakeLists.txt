@@ -67,9 +67,9 @@ ENDIF ()
 
 # Some options for conditional builds
 OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" OFF)
-OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" OFF)
+#OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" OFF)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
-OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
+#OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
 
 OPTION(REFSOLN "Whether to read/write reference soln data" FALSE)
 # Reference solution data
@@ -220,17 +220,17 @@ IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(src/sweqx)
 ENDIF()
 
-IF(${BUILD_HOMME_SWEQX_FLAT})
-  ADD_SUBDIRECTORY(src/sweqx_flat)
-ENDIF()
+#IF(${BUILD_HOMME_SWEQX_FLAT})
+#  ADD_SUBDIRECTORY(src/sweqx_flat)
+#ENDIF()
 
 IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(src/preqx)
 ENDIF()
 
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(src/preqx_flat)
-ENDIF()
+#IF(${BUILD_HOMME_PREQX_FLAT})
+#  ADD_SUBDIRECTORY(src/preqx_flat)
+#ENDIF()
 
 ADD_SUBDIRECTORY(test_execs)
 

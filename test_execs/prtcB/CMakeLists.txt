@@ -1,7 +1,7 @@
 SET (FORTRAN_LOOPS TRUE)
 SET (HOMME_USE_FLAT_ARRAYS FALSE)
 
-PREQX_SETUP( )
+PREQX_SETUP(${FORTRAN_LOOPS})
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
