@@ -893,7 +893,7 @@ void BoundaryExchange
       const auto& info = connections(ie, iconn);
       const int k = ie*NUM_CONNECTIONS + iconn;
       auto& i2r = i2remote[k];
-      // Original sequence through (elements, connection).
+      // Original sequence through (element, connection) pairs.
       i2r.i = k;
       // An ordering of the message buffer upon which both members of the
       // communication pair agree.
@@ -912,7 +912,7 @@ void BoundaryExchange
   // ascending. The first lets us set up comm buffers so monolithic messages
   // slot right in. The second means that the send and recv partners agree on
   // how the monolithic message is packed.
-  std::stable_sort(i2remote.begin(), i2remote.end());
+  std::sort(i2remote.begin(), i2remote.end());
 
   // Collect the unique remote_pids and get the offsets of the contiguous blocks
   // of them.
