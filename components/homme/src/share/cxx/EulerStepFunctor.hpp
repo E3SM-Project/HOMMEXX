@@ -7,6 +7,8 @@
 #include "Control.hpp"
 #include "SphereOperators.hpp"
 #include "vector/VectorUtils.hpp"
+#include "ErrorDefs.hpp"
+#include "BoundaryExchange.hpp"
 
 namespace Homme {
 
@@ -158,11 +160,10 @@ public:
   struct AALTracerPhase {};
   struct AALFusedPhases {};
 
-  static void advect_and_limit (const int &DSSopt) {
+  static void advect_and_limit () {
     profiling_resume();
     GPTLstart("esf-aal-tot run");
     Control& data = Context::singleton().get_control();
-		data.DSSopt = Control::DSSOption::from(DSSopt);
     EulerStepFunctor func(data);
 		fprintf(stderr, "advect_and_limit DSSopt: %d\n", func.m_data.DSSopt);
     if (OnGpu<ExecSpace>::value) {
@@ -364,6 +365,146 @@ public:
       });
     }
     ExecSpace::fence();
+  }
+
+  static void euler_step(const int &n0_qdp,
+                         const Control::DSSOption::Enum &DSSopt,
+                         const int &rhs_multiplier) {
+    Control &data = Context::singleton().get_control();
+    data.DSSopt = DSSopt;
+    data.rhs_multiplier = rhs_multiplier;
+    data.qn0 = n0_qdp - 1;
+    if (data.limiter_option == 4) {
+      Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
+                            Errors::err_unimplemented);
+    }
+    const auto &elements = Context::singleton().get_elements();
+    if (data.limiter_option == 8) {
+      // when running lim8, we also need to limit the biharmonic, so that term
+      // needs to be included in each euler step.  three possible algorithms
+      // here:
+      // 1) most expensive:
+      //     compute biharmonic (which also computes qmin/qmax) during all 3
+      //     stages be sure to set rhs_viss=1 cost:  3 biharmonic steps with 3
+      // DSS
+
+      // 2) cheapest:
+      //     compute biharmonic (which also computes qmin/qmax) only on first
+      //     stage be sure to set rhs_viss=3 reuse qmin/qmax for all following
+      //     stages (but update based on local qmin/qmax) cost:  1 biharmonic
+      //     steps with 1 DSS main concern: viscosity
+
+      // 3)  compromise:
+      //     compute biharmonic (which also computes qmin/qmax) only on last
+      // stage
+      //     be sure to set rhs_viss=3
+      //     compute qmin/qmax directly on first stage
+      //     reuse qmin/qmax for 2nd stage stage (but update based on local
+      //     qmin/qmax) cost:  1 biharmonic steps, 2 DSS
+
+      //  NOTE  when nu_p=0 (no dissipation applied in dynamics to dp equation),
+      //  we should
+      //        apply dissipation to Q (not Qdp) to preserve Q=1
+      //        i.e.  laplace(Qdp) ~  dp0 laplace(Q)
+      //        for nu_p=nu_q>0, we need to apply dissipation to Q *
+      // diffusion_dp
+
+      // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
+      GPTLstart("bihmix_qminmax");
+
+      // euler_qmin_qmax_c()
+      EulerStepFunctor::compute_qmin_qmax();
+
+      if (rhs_multiplier == 0) {
+        GPTLstart("eus_neighbor_minmax1");
+
+        // euler_neighbor_minmax_c()
+        BoundaryExchange &be =
+            *Context::singleton().get_boundary_exchange("min max Euler");
+        assert(be.is_registration_completed());
+        be.exchange_min_max(data.nets, data.nete);
+
+        GPTLstop("eus_neighbor_minmax1");
+      } else if (rhs_multiplier == 2) {
+        // euler_minmax_and_biharmonic_c()
+        const auto be = Context::singleton().get_boundary_exchange(
+            "Euler step: min/max & qtens_biharmonic");
+        if (!be->is_registration_completed()) {
+          be->set_buffers_manager(
+              Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+          be->set_num_fields(0, 0, data.qsize);
+          be->register_field(elements.buffers.qtens_biharmonic, data.qsize, 0);
+          be->registration_completed();
+        }
+        {
+          // euler_neighbor_minmax_start_c()
+          BoundaryExchange &be =
+              *Context::singleton().get_boundary_exchange("min max Euler");
+          be.pack_and_send_min_max(data.nets, data.nete);
+        }
+        EulerStepFunctor::compute_biharmonic_pre();
+        be->exchange();
+        EulerStepFunctor::compute_biharmonic_post();
+        {
+          // euler_neighbor_minmax_finish_c()
+          BoundaryExchange &be =
+              *Context::singleton().get_boundary_exchange("min max Euler");
+          be.recv_and_unpack_min_max(data.nets, data.nete);
+        }
+      }
+      GPTLstop("bihmix_qminmax");
+    }
+    GPTLstart("eus_2d_advec");
+    GPTLstart("advance_qdp");
+
+    // advance_qdp_c()
+    EulerStepFunctor::advect_and_limit();
+
+    GPTLstop("advance_qdp");
+
+    //  euler_exchange_qdp_dss_var_c();
+    //
+    // Note: we have three separate BE structures, all of which register qdp.
+    // They differ only in the last field registered.
+    // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
+    // rather than one for qdp and one for the last DSS variable.
+    // TODO: move this setup in init_control_euler and move that function one
+    // stack frame up of euler_step in F90, making it set the common parameters
+    // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
+
+    std::stringstream ss;
+    ss << "exchange qdp " << (data.DSSopt == Control::DSSOption::eta
+                                  ? "eta"
+                                  : data.DSSopt == Control::DSSOption::omega
+                                        ? "omega"
+                                        : "div_vdp_ave") << " " << data.np1_qdp;
+
+    const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+        Context::singleton().get_boundary_exchange(ss.str());
+
+    const auto &dss_var = (data.DSSopt == Control::DSSOption::eta
+                               ? elements.m_eta_dot_dpdn
+                               : (data.DSSopt == Control::DSSOption::omega
+                                      ? elements.m_omega_p
+                                      : elements.m_derived_divdp_proj));
+
+    if (!be_qdp_dss_var->is_registration_completed()) {
+      // If it is the first time we call this method, we need to set up the BE
+      std::shared_ptr<BuffersManager> buffers_manager =
+          Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+      be_qdp_dss_var->set_buffers_manager(buffers_manager);
+      be_qdp_dss_var->set_num_fields(0, 0, data.qsize + 1);
+      be_qdp_dss_var->register_field(elements.m_qdp, data.np1_qdp, data.qsize,
+                                     0);
+      be_qdp_dss_var->register_field(dss_var);
+      be_qdp_dss_var->registration_completed();
+    }
+
+    be_qdp_dss_var->exchange();
+
+    EulerStepFunctor::apply_rspheremp();
+
+    GPTLstop("eus_2d_advec");
   }
 
 private:
