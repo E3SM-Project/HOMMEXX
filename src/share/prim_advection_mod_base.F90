@@ -1424,20 +1424,22 @@ end subroutine ALE_parametric_coords
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
   subroutine Prim_Advec_Tracers_remap_rk2( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
+    use iso_c_binding , only : c_ptr, c_loc
+    use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
+         elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
+         elem_derived_divdp, elem_derived_dpdiss_biharmonic, elem_derived_dpdiss_ave
     use perf_mod      , only : t_startf, t_stopf            ! _EXTERNAL
     use derivative_mod, only : divergence_sphere
     use control_mod   , only : vert_remap_q_alg, qsplit
     implicit none
 
     interface
-       subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-            n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
+       subroutine init_control_euler_c (nets, nete, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
          use iso_c_binding, only : c_int, c_double
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
-              n0_qdp, qsize, np1_qdp, limiter_option
+         integer (kind=c_int),  intent(in) :: nets, nete, qsize, np1_qdp, limiter_option
          real (kind=c_double), intent(in) :: dt, nu_p, nu_q
        end subroutine init_control_euler_c
        subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
@@ -1447,6 +1449,13 @@ end subroutine ALE_parametric_coords
          !
          integer (kind=c_int),  intent(in) :: qsize
        end subroutine init_euler_neighbor_minmax_c
+       subroutine euler_step_c (n0_qdp, DSSopt, rhs_multiplier) bind(c)
+         use iso_c_binding, only : c_int
+         !
+         ! Inputs
+         !
+         integer (kind=c_int),  intent(in) :: n0_qdp, DSSopt, rhs_multiplier
+       end subroutine euler_step_c
     end interface
 
     type (element_t)     , intent(inout) :: elem(:)
@@ -1462,6 +1471,12 @@ end subroutine ALE_parametric_coords
     integer :: i,j,k,l,ie,q,nmin
     integer :: nfilt,rkstage,rhs_multiplier
     integer :: n0_qdp, np1_qdp
+
+    type (c_ptr) :: qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
+         elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
+         elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+         elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
+
 
     call t_barrierf('sync_prim_advec_tracers_remap_k2', hybrid%par%comm)
     call t_startf('prim_advec_tracers_remap_rk2')
@@ -1487,9 +1502,27 @@ end subroutine ALE_parametric_coords
 
 #ifdef USE_KOKKOS_KERNELS
     ! Set up the boundary exchange for the minmax calls
-    call init_control_euler_c(nets, nete, DSSdiv_vdp_ave, rhs_multiplier, n0_qdp, qsize, &
-         dt, np1_qdp, nu_p, nu_q, limiter_option)
+    call init_control_euler_c(nets, nete, qsize, &
+         dt/2, np1_qdp, nu_p, nu_q, limiter_option)
     call init_euler_neighbor_minmax_c(qsize)
+
+    ! Bind the ptrs for the C calls
+    qmin_ptr = c_loc(qmin)
+    qmax_ptr = c_loc(qmax)
+
+    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+    elem_derived_dp_ptr                = c_loc(elem_derived_dp)
+    elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
+    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+    elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
+    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+         elem_derived_dpdiss_ave_ptr)
 #endif
 
     !rhs_multiplier is for obtaining dp_tracers at each stage:
@@ -1497,21 +1530,35 @@ end subroutine ALE_parametric_coords
 
     call t_startf('euler_step_0')
     rhs_multiplier = 0
-    print *, "Calling euler_step with DSSopt", DSSdiv_vdp_ave
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(n0_qdp, DSSdiv_vdp_ave, rhs_multiplier)
+#else
     call euler_step( np1_qdp , n0_qdp  , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSdiv_vdp_ave , rhs_multiplier )
+#endif
     call t_stopf('euler_step_0')
 
     call t_startf('euler_step_1')
     rhs_multiplier = 1
-    print *, "Calling euler_step with DSSopt", DSSeta
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(np1_qdp, DSSeta, rhs_multiplier)
+#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSeta         , rhs_multiplier )
+#endif
     call t_stopf('euler_step_1')
 
     call t_startf('euler_step_2')
     rhs_multiplier = 2
-    print *, "Calling euler_step with DSSopt", DSSomega
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(np1_qdp, DSSomega, rhs_multiplier)
+#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSomega       , rhs_multiplier )
+#endif
     call t_stopf('euler_step_2')
+
+#ifdef USE_KOKKOS_KERNELS
+    call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
+#endif
 
     !to finish the 2D advection step, we need to average the t and t+2 results to get a second order estimate for t+1.
     call t_startf('qdp_tavg')
@@ -1588,6 +1635,10 @@ end subroutine ALE_parametric_coords
 
 #ifdef USE_KOKKOS_KERNELS
   subroutine euler_step( np1_qdp , n0_qdp , dt , elem , hvcoord , hybrid , deriv , nets , nete , DSSopt , rhs_multiplier )
+    ! call euler_step( np1_qdp , n0_qdp  , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSdiv_vdp_ave , rhs_multiplier )
+    ! Set up the boundary exchange for the minmax calls
+    ! call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+    !      dt, np1_qdp, nu_p, nu_q, limiter_option)
     use iso_c_binding  , only : c_ptr, c_loc
     use kinds          , only : real_kind
     use dimensions_mod , only : np, nlev
@@ -1608,46 +1659,41 @@ end subroutine ALE_parametric_coords
     implicit none
 
     interface
-       subroutine euler_neighbor_minmax_c(nets, nete) bind(c)
+       subroutine euler_neighbor_minmax_c() bind(c)
          use iso_c_binding, only : c_int
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete
        end subroutine euler_neighbor_minmax_c
-       subroutine euler_neighbor_minmax_start_c(nets, nete) bind(c)
+       subroutine euler_neighbor_minmax_start_c() bind(c)
          use iso_c_binding, only : c_int
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete
        end subroutine euler_neighbor_minmax_start_c
-       subroutine euler_neighbor_minmax_finish_c(nets, nete) bind(c)
+       subroutine euler_neighbor_minmax_finish_c() bind(c)
          use iso_c_binding, only : c_int
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete
        end subroutine euler_neighbor_minmax_finish_c
-       subroutine euler_minmax_and_biharmonic_c(nets, nete, rhs_multiplier) bind(c)
-         use iso_c_binding, only : c_int, c_double
+       subroutine euler_minmax_and_biharmonic_c(rhs_multiplier) bind(c)
+         use iso_c_binding, only : c_int
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete, rhs_multiplier
+         integer (kind=c_int),  intent(in) :: rhs_multiplier
        end subroutine euler_minmax_and_biharmonic_c
 
        subroutine euler_qmin_qmax_c() bind(c)
        end subroutine euler_qmin_qmax_c
 
-       subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-            n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
+       subroutine init_control_euler_c (nets, nete, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
          use iso_c_binding, only : c_int, c_double
          !
          ! Inputs
          !
-         integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
-              n0_qdp, qsize, np1_qdp, limiter_option
+         integer (kind=c_int),  intent(in) :: nets, nete, qsize, np1_qdp, limiter_option
          real (kind=c_double), intent(in) :: dt, nu_p, nu_q
        end subroutine init_control_euler_c
     end interface
@@ -1682,22 +1728,8 @@ end subroutine ALE_parametric_coords
          elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
          elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
 
-    ! Bind the ptrs for the C calls
-    qmin_ptr = c_loc(qmin)
-    qmax_ptr = c_loc(qmax)
-
-    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-    elem_derived_dp_ptr                = c_loc(elem_derived_dp)
-    elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
-    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
-    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
-    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-    elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
-    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-
     ! Set up the boundary exchange for the minmax calls
-    call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
+    call init_control_euler_c(nets, nete, qsize, &
          dt, np1_qdp, nu_p, nu_q, limiter_option)
 
     do k = 1 , nlev
@@ -1740,19 +1772,15 @@ end subroutine ALE_parametric_coords
        !
        ! initialize dp, and compute Q from Qdp (and store Q in Qtens_biharmonic)
 
-       call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-            elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-            elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-            elem_derived_dpdiss_ave_ptr)
        call euler_qmin_qmax_c()
        if ( rhs_multiplier == 0 ) then
           ! update qmin/qmax based on neighbor data for lim8
           call t_startf('eus_neighbor_minmax1')
-          call euler_neighbor_minmax_c(nets,nete)
+          call euler_neighbor_minmax_c()
           call t_stopf('eus_neighbor_minmax1')
        endif
 
-       call euler_minmax_and_biharmonic_c(nets, nete, rhs_multiplier)
+       call euler_minmax_and_biharmonic_c(rhs_multiplier)
        call t_stopf('bihmix_qminmax')
     endif
     call t_startf('eus_2d_advec')
@@ -1767,9 +1795,6 @@ end subroutine ALE_parametric_coords
     call t_stopf("advance_qdp")
 
     call euler_exchange_qdp_dss_var_c()
-
-    call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
 
     call t_stopf('eus_2d_advec')
 

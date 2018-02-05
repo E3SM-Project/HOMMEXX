@@ -132,6 +132,11 @@ public:
     // laplace_simple provides the barrier.
     {
       const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+      Kokkos::single(Kokkos::PerTeam(kv.team), [=]() {
+        if(kv.ie == 0) {
+          fprintf(stderr, "BIHPost dt: % .17e\n", m_data.dt);
+        }
+      });
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(kv.team, NP*NP),
         [&] (const int loop_idx) {
@@ -291,8 +296,9 @@ public:
   }
 
   static void compute_qmin_qmax() {
-    Control &state = Context::singleton().get_control();
-    Elements &elems = Context::singleton().get_elements();
+    const Control &state = Context::singleton().get_control();
+		fprintf(stderr, "compute_qmin_qmax rhs_multiplier: %d\n", state.rhs_multiplier);
+    const Elements &elems = Context::singleton().get_elements();
 
     Kokkos::RangePolicy<ExecSpace> policy1(0, state.num_elems * state.qsize *
                                                   NP * NP * NUM_LEV);
@@ -314,7 +320,7 @@ public:
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *
                                                   NUM_LEV);
-    if (state.rhs_multiplier == 1.0) {
+    if (state.rhs_multiplier == 1) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
@@ -395,6 +401,13 @@ private:
                          c.DSSopt == Control::DSSOption::omega ?
                          e.m_omega_p :
                          e.m_derived_divdp_proj);
+		Kokkos::single(Kokkos::PerTeam(kv.team), [=]() {
+			if(kv.ie == 0) {
+        fprintf(stderr, "compute_2d_advection_step dt: % .17e\n", c.dt);
+        fprintf(stderr, "compute_2d_advection_step DSSopt: %d\n", c.DSSopt);
+				fprintf(stderr, "compute_2d_advection_step rhs_multiplier: %d\n", c.rhs_multiplier);
+			}
+		});
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP*NP),
       [&] (const int loop_idx) {
@@ -464,6 +477,11 @@ private:
       metdet = Homme::subview(m_elements.m_metdet, kv.ie);
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
+		Kokkos::single(Kokkos::PerTeam(kv.team), [=]() {
+			if(kv.ie == 0) {
+        fprintf(stderr, "compute_qtens dt: % .17e\n", m_data.dt);
+      }
+    });
     divergence_sphere_update(
       kv, -m_data.dt, 1.0, dinv, metdet, dvv,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
