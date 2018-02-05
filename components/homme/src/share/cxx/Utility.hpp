@@ -338,7 +338,7 @@ sync_to_host_p2i(Source_T source, Dest_T dest) {
   }
 }
 
-//this is for sdot =  ExecViewManaged<Real* [NP][NP]> 
+//this is for sdot =  ExecViewManaged<Real* [NP][NP]>
 template <typename Source_T, typename Dest_T>
 typename std::enable_if<
     exec_view_mappable<Source_T, Real * [NP][NP]>::value &&
@@ -792,7 +792,7 @@ KOKKOS_INLINE_FUNCTION constexpr FPType max(const FPType &val, FPPack... pack) {
 template <typename ViewType>
 typename std::enable_if<
     !std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
-frobenius_norm(const ViewType view) {
+frobenius_norm(const ViewType view, bool ignore_nans = false) {
   typename ViewType::pointer_type data = view.data();
 
   size_t length = view.size();
@@ -802,6 +802,9 @@ frobenius_norm(const ViewType view) {
   Real c = 0;
   Real temp, y;
   for (size_t i = 0; i < length; ++i) {
+    if (std::isnan(data[i]) && ignore_nans) {
+      continue;
+    }
     y = data[i] * data[i] - c;
     temp = norm + y;
     c = (temp - norm) - y;
@@ -814,7 +817,7 @@ frobenius_norm(const ViewType view) {
 template <typename ViewType>
 typename std::enable_if<
     std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
-frobenius_norm(const ViewType view) {
+frobenius_norm(const ViewType view, bool ignore_nans = false) {
   typename ViewType::pointer_type data = view.data();
 
   size_t length = view.size();
@@ -825,6 +828,9 @@ frobenius_norm(const ViewType view) {
   Real temp, y;
   for (size_t i = 0; i < length; ++i) {
     for (int v = 0; v < VECTOR_SIZE; ++v) {
+      if (std::isnan(data[i][v]) && ignore_nans) {
+        continue;
+      }
       y = data[i][v] * data[i][v] - c;
       temp = norm + y;
       c = (temp - norm) - y;
