@@ -198,9 +198,9 @@ void init_time_level_c (const int& nm1, const int& n0, const int& np1,
                         const int& nstep, const int& nstep0)
 {
   TimeLevel& tl = Context::singleton().get_time_level ();
-  tl.nm1    = nm1;
-  tl.n0     = n0;
-  tl.np1    = np1;
+  tl.nm1    = nm1-1;
+  tl.n0     = n0-1;
+  tl.np1    = np1-1;
   tl.nstep  = nstep;
   tl.nstep0 = nstep0;
 }
