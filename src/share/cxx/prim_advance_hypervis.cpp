@@ -38,7 +38,7 @@ void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w)
   Derivative&       deriv    = Context::singleton().get_derivative();
 
   // Set elements some inputs into the control
-  data.np1       = np1-1;
+  data.np1       = np1;
   data.dt        = dt/params.hypervis_subcycle;
   data.eta_ave_w = eta_ave_w;
   data.nu_ratio  = 1.0;
