@@ -133,13 +133,6 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
-    subroutine advance_qdp_c(DSSopt) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int), intent(in) :: DSSopt
-    end subroutine advance_qdp_c
     subroutine euler_exchange_qdp_dss_var_c() bind(c)
     end subroutine euler_exchange_qdp_dss_var_c
   end interface
