@@ -34,8 +34,10 @@ module prim_driver_mod
   implicit none
 
   private
-  public :: prim_init1, prim_init2 , prim_run, prim_run_subcycle, prim_finalize, leapfrog_bootstrap
-  public :: smooth_topo_datasets
+#ifndef USE_KOKKOS_KERNELS
+  public :: prim_run, leapfrog_bootstrap, smooth_topo_datasets
+#endif
+  public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
   type (quadrature_t)   :: gp                     ! element GLL points
@@ -108,7 +110,9 @@ contains
     use params_mod,         only: sfcurve
     use physical_constants, only: dd_pi
     use prim_advection_mod, only: prim_advec_init1
+#ifndef USE_KOKKOS_KERNELS
     use prim_advance_mod,   only: prim_advance_init
+#endif
     use prim_state_mod,     only: prim_printstate_init
     use schedtype_mod,      only: schedule
     use schedule_mod,       only: genEdgeSched,  PrintSchedule
@@ -536,7 +540,9 @@ contains
     allocate(cm(0:n_domains-1))
 #endif
     allocate(cg(0:n_domains-1))
+#ifndef USE_KOKKOS_KERNELS
     call prim_advance_init(par,elem,integration)
+#endif
 #ifdef TRILINOS
     call prim_implicit_init(par, elem)
 #endif
@@ -1052,8 +1058,7 @@ contains
 
 !=======================================================================================================!
 
-
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine leapfrog_bootstrap(elem, hybrid,nets,nete,tstep,tl,hvcoord)
 
   !
@@ -1094,11 +1099,11 @@ contains
   tl%nstep=tl%nstep-1        ! count all of that as 1 timestep
 
   end subroutine leapfrog_bootstrap
-
+#endif
 
 !=======================================================================================================!
 
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine prim_run(elem, hybrid,nets,nete, dt, tl, hvcoord, advance_name)
     use hybvcoord_mod, only : hvcoord_t
     use time_mod, only : TimeLevel_t, timelevel_update, smooth
@@ -1271,6 +1276,7 @@ contains
        call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
     end if
   end subroutine prim_run
+#endif
 
 !=======================================================================================================!
 
@@ -1550,6 +1556,7 @@ contains
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
+use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
 #ifdef USE_KOKKOS_KERNELS
     use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
                                   elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
@@ -1719,6 +1726,7 @@ contains
        ! defer final timelevel update until after Q update.
     enddo
 #endif
+    call abortmp("That's enough, thank you.")
 
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
@@ -1970,7 +1978,7 @@ contains
 !=======================================================================================================!
 
 
-
+#ifndef USE_KOKKOS_KERNELS
     subroutine smooth_topo_datasets(phis,sghdyn,sgh30dyn,elem,hybrid,nets,nete)
     use control_mod, only : smooth_phis_numcycle,smooth_sgh_numcycle
     use hybrid_mod, only : hybrid_t
@@ -2005,6 +2013,7 @@ contains
     call smooth_phis(sgh30dyn,elem,hybrid,deriv(hybrid%ithr),nets,nete,minf,smooth_sgh_numcycle)
 
     end subroutine smooth_topo_datasets
+#endif
 
 end module prim_driver_mod
 
