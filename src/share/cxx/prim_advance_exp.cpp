@@ -6,6 +6,7 @@
 #include "mpi/ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
+#include "Utility.hpp"
 
 namespace Homme
 {
@@ -68,7 +69,7 @@ void prim_advance_exp_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_sta
   sync_to_host(elements.m_derived_dpdiss_biharmonic, dpdiss_biharmonic_f90);
 }
 
-void prim_advance_exp_c(const Real dt, const bool compute_diagnostics)
+void prim_advance_exp_c(const Real& dt, const bool& compute_diagnostics)
 {
   // Get simulation params
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -203,22 +204,18 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
 
   // ===================== RK STAGES ===================== //
 
-std::cout << "  RK stage 1\n";
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
   functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
   caar_monolithic(elements,functor,*be[nm1],policy_pre,policy_post);
 
-std::cout << "  RK stage 2\n";
   // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
   functor.set_rk_stage_data(n0,nm1,np1,dt/5.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
-std::cout << "  RK stage 3\n";
   // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
   functor.set_rk_stage_data(n0,np1,np1,dt/3.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
-std::cout << "  RK stage 4\n";
   // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
   functor.set_rk_stage_data(n0,np1,np1,2.0*dt/3.0,0.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
@@ -238,7 +235,6 @@ std::cout << "  RK stage 4\n";
   });
   ExecSpace::fence();
 
-std::cout << "  RK stage 5\n";
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
