@@ -104,14 +104,14 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
 
 void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields)
 {
-  // We don't allow to call this method twice in a row. If you want to change the number of fields, 
+  // We don't allow to call this method twice in a row. If you want to change the number of fields,
   // you need to call clean_up first, to get a fresh new BoundaryExchange.
   // Note: if you do call clean_up and then again set_num_field and the new number of fields
   //       are smaller than the previous ones, BuffersManager will NOT shrink the buffers, so
   //       you may be left with buffers that are larger than what you need.
   assert (m_cleaned_up);
 
-  // Make sure the connectivity is valid: must at least be a valid pointer, and be initialized, i.e., 
+  // Make sure the connectivity is valid: must at least be a valid pointer, and be initialized, i.e.,
   // store a valid number of elements, but may be finalized later (before registration_completed call though)
   assert (m_connectivity && m_connectivity->is_initialized());
 
@@ -119,7 +119,7 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   assert (!(num_1d_fields>0 && (num_2d_fields>0 || num_2d_fields>0)));
 
   // Note: we do not set m_num_1d_fields, m_num_2d_fields and m_num_3d_fields, since we will use them as
-  //       progressive indices while adding fields. Then, during registration_completed, 
+  //       progressive indices while adding fields. Then, during registration_completed,
   //       we will check that they match the 2nd dimension of m_1d_fields, m_2d_fields and m_3d_fields.
 
   // Create the fields views
@@ -180,7 +180,7 @@ void BoundaryExchange::registration_completed()
 
   // Create the MPI data types, for corners and edges
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
-  // Note: for 2d/3d fields, we have 1 Real per GP (per level, in 3d). For 1d fields, 
+  // Note: for 2d/3d fields, we have 1 Real per GP (per level, in 3d). For 1d fields,
   //       we have 2 Real per level (max and min over element).
   m_elem_buf_size[etoi(ConnectionKind::CORNER)] = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * 1;
   m_elem_buf_size[etoi(ConnectionKind::EDGE)]   = m_num_1d_fields*2*NUM_LEV*VECTOR_SIZE + (m_num_2d_fields + m_num_3d_fields*NUM_LEV*VECTOR_SIZE) * NP;
@@ -307,12 +307,12 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   GPTLstart("be pack");
   const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({nets, 0, 0}, {nete, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({nets, 0, 0}, {nete, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
       const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
       // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid, 
+      // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
       // for local connections we need to manually copy on the remote element lid. We can do it here
       const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
@@ -327,7 +327,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   if (m_num_3d_fields>0) {
     const auto num_3d_fields = m_num_3d_fields;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV), 
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
         const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
@@ -336,7 +336,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
         const ConnectionInfo& info = connections(ie, iconn);
         const LidGidPos& field_lidpos  = info.local;
         // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid, 
+        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
         // for local connections we need to manually copy on the remote element lid. We can do it here
         const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
@@ -429,7 +429,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   // First, unpack 2d fields (if any)...
   const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({nets, 0}, {nete, m_num_2d_fields}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({nets, 0}, {nete, m_num_2d_fields}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield) {
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
@@ -451,7 +451,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   if (m_num_3d_fields>0) {
     const auto num_3d_fields = m_num_3d_fields;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV), 
+      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
         const int ie = nets + it / (num_3d_fields*NUM_LEV);
         const int ifield = (it / NUM_LEV) % num_3d_fields;
@@ -540,7 +540,7 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   GPTLstart("be pack minmax");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV), 
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
       const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
@@ -590,7 +590,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
     return;
   }
 
-  // If I am doing pack_and_send and recv_and_unpack manually (rather than through 'exchange'), 
+  // If I am doing pack_and_send and recv_and_unpack manually (rather than through 'exchange'),
   // then I need to start receiving now (otherwise it is done already inside 'exchange')
   if (!m_recv_pending) {
     // If you are doing send/recv manually, don't call recv without a send, or
@@ -631,7 +631,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   GPTLstart("be unpack minmax");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV), 
+    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
       const int ie = nets + it / (num_1d_fields*NUM_LEV);
       const int ifield = (it / NUM_LEV) % num_1d_fields;
@@ -744,11 +744,11 @@ void BoundaryExchange::build_buffer_views_and_requests()
   init_slot_idx_to_elem_conn_pair(slot_idx_to_elem_conn_pair, pids, pid_offsets);
 
   // NOTE: I wanted to do this setup in parallel, on the execution space, but there
-  //       is a reduction hidden. In particular, we need to access buf_offset atomically, 
+  //       is a reduction hidden. In particular, we need to access buf_offset atomically,
   //       so that it is not update while we are still using it. One solution would be to
   //       use Kokkos::atomic_fetch_add, but it may kill the concurrency. And given that
   //       we do not have a ton of concurrency in this setup phase, and given that it is
-  //       precisely only a setup phase, we may as well do things serially on the host, 
+  //       precisely only a setup phase, we may as well do things serially on the host,
   //       then deep_copy back to device
   ConnectionHelpers helpers;
   auto h_send_1d_buffers = Kokkos::create_mirror_view(m_send_1d_buffers);
