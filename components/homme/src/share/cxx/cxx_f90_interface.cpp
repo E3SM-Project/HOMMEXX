@@ -33,29 +33,25 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
                hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int &DSSopt,
-                           const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const double& nu_p, const double& nu_q,
-                           const int& limiter_option)
-{
-  Control& control = Context::singleton().get_control ();
+void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
+                          const Real &dt, const int &np1_qdp,
+                          const double &nu_p, const double &nu_q,
+                          const int &limiter_option) {
+  Control &control = Context::singleton().get_control();
 
-	control.DSSopt = Control::DSSOption::from(DSSopt);
-  control.rhs_multiplier = rhs_multiplier;
+  // Adjust indices
+  control.nets = nets - 1;
+  control.nete = nete; // F90 ranges are closed, c ranges are open on the right,
+                       // so this can stay the same
+  control.np1_qdp = np1_qdp - 1;
+
   control.rhs_viss = 0;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
   control.limiter_option = limiter_option;
 
-  // Adjust indices
-  control.nets  = nets-1;
-  control.nete  = nete;  // F90 ranges are closed, c ranges are open on the right, so this can stay the same
-  control.qn0   = qn0-1;
-
   control.qsize = qsize;
-  control.dt    = dt;
-
-  control.np1_qdp = np1_qdp-1;
+  control.dt = dt;
 }
 
 void init_euler_neighbor_minmax_c (const int& qsize)
@@ -77,26 +73,29 @@ void euler_precompute_divdp_c() {
   EulerStepFunctor::precompute_divdp_c();
 }
 
-void euler_neighbor_minmax_c (const int& nets, const int& nete)
+void euler_neighbor_minmax_c ()
 {
+	const Control &c = Context::singleton().get_control();
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
   assert(be.is_registration_completed());
-  be.exchange_min_max(nets-1, nete);
+  be.exchange_min_max(c.nets, c.nete);
 }
 
-void euler_neighbor_minmax_start_c (const int& nets, const int& nete)
+void euler_neighbor_minmax_start_c ()
 {
+	const Control &c = Context::singleton().get_control();
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.pack_and_send_min_max(nets-1, nete);
+  be.pack_and_send_min_max(c.nets, c.nete);
 }
 
-void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
+void euler_neighbor_minmax_finish_c ()
 {
+	const Control &c = Context::singleton().get_control();
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.recv_and_unpack_min_max(nets-1, nete);
+  be.recv_and_unpack_min_max(c.nets, c.nete);
 }
 
-void euler_minmax_and_biharmonic_c (const int& nets, const int& nete, const int& rhs_multiplier) {
+void euler_minmax_and_biharmonic_c (const int& rhs_multiplier) {
   auto& c = Context::singleton().get_control();
   if (rhs_multiplier != 2) return;
 	c.rhs_multiplier = rhs_multiplier;
@@ -109,11 +108,11 @@ void euler_minmax_and_biharmonic_c (const int& nets, const int& nete, const int&
     be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
     be->registration_completed();
   }
-  euler_neighbor_minmax_start_c(nets, nete);
+  euler_neighbor_minmax_start_c();
   EulerStepFunctor::compute_biharmonic_pre();
   be->exchange();
   EulerStepFunctor::compute_biharmonic_post();
-  euler_neighbor_minmax_finish_c(nets, nete);
+  euler_neighbor_minmax_finish_c();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -369,6 +368,60 @@ void euler_exchange_qdp_dss_var_c ()
 
 void euler_qmin_qmax_c() {
   EulerStepFunctor::compute_qmin_qmax();
+}
+
+void euler_step_c(const int &n0_qdp, const int &DSSopt, const int &rhs_multiplier) {
+	Control &data = Context::singleton().get_control();
+	data.DSSopt = Control::DSSOption::from(DSSopt);
+	data.rhs_multiplier = rhs_multiplier;
+	data.qn0 = n0_qdp - 1;
+  if (data.limiter_option == 4) {
+    Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
+                          Errors::err_unimplemented);
+  }
+  if (data.limiter_option == 8) {
+    // when running lim8, we also need to limit the biharmonic, so that term
+    // needs to be included in each euler step.  three possible algorithms here:
+    // 1) most expensive:
+    //     compute biharmonic (which also computes qmin/qmax) during all 3
+    //     stages be sure to set rhs_viss=1 cost:  3 biharmonic steps with 3 DSS
+
+    // 2) cheapest:
+    //     compute biharmonic (which also computes qmin/qmax) only on first
+    //     stage be sure to set rhs_viss=3 reuse qmin/qmax for all following
+    //     stages (but update based on local qmin/qmax) cost:  1 biharmonic
+    //     steps with 1 DSS main concern: viscosity
+
+    // 3)  compromise:
+    //     compute biharmonic (which also computes qmin/qmax) only on last stage
+    //     be sure to set rhs_viss=3
+    //     compute qmin/qmax directly on first stage
+    //     reuse qmin/qmax for 2nd stage stage (but update based on local
+    //     qmin/qmax) cost:  1 biharmonic steps, 2 DSS
+
+    //  NOTE  when nu_p=0 (no dissipation applied in dynamics to dp equation),
+    //  we should
+    //        apply dissipation to Q (not Qdp) to preserve Q=1
+    //        i.e.  laplace(Qdp) ~  dp0 laplace(Q)
+    //        for nu_p=nu_q>0, we need to apply dissipation to Q * diffusion_dp
+
+    // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
+    GPTLstart("bihmix_qminmax");
+    euler_qmin_qmax_c();
+    if (rhs_multiplier == 0) {
+      GPTLstart("eus_neighbor_minmax1");
+      euler_neighbor_minmax_c();
+      GPTLstop("eus_neighbor_minmax1");
+    }
+    euler_minmax_and_biharmonic_c(rhs_multiplier);
+    GPTLstop("bihmix_qminmax");
+  }
+  GPTLstart("eus_2d_advec");
+  GPTLstart("advance_qdp");
+  advance_qdp_c(DSSopt);
+  GPTLstop("advance_qdp");
+  euler_exchange_qdp_dss_var_c();
+  GPTLstop("eus_2d_advec");
 }
 
 } // extern "C"
