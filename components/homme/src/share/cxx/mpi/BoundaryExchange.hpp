@@ -192,14 +192,6 @@ private:
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
 
-  // Map index into send and recv buffers to [0, get_num_local_elements()) x [0,
-  // NUM_CONNECTIONS). The point is to pack all data corresponding to a
-  // particular remote contiguously.
-  ExecViewManaged<int*> m_i2ec;
-  void init_i2ec(ExecViewManaged<int*>::HostMirror& h_i2ec,
-                 std::vector<int>& pids, std::vector<int>& pids_os);
-  void free_requests();
-
   ExecViewManaged<ExecViewManaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
@@ -238,6 +230,11 @@ private:
   bool        m_cleaned_up;
   bool        m_send_pending;
   bool        m_recv_pending;
+
+  void init_slot_idx_to_elem_conn_pair(
+    std::vector<int>& h_slot_idx_to_elem_conn_pair,
+    std::vector<int>& pids, std::vector<int>& pids_os);
+  void free_requests();
 };
 
 // ============================ REGISTER METHODS ========================= //
