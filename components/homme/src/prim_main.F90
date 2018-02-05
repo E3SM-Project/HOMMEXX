@@ -4,8 +4,10 @@
 
 program prim_main
 #ifdef _PRIM
-  use prim_driver_mod,  only: prim_init1, prim_init2, prim_run, prim_finalize,&
-                              leapfrog_bootstrap, prim_run_subcycle
+  use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize, prim_run_subcycle
+#ifndef USE_KOKKOS_KERNELS
+  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run
+#endif
   use hybvcoord_mod,    only: hvcoord_t, hvcoord_init
 #endif
 
@@ -263,8 +265,12 @@ program prim_main
   ! advance_si not yet upgraded to be self-starting.  use leapfrog bootstrap procedure:
   if(integration == 'semi_imp') then
      if (runtype /= 1 ) then
+#ifdef USE_KOKKOS_KERNELS
+        call abortmp("Error! Cannot use this option in Kokkos build")
+#else
         if(par%masterproc) print *,"Leapfrog bootstrap initialization..."
         call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
+#endif
      endif
   endif
 
@@ -291,7 +297,11 @@ program prim_main
         if (tstep_type>0) then  ! forward in time subcycled methods
            call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
         else  ! leapfrog
+#ifdef USE_KOKKOS_KERNELS
+           call abortmp ("Error! Functionality not available in Kokkos build")
+#else
            call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
+#endif
         endif
         call t_stopf('prim_run')
      end do

@@ -61,7 +61,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_BASE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
-  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
@@ -101,10 +100,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/physics_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
   ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
@@ -136,6 +131,17 @@ SET(PREQX_FLAT_DEPS_F90
   ${PHYSICS_DIR}/physics_io_mod.F90
   ${PHYSICS_DIR}/physics_types_mod.F90
 )
+
+IF (NOT ${USE_KOKKOS_KERNELS})
+  SET (PREQX_FLAT_DEPS_F90
+    ${PREQX_FLAT_DEPS_F90}
+    ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_mod.F90
+  )
+ENDIF()
 
 SET(PREQX_FLAT_DEPS_C
   ${UTILS_SHARE_DIR}/shr_vmath_fwrap.c
