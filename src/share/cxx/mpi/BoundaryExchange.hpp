@@ -25,11 +25,11 @@ class BuffersManager;
  * BoundaryExchange: a class to handle the pack/exchange/unpack process
  *
  * This class (BE) takes care of exchanging the values of one or more fields in the
- * GP on the boundary of the elements with the neighboring elements. In particular, 
+ * GP on the boundary of the elements with the neighboring elements. In particular,
  * it takes care of packing the values into some buffers, performing the exchange
- * (usually, this includes some MPI calls, unless running in serial mode), 
+ * (usually, this includes some MPI calls, unless running in serial mode),
  * and then unpacking the values, accumulating them into the receiving elements.
- * This process can be done for an arbitrary number of 2d fields (that is, 
+ * This process can be done for an arbitrary number of 2d fields (that is,
  * no vertical levels) and 3d fields (with vertical levels). If you have a
  * vector field of dimension DIM, you need to register DIM separate scalar
  * fields. Internally, for each input field the BE object stores a bunch of
@@ -44,9 +44,9 @@ class BuffersManager;
  *  - a call to set_num_fields, which sets the number of 1d, 2d and 3d fields
  *    that will be exchanged. Once this method is called, it cannot be
  *    called again, unless the method clean_up is called first.
- *  - a number of calls to one of more of the register_field(...), methods, 
+ *  - a number of calls to one of more of the register_field(...), methods,
  *    which set the fields into the BE class. You cannot register more fields
- *    than declared in the set_num_fields call. However you can, if you want, 
+ *    than declared in the set_num_fields call. However you can, if you want,
  *    register less fields, although this scenario is not tested, and may
  *    be buggy, so you are probably better off calling set_num_fields with
  *    the actual number of fields you are going to register. Note that you
@@ -55,12 +55,12 @@ class BuffersManager;
  *          2d/3d fields. The idea is that 1d fields are exchanged only as
  *          min/max quantities (so they are not accumulated). Please, use
  *          two different BE objects for accumulation and for min/max.
- *  - a call to registration_completed, which ends the registration phase, 
+ *  - a call to registration_completed, which ends the registration phase,
  *    and sets up all the internal structure to prepare for calls to
  *    exchange(). This method MUST be called BEFORE any call to exchange.
  *
  * This class relies on the BuffersManager (BM) class for the handling of the buffers.
- * See BuffersManager header for more info on that. As explained above, 
+ * See BuffersManager header for more info on that. As explained above,
  * you may have different BE objects, which are however never used at the
  * same time. Therefore, it makes sense to reuse the same BM for all of them.
  * For this reason, the BM can serve multiple 'customers'. The BE and BM
@@ -127,10 +127,10 @@ public:
 
   // These two registration methods should be used for the exchange of min/max fields
   template<typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min, 
+  void register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
                                 ExecView<Scalar*[NUM_LEV], Properties...> field_max);
   template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min, 
+  void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
                                 ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim);
 
   template<int DIM, typename... Properties>
@@ -196,8 +196,8 @@ private:
   ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
   ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
 
-  // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack, 
-  // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace), 
+  // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
+  // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
   // and the blackhole buffers (used for missing connections)
   std::shared_ptr<BuffersManager> m_buffers_manager;
 
@@ -254,7 +254,7 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties..
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_2d_fields(ie, l_num_2d_fields+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL);
     });
@@ -278,7 +278,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], P
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie, l_num_3d_fields+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL, ALL);
     });
@@ -302,7 +302,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie, l_num_3d_fields+idim) = Kokkos::subview(field, ie, outer_dim, start_dim+idim, ALL, ALL, ALL);
     });
@@ -324,7 +324,7 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> fi
   {
     auto l_num_2d_fields = m_num_2d_fields;
     auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()), 
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_2d_fields(ie, l_num_2d_fields) = Kokkos::subview(field, ie, ALL, ALL);
     });
@@ -346,7 +346,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
   {
     auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()), 
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_3d_fields(ie, l_num_3d_fields) = Kokkos::subview(field, ie, ALL, ALL, ALL);
     });
@@ -356,7 +356,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
 }
 
 template<typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min, 
+void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
                                                 ExecView<Scalar*[NUM_LEV], Properties...> field_max)
 {
   using Kokkos::ALL;
@@ -369,7 +369,7 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Prope
   {
     auto l_num_1d_fields = m_num_1d_fields;
     auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()), 
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
                          KOKKOS_LAMBDA(const int ie){
       l_1d_fields(ie, l_num_1d_fields, MAX_ID) = Kokkos::subview(field_max, ie, ALL);
       l_1d_fields(ie, l_num_1d_fields, MIN_ID) = Kokkos::subview(field_min, ie, ALL);
@@ -380,7 +380,7 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Prope
 }
 
 template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min, 
+void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
                                                 ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim)
 {
   using Kokkos::ALL;
@@ -393,7 +393,7 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], 
   {
     auto l_num_1d_fields = m_num_1d_fields;
     auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
       l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_max, ie, start_dim+idim, ALL);
       l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min, ie, start_dim+idim, ALL);
@@ -416,7 +416,7 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV
   {
     auto l_num_1d_fields = m_num_1d_fields;
     auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}), 
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int idim){
       l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MAX_ID), ALL);
       l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MIN_ID), ALL);
