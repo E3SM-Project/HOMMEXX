@@ -1726,7 +1726,6 @@ use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
        ! defer final timelevel update until after Q update.
     enddo
 #endif
-    call abortmp("That's enough, thank you.")
 
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
