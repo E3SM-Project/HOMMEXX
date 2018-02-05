@@ -73,39 +73,6 @@ void euler_precompute_divdp_c() {
   EulerStepFunctor::precompute_divdp_c();
 }
 
-void euler_neighbor_minmax_start_c ()
-{
-	const Control &c = Context::singleton().get_control();
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.pack_and_send_min_max(c.nets, c.nete);
-}
-
-void euler_neighbor_minmax_finish_c ()
-{
-	const Control &c = Context::singleton().get_control();
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.recv_and_unpack_min_max(c.nets, c.nete);
-}
-
-void euler_minmax_and_biharmonic_c (const int& rhs_multiplier) {
-  auto& c = Context::singleton().get_control();
-  if (rhs_multiplier != 2) return;
-  const auto& e = Context::singleton().get_elements();
-  const auto be = Context::singleton().get_boundary_exchange(
-    "Euler step: min/max & qtens_biharmonic");
-  if ( ! be->is_registration_completed()) {
-    be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
-    be->set_num_fields(0, 0, c.qsize);
-    be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
-    be->registration_completed();
-  }
-  euler_neighbor_minmax_start_c();
-  EulerStepFunctor::compute_biharmonic_pre();
-  be->exchange();
-  EulerStepFunctor::compute_biharmonic_post();
-  euler_neighbor_minmax_finish_c();
-}
-
 void init_derivative_c (CF90Ptr& dvv)
 {
   Derivative& deriv = Context::singleton().get_derivative ();
@@ -306,50 +273,6 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
-}
-
-void euler_exchange_qdp_dss_var_c ()
-{
-  Control data = Context::singleton().get_control();
-  Elements& elements = Context::singleton().get_elements();
-
-  // Note: we have three separate BE structures, all of which register qdp. They
-  //       differ only in the last field registered. This allows us to have a SINGLE
-  //       mpi call to exchange qsize+1 fields, rather than one for qdp and one for the
-  //       last DSS variable.
-  // TODO: move this setup in init_control_euler and move that function one stack frame up
-  //       of euler_step in F90, making it set the common parameters to all euler_steps
-  //       calls (nets, nete, dt, nu_p, nu_q)
-
-  std::stringstream ss;
-  ss << "exchange qdp "
-     << (data.DSSopt == Control::DSSOption::eta ?
-         "eta" :
-         data.DSSopt == Control::DSSOption::omega ?
-         "omega" :
-         "div_vdp_ave")
-     << " " << data.np1_qdp;
-
-  const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
-    Context::singleton().get_boundary_exchange(ss.str());
-
-  const auto& dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
-                         (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p   :
-                          elements.m_derived_divdp_proj));
-
-  if (!be_qdp_dss_var->is_registration_completed()) {
-    // If it is the first time we call this method, we need to set up the BE
-    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-    be_qdp_dss_var->set_buffers_manager(buffers_manager);
-    be_qdp_dss_var->set_num_fields(0,0,data.qsize+1);
-    be_qdp_dss_var->register_field(elements.m_qdp,data.np1_qdp,data.qsize,0);
-    be_qdp_dss_var->register_field(dss_var);
-    be_qdp_dss_var->registration_completed();
-  }
-
-  be_qdp_dss_var->exchange();
-
-  EulerStepFunctor::apply_rspheremp();
 }
 
 void euler_step_c(const int &n0_qdp, const int &DSSopt, const int &rhs_multiplier) {
