@@ -33,14 +33,14 @@ void init_control_caar_c (const int& nets, const int& nete, const int& num_elems
                hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
+void init_control_euler_c (const int& nets, const int& nete, const int &DSSopt,
                            const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
                            const int& np1_qdp, const double& nu_p, const double& nu_q,
                            const int& limiter_option)
 {
   Control& control = Context::singleton().get_control ();
 
-  control.DSSopt = Control::DSSOption::from(DSSopt);
+	control.DSSopt = Control::DSSOption::from(DSSopt);
   control.rhs_multiplier = rhs_multiplier;
   control.rhs_viss = 0;
   control.nu_p = nu_p;
@@ -73,6 +73,10 @@ void init_euler_neighbor_minmax_c (const int& qsize)
   }
 }
 
+void euler_precompute_divdp_c() {
+  EulerStepFunctor::precompute_divdp_c();
+}
+
 void euler_neighbor_minmax_c (const int& nets, const int& nete)
 {
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
@@ -92,9 +96,10 @@ void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
   be.recv_and_unpack_min_max(nets-1, nete);
 }
 
-void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
-  const auto& c = Context::singleton().get_control();
-  if (c.rhs_multiplier != 2) return;
+void euler_minmax_and_biharmonic_c (const int& nets, const int& nete, const int& rhs_multiplier) {
+  auto& c = Context::singleton().get_control();
+  if (rhs_multiplier != 2) return;
+	c.rhs_multiplier = rhs_multiplier;
   const auto& e = Context::singleton().get_elements();
   const auto be = Context::singleton().get_boundary_exchange(
     "Euler step: min/max & qtens_biharmonic");
@@ -313,9 +318,9 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c()
+void advance_qdp_c(const int &DSSopt)
 {
-  EulerStepFunctor::advect_and_limit();
+  EulerStepFunctor::advect_and_limit(DSSopt);
 }
 
 void euler_exchange_qdp_dss_var_c ()
