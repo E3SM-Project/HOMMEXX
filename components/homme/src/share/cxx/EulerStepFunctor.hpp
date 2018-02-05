@@ -153,11 +153,13 @@ public:
   struct AALTracerPhase {};
   struct AALFusedPhases {};
 
-  static void advect_and_limit () {
+  static void advect_and_limit (const int &DSSopt) {
     profiling_resume();
     GPTLstart("esf-aal-tot run");
     Control& data = Context::singleton().get_control();
+		data.DSSopt = Control::DSSOption::from(DSSopt);
     EulerStepFunctor func(data);
+		fprintf(stderr, "advect_and_limit DSSopt: %d\n", func.m_data.DSSopt);
     if (OnGpu<ExecSpace>::value) {
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
@@ -207,12 +209,54 @@ public:
     stop_timer("esf-aal-fused compute");
   }
 
+  struct PrecomputeDivDp {};
+
+  static void precompute_divdp_c() {
+    profiling_resume();
+    GPTLstart("esf-precompute_divdp run");
+
+    Control &data = Context::singleton().get_control();
+    EulerStepFunctor func(data);
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
+            data.num_elems),
+        func);
+
+    GPTLstop("esf-precompute_divdp run");
+    profiling_pause();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
+    start_timer("esf-precompute_divdp compute");
+    KernelVariables kv(team);
+    divergence_sphere(kv, m_elements.m_dinv, m_elements.m_metdet,
+                      m_deriv.get_dvv(),
+                      Homme::subview(m_elements.m_derived_vn0, kv.ie),
+                      m_elements.buffers.div_buf,
+                      Homme::subview(m_elements.m_derived_divdp, kv.ie));
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
+                           KOKKOS_LAMBDA(const int ilev) {
+        m_elements.m_derived_divdp_proj(kv.ie, igp, jgp, ilev) =
+            m_elements.m_derived_divdp(kv.ie, igp, jgp, ilev);
+      });
+    });
+
+    stop_timer("esf-precompute_divdp compute");
+  }
+
   static void apply_rspheremp () {
     profiling_resume();
     GPTLstart("esf-rspheremp run");
 
     Control& c = Context::singleton().get_control();
     Elements& e = Context::singleton().get_elements();
+
+		fprintf(stderr, "apply_rspheremp DSSopt: %d\n", c.DSSopt);
 
     const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
                          e.m_eta_dot_dpdn :
