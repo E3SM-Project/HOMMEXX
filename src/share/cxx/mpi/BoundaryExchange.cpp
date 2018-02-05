@@ -740,9 +740,8 @@ void BoundaryExchange::build_buffer_views_and_requests()
   m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", nle, m_num_3d_fields);
   m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", nle, m_num_3d_fields);
 
-  ExecViewManaged<int*>::HostMirror h_i2ec;
-  std::vector<int> pids, pids_os;
-  init_i2ec(h_i2ec, pids, pids_os);
+  std::vector<int> slot_idx_to_elem_conn_pair, pids, pid_offsets;
+  init_slot_idx_to_elem_conn_pair(slot_idx_to_elem_conn_pair, pids, pid_offsets);
 
   // NOTE: I wanted to do this setup in parallel, on the execution space, but there
   //       is a reduction hidden. In particular, we need to access buf_offset atomically, 
@@ -760,8 +759,8 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto h_recv_3d_buffers = Kokkos::create_mirror_view(m_recv_3d_buffers);
   auto h_connections = m_connectivity->get_connections<HostMemSpace>();
   for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
-    const int ie = h_i2ec(k) / NUM_CONNECTIONS;
-    const int iconn = h_i2ec(k) % NUM_CONNECTIONS;
+    const int ie = slot_idx_to_elem_conn_pair[k] / NUM_CONNECTIONS;
+    const int iconn = slot_idx_to_elem_conn_pair[k] % NUM_CONNECTIONS;
     {
       const ConnectionInfo& info = h_connections(ie, iconn);
 
@@ -830,24 +829,24 @@ void BoundaryExchange::build_buffer_views_and_requests()
     m_recv_requests.resize(npids);
     MPIViewManaged<Real*>::pointer_type send_ptr = buffers_manager->get_mpi_send_buffer().data();
     MPIViewManaged<Real*>::pointer_type recv_ptr = buffers_manager->get_mpi_recv_buffer().data();
-    int os = 0;
+    int offset = 0;
     for (int ip = 0; ip < npids; ++ip) {
       int count = 0;
-      for (int k = pids_os[ip]; k < pids_os[ip+1]; ++k) {
-        const int ie = h_i2ec(k) / NUM_CONNECTIONS;
-        const int iconn = h_i2ec(k) % NUM_CONNECTIONS;
+      for (int k = pid_offsets[ip]; k < pid_offsets[ip+1]; ++k) {
+        const int ie = slot_idx_to_elem_conn_pair[k] / NUM_CONNECTIONS;
+        const int iconn = slot_idx_to_elem_conn_pair[k] % NUM_CONNECTIONS;
         const ConnectionInfo& info = connections(ie, iconn);
         count += m_elem_buf_size[info.kind];
       }
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr + os, count, MPI_DOUBLE,
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Send_init(send_ptr + offset, count, MPI_DOUBLE,
                                             pids[ip], m_exchange_type, mpi_comm,
                                             &m_send_requests[ip]),
                               m_connectivity->get_comm().m_mpi_comm);
-      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr + os, count, MPI_DOUBLE,
+      HOMMEXX_MPI_CHECK_ERROR(MPI_Recv_init(recv_ptr + offset, count, MPI_DOUBLE,
                                             pids[ip], m_exchange_type, mpi_comm,
                                             &m_recv_requests[ip]),
                               m_connectivity->get_comm().m_mpi_comm);
-      os += count;
+      offset += count;
     }
   }
 
@@ -867,15 +866,16 @@ void BoundaryExchange
   m_recv_requests.clear();
 }
 
+// A slot is the space in a communication buffer for an (element, connection)
+// pair. The slot index space numbers slots so that, first, they are contiguous
+// by remote PID and, second, within a PID block, each comm partner agrees on
+// order of slots.
 void BoundaryExchange
-::init_i2ec (ExecViewManaged<int*>::HostMirror& h_i2ec,
-             std::vector<int>& pids, std::vector<int>& pids_os) {
-  pids.clear();
-  pids_os.clear();
-
+::init_slot_idx_to_elem_conn_pair (
+  std::vector<int>& slot_idx_to_elem_conn_pair,
+  std::vector<int>& pids, std::vector<int>& pid_offsets)
+{
   const auto nle = m_connectivity->get_num_local_elements();
-  m_i2ec = ExecViewManaged<int*>("i2ec", nle*NUM_CONNECTIONS);
-  h_i2ec = Kokkos::create_mirror_view(m_i2ec);
 
   struct IP {
     int i, ord, pid;
@@ -916,21 +916,22 @@ void BoundaryExchange
 
   // Collect the unique remote_pids and get the offsets of the contiguous blocks
   // of them.
+  slot_idx_to_elem_conn_pair.resize(nle*NUM_CONNECTIONS);
+  pids.clear();
+  pid_offsets.clear();
   int prev_pid = -2;
   for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
     const auto& i2r = i2remote[k];
     if (i2r.pid > prev_pid && i2r.pid != -1) {
       pids.push_back(i2r.pid);
-      pids_os.push_back(k);
+      pid_offsets.push_back(k);
       prev_pid = i2r.pid;
     }
     const int ie = i2r.i / NUM_CONNECTIONS;
     const int iconn = i2r.i % NUM_CONNECTIONS;
-    h_i2ec(k) = ie*NUM_CONNECTIONS + iconn;
+    slot_idx_to_elem_conn_pair[k] = ie*NUM_CONNECTIONS + iconn;
   }
-  pids_os.push_back(nle*NUM_CONNECTIONS);
-
-  Kokkos::deep_copy(m_i2ec, h_i2ec);
+  pid_offsets.push_back(nle*NUM_CONNECTIONS);
 }
 
 void BoundaryExchange::clear_buffer_views_and_requests ()
