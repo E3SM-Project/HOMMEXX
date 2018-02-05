@@ -35,7 +35,7 @@ struct TimeLevel
         tmp = np1;
         np1 = nm1;
         nm1 = n0;
-        n0  = nm1;
+        n0  = tmp;
         break;
       case UpdateType::FORWARD:
         tmp = np1;
