@@ -195,14 +195,14 @@ void init_derivative_c (CF90Ptr& dvv)
 }
 
 void init_time_level_c (const int& nm1, const int& n0, const int& np1,
-                        const int& nstep, const int nstep0)
+                        const int& nstep, const int& nstep0)
 {
   TimeLevel& tl = Context::singleton().get_time_level ();
   tl.nm1    = nm1;
-  tl.n0     = nm1;
-  tl.np1    = nm1;
-  tl.nstep  = nm1;
-  tl.nstep0 = nm1;
+  tl.n0     = n0;
+  tl.np1    = np1;
+  tl.nstep  = nstep;
+  tl.nstep0 = nstep0;
 }
 
 void update_time_level_c (const int& update_type)
