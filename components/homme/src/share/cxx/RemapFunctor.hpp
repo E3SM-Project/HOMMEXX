@@ -6,7 +6,7 @@
 
 #include <Kokkos_Array.hpp>
 
-#include "mpi/ErrorDefs.hpp"
+#include "ErrorDefs.hpp"
 
 #include "Control.hpp"
 #include "Elements.hpp"
