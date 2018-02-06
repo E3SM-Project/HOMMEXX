@@ -1,5 +1,5 @@
-#ifndef HOMME_ERRORDEFS_HPP
-#define HOMME_ERRORDEFS_HPP
+#ifndef HOMMEXX_ERRORDEFS_HPP
+#define HOMMEXX_ERRORDEFS_HPP
 
 #ifndef NDEBUG
 #define DEBUG_PRINT(...) \
@@ -50,4 +50,4 @@ static constexpr int err_negative_layer_thickness = 101;
 } // namespace Errors
 } // namespace Homme
 
-#endif // HOMME_ERRORDEFS_HPP
+#endif // HOMMEXX_ERRORDEFS_HPP

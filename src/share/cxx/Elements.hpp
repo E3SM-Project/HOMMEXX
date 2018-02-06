@@ -1,5 +1,5 @@
-#ifndef HOMME_REGION_HPP
-#define HOMME_REGION_HPP
+#ifndef HOMMEXX_REGION_HPP
+#define HOMMEXX_REGION_HPP
 
 #include "Types.hpp"
 #include "Utility.hpp"
@@ -161,4 +161,4 @@ private:
 
 } // Homme
 
-#endif // HOMME_REGION_HPP
+#endif // HOMMEXX_REGION_HPP
