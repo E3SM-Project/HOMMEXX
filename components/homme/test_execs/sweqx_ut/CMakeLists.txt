@@ -6,6 +6,9 @@ SET(SWEQX_CXX_INCLUDE ${HOMME_SOURCE_DIR}/src/kokkos_kernels
 
 SET(CONFIG_DEFINES PIO_INTERP NC=4 NP=4 PLEV=4 QSIZE_D=4 TIMING=1 _MPI=1 _PRESTART=1 _WK_GRAD=1 HOMME_QUAD_PREC=1 HOMME_USE_FLAT_ARRAYS=1)
 
+#this is the def. of this macro:
+#macro(cxx_unit_test target_name target_f90_srcs target_cxx_srcs include_dirs config_defines NUM_CPUS)
+#so, this call seems to be broken
 cxx_unit_test(sweqx_ut "${SWEQX_UT_SRCS}" "${SWEQX_CXX_INCLUDE}" "${CONFIG_DEFINES}")
 
 SET(input_files

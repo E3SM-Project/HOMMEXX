@@ -160,11 +160,11 @@ ADD_SUBDIRECTORY (share_ut)
 # Add the test exec subdirs for the sweqx executable
 IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(swtcA)
-#  ADD_SUBDIRECTORY(swtcB)
+  ADD_SUBDIRECTORY(swtcB)
 ENDIF()
 
 IF(${BUILD_HOMME_SWEQX})
-  ADD_SUBDIRECTORY(sweqx_ut)
+#  ADD_SUBDIRECTORY(sweqx_ut)
   ADD_SUBDIRECTORY(swtcA_c)
   ADD_SUBDIRECTORY(swtcB_c)
 ENDIF()
