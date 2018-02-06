@@ -1,9 +1,8 @@
-
 #include <iostream>
 
 #include <mpi.h>
 
-#include "mpi/ErrorDefs.hpp"
+#include "ErrorDefs.hpp"
 #include "Hommexx_Session.hpp"
 
 namespace Homme {
