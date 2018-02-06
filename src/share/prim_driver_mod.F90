@@ -1300,7 +1300,9 @@ contains
     use fvm_control_volume_mod, only: n0_fvm
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
+#ifdef CAM
     use prim_advance_mod,   only: applycamforcing, applycamforcing_dynamics
+#endif
     use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1548,7 +1550,7 @@ contains
     use fvm_mod,            only: fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: overwrite_SEdensity
+    !use prim_advance_mod,   only: overwrite_SEdensity
 #ifndef USE_KOKKOS_KERNELS
     use prim_advance_exp_mod, only: prim_advance_exp
 #endif
