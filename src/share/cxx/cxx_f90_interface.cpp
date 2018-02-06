@@ -10,7 +10,7 @@
 #include "RemapFunctor.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
-#include "mpi/ErrorDefs.hpp"
+#include "ErrorDefs.hpp"
 
 #include "Utility.hpp"
 

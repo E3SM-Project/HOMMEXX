@@ -1,7 +1,7 @@
 #ifndef HOMMEXX_TIME_LEVEL_HPP
 #define HOMMEXX_TIME_LEVEL_HPP
 
-#include "mpi/ErrorDefs.hpp"
+#include "ErrorDefs.hpp"
 #include "HommexxEnums.hpp"
 
 namespace Homme

@@ -3,7 +3,7 @@
 #include "Context.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
-#include "mpi/ErrorDefs.hpp"
+#include "ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
 #include "Utility.hpp"
