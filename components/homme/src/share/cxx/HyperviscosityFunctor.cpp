@@ -46,6 +46,7 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
   auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_data.num_elems);
   Kokkos::parallel_for(policy_first_laplace, *this);
+  Kokkos::fence();
 
   // Get be structure
   std::string be_name = "HyperviscosityFunctor";
@@ -58,11 +59,13 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   // Apply inverse mass matrix
   Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
   Kokkos::parallel_for(policy_mass, *this);
+  Kokkos::fence();
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
   auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_data.num_elems);
   Kokkos::parallel_for(policy_second_laplace, *this);
+  Kokkos::fence();
 }
 
 } // namespace Homme
