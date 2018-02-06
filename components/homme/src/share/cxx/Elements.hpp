@@ -1,5 +1,5 @@
-#ifndef HOMME_REGION_HPP
-#define HOMME_REGION_HPP
+#ifndef HOMMEXX_REGION_HPP
+#define HOMMEXX_REGION_HPP
 
 #include "Types.hpp"
 #include "Utility.hpp"
@@ -14,10 +14,12 @@ public:
   // Coriolis term
   ExecViewManaged<Real * [NP][NP]> m_fcor;
   // Quadrature weights and metric tensor
-  ExecViewManaged<Real * [NP][NP]> m_spheremp;
-  ExecViewManaged<Real * [NP][NP]> m_rspheremp;
-  ExecViewManaged<Real * [NP][NP]> m_metdet;
-  // Prescrived surface geopotential at eta = 1 (at bottom)
+  ExecViewManaged<Real * [NP][NP]>        m_mp;
+  ExecViewManaged<Real * [NP][NP]>        m_spheremp;
+  ExecViewManaged<Real * [NP][NP]>        m_rspheremp;
+  ExecViewManaged<Real * [2][2][NP][NP]>  m_metinv;
+  ExecViewManaged<Real * [NP][NP]>        m_metdet;
+  // Prescribed surface geopotential height at eta = 1
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
   // D (map for covariant coordinates) and D^{-1}
@@ -70,6 +72,9 @@ public:
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ttens;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> dptens;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vtens;
 
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
@@ -87,7 +92,15 @@ public:
     // Buffers for spherical operators
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vort_buf;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> curl_buf;
+
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> sphere_vector_buf;
+
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> divergence_temp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity_temp;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_1;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_2;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_3;
 
     // Buffers for vertical advection terms in V and T for case
     // of Eulerian advection, rsplit=0. These buffers are used in both 
@@ -111,8 +124,9 @@ public:
   int num_elems() const { return m_num_elems; }
 
   // Fill the exec space views with data coming from F90 pointers
-  void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor, CF90Ptr &spheremp,
-               CF90Ptr &rspheremp, CF90Ptr &metdet, CF90Ptr &phis);
+  void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
+               CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
+               CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
@@ -147,4 +161,4 @@ private:
 
 } // Homme
 
-#endif // HOMME_REGION_HPP
+#endif // HOMMEXX_REGION_HPP

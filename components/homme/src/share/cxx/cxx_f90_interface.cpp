@@ -2,12 +2,15 @@
 #include "Elements.hpp"
 #include "Control.hpp"
 #include "Context.hpp"
-
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
+#include "HommexxEnums.hpp"
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "RemapFunctor.hpp"
-#include "BoundaryExchange.hpp"
-#include "BuffersManager.hpp"
+#include "mpi/BoundaryExchange.hpp"
+#include "mpi/BuffersManager.hpp"
+#include "ErrorDefs.hpp"
 
 #include "Utility.hpp"
 
@@ -19,18 +22,92 @@ namespace Homme
 extern "C"
 {
 
+void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
+                               const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
+                               const int& qsize, const int& state_frequency,
+                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div, const Real& nu_top,
+                               const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
+                               const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
+{
+  // Get the simulation params struct
+  SimulationParams& params = Context::singleton().get_simulation_params();
+
+  if (remap_alg==1) {
+    params.remap_alg = RemapAlg::PPM_MIRRORED;
+  } else if (remap_alg==2) {
+    params.remap_alg = RemapAlg::PPM_FIXED;
+  } else {
+    Errors::runtime_abort("Error in init_simulation_params_c: unknown remap algorithm.\n",
+                           Errors::err_unknown_option);
+  }
+
+  params.limiter_option                = limiter_option;
+  params.rsplit                        = rsplit;
+  params.qsplit                        = qsplit;
+  params.time_step_type                = time_step_type;
+  params.prescribed_wind               = (prescribed_wind>0);
+  params.energy_fixer                  = (energy_fixer>0);
+  params.state_frequency               = state_frequency;
+  params.qsize                         = qsize;
+  params.nu                            = nu;
+  params.nu_p                          = nu_p;
+  params.nu_s                          = nu_s;
+  params.nu_div                        = nu_div;
+  params.nu_top                        = nu_top;
+  params.hypervis_order                = hypervis_order;
+  params.hypervis_subcycle             = hypervis_subcycle;
+  params.disable_diagnostics           = disable_diagnostics;
+  params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
+  params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
+
+  // Check that the simulation options are supported. This helps us in the future, since we
+  // are currently 'assuming' some option have/not have certain values. As we support for more
+  // options in the C++ build, we will remove some checks
+  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_scaling==0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_not_implemented);
+
+  // Now this structure can be used safely
+  params.params_set = true;
+
+  // Set some parameters in the Control structure already
+  Control& data = Context::singleton().get_control();
+  data.rsplit = params.rsplit;
+  data.nu     = params.nu;
+  data.nu_s   = params.nu_s;
+  data.nu_p   = params.nu_p;
+  data.nu_top = params.nu_top;
+  data.hypervis_scaling = params.hypervis_scaling;
+}
+
+void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
+                                      CRCPtr& hybrid_bm_ptr, CRCPtr& hybrid_bi_ptr)
+{
+  Control& data = Context::singleton().get_control();
+  data.init_hvcoord(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
+}
+
+void init_control_c (const int& nets, const int& nete, const int& num_elems)
+{
+  // Setting elements count in the control once and for all
+  Control& control = Context::singleton().get_control ();
+
+  control.nets      = nets-1;
+  control.nete      = nete;       // F90 ranges are closed, c ranges are open on the right, so this can stay the same
+  control.num_elems = num_elems;
+
+}
+
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0, 
-                          const int& rsplit,
-                          CRCPtr& hybrid_am_ptr,
-                          CRCPtr& hybrid_ai_ptr,
-                          CRCPtr& hybrid_bm_ptr,
-                          CRCPtr& hybrid_bi_ptr)
+                          const int& qn0, const int& rsplit)
 {
   Control& control = Context::singleton().get_control ();
 
-  control.init(nets, nete, num_elems, qn0, ps0, rsplit, 
-               hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
+  control.init(nets, nete, num_elems, qn0, rsplit);
 }
 
 void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
@@ -79,13 +156,40 @@ void init_derivative_c (CF90Ptr& dvv)
   deriv.init(dvv);
 }
 
+void init_time_level_c (const int& nm1, const int& n0, const int& np1,
+                        const int& nstep, const int& nstep0)
+{
+  TimeLevel& tl = Context::singleton().get_time_level ();
+  tl.nm1    = nm1-1;
+  tl.n0     = n0-1;
+  tl.np1    = np1-1;
+  tl.nstep  = nstep;
+  tl.nstep0 = nstep0;
+}
+
+void update_time_level_c (const int& update_type)
+{
+  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_not_implemented);
+
+  TimeLevel& tl = Context::singleton().get_time_level();
+  if (update_type==0) {
+    tl.update_dynamics_levels(UpdateType::LEAPFROG);
+  }
+}
+
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
-                         CF90Ptr& spheremp, CF90Ptr& rspheremp, CF90Ptr& metdet, CF90Ptr& phis)
+                         CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
+                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
 {
   Control& control = Context::singleton().get_control ();
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, control.rsplit == 0);
-  r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
+  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+
+  // We also set nets, nete and num_elems in the Control
+  control.nets      = 0;
+  control.nete      = num_elems;
+  control.num_elems = num_elems;
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
@@ -102,7 +206,7 @@ void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF9
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                          F90Ptr& elem_derived_phi_ptr, 
+                          F90Ptr& elem_derived_phi_ptr,
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {

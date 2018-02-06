@@ -951,15 +951,17 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
   vorticity_sphere_vector(kv,d,metdet,dvv,vector,sphere_buf,vort);
 
   constexpr int np_squared = NP * NP;
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
-                      [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slow
-    const int jgp = loop_idx % NP; //fast
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-      div(igp,jgp,ilev) *= nu_ratio;
+  if (nu_ratio>0 && nu_ratio!=1.0) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
+                        [&](const int loop_idx) {
+      const int igp = loop_idx / NP; //slow
+      const int jgp = loop_idx % NP; //fast
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+        div(igp,jgp,ilev) *= nu_ratio;
+      });
     });
-  });
-  kv.team_barrier();
+    kv.team_barrier();
+  }
 
   grad_sphere_wk_testcov(kv,d,mp,metinv,metdet,dvv,div,sphere_buf,gradcov);
   curl_sphere_wk_testcov(kv,d,mp,dvv,vort,sphere_buf,curlcov);
@@ -972,10 +974,10 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
 #define UNDAMPRRCART
 #ifdef UNDAMPRRCART
       laplace(0,igp,jgp,ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(0,igp,jgp,ilev)
-                              *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+                              *(PhysicalConstants::rrearth*PhysicalConstants::rrearth);
 
       laplace(1,igp,jgp,ilev) = 2.0*spheremp(kv.ie,igp,jgp)*vector(1,igp,jgp,ilev)
-                              *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
+                              *(PhysicalConstants::rrearth*PhysicalConstants::rrearth);
 #endif
       laplace(0,igp,jgp,ilev) += (gradcov(0,igp,jgp,ilev) - curlcov(0,igp,jgp,ilev));
       laplace(1,igp,jgp,ilev) += (gradcov(1,igp,jgp,ilev) - curlcov(1,igp,jgp,ilev));

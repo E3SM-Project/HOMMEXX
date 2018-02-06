@@ -61,7 +61,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_BASE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
-  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
   ${SRC_SHARE_DIR}/control_mod.F90
   ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
@@ -101,10 +100,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/physics_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
-  ${SRC_SHARE_DIR}/prim_advance_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
   ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
@@ -137,6 +132,17 @@ SET(PREQX_FLAT_DEPS_F90
   ${PHYSICS_DIR}/physics_types_mod.F90
 )
 
+IF (NOT ${USE_KOKKOS_KERNELS})
+  SET (PREQX_FLAT_DEPS_F90
+    ${PREQX_FLAT_DEPS_F90}
+    ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
+    ${SRC_SHARE_DIR}/prim_advance_mod.F90
+  )
+ENDIF()
+
 SET(PREQX_FLAT_DEPS_C
   ${UTILS_SHARE_DIR}/shr_vmath_fwrap.c
   ${SRC_BASE_DIR}/jrio.c
@@ -144,10 +150,13 @@ SET(PREQX_FLAT_DEPS_C
 
 SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/cxx_f90_interface.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advance_exp.cpp
+  ${SRC_SHARE_DIR}/cxx/prim_advance_hypervis.cpp
   ${SRC_SHARE_DIR}/cxx/Control.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
@@ -177,6 +186,11 @@ SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 SET(PREQX_FLAT_UT_F90_SRCS
   ${TARGET_F90}
   ${PREQX_FLAT_DEPS_F90}
+  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_mod.F90
 )
 
 SET(PREQX_FLAT_UT_CXX_SRCS

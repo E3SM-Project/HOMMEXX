@@ -4,8 +4,10 @@
 
 program prim_main
 #ifdef _PRIM
-  use prim_driver_mod,  only: prim_init1, prim_init2, prim_run, prim_finalize,&
-                              leapfrog_bootstrap, prim_run_subcycle
+  use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize, prim_run_subcycle
+#ifndef USE_KOKKOS_KERNELS
+  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run
+#endif
   use hybvcoord_mod,    only: hvcoord_t, hvcoord_init
 #endif
 
@@ -30,6 +32,7 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use iso_c_binding,       only: c_ptr, c_loc
 #endif
 
 #ifdef _REFSOLN
@@ -46,11 +49,29 @@ program prim_main
   implicit none
 #ifdef USE_KOKKOS_KERNELS
   interface
-     subroutine initialize_hommexx_session() bind(c)
-     end subroutine initialize_hommexx_session
+    subroutine initialize_hommexx_session() bind(c)
+    end subroutine initialize_hommexx_session
 
-     subroutine finalize_hommexx_session() bind(c)
-     end subroutine finalize_hommexx_session
+    subroutine finalize_hommexx_session() bind(c)
+    end subroutine finalize_hommexx_session
+
+    subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_double
+      !
+      ! Inputs
+      !
+      real (kind=c_double),  intent(in) :: ps0
+      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
+    end subroutine init_hvcoord_c
+
+    subroutine init_time_level_c(nm1,n0,np1,nstep,nstep0) bind(c)
+      use iso_c_binding, only: c_int
+      !
+      ! Inputs
+      !
+      integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
+    end subroutine init_time_level_c
   end interface
 #endif
 
@@ -61,7 +82,11 @@ program prim_main
   type (domain1d_t), pointer  :: dom_mt(:)
   type (RestartHeader_t)      :: RestartHeader
   type (TimeLevel_t)          :: tl             ! Main time level struct
-  type (hvcoord_t)            :: hvcoord        ! hybrid vertical coordinate struct
+  type (hvcoord_t), target    :: hvcoord        ! hybrid vertical coordinate struct
+
+#ifdef USE_KOKKOS_KERNELS
+  type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
+#endif
 
   real*8 timeit, et, st
   integer nets,nete
@@ -149,7 +174,13 @@ program prim_main
      call haltmp("error in hvcoord_init")
   end if
 
-
+#ifdef USE_KOKKOS_KERNELS
+  hybrid_am_ptr = c_loc(hvcoord%hyam)
+  hybrid_ai_ptr = c_loc(hvcoord%hyai)
+  hybrid_bm_ptr = c_loc(hvcoord%hybm)
+  hybrid_bi_ptr = c_loc(hvcoord%hybi)
+  call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
+#endif
 
 #ifdef PIO_INTERP
   if(runtype<0) then
@@ -234,11 +265,18 @@ program prim_main
   ! advance_si not yet upgraded to be self-starting.  use leapfrog bootstrap procedure:
   if(integration == 'semi_imp') then
      if (runtype /= 1 ) then
+#ifdef USE_KOKKOS_KERNELS
+        call abortmp("Error! Cannot use this option in Kokkos build")
+#else
         if(par%masterproc) print *,"Leapfrog bootstrap initialization..."
         call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
+#endif
      endif
   endif
 
+#ifdef USE_KOKKOS_KERNELS
+  call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
+#endif
 
   if(par%masterproc) print *,"Entering main timestepping loop"
   call t_startf('prim_main_loop')
@@ -259,7 +297,11 @@ program prim_main
         if (tstep_type>0) then  ! forward in time subcycled methods
            call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
         else  ! leapfrog
+#ifdef USE_KOKKOS_KERNELS
+           call abortmp ("Error! Functionality not available in Kokkos build")
+#else
            call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
+#endif
         endif
         call t_stopf('prim_run')
      end do
