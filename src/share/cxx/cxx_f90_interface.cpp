@@ -63,13 +63,13 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   // Check that the simulation options are supported. This helps us in the future, since we
   // are currently 'assuming' some option have/not have certain values. As we support for more
   // options in the C++ build, we will remove some checks
-  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(hypervis_scaling==0,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_unsupported_option);
-  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_scaling==0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_not_implemented);
 
   // Now this structure can be used safely
   params.params_set = true;
@@ -169,7 +169,7 @@ void init_time_level_c (const int& nm1, const int& n0, const int& np1,
 
 void update_time_level_c (const int& update_type)
 {
-  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_unsupported_option);
+  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_not_implemented);
 
   TimeLevel& tl = Context::singleton().get_time_level();
   if (update_type==0) {

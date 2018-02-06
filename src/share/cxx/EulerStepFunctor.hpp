@@ -439,7 +439,7 @@ public:
     data.qn0 = n0_qdp - 1;
     if (data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
-                            Errors::err_unimplemented);
+                            Errors::err_not_implemented);
     }
     EulerStepFunctor functor(data);
     const auto &elements = Context::singleton().get_elements();
@@ -717,13 +717,13 @@ private:
           minp = qlim(0,vpi)[vsi] = mass/sumc;
         if (mass > maxp*sumc)
           maxp = qlim(1,vpi)[vsi] = mass/sumc;
-    
+
         limit(team, mass, minp, maxp, x.data(), c.data());
 
         parallel_for(tvr, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
-          });        
+          });
       });
   }
 
