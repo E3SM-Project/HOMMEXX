@@ -130,7 +130,7 @@ if (${CUDA_FOUND})
   if (DEFINED HOMMEXX_FPMODEL)
       if ("${fpmodel_string_lower}" STREQUAL "strict")
         set (${flags} "-Xcompiler --fmad=false" PARENT_SCOPE)
-      endif ())
+      endif ()
   endif ()
 endif ()
 
