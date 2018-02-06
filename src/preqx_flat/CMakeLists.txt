@@ -186,6 +186,11 @@ SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 SET(PREQX_FLAT_UT_F90_SRCS
   ${TARGET_F90}
   ${PREQX_FLAT_DEPS_F90}
+  ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
+  ${SRC_SHARE_DIR}/prim_advance_mod.F90
 )
 
 SET(PREQX_FLAT_UT_CXX_SRCS
