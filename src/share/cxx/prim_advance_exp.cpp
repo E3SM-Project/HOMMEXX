@@ -81,11 +81,13 @@ void prim_advance_exp_c(const Real& dt, const bool& compute_diagnostics)
   TimeLevel& tl = Context::singleton().get_time_level();
 
   prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
+  tl.tevolve += dt;
   for (int iter=1; iter<params.qsplit; ++iter) {
     // Update time levels
     tl.update_dynamics_levels(UpdateType::LEAPFROG);
 
     prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,false);
+    tl.tevolve += dt;
   }
   // Note: Fortran comment says "the last time level update is deferred till after Q update"
   //       Since I don't knokw exactly when that is, I put a hook in the TimeLevel_update
@@ -156,7 +158,7 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
-    advance_hypervis_dp(np1,dt,data.eta_ave_w);
+    advance_hypervis_dp(np1,dt,eta_ave_w);
   }
 
 #ifdef ENERGY_DIAGNOSTICS
