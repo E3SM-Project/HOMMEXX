@@ -41,6 +41,7 @@ namespace Errors {
 
 void runtime_abort(std::string message, int code);
 
+static constexpr int err_unimplemented = 100;
 static constexpr int err_negative_layer_thickness = 101;
 }  // namespace Errors
 }
