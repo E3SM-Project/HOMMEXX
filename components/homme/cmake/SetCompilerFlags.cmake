@@ -127,7 +127,7 @@ ENDIF ()
 find_package(CUDA QUIET)
 if (${CUDA_FOUND})
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD -arch=sm_60")
-  if (DEFINED HOMMEXX_FPMODEL
+  if (DEFINED HOMMEXX_FPMODEL)
       if ("${fpmodel_string_lower}" STREQUAL "strict")
         set (${flags} "-Xcompiler --fmad=false" PARENT_SCOPE)
       endif ())
