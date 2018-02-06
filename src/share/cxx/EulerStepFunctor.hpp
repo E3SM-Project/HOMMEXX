@@ -7,11 +7,13 @@
 #include "Control.hpp"
 #include "SphereOperators.hpp"
 #include "vector/VectorUtils.hpp"
+#include "ErrorDefs.hpp"
+#include "BoundaryExchange.hpp"
 
 namespace Homme {
 
 class EulerStepFunctor {
-  const Control    m_data;
+  Control          m_data;
   const Elements   m_elements;
   const Derivative m_deriv;
 
@@ -39,35 +41,32 @@ public:
     ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
     ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
    */
-  static void compute_biharmonic_pre () {
+  void compute_biharmonic_pre() {
     profiling_resume();
     GPTLstart("esf-bih-pre run");
 
-    Control& c = Context::singleton().get_control();
-    assert(c.rhs_multiplier == 2);
-    c.rhs_viss = 3;
+    assert(m_data.rhs_multiplier == 2);
+    m_data.rhs_viss = 3;
 
-    EulerStepFunctor func(c);
-    Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, BIHPre>(c.num_elems * c.qsize),
-      func);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
+                             m_data.num_elems * m_data.qsize),
+                         *this);
 
     ExecSpace::fence();
     GPTLstop("esf-bih-pre run");
     profiling_pause();
   }
 
-  static void compute_biharmonic_post () {
+  void compute_biharmonic_post() {
     profiling_resume();
     GPTLstart("esf-bih-post run");
 
-    Control& c = Context::singleton().get_control();
+    Control &c = Context::singleton().get_control();
     assert(c.rhs_multiplier == 2);
 
-    EulerStepFunctor func(c);
-    Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, BIHPost>(c.num_elems * c.qsize),
-      func);
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
+                             m_data.num_elems * m_data.qsize),
+                         *this);
 
     ExecSpace::fence();
     GPTLstop("esf-bih-post run");
@@ -153,28 +152,29 @@ public:
   struct AALTracerPhase {};
   struct AALFusedPhases {};
 
-  static void advect_and_limit () {
+  void advect_and_limit() {
     profiling_resume();
     GPTLstart("esf-aal-tot run");
-    Control& data = Context::singleton().get_control();
-    EulerStepFunctor func(data);
     if (OnGpu<ExecSpace>::value) {
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(data.num_elems),
-        func);
+          Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
+              m_data.num_elems),
+          *this);
       ExecSpace::fence();
       GPTLstop("esf-aal-noq run");
       GPTLstart("esf-aal-q run");
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(data.num_elems * data.qsize),
-        func);
+          Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
+              m_data.num_elems * m_data.qsize),
+          *this);
       ExecSpace::fence();
       GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
-        Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(data.num_elems),
-        func);
+          Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(
+              m_data.num_elems),
+          *this);
     }
     ExecSpace::fence();
     GPTLstop("esf-aal-tot run");
@@ -207,12 +207,49 @@ public:
     stop_timer("esf-aal-fused compute");
   }
 
-  static void apply_rspheremp () {
+  struct PrecomputeDivDp {};
+
+  static void precompute_divdp_c() {
+    profiling_resume();
+    GPTLstart("esf-precompute_divdp run");
+
+    Control &data = Context::singleton().get_control();
+    EulerStepFunctor func(data);
+    Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
+            data.num_elems),
+        func);
+
+    GPTLstop("esf-precompute_divdp run");
+    profiling_pause();
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
+    start_timer("esf-precompute_divdp compute");
+    KernelVariables kv(team);
+    divergence_sphere(kv, m_elements.m_dinv, m_elements.m_metdet,
+                      m_deriv.get_dvv(),
+                      Homme::subview(m_elements.m_derived_vn0, kv.ie),
+                      m_elements.buffers.div_buf,
+                      Homme::subview(m_elements.m_derived_divdp, kv.ie));
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
+                         [&](const int idx) {
+      const int igp = idx / NP;
+      const int jgp = idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
+                           [&](const int ilev) {
+        m_elements.m_derived_divdp_proj(kv.ie, igp, jgp, ilev) =
+            m_elements.m_derived_divdp(kv.ie, igp, jgp, ilev);
+      });
+    });
+
+    stop_timer("esf-precompute_divdp compute");
+  }
+
+  static void apply_rspheremp(const Control &c, const Elements &e) {
     profiling_resume();
     GPTLstart("esf-rspheremp run");
-
-    Control& c = Context::singleton().get_control();
-    Elements& e = Context::singleton().get_elements();
 
     const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
                          e.m_eta_dot_dpdn :
@@ -247,8 +284,8 @@ public:
   }
 
   static void compute_qmin_qmax() {
-    Control &state = Context::singleton().get_control();
-    Elements &elems = Context::singleton().get_elements();
+    const Control &state = Context::singleton().get_control();
+    const Elements &elems = Context::singleton().get_elements();
 
     Kokkos::RangePolicy<ExecSpace> policy1(0, state.num_elems * state.qsize *
                                                   NP * NP * NUM_LEV);
@@ -270,7 +307,7 @@ public:
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *
                                                   NUM_LEV);
-    if (state.rhs_multiplier == 1.0) {
+    if (state.rhs_multiplier == 1) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
         const int ie = (loop_idx / NUM_LEV) / state.qsize;
         const int q = (loop_idx / NUM_LEV) % state.qsize;
@@ -314,6 +351,151 @@ public:
       });
     }
     ExecSpace::fence();
+  }
+
+  void neighbor_minmax_start() {
+    BoundaryExchange &be =
+        *Context::singleton().get_boundary_exchange("min max Euler");
+    be.pack_and_send_min_max(m_data.nets, m_data.nete);
+  }
+
+  void neighbor_minmax_finish() {
+    BoundaryExchange &be =
+        *Context::singleton().get_boundary_exchange("min max Euler");
+    be.recv_and_unpack_min_max(m_data.nets, m_data.nete);
+  }
+
+  void minmax_and_biharmonic() {
+    // euler_minmax_and_biharmonic_c()
+    const auto be = Context::singleton().get_boundary_exchange(
+        "Euler step: min/max & qtens_biharmonic");
+    if (!be->is_registration_completed()) {
+      be->set_buffers_manager(
+          Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+      be->set_num_fields(0, 0, m_data.qsize);
+      be->register_field(m_elements.buffers.qtens_biharmonic, m_data.qsize, 0);
+      be->registration_completed();
+    }
+    neighbor_minmax_start();
+    compute_biharmonic_pre();
+    be->exchange();
+    compute_biharmonic_post();
+    neighbor_minmax_finish();
+  }
+
+  static void neighbor_minmax(const Control &data) {
+    BoundaryExchange &be =
+        *Context::singleton().get_boundary_exchange("min max Euler");
+    assert(be.is_registration_completed());
+    be.exchange_min_max(data.nets, data.nete);
+  }
+
+  static void exchange_qdp_dss_var(const Control &data, const Elements &elements) {
+    // Note: we have three separate BE structures, all of which register qdp.
+    // They differ only in the last field registered.
+    // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
+    // rather than one for qdp and one for the last DSS variable.
+    // TODO: move this setup in init_control_euler and move that function one
+    // stack frame up of euler_step in F90, making it set the common parameters
+    // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
+
+    std::stringstream ss;
+    ss << "exchange qdp " << (data.DSSopt == Control::DSSOption::eta
+                                  ? "eta"
+                                  : data.DSSopt == Control::DSSOption::omega
+                                        ? "omega"
+                                        : "div_vdp_ave") << " " << data.np1_qdp;
+
+    const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+        Context::singleton().get_boundary_exchange(ss.str());
+
+    const auto &dss_var = (data.DSSopt == Control::DSSOption::eta
+                               ? elements.m_eta_dot_dpdn
+                               : (data.DSSopt == Control::DSSOption::omega
+                                      ? elements.m_omega_p
+                                      : elements.m_derived_divdp_proj));
+
+    if (!be_qdp_dss_var->is_registration_completed()) {
+      // If it is the first time we call this method, we need to set up the BE
+      std::shared_ptr<BuffersManager> buffers_manager =
+          Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+      be_qdp_dss_var->set_buffers_manager(buffers_manager);
+      be_qdp_dss_var->set_num_fields(0, 0, data.qsize + 1);
+      be_qdp_dss_var->register_field(elements.m_qdp, data.np1_qdp, data.qsize,
+                                     0);
+      be_qdp_dss_var->register_field(dss_var);
+      be_qdp_dss_var->registration_completed();
+    }
+
+    be_qdp_dss_var->exchange();
+  }
+
+  static void euler_step(const int &n0_qdp,
+                         const Control::DSSOption::Enum &DSSopt,
+                         const int &rhs_multiplier) {
+    Control &data = Context::singleton().get_control();
+    data.DSSopt = DSSopt;
+    data.rhs_multiplier = rhs_multiplier;
+    data.qn0 = n0_qdp - 1;
+    if (data.limiter_option == 4) {
+      Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
+                            Errors::err_unimplemented);
+    }
+    EulerStepFunctor functor(data);
+    const auto &elements = Context::singleton().get_elements();
+    if (data.limiter_option == 8) {
+      // when running lim8, we also need to limit the biharmonic, so that term
+      // needs to be included in each euler step.  three possible algorithms
+      // here:
+      // most expensive:
+      //   compute biharmonic (which also computes qmin/qmax) during all 3
+      //   stages be sure to set rhs_viss=1 cost:  3 biharmonic steps with 3 DSS
+
+      // cheapest:
+      //   compute biharmonic (which also computes qmin/qmax) only on first
+      //   stage be sure to set rhs_viss=3 reuse qmin/qmax for all following
+      //   stages (but update based on local qmin/qmax) cost:  1 biharmonic
+      //   steps with 1 DSS main concern: viscosity
+
+      // compromise:
+      //   compute biharmonic (which also computes qmin/qmax) only on last stage
+      //   be sure to set rhs_viss=3
+      //   compute qmin/qmax directly on first stage
+      //   reuse qmin/qmax for 2nd stage stage (but update based on local
+      //   qmin/qmax) cost:  1 biharmonic steps, 2 DSS
+
+      //  NOTE  when nu_p=0 (no dissipation applied in dynamics to dp equation),
+      //        we should apply dissipation to Q (not Qdp) to preserve Q=1
+      //        i.e.  laplace(Qdp) ~  dp0 laplace(Q)
+      //        for nu_p=nu_q>0, we need to apply dissipation to Q *diffusion_dp
+
+      // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
+      GPTLstart("bihmix_qminmax");
+
+      // euler_qmin_qmax_c()
+      compute_qmin_qmax();
+
+      if (rhs_multiplier == 0) {
+        GPTLstart("eus_neighbor_minmax1");
+        neighbor_minmax(data);
+        GPTLstop("eus_neighbor_minmax1");
+      } else if (rhs_multiplier == 2) {
+        functor.minmax_and_biharmonic();
+      }
+      GPTLstop("bihmix_qminmax");
+    }
+    GPTLstart("eus_2d_advec");
+    GPTLstart("advance_qdp");
+
+    functor.advect_and_limit();
+
+    GPTLstop("advance_qdp");
+
+    exchange_qdp_dss_var(data, elements);
+
+    apply_rspheremp(data, elements);
+
+    GPTLstop("eus_2d_advec");
   }
 
 private:
