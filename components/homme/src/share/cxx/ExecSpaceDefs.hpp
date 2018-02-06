@@ -210,6 +210,43 @@ struct Memory<Hommexx_Cuda> {
   };
 };
 
+// We want to get C++ on GPU to match F90 on CPU. Thus, need to serialize
+// parallel reductions.
+
+// Call through to parallel_reduce.
+template< typename LoopBdyType, class Lambda, typename ValueType>
+KOKKOS_FORCEINLINE_FUNCTION
+void parallel_reduce (
+  const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
+  const LoopBdyType& loop_boundaries,
+  const Lambda& lambda, ValueType& result)
+{
+  Kokkos::parallel_reduce(loop_boundaries, lambda, result);
+}
+
+#if defined KOKKOS_HAVE_CUDA && defined HOMMEXX_GPU_BFB_WITH_CPU
+// Serialize the parallel_reduce.
+template< typename iType, class Lambda, typename ValueType >
+KOKKOS_INLINE_FUNCTION
+void parallel_reduce (
+  const Homme::TeamMember& team,
+  const Kokkos::Impl::ThreadVectorRangeBoundariesStruct<iType, Kokkos::Impl::CudaTeamMember>& loop_boundaries,
+  const Lambda& lambda, ValueType& result)
+{
+  // All threads init result.
+  result = ValueType();
+  // One thread sums.
+  Kokkos::single(Kokkos::PerThread(team), [&] () {
+      for (iType i = loop_boundaries.start; i < loop_boundaries.end; ++i)
+        lambda(i, result);
+    });
+  // Broadcast result to all threads by doing sum of one thread's
+  // non-0 value and the rest of the 0s.
+  Kokkos::Impl::CudaTeamMember::vector_reduce(
+    Kokkos::Experimental::Sum<ValueType>(result));
+}
+#endif
+
 } // namespace Homme
 
 #endif // HOMMEXX_EXEC_SPACE_DEFS_HPP
