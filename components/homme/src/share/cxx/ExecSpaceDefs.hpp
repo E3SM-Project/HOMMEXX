@@ -229,7 +229,7 @@ void parallel_reduce (
 template< typename iType, class Lambda, typename ValueType >
 KOKKOS_INLINE_FUNCTION
 void parallel_reduce (
-  const Homme::TeamMember& team,
+  const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
   const Kokkos::Impl::ThreadVectorRangeBoundariesStruct<iType, Kokkos::Impl::CudaTeamMember>& loop_boundaries,
   const Lambda& lambda, ValueType& result)
 {
