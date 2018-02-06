@@ -83,28 +83,6 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TagUpdateStates&, const int idx) const {
-    const int ie   =  idx / (NP*NP*NUM_LEV);
-    const int igp  = (idx / (NP*NUM_LEV)) % NP;
-    const int jgp  = (idx / NUM_LEV) % NP;
-    const int ilev =  idx % NUM_LEV;
-
-    m_elements.buffers.vtens(ie,0,igp,jgp,ilev) *= m_data.dt;
-    m_elements.buffers.vtens(ie,1,igp,jgp,ilev) *= m_data.dt;
-    m_elements.buffers.ttens(ie,igp,jgp,ilev) *= m_data.dt;
-
-    m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
-    m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
-
-    Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev)
-                   + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev);
-    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) += m_elements.buffers.ttens(ie,igp,jgp,ilev);
-    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) -= heating/PhysicalConstants::cp;
-
-    m_elements.m_dp3d(ie,m_data.np1,igp,jgp,ilev) = m_elements.buffers.dptens(ie,igp,jgp,ilev);
-  }
-
-  KOKKOS_INLINE_FUNCTION
   void operator()(const TagApplyInvMass&, const int idx) const
   {
     const int ie   =  idx / (NP*NP*NUM_LEV);
@@ -117,6 +95,33 @@ public:
     m_elements.buffers.ttens (ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
     m_elements.buffers.vtens (ie,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
     m_elements.buffers.vtens (ie,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const TagUpdateStates&, const int idx) const {
+    const int ie   =  idx / (NP*NP*NUM_LEV);
+    const int igp  = (idx / (NP*NUM_LEV)) % NP;
+    const int jgp  = (idx / NUM_LEV) % NP;
+    const int ilev =  idx % NUM_LEV;
+
+    // Apply inverse mass matrix
+    m_elements.buffers.vtens(ie,0,igp,jgp,ilev) = (m_data.dt * m_elements.buffers.vtens(ie,0,igp,jgp,ilev) *
+                                                   m_elements.m_rspheremp(ie,igp,jgp));
+    m_elements.buffers.vtens(ie,1,igp,jgp,ilev) = (m_data.dt * m_elements.buffers.vtens(ie,1,igp,jgp,ilev) *
+                                                   m_elements.m_rspheremp(ie,igp,jgp));
+    m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
+    m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
+
+    m_elements.buffers.ttens(ie,igp,jgp,ilev) = (m_data.dt*m_elements.buffers.ttens(ie,igp,jgp,ilev) *
+                                                 m_elements.m_rspheremp(ie,igp,jgp));
+    const Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev)
+                         + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev);
+    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) =
+      m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) + m_elements.buffers.ttens(ie,igp,jgp,ilev) -
+      heating/PhysicalConstants::cp;
+
+    m_elements.m_dp3d(ie,m_data.np1,igp,jgp,ilev) = (m_elements.buffers.dptens(ie,igp,jgp,ilev) *
+                                                     m_elements.m_rspheremp(ie,igp,jgp));
   }
 
   KOKKOS_INLINE_FUNCTION

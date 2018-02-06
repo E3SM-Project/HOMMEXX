@@ -16,7 +16,6 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
 void HyperviscosityFunctor::run (const int hypervis_subcycle)
 {
   m_hypervis_subcycle = hypervis_subcycle;
-  Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
   Kokkos::RangePolicy<ExecSpace,TagUpdateStates> policy_update_states(0, m_data.num_elems*NP*NP*NUM_LEV);
   auto policy_pre_exchange =
       Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
@@ -25,6 +24,7 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
     biharmonic_wk_dp3d ();
     // dispatch parallel_for for first kernel
     Kokkos::parallel_for(policy_pre_exchange, *this);
+    Kokkos::fence();
 
     // Boundary Echange
     std::string be_name = "HyperviscosityFunctor";
@@ -34,11 +34,9 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
     // Exchange
     be.exchange(m_data.nets, m_data.nete);
 
-    // Apply inverse mass matrix
-    Kokkos::parallel_for(policy_mass, *this);
-
     // Update states
     Kokkos::parallel_for(policy_update_states, *this);
+    Kokkos::fence();
   }
 }
 
