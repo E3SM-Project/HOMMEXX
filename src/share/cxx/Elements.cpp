@@ -7,10 +7,10 @@
 
 namespace Homme {
 
-void Elements::init(const int num_elems, const bool rsplit0) {
+void Elements::init(const int num_elems) {
   m_num_elems = num_elems;
 
-  buffers.init(num_elems, rsplit0);
+  buffers.init(num_elems);
 
   m_fcor = ExecViewManaged<Real * [NP][NP]>("FCOR", m_num_elems);
   m_mp = ExecViewManaged<Real * [NP][NP]>("MP", m_num_elems);
@@ -136,7 +136,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
-  init(num_elems, true);
+  init(num_elems);
   std::random_device rd;
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0 / min_value);
@@ -541,7 +541,7 @@ void Elements::dinv(Real *dinv_ptr, int ie) const {
   Kokkos::deep_copy(dinv_host, dinv_device);
 }
 
-void Elements::BufferViews::init(const int num_elems, const bool rsplit0) {
+void Elements::BufferViews::init(const int num_elems) {
   pressure =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
   pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
@@ -601,14 +601,12 @@ void Elements::BufferViews::init(const int num_elems, const bool rsplit0) {
   lapl_buf_1 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
   lapl_buf_2 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
   lapl_buf_3 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
-  if (rsplit0) {
-    v_vadv_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("v_vadv buffer",
-                                                                num_elems);
-    t_vadv_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("t_vadv buffer",
-                                                             num_elems);
-    eta_dot_dpdn_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdpn buffer",
-                                                                     num_elems);
-  }
+  v_vadv_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("v_vadv buffer",
+                                                              num_elems);
+  t_vadv_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("t_vadv buffer",
+                                                           num_elems);
+  eta_dot_dpdn_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdpn buffer",
+                                                                   num_elems);
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
