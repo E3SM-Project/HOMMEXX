@@ -1580,56 +1580,6 @@ contains
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
-!use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
-!#ifdef USE_KOKKOS_KERNELS
-!    use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
-!                                  elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
-!                                  elem_derived_phi, elem_derived_omega_p,         &
-!                                  elem_derived_vn0, elem_derived_dpdiss_ave,      &
-!                                  elem_derived_dpdiss_biharmonic
-!    use iso_c_binding,      only: c_int, c_bool, c_double, c_ptr, c_loc
-
-!    interface
-!      subroutine prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-!                                               elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-!                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-!                                               elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
-!        use iso_c_binding, only: c_ptr
-!        !
-!        ! Inputs
-!        !
-!        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-!                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-!                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-!                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-!                                    elem_derived_dpdiss_biharmonic_ptr
-!      end subroutine prim_advance_exp_pull_data_c
-
-!      subroutine prim_advance_exp_c(dt, compute_diagnostics) bind(c)
-!        use iso_c_binding, only: c_bool, c_double
-!        !
-!        ! Inputs
-!        !
-!        real    (kind=c_double), intent(in) :: dt
-!        logical (kind=c_bool),   intent(in) :: compute_diagnostics
-!      end subroutine prim_advance_exp_c
-
-!      subroutine prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-!                                                  elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-!                                                  elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-!                                                  elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
-!        use iso_c_binding, only: c_ptr
-!        !
-!        ! Inputs
-!        !
-!        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-!                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-!                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-!                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-!                                    elem_derived_dpdiss_biharmonic_ptr
-!      end subroutine prim_advance_exp_push_results_c
-!    end interface
-!#endif
     !
     ! Inputs/Outputs
     !
@@ -1656,13 +1606,6 @@ contains
 
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
-!#ifdef USE_KOKKOS_KERNELS
-!    type (c_ptr) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-!                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-!                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-!                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-!                    elem_derived_dpdiss_biharmonic_ptr
-!#endif
 
     !call t_startf("prim_step_init")
     dt_q = dt*qsplit
@@ -1720,27 +1663,6 @@ contains
     n_Q = tl%n0  ! n_Q = timelevel of FV tracers at time t.  need to save this
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
-!#ifdef USE_KOKKOS_KERNELS
-!    elem_state_v_ptr                   = c_loc(elem_state_v)
-!    elem_state_t_ptr                   = c_loc(elem_state_temp)
-!    elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
-!    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-!    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-!    elem_derived_phi_ptr               = c_loc(elem_derived_phi)
-!    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-!    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
-!    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
-!    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-!    call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-!                                       elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-!                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-!                                       elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
-!    call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
-!    call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-!                                          elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-!                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-!                                          elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
-!#else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
     do n=2,qsplit
@@ -1749,7 +1671,6 @@ contains
             hybrid, dt, tl, nets, nete, .false.)
        ! defer final timelevel update until after Q update.
     enddo
-!#endif
 
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
