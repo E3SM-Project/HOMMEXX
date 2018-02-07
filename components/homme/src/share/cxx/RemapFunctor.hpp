@@ -738,9 +738,6 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
   Control m_data;
   const Elements m_elements;
 
-  // Surface pressure
-  ExecViewManaged<Real * [NP][NP]> m_ps_v;
-
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
 
   ExecViewManaged<bool *> valid_layer_thickness;
@@ -750,25 +747,13 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
   explicit RemapFunctor(const Control &data, const Elements &elements)
       : _RemapFunctorRSplit<nonzero_rsplit>(data.num_elems), m_data(data),
-        m_elements(elements), m_ps_v("Surface pressure", data.num_elems),
+        m_elements(elements),
         m_tgt_layer_thickness("Target Layer Thickness", data.num_elems),
         valid_layer_thickness(
             "Check for whether the surface thicknesses are positive",
             data.num_elems),
         host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
         m_remap(data) {}
-
-  // fort_ps_v is of type Real [NUM_ELEMS][NUM_TIME_LEVELS][NP][NP]
-  // This method only updates the np1 timelevel
-  void update_fortran_ps_v(Real *fort_ps_v_ptr) {
-    assert(fort_ps_v_ptr != nullptr);
-    HostViewUnmanaged<Real * [NUM_TIME_LEVELS][NP][NP]> fort_ps_v(
-        fort_ps_v_ptr, m_data.num_elems);
-    for (int ie = 0; ie < m_data.num_elems; ++ie) {
-      Kokkos::deep_copy(Homme::subview(fort_ps_v, ie, m_data.np1),
-                        Homme::subview(m_ps_v, ie));
-    }
-  }
 
   void input_valid_assert() {
     Kokkos::deep_copy(host_valid_input, valid_layer_thickness);
@@ -842,7 +827,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
                      []() { TRACE_PRINT("computing thickness\n"); });
     }
     compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
-                 Homme::subview(m_ps_v, kv.ie));
+                 Homme::subview(m_elements.m_ps_v, kv.ie, m_data.np1));
 
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness =
         compute_target_thickness(kv);
@@ -1047,14 +1032,14 @@ private:
           TRACE_PRINT(
               "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid ai: % .17e, "
               "hybrid bi: % .17e\n",
-              ilevel, ilev, vec_lev, m_data.ps0, m_ps_v(kv.ie, igp, jgp),
+              ilevel, ilev, vec_lev, m_data.ps0, m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp),
               m_data.hybrid_ai(ilevel), m_data.hybrid_bi(ilevel));
         }
         tgt_layer_thickness(igp, jgp, ilev)[vec_lev] =
             (m_data.hybrid_ai(ilevel + 1) - m_data.hybrid_ai(ilevel)) *
                 m_data.ps0 +
             (m_data.hybrid_bi(ilevel + 1) - m_data.hybrid_bi(ilevel)) *
-                m_ps_v(kv.ie, igp, jgp);
+                m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp);
       });
     });
     kv.team_barrier();
