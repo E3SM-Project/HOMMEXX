@@ -4,9 +4,9 @@
 
 program prim_main
 #ifdef _PRIM
-  use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize, prim_run_subcycle
+  use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize
 #ifndef USE_KOKKOS_KERNELS
-  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run
+  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run, prim_run_subcycle
 #endif
   use hybvcoord_mod,    only: hvcoord_t, hvcoord_init
 #endif
@@ -19,6 +19,9 @@ program prim_main
   use time_mod,         only: tstep, nendstep, timelevel_t, TimeLevel_init
   use dimensions_mod,   only: nelemd, qsize, ntrac
   use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type
+#ifdef USE_KOKKOS_KERNELS
+  use control_mod,      only: qsplit, rsplit
+#endif
   use domain_mod,       only: domain1d_t, decompose
   use element_mod,      only: element_t
   use fvm_mod,          only: fvm_init3
@@ -32,7 +35,9 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
-  use iso_c_binding,       only: c_ptr, c_loc
+  use element_mod,         only: elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                 elem_state_Qdp, elem_state_ps_v
+  use iso_c_binding,       only: c_ptr, c_loc, c_int
 #endif
 
 #ifdef _REFSOLN
@@ -52,9 +57,6 @@ program prim_main
     subroutine initialize_hommexx_session() bind(c)
     end subroutine initialize_hommexx_session
 
-    subroutine finalize_hommexx_session() bind(c)
-    end subroutine finalize_hommexx_session
-
     subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
       use iso_c_binding , only : c_ptr, c_double
       !
@@ -72,6 +74,29 @@ program prim_main
       !
       integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
     end subroutine init_time_level_c
+
+    subroutine prim_run_subcycle_c(nets,nete,tstep,nstep,nm1,n0,np1) bind(c)
+      use iso_c_binding, only: c_int, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: nets, nete, nstep, nm1, n0, np1
+      real (kind=c_double), intent(in) :: tstep
+    end subroutine prim_run_subcycle_c
+
+
+    subroutine cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
+      use iso_c_binding , only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+      type (c_ptr),          intent(in) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    end subroutine cxx_push_results_to_f90
+
+    subroutine finalize_hommexx_session() bind(c)
+    end subroutine finalize_hommexx_session
   end interface
 #endif
 
@@ -86,6 +111,9 @@ program prim_main
 
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
+  type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+  type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+  integer (kind=c_int) :: nstep_c, nm1_c, n0_c, np1_c
 #endif
 
   real*8 timeit, et, st
@@ -295,7 +323,15 @@ program prim_main
      do while(tl%nstep<nstep)
         call t_startf('prim_run')
         if (tstep_type>0) then  ! forward in time subcycled methods
-           call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
+#ifdef USE_KOKKOS_KERNELS
+          call prim_run_subcycle_c(nets,nete,tstep,nstep_c,nm1_c,n0_c,np1_c)
+          tl%nstep = nstep_c
+          tl%nm1   = nm1_c
+          tl%n0    = n0_c
+          tl%np1   = np1_c
+#else
+          call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
+#endif
         else  ! leapfrog
 #ifdef USE_KOKKOS_KERNELS
            call abortmp ("Error! Functionality not available in Kokkos build")
@@ -315,6 +351,16 @@ program prim_main
      nets=1
      nete=nelemd
 
+#ifdef USE_KOKKOS_KERNELS
+    !TODO: push results only if it is output step (need to add a query subroutine to interp_movie_mod)
+    elem_state_v_ptr    = c_loc(elem_state_v)
+    elem_state_temp_ptr = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr)
+#endif
 
 #ifdef PIO_INTERP
      if (ntrac>0) call fvm_init3(elem,fvm,hybrid,nets,nete,n0_fvm)
