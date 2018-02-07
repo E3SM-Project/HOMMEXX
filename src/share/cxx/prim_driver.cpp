@@ -38,8 +38,12 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   bool compute_diagnostics = false;
   bool compute_energy      = params.energy_fixer;
   if (nstep_end%params.state_frequency==0 || nstep_end==tl.nstep0) {
-    compute_diagnostics = true;
-    compute_energy      = true;
+#ifndef NDEBUG
+    std::cout << "WARNING! You need to implement something at line " << __LINE__ << " of file " << __FILE__ << "\n";
+#endif
+    // TODO: uncomment these lines, and implement diagnostics stuff
+    //compute_diagnostics = true;
+    //compute_energy      = true;
   }
 
   if (params.disable_diagnostics) {
