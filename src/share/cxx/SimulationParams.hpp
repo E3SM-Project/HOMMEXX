@@ -42,8 +42,9 @@ struct SimulationParams
   bool      use_semi_lagrangian_transport;
 
   double    nu;
-  double    nu_s;
   double    nu_p;
+  double    nu_q;
+  double    nu_s;
   double    nu_top;
   double    nu_div;
   int       hypervis_order;

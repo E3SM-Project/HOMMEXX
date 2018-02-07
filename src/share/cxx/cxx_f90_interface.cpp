@@ -5,9 +5,6 @@
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "HommexxEnums.hpp"
-#include "CaarFunctor.hpp"
-#include "EulerStepFunctor.hpp"
-#include "RemapFunctor.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
 #include "ErrorDefs.hpp"
@@ -25,7 +22,7 @@ extern "C"
 void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
                                const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
                                const int& qsize, const int& state_frequency,
-                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div, const Real& nu_top,
+                               const Real& nu, const Real& nu_p, const Real& nu_q, const Real& nu_s, const Real& nu_div, const Real& nu_top,
                                const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
                                const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
 {
@@ -51,6 +48,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.qsize                         = qsize;
   params.nu                            = nu;
   params.nu_p                          = nu_p;
+  params.nu_q                          = nu_q;
   params.nu_s                          = nu_s;
   params.nu_div                        = nu_div;
   params.nu_top                        = nu_top;
@@ -76,12 +74,18 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Set some parameters in the Control structure already
   Control& data = Context::singleton().get_control();
+  data.limiter_option = params.limiter_option;
   data.rsplit = params.rsplit;
   data.nu     = params.nu;
   data.nu_s   = params.nu_s;
   data.nu_p   = params.nu_p;
+  data.nu_q   = params.nu_q;
   data.nu_top = params.nu_top;
   data.hypervis_scaling = params.hypervis_scaling;
+  data.qsize  = params.qsize;
+
+
+std::cout << "INIT: nu_q = " << nu_q << "\n";
 }
 
 void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
@@ -110,31 +114,6 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
 
   sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,data.num_elems));
-}
-
-void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
-                          const Real &dt, const int &np1_qdp,
-                          const double &nu_p, const double &nu_q,
-                          const int &limiter_option) {
-  Control &control = Context::singleton().get_control();
-
-  // Adjust indices
-  control.nets = nets - 1;
-  control.nete = nete; // F90 ranges are closed, c ranges are open on the right,
-                       // so this can stay the same
-  control.np1_qdp = np1_qdp - 1;
-
-  control.rhs_viss = 0;
-  control.nu_p = nu_p;
-  control.nu_q = nu_q;
-  control.limiter_option = limiter_option;
-
-  control.qsize = qsize;
-  control.dt = dt;
-}
-
-void euler_precompute_divdp_c() {
-  EulerStepFunctor::precompute_divdp_c();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
