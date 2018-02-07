@@ -17,17 +17,12 @@ void apply_test_forcing ();
 
 extern "C" {
 
-void prim_run_subcycle_c (const int& nets, const int& nete, const Real& dt,
-                          int& nstep, int& nm1, int& n0, int& np1)
+void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1)
 {
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);
-
-  // Set elements range info in the control
-  data.nets = nets-1;
-  data.nete = nete-1;
 
   // Get time info and compute dt for tracers and remap
   TimeLevel& tl = Context::singleton().get_time_level();
