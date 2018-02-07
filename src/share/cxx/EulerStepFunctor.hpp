@@ -9,6 +9,7 @@
 #include "vector/VectorUtils.hpp"
 #include "ErrorDefs.hpp"
 #include "BoundaryExchange.hpp"
+#include "profiling.hpp"
 
 namespace Homme {
 
