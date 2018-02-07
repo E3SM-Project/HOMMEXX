@@ -17,89 +17,11 @@ void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange&
                        Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre,
                        Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange>& policy_post);
 void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
-void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
-                            const Real dt, const bool compute_diagnostics);
 
 // -------------- IMPLEMENTATIONS -------------- //
 
-extern "C"
-{
-
-void prim_advance_exp_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                                   CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
-                                   CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                                   CF90Ptr& elem_derived_dpdiss_ave_ptr, CF90Ptr& elem_derived_dpdiss_biharmonic_ptr)
-{
-  // Get elements and control structures
-  Elements& elements = Context::singleton().get_elements();
-  Control& control = Context::singleton().get_control ();
-
-  // Push data from Fortran pointers to C++ views
-  elements.pull_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
-  elements.pull_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
-  elements.pull_eta_dot(elem_derived_eta_dot_dpdn_ptr);
-  elements.pull_qdp(elem_state_Qdp_ptr);
-
-  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
-  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
-
-  sync_to_device(dpdiss_ave_f90       , elements.m_derived_dpdiss_ave       );
-  sync_to_device(dpdiss_biharmonic_f90, elements.m_derived_dpdiss_biharmonic);
-}
-
-void prim_advance_exp_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                                      F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
-                                      F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr,
-                                      F90Ptr& elem_derived_dpdiss_ave_ptr, F90Ptr& elem_derived_dpdiss_biharmonic_ptr)
-{
-  // Get elements and control structures
-  Elements& elements = Context::singleton().get_elements();
-  Control& control = Context::singleton().get_control ();
-
-  // Push data from C++ views to Fortran pointers
-  elements.push_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
-  elements.push_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
-  elements.push_eta_dot(elem_derived_eta_dot_dpdn_ptr);
-  elements.push_qdp(elem_state_Qdp_ptr);
-
-  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
-  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
-
-  sync_to_host(elements.m_derived_dpdiss_ave,        dpdiss_ave_f90);
-  sync_to_host(elements.m_derived_dpdiss_biharmonic, dpdiss_biharmonic_f90);
-}
-
-void prim_advance_exp_c(const Real& dt, const bool& compute_diagnostics)
-{
-  // Get simulation params
-  SimulationParams& params = Context::singleton().get_simulation_params();
-
-  // Sanity check
-  assert(params.params_set);
-
-  // Get time level info
-  TimeLevel& tl = Context::singleton().get_time_level();
-
-  prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
-  tl.tevolve += dt;
-  for (int iter=1; iter<params.qsplit; ++iter) {
-    // Update time levels
-    tl.update_dynamics_levels(UpdateType::LEAPFROG);
-
-    prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,false);
-    tl.tevolve += dt;
-  }
-  // Note: Fortran comment says "the last time level update is deferred till after Q update"
-  //       Since I don't knokw exactly when that is, I put a hook in the TimeLevel_update
-  //       subroutine in Fortran for a c function that updates the C++ TimeLevel structure.
-  //       This way, I don't have to worry where that update is. After all, soon enough we
-  //       will convert to C that part too (wherever it is), so this is just temporary.
-}
-
-} // extern "C"
-
-void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
-                            const Real dt, const bool compute_diagnostics)
+void prim_advance_exp (const int nm1, const int n0, const int np1,
+                       const Real dt, const bool compute_diagnostics)
 {
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
