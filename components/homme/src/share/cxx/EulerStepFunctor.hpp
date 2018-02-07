@@ -62,8 +62,7 @@ public:
     profiling_resume();
     GPTLstart("esf-bih-post run");
 
-    Control &c = Context::singleton().get_control();
-    assert(c.rhs_multiplier == 2);
+    assert(m_data.rhs_multiplier == 2);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
                              m_data.num_elems * m_data.qsize),
