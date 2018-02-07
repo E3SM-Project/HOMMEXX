@@ -329,9 +329,9 @@ program prim_main
           endif
           call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c)
           tl%nstep = nstep_c
-          tl%nm1   = nm1_c
-          tl%n0    = n0_c
-          tl%np1   = np1_c
+          tl%nm1   = nm1_c + 1
+          tl%n0    = n0_c  + 1
+          tl%np1   = np1_c + 1
 #else
           call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
 #endif
@@ -355,14 +355,13 @@ program prim_main
      nete=nelemd
 
 #ifdef USE_KOKKOS_KERNELS
-    !TODO: push results only if it is output step (need to add a query subroutine to interp_movie_mod)
-    elem_state_v_ptr    = c_loc(elem_state_v)
-    elem_state_temp_ptr = c_loc(elem_state_temp)
-    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
-    elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
-    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
-    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
-                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr)
+     elem_state_v_ptr         = c_loc(elem_state_v)
+     elem_state_temp_ptr      = c_loc(elem_state_temp)
+     elem_state_dp3d_ptr      = c_loc(elem_state_dp3d)
+     elem_state_Qdp_ptr       = c_loc(elem_state_Qdp)
+     elem_state_ps_v_ptr      = c_loc(elem_state_ps_v)
+     call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                  elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 #endif
 
 #ifdef PIO_INTERP
