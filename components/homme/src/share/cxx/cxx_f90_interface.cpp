@@ -103,11 +103,11 @@ void init_control_c (const int& nets, const int& nete, const int& num_elems)
 }
 
 void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const int& rsplit)
+                          const int& n0_qdp, const int& rsplit)
 {
   Control& control = Context::singleton().get_control ();
 
-  control.init(nets, nete, num_elems, qn0, rsplit);
+  control.init(nets, nete, num_elems, n0_qdp, rsplit);
 }
 
 void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
@@ -402,7 +402,7 @@ void vertical_remap_c(const int &remap_alg, const int &np1, const int &np1_qdp,
 
   Control &sim_state = Context::singleton().get_control();
   sim_state.np1 = np1;
-  sim_state.qn0 = np1_qdp;
+  sim_state.n0_qdp = np1_qdp;
   sim_state.dt = dt;
   const auto rsplit = sim_state.rsplit;
   if (remap_alg == PpmFixed::fortran_remap_alg) {

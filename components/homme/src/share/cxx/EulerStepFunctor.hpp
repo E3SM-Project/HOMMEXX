@@ -300,7 +300,7 @@ public:
                   state.rhs_multiplier * state.dt *
                       elems.m_derived_divdp_proj(ie, igp, jgp, lev);
 
-      Scalar tmp = elems.m_qdp(ie, state.qn0, q, igp, jgp, lev) / dp;
+      Scalar tmp = elems.m_qdp(ie, state.n0_qdp, q, igp, jgp, lev) / dp;
       elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
     });
     ExecSpace::fence();
@@ -578,7 +578,7 @@ private:
         const int jgp = loop_idx % NP;
 
         const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-          qdp   = Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, kv.iq);
+          qdp   = Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
         const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
           q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
         const ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>

@@ -53,11 +53,11 @@ void Control::init_hvcoord(const Real ps0_in,
 }
 
 void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
-                   const int qn0_in, const int rsplit_in) {
+                   const int n0_qdp_in, const int rsplit_in) {
   nets = nets_in;
   nete = nete_in;
   num_elems = num_elems_in;
-  qn0 = qn0_in;
+  n0_qdp = n0_qdp_in;
   rsplit = rsplit_in;
 }
 

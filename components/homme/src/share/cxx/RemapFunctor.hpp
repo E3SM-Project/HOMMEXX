@@ -10,6 +10,7 @@
 
 #include "Control.hpp"
 #include "Elements.hpp"
+#include "KernelVariables.hpp"
 #include "Types.hpp"
 
 #include "profiling.hpp"
@@ -818,7 +819,7 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
 
     for (int q = 0; q < m_data.qsize; ++q) {
       remap_vals[prev_filled + q] =
-          Homme::subview(m_elements.m_qdp, kv.ie, m_data.qn0, q);
+          Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, q);
     }
     return m_data.qsize;
   }

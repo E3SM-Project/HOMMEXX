@@ -111,10 +111,10 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
 
   // Get time level info, and determine the tracers time level
   TimeLevel& tl = Context::singleton().get_time_level();
-  data.qn0 = -1;
+  data.n0_qdp= -1;
   if (params.moisture == MoistDry::MOIST) {
     tl.update_tracers_levels(params.qsplit);
-    data.qn0 = tl.n0_qdp;
+    data.n0_qdp = tl.n0_qdp;
   }
 
   // Set eta_ave_w
