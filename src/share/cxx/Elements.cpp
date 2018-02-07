@@ -40,6 +40,10 @@ void Elements::init(const int num_elems, const bool rsplit0) {
   m_dp3d = ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]>(
       "DP3D", m_num_elems);
 
+  m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
+  m_lnps = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("LNPS", m_num_elems);
+
+  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("q", m_num_elems);
   m_qdp =
       ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
           "qdp", m_num_elems);
@@ -270,7 +274,7 @@ void Elements::pull_from_f90_pointers(
   pull_qdp(state_qdp);
 }
 
-void Elements::pull_3d(CF90Ptr &derived_phi, 
+void Elements::pull_3d(CF90Ptr &derived_phi,
                        CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
@@ -395,7 +399,7 @@ void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
   push_qdp(state_qdp);
 }
 
-void Elements::push_3d(F90Ptr &derived_phi, 
+void Elements::push_3d(F90Ptr &derived_phi,
                        F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
   ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>::HostMirror h_omega_p =
       Kokkos::create_mirror_view(m_omega_p);
