@@ -75,12 +75,12 @@ program prim_main
       integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
     end subroutine init_time_level_c
 
-    subroutine prim_run_subcycle_c(nets,nete,tstep,nstep,nm1,n0,np1) bind(c)
+    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1) bind(c)
       use iso_c_binding, only: c_int, c_double
       !
       ! Inputs
       !
-      integer(kind=c_int),  intent(in) :: nets, nete, nstep, nm1, n0, np1
+      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1
       real (kind=c_double), intent(in) :: tstep
     end subroutine prim_run_subcycle_c
 
@@ -324,7 +324,10 @@ program prim_main
         call t_startf('prim_run')
         if (tstep_type>0) then  ! forward in time subcycled methods
 #ifdef USE_KOKKOS_KERNELS
-          call prim_run_subcycle_c(nets,nete,tstep,nstep_c,nm1_c,n0_c,np1_c)
+          if (nets/=1 .or. nete/=nelemd) then
+            call abortmp ("We don't allow to call C routines from a horizontally threaded region")
+          endif
+          call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c)
           tl%nstep = nstep_c
           tl%nm1   = nm1_c
           tl%n0    = n0_c
