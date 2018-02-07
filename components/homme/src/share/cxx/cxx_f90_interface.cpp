@@ -91,17 +91,6 @@ void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_p
   data.init_hvcoord(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
 }
 
-void init_control_c (const int& nets, const int& nete, const int& num_elems)
-{
-  // Setting elements count in the control once and for all
-  Control& control = Context::singleton().get_control ();
-
-  control.nets      = nets-1;
-  control.nete      = nete;       // F90 ranges are closed, c ranges are open on the right, so this can stay the same
-  control.num_elems = num_elems;
-
-}
-
 void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp_ptr, F90Ptr& elem_state_dp3d_ptr,
                              F90Ptr& elem_state_Qdp_ptr, F90Ptr& elem_state_ps_v_ptr)
 {
@@ -176,11 +165,8 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
                          CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
 {
-  // Get the simulation params struct
-  SimulationParams& params = Context::singleton().get_simulation_params();
-
   Elements& r = Context::singleton().get_elements ();
-  r.init (num_elems, params.rsplit == 0);
+  r.init (num_elems);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
 
   // We also set nets, nete and num_elems in the Control
