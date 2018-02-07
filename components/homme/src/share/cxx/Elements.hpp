@@ -26,7 +26,7 @@ public:
   ExecViewManaged<Real * [2][2][NP][NP]> m_d;
   ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
 
-  // Omega is the 'pressure vertical velocity' in papers, 
+  // Omega is the 'pressure vertical velocity' in papers,
   // but omega=Dp/Dt  (not really vertical velocity).
   // In homme omega is scaled, derived%omega_p=(1/p)*(Dp/Dt)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
@@ -42,10 +42,14 @@ public:
   // dp ( it is dp/d\eta * delta(eta)), or pseudodensity
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
+  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
+  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_lnps;
+
   // q is tracer ratio, qdp is tracer mass
+  ExecViewManaged<Scalar *                    [QSIZE_D][NP][NP][NUM_LEV]> m_Q;
   ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
   // eta=$\eta$ is the vertical coordinate
-  // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$ 
+  // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
@@ -55,9 +59,9 @@ public:
     m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
     m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
 
-  //buffer views are temporaries that matter only during local RK steps 
+  //buffer views are temporaries that matter only during local RK steps
   //(dynamics and tracers time step).
-  //m_ views are also used outside of local timesteps. 
+  //m_ views are also used outside of local timesteps.
   struct BufferViews {
 
     BufferViews() = default;
@@ -103,8 +107,8 @@ public:
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_3;
 
     // Buffers for vertical advection terms in V and T for case
-    // of Eulerian advection, rsplit=0. These buffers are used in both 
-    // cases, rsplit>0 and =0. Some of these values need to be init-ed 
+    // of Eulerian advection, rsplit=0. These buffers are used in both
+    // cases, rsplit>0 and =0. Some of these values need to be init-ed
     // to zero at the beginning of each RK stage. Right now there is a code
     // for this, since Elements is a singleton.
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
@@ -134,7 +138,7 @@ public:
                               CF90Ptr &derived_omega_p,
                               CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn,
                               CF90Ptr &state_qdp);
-  void pull_3d(CF90Ptr &derived_phi, 
+  void pull_3d(CF90Ptr &derived_phi,
                CF90Ptr &derived_omega_p, CF90Ptr &derived_v);
   void pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d);
   void pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn);
@@ -142,11 +146,11 @@ public:
 
   // Push the results from the exec space views to the F90 pointers
   void push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp,
-                            F90Ptr &derived_phi, 
+                            F90Ptr &derived_phi,
                             F90Ptr &derived_omega_p, F90Ptr &derived_v,
                             F90Ptr &derived_eta_dot_dpdn,
                             F90Ptr &state_qdp) const;
-  void push_3d(F90Ptr &derived_phi, 
+  void push_3d(F90Ptr &derived_phi,
                F90Ptr &derived_omega_p, F90Ptr &derived_v) const;
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
