@@ -92,7 +92,8 @@ void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_p
 }
 
 void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp_ptr, F90Ptr& elem_state_dp3d_ptr,
-                             F90Ptr& elem_state_Qdp_ptr, F90Ptr& elem_state_ps_v_ptr)
+                             F90Ptr& elem_state_Qdp_ptr, F90Ptr& elem_state_ps_v_ptr,
+                             F90Ptr& elem_derived_omega_p_ptr)
 {
   Elements& elements = Context::singleton().get_elements ();
   elements.push_4d(elem_state_v_ptr,elem_state_temp_ptr,elem_state_dp3d_ptr);
@@ -107,6 +108,8 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
 
   Kokkos::deep_copy(ps_v_host,elements.m_ps_v);
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
+
+  sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,data.num_elems));
 }
 
 void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
