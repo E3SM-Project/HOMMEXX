@@ -22,6 +22,8 @@ void Control::init_hvcoord(const Real ps0_in,
   //hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient B_midpoints");
 
+  hybrid_ai_delta = ExecViewManaged<Scalar[NUM_LEV]>("Difference in Hybrid a coordinates between consecutive interfaces");
+  hybrid_bi_delta = ExecViewManaged<Scalar[NUM_LEV]>("Difference in Hybrid b coordinates between consecutive interfaces");
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_am(hybrid_am_ptr);
   //HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> host_hybrid_bm(hybrid_bm_ptr);
   HostViewUnmanaged<const Real[NUM_INTERFACE_LEV]> host_hybrid_ai(hybrid_ai_ptr);
@@ -38,15 +40,23 @@ void Control::init_hvcoord(const Real ps0_in,
 //  assert(hybrid_ai_ptr != nullptr);
 //  assert(hybrid_bi_ptr != nullptr);
 
+  decltype(hybrid_ai_delta)::HostMirror host_hybrid_ai_delta = Kokkos::create_mirror_view(hybrid_ai_delta);
+  decltype(hybrid_bi_delta)::HostMirror host_hybrid_bi_delta = Kokkos::create_mirror_view(hybrid_bi_delta);
+  for (int level=0;level<NUM_PHYSICAL_LEV; ++level) {
+    const int ilev = level / VECTOR_SIZE;
+    const int ivec = level % VECTOR_SIZE;
+
+    host_hybrid_ai_delta(ilev)[ivec] = host_hybrid_ai(level+1) - host_hybrid_ai(level);
+    host_hybrid_bi_delta(ilev)[ivec] = host_hybrid_bi(level+1) - host_hybrid_bi(level);
+  }
+  Kokkos::deep_copy(hybrid_ai_delta,host_hybrid_ai_delta);
+  Kokkos::deep_copy(hybrid_bi_delta,host_hybrid_bi_delta);
   {
     dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
     const auto hdp0 = Kokkos::create_mirror_view(dp0);
-    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
-      const int ilev = k / VECTOR_SIZE;
-      const int ivec = k % VECTOR_SIZE;
+    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
       // BFB way of writing it.
-      hdp0(ilev)[ivec] = ((hybrid_ai_ptr[k+1] - hybrid_ai_ptr[k])*ps0 +
-                          (hybrid_bi_ptr[k+1] - hybrid_bi_ptr[k])*ps0);
+      hdp0(ilev) = hybrid_ai_delta[ilev]*ps0 + hybrid_bi_delta[ilev]*ps0;
     }
     Kokkos::deep_copy(dp0, hdp0);
   }

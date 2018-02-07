@@ -86,8 +86,10 @@ struct Control {
   Real hybrid_ai0;
   // hybrid ai
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
+  ExecViewManaged<Scalar[NUM_LEV]> hybrid_ai_delta;
   // hybrid bi
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
+  ExecViewManaged<Scalar[NUM_LEV]> hybrid_bi_delta;
   ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 
