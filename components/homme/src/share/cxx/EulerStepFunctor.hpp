@@ -430,13 +430,7 @@ public:
     be_qdp_dss_var->exchange();
   }
 
-  static void euler_step(const int &n0_qdp,
-                         const Control::DSSOption::Enum &DSSopt,
-                         const int &rhs_multiplier) {
-    Control &data = Context::singleton().get_control();
-    data.DSSopt = DSSopt;
-    data.rhs_multiplier = rhs_multiplier;
-    data.qn0 = n0_qdp - 1;
+  static void euler_step(const Control& data) {
     if (data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
@@ -475,11 +469,11 @@ public:
       // euler_qmin_qmax_c()
       compute_qmin_qmax();
 
-      if (rhs_multiplier == 0) {
+      if (data.rhs_multiplier == 0) {
         GPTLstart("eus_neighbor_minmax1");
         neighbor_minmax(data);
         GPTLstop("eus_neighbor_minmax1");
-      } else if (rhs_multiplier == 2) {
+      } else if (data.rhs_multiplier == 2) {
         functor.minmax_and_biharmonic();
       }
       GPTLstop("bihmix_qminmax");
