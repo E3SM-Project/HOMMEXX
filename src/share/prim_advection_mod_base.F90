@@ -87,9 +87,10 @@ module prim_advection_mod_base
   save
 
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
+#ifndef USE_KOKKOS_KERNELS
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
-  public :: prim_advec_tracers_fvm
-  public :: vertical_remap_interface
+  public :: prim_advec_tracers_fvm, vertical_remap_interface
+#endif
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
   type (ghostBuffer3D_t)   :: ghostbuf_tr
@@ -103,39 +104,39 @@ module prim_advection_mod_base
 
   type (derivative_t), public, allocatable   :: deriv(:) ! derivative struct (nthreads)
 
-  interface
-    subroutine euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: qmin_ptr, qmax_ptr
-    end subroutine euler_pull_qmin_qmax_c
-    subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-         elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-           elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-           elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-           elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
-    end subroutine euler_pull_data_c
-    subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
-      use iso_c_binding, only : c_ptr
-      !
-      ! Inputs
-      !
-      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-           elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
-    end subroutine euler_push_results_c
-    subroutine euler_exchange_qdp_dss_var_c() bind(c)
-    end subroutine euler_exchange_qdp_dss_var_c
-  end interface
+!  interface
+!    subroutine euler_pull_qmin_qmax_c(qmin_ptr, qmax_ptr) bind(c)
+!      use iso_c_binding, only : c_ptr
+!      !
+!      ! Inputs
+!      !
+!      type (c_ptr), intent(in) :: qmin_ptr, qmax_ptr
+!    end subroutine euler_pull_qmin_qmax_c
+!    subroutine euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+!         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+!         elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr) bind(c)
+!      use iso_c_binding, only : c_ptr
+!      !
+!      ! Inputs
+!      !
+!      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!           elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+!           elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+!           elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
+!    end subroutine euler_pull_data_c
+!    subroutine euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr) bind(c)
+!      use iso_c_binding, only : c_ptr
+!      !
+!      ! Inputs
+!      !
+!      type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!           elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
+!    end subroutine euler_push_results_c
+!    subroutine euler_exchange_qdp_dss_var_c() bind(c)
+!    end subroutine euler_exchange_qdp_dss_var_c
+!  end interface
 
 contains
 
@@ -491,7 +492,7 @@ contains
 
 
 !=================================================================================================!
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine Prim_Advec_Tracers_remap( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
     use control_mod   , only : use_semi_lagrange_transport
     implicit none
@@ -1426,30 +1427,30 @@ end subroutine ALE_parametric_coords
     use control_mod   , only : vert_remap_q_alg, qsplit
     implicit none
 
-    interface
-       subroutine init_control_euler_c (nets, nete, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
-         use iso_c_binding, only : c_int, c_double
-         !
-         ! Inputs
-         !
-         integer (kind=c_int),  intent(in) :: nets, nete, qsize, np1_qdp, limiter_option
-         real (kind=c_double), intent(in) :: dt, nu_p, nu_q
-       end subroutine init_control_euler_c
-       subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
-         use iso_c_binding, only : c_int
-         !
-         ! Inputs
-         !
-         integer (kind=c_int),  intent(in) :: qsize
-       end subroutine init_euler_neighbor_minmax_c
-       subroutine euler_step_c (n0_qdp, DSSopt, rhs_multiplier) bind(c)
-         use iso_c_binding, only : c_int
-         !
-         ! Inputs
-         !
-         integer (kind=c_int),  intent(in) :: n0_qdp, DSSopt, rhs_multiplier
-       end subroutine euler_step_c
-    end interface
+    !interface
+    !   subroutine init_control_euler_c (nets, nete, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
+    !     use iso_c_binding, only : c_int, c_double
+    !     !
+    !     ! Inputs
+    !     !
+    !     integer (kind=c_int),  intent(in) :: nets, nete, qsize, np1_qdp, limiter_option
+    !     real (kind=c_double), intent(in) :: dt, nu_p, nu_q
+    !   end subroutine init_control_euler_c
+    !   subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
+    !     use iso_c_binding, only : c_int
+    !     !
+    !     ! Inputs
+    !     !
+    !     integer (kind=c_int),  intent(in) :: qsize
+    !   end subroutine init_euler_neighbor_minmax_c
+    !   subroutine euler_step_c (n0_qdp, DSSopt, rhs_multiplier) bind(c)
+    !     use iso_c_binding, only : c_int
+    !     !
+    !     ! Inputs
+    !     !
+    !     integer (kind=c_int),  intent(in) :: n0_qdp, DSSopt, rhs_multiplier
+    !   end subroutine euler_step_c
+    !end interface
 
     type (element_t)     , intent(inout) :: elem(:)
     type (derivative_t)  , intent(in   ) :: deriv
@@ -1493,65 +1494,65 @@ end subroutine ALE_parametric_coords
     call precompute_divdp( elem , hybrid , deriv , dt , nets , nete , n0_qdp )
     call t_stopf('precomput_divdp')
 
-#ifdef USE_KOKKOS_KERNELS
-    ! Set up the boundary exchange for the minmax calls
-    call init_control_euler_c(nets, nete, qsize, &
-         dt/2, np1_qdp, nu_p, nu_q, limiter_option)
-    call init_euler_neighbor_minmax_c(qsize)
+!#ifdef USE_KOKKOS_KERNELS
+!    ! Set up the boundary exchange for the minmax calls
+!    call init_control_euler_c(nets, nete, qsize, &
+!         dt/2, np1_qdp, nu_p, nu_q, limiter_option)
+!    call init_euler_neighbor_minmax_c(qsize)
 
-    ! Bind the ptrs for the C calls
-    qmin_ptr = c_loc(qmin)
-    qmax_ptr = c_loc(qmax)
+!    ! Bind the ptrs for the C calls
+!    qmin_ptr = c_loc(qmin)
+!    qmax_ptr = c_loc(qmax)
 
-    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-    elem_derived_dp_ptr                = c_loc(elem_derived_dp)
-    elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
-    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
-    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
-    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-    elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
-    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-         elem_derived_dpdiss_ave_ptr)
-#endif
+!    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+!    elem_derived_dp_ptr                = c_loc(elem_derived_dp)
+!    elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
+!    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+!    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+!    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+!    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+!    elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
+!    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+!    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+!         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+!         elem_derived_dpdiss_ave_ptr)
+!#endif
 
     !rhs_multiplier is for obtaining dp_tracers at each stage:
     !dp_tracers(stage) = dp - rhs_multiplier*dt*divdp_proj
 
     call t_startf('euler_step_0')
     rhs_multiplier = 0
-#if defined(USE_KOKKOS_KERNELS) && 1
-    call euler_step_c(n0_qdp, DSSdiv_vdp_ave, rhs_multiplier)
-#else
+!#if defined(USE_KOKKOS_KERNELS) && 1
+!    call euler_step_c(n0_qdp, DSSdiv_vdp_ave, rhs_multiplier)
+!#else
     call euler_step( np1_qdp , n0_qdp  , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSdiv_vdp_ave , rhs_multiplier )
-#endif
+!#endif
     call t_stopf('euler_step_0')
 
     call t_startf('euler_step_1')
     rhs_multiplier = 1
-#if defined(USE_KOKKOS_KERNELS) && 1
-    call euler_step_c(np1_qdp, DSSeta, rhs_multiplier)
-#else
+!#if defined(USE_KOKKOS_KERNELS) && 1
+!    call euler_step_c(np1_qdp, DSSeta, rhs_multiplier)
+!#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSeta         , rhs_multiplier )
-#endif
+!#endif
     call t_stopf('euler_step_1')
 
     call t_startf('euler_step_2')
     rhs_multiplier = 2
-#if defined(USE_KOKKOS_KERNELS) && 1
-    call euler_step_c(np1_qdp, DSSomega, rhs_multiplier)
-#else
+!#if defined(USE_KOKKOS_KERNELS) && 1
+!    call euler_step_c(np1_qdp, DSSomega, rhs_multiplier)
+!#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSomega       , rhs_multiplier )
-#endif
+!#endif
     call t_stopf('euler_step_2')
 
-#ifdef USE_KOKKOS_KERNELS
-    call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
-#endif
+!#ifdef USE_KOKKOS_KERNELS
+!    call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+!         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
+!#endif
 
     !to finish the 2D advection step, we need to average the t and t+2 results to get a second order estimate for t+1.
     call t_startf('qdp_tavg')
@@ -1626,7 +1627,6 @@ end subroutine ALE_parametric_coords
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
 
-#ifndef USE_KOKKOS_KERNELS
   subroutine euler_step( np1_qdp , n0_qdp , dt , elem , hvcoord , hybrid , deriv , nets , nete , DSSopt , rhs_multiplier )
     ! ===================================
     ! This routine is the basic foward
@@ -1890,7 +1890,6 @@ end subroutine ALE_parametric_coords
     !pw call t_stopf('euler_step')
 
   end subroutine euler_step
-#endif ! USE_KOKKOS_KERNELS
 !-----------------------------------------------------------------------------
 
 
@@ -2079,107 +2078,107 @@ end subroutine ALE_parametric_coords
   enddo
   call t_stopf('advance_hypervis_scalar')
   end subroutine advance_hypervis_scalar
+#endif
 
-#ifdef USE_KOKKOS_KERNELS
-  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
-    use iso_c_binding,  only: c_ptr, c_loc, c_int, c_double
-    use control_mod, only: vert_remap_q_alg
-    use kinds,          only: real_kind
-    use hybvcoord_mod,  only: hvcoord_t
-    use hybrid_mod,     only: hybrid_t
+!#ifdef USE_KOKKOS_KERNELS
+!  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+!    use iso_c_binding,  only: c_ptr, c_loc, c_int, c_double
+!    use control_mod, only: vert_remap_q_alg
+!    use kinds,          only: real_kind
+!    use hybvcoord_mod,  only: hvcoord_t
+!    use hybrid_mod,     only: hybrid_t
 
-    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                elem_derived_phi,                               &
-                                elem_derived_omega_p, elem_derived_vn0,         &
-                                elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
-                                elem_state_ps_v
+!    use element_mod    , only : elem_state_v, elem_state_temp, elem_state_dp3d, &
+!                                elem_derived_phi,                               &
+!                                elem_derived_omega_p, elem_derived_vn0,         &
+!                                elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+!                                elem_state_ps_v
 
-    use fvm_control_volume_mod, only : fvm_struct
+!    use fvm_control_volume_mod, only : fvm_struct
 
-    implicit none
+!    implicit none
 
-    interface
-      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v) bind(c)
-        use iso_c_binding, only : c_int, c_double, c_ptr
-        integer (kind=c_int), intent(in) :: vert_remap_alg
-        integer (kind=c_int), intent(in) :: np1
-        integer (kind=c_int), intent(in) :: np1_qdp
-        real (kind=c_double), intent(in) :: dt
-        real (kind=c_double), intent(in) :: ps_v(:,:,:,:)
-      end subroutine vertical_remap_c
+!    interface
+!      subroutine vertical_remap_c(vert_remap_alg, np1, np1_qdp, dt, ps_v) bind(c)
+!        use iso_c_binding, only : c_int, c_double, c_ptr
+!        integer (kind=c_int), intent(in) :: vert_remap_alg
+!        integer (kind=c_int), intent(in) :: np1
+!        integer (kind=c_int), intent(in) :: np1_qdp
+!        real (kind=c_double), intent(in) :: dt
+!        real (kind=c_double), intent(in) :: ps_v(:,:,:,:)
+!      end subroutine vertical_remap_c
 
-      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                   elem_derived_phi_ptr,                                    &
-                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
-                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
-        use iso_c_binding , only : c_ptr
-        !
-        ! Inputs
-        !
-        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr
-        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
-        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-      end subroutine caar_pull_data_c
+!      subroutine caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+!                                   elem_derived_phi_ptr,                                    &
+!                                   elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+!                                   elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+!        use iso_c_binding , only : c_ptr
+!        !
+!        ! Inputs
+!        !
+!        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+!        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+!        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+!        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+!      end subroutine caar_pull_data_c
 
-      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                                      elem_derived_phi_ptr,                                    &
-                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
-                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
-        use iso_c_binding , only : c_ptr
-        !
-        ! Inputs
-        !
-        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-        type (c_ptr), intent(in) :: elem_derived_phi_ptr
-        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
-        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-      end subroutine caar_push_results_c
-    end interface
+!      subroutine caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+!                                      elem_derived_phi_ptr,                                    &
+!                                      elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+!                                      elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr) bind(c)
+!        use iso_c_binding , only : c_ptr
+!        !
+!        ! Inputs
+!        !
+!        type (c_ptr), intent(in) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+!        type (c_ptr), intent(in) :: elem_derived_phi_ptr
+!        type (c_ptr), intent(in) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+!        type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+!      end subroutine caar_push_results_c
+!    end interface
 
-    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
-    type (element_t), intent(inout)   :: elem(:)
-    type(fvm_struct), intent(inout)   :: fvm(:)
-    type (hvcoord_t), intent(in)      :: hvcoord
-    real (kind=real_kind), intent(in) :: dt
-    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+!    type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
+!    type (element_t), intent(inout)   :: elem(:)
+!    type(fvm_struct), intent(inout)   :: fvm(:)
+!    type (hvcoord_t), intent(in)      :: hvcoord
+!    real (kind=real_kind), intent(in) :: dt
+!    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
 
-    integer (kind=c_int) :: np1_c, np1_qdp_c
+!    integer (kind=c_int) :: np1_c, np1_qdp_c
 
-    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_derived_phi_ptr
-    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
-    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
-!    type (c_ptr) :: hvcoord_ai_ptr, hvcoord_bi_ptr
+!    type (c_ptr) :: elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr
+!    type (c_ptr) :: elem_derived_phi_ptr
+!    type (c_ptr) :: elem_derived_omega_p_ptr, elem_derived_vn0_ptr
+!    type (c_ptr) :: elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr
+!!    type (c_ptr) :: hvcoord_ai_ptr, hvcoord_bi_ptr
 
-    elem_state_v_ptr              = c_loc(elem_state_v)
-    elem_state_t_ptr              = c_loc(elem_state_temp)
-    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
-    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
-    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
-    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
-    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
-    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
-    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                           elem_derived_phi_ptr,                                    &
-                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
-                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+!    elem_state_v_ptr              = c_loc(elem_state_v)
+!    elem_state_t_ptr              = c_loc(elem_state_temp)
+!    elem_state_dp3d_ptr           = c_loc(elem_state_dp3d)
+!    elem_derived_phi_ptr          = c_loc(elem_derived_phi)
+!    elem_derived_omega_p_ptr      = c_loc(elem_derived_omega_p)
+!    elem_derived_vn0_ptr          = c_loc(elem_derived_vn0)
+!    elem_derived_eta_dot_dpdn_ptr = c_loc(elem_derived_eta_dot_dpdn)
+!    elem_state_Qdp_ptr            = c_loc(elem_state_Qdp)
+!    call caar_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+!                           elem_derived_phi_ptr,                                    &
+!                           elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+!                           elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
 
-    np1_c = np1 - 1
-    np1_qdp_c = np1_qdp - 1
+!    np1_c = np1 - 1
+!    np1_qdp_c = np1_qdp - 1
 
-    call t_startf('total vertical remap time')
-    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
-    call t_stopf('total vertical remap time')
+!    call t_startf('total vertical remap time')
+!    call vertical_remap_c(vert_remap_q_alg, np1_c, np1_qdp_c, dt, elem_state_ps_v)
+!    call t_stopf('total vertical remap time')
 
-    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
-                              elem_derived_phi_ptr,                                    &
-                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
-                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
-  end subroutine vertical_remap_interface
+!    call caar_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr, &
+!                              elem_derived_phi_ptr,                                    &
+!                              elem_derived_omega_p_ptr, elem_derived_vn0_ptr,          &
+!                              elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr)
+!  end subroutine vertical_remap_interface
 
-#else
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     use kinds,          only: real_kind
     use hybvcoord_mod,  only: hvcoord_t
@@ -2200,7 +2199,6 @@ end subroutine ALE_parametric_coords
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     call t_stopf('total vertical remap time')
   end subroutine vertical_remap_interface
-#endif ! USE_KOKKOS_KERNELS
 
   subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
 
@@ -2336,5 +2334,6 @@ end subroutine ALE_parametric_coords
   enddo
   call t_stopf('vertical_remap')
   end subroutine vertical_remap
+#endif
 
 end module prim_advection_mod_base

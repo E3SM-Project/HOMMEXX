@@ -3,7 +3,9 @@
 #endif
 
 module prim_advection_mod
-  use prim_advection_mod_base, only: Prim_Advec_Tracers_remap_ALE, prim_advec_tracers_fvm, vertical_remap_interface, Prim_Advec_Tracers_remap, prim_advec_init1, prim_advec_init2, &
-                                     prim_advec_init_deriv, deriv, Prim_Advec_Tracers_remap_rk2
+#ifndef USE_KOKKOS_KERNELS
+  use prim_advection_mod_base, only: Prim_Advec_Tracers_remap_ALE, prim_advec_tracers_fvm, vertical_remap_interface, Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2
+#endif
+  use prim_advection_mod_base, only: prim_advec_init1, prim_advec_init2, prim_advec_init_deriv, deriv
   implicit none
 end module prim_advection_mod

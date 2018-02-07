@@ -35,9 +35,9 @@ module prim_driver_mod
 
   private
 #ifndef USE_KOKKOS_KERNELS
-  public :: prim_run, leapfrog_bootstrap, smooth_topo_datasets
+  public :: prim_run, prim_run_subcycle, leapfrog_bootstrap, smooth_topo_datasets
 #endif
-  public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
+  public :: prim_init1, prim_init2 , prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
   type (quadrature_t)   :: gp                     ! element GLL points
@@ -583,7 +583,7 @@ contains
     use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
     use prim_state_mod,       only: prim_printstate, prim_diag_scalars
     use prim_si_ref_mod,      only: prim_si_refstate_init, prim_set_mass
-    use prim_advection_mod,   only: prim_advec_init2, prim_advec_init_deriv, deriv
+    use prim_advection_mod,   only: deriv, prim_advec_init2, prim_advec_init_deriv
     use solver_init_mod,      only: solver_init2
     use time_mod,             only: timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, smooth, nsplit, TimeLevel_Qdp
     use thread_mod,           only: nthreads
@@ -596,7 +596,9 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     use element_mod,          only: elem_D, elem_Dinv, elem_fcor,                   &
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
-                                    elem_metdet, elem_metinv, elem_state_phis
+                                    elem_metdet, elem_metinv, elem_state_phis,      &
+                                    elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                    elem_state_Qdp, elem_state_ps_v, elem_state_lnps
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
                                     vert_remap_q_alg, statefreq, use_semi_lagrange_transport
@@ -607,6 +609,62 @@ contains
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
 #endif
+
+  interface
+#ifdef TRILINOS
+    subroutine noxinit(vectorSize,vector,comm,v_container,p_container,j_container) &
+        bind(C,name='noxinit')
+    use ,intrinsic :: iso_c_binding
+      integer(c_int)                :: vectorSize,comm
+      real(c_double)  ,dimension(*) :: vector
+      type(c_ptr)                   :: v_container
+      type(c_ptr)                   :: p_container  !precon ptr
+      type(c_ptr)                   :: j_container  !analytic jacobian ptr
+    end subroutine noxinit
+#endif
+
+#ifdef USE_KOKKOS_KERNELS
+    subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
+                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
+                                         nu, nu_p, nu_s, nu_div, nu_top,                           &
+                                         hypervis_order, hypervis_subcycle, hypervis_scaling,      &
+                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
+      use iso_c_binding, only: c_int, c_bool, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
+      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
+      integer(kind=c_int),  intent(in) :: state_frequency, qsize
+      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, nu_top, hypervis_scaling
+      integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
+    end subroutine init_simulation_params_c
+    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
+                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
+      use iso_c_binding, only : c_ptr, c_int
+      !
+      ! Inputs
+      !
+      integer (kind=c_int), intent(in) :: nelemd
+      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
+      type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
+      type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
+    end subroutine init_elements_2d_c
+    subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
+                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+      type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+    end subroutine init_elements_states_c
+    subroutine init_boundary_exchanges_c () bind(c)
+    end subroutine init_boundary_exchanges_c
+#endif
+  end interface
 
     type (element_t),   intent(inout) :: elem(:)
     type (fvm_struct),  intent(inout) :: fvm(:)
@@ -646,6 +704,8 @@ contains
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
+    type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
 #endif
 
 #ifdef TRILINOS
@@ -671,51 +731,6 @@ contains
     integer :: qn0
     real (kind=real_kind) :: eta_ave_w
 
-  interface
-    subroutine noxinit(vectorSize,vector,comm,v_container,p_container,j_container) &
-        bind(C,name='noxinit')
-    use ,intrinsic :: iso_c_binding
-      integer(c_int)                :: vectorSize,comm
-      real(c_double)  ,dimension(*) :: vector
-      type(c_ptr)                   :: v_container
-      type(c_ptr)                   :: p_container  !precon ptr
-      type(c_ptr)                   :: j_container  !analytic jacobian ptr
-    end subroutine noxinit
-
-  end interface
-#endif
-
-#ifdef USE_KOKKOS_KERNELS
-  interface
-    subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
-                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
-                                         nu, nu_p, nu_s, nu_div, nu_top,                           &
-                                         hypervis_order, hypervis_subcycle, hypervis_scaling,      &
-                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
-      use iso_c_binding, only: c_int, c_bool, c_double
-      !
-      ! Inputs
-      !
-      integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
-      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
-      integer(kind=c_int),  intent(in) :: state_frequency, qsize
-      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, nu_top, hypervis_scaling
-      integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
-      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
-    end subroutine init_simulation_params_c
-    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
-                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr, c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int), intent(in) :: nelemd
-      type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
-      type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
-      type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
-    end subroutine init_elements_2d_c
-  end interface
 #endif
 
     if (topology == "cube") then
@@ -1032,19 +1047,6 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     call init_caar_derivative_c(deriv(hybrid%ithr))
 
-    elem_D_ptr            = c_loc(elem_D)
-    elem_Dinv_ptr         = c_loc(elem_Dinv)
-    elem_fcor_ptr         = c_loc(elem_fcor)
-    elem_mp_ptr           = c_loc(elem_mp)
-    elem_spheremp_ptr     = c_loc(elem_spheremp)
-    elem_rspheremp_ptr    = c_loc(elem_rspheremp)
-    elem_metdet_ptr       = c_loc(elem_metdet)
-    elem_metinv_ptr       = c_loc(elem_metinv)
-    elem_state_phis_ptr   = c_loc(elem_state_phis)
-    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
-                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
-
     call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
                                    prescribed_wind, energy_fixer, qsize, statefreq,               &
                                    nu, nu_p, nu_s, nu_div, nu_top,                                &
@@ -1052,6 +1054,29 @@ contains
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
                                    LOGICAL(use_semi_lagrange_transport,c_bool))
+
+    elem_D_ptr          = c_loc(elem_D)
+    elem_Dinv_ptr       = c_loc(elem_Dinv)
+    elem_fcor_ptr       = c_loc(elem_fcor)
+    elem_mp_ptr         = c_loc(elem_mp)
+    elem_spheremp_ptr   = c_loc(elem_spheremp)
+    elem_rspheremp_ptr  = c_loc(elem_rspheremp)
+    elem_metdet_ptr     = c_loc(elem_metdet)
+    elem_metinv_ptr     = c_loc(elem_metinv)
+    elem_state_phis_ptr = c_loc(elem_state_phis)
+    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
+                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
+                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
+    elem_state_v_ptr    = c_loc(elem_state_v)
+    elem_state_temp_ptr = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    elem_state_lnps_ptr = c_loc(elem_state_lnps)
+    call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
+                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr)
+
+    call init_boundary_exchanges_c ()
 #endif
 
   end subroutine prim_init2
@@ -1276,7 +1301,6 @@ contains
        call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
     end if
   end subroutine prim_run
-#endif
 
 !=======================================================================================================!
 
@@ -1520,8 +1544,6 @@ contains
     end if
   end subroutine prim_run_subcycle
 
-
-
   subroutine prim_step(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
   !
   !   Take qsplit dynamics steps and one tracer step
@@ -1558,56 +1580,56 @@ contains
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
-use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
-#ifdef USE_KOKKOS_KERNELS
-    use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                  elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
-                                  elem_derived_phi, elem_derived_omega_p,         &
-                                  elem_derived_vn0, elem_derived_dpdiss_ave,      &
-                                  elem_derived_dpdiss_biharmonic
-    use iso_c_binding,      only: c_int, c_bool, c_double, c_ptr, c_loc
+!use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
+!#ifdef USE_KOKKOS_KERNELS
+!    use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
+!                                  elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+!                                  elem_derived_phi, elem_derived_omega_p,         &
+!                                  elem_derived_vn0, elem_derived_dpdiss_ave,      &
+!                                  elem_derived_dpdiss_biharmonic
+!    use iso_c_binding,      only: c_int, c_bool, c_double, c_ptr, c_loc
 
-    interface
-      subroutine prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-                                               elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-                                               elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
-        use iso_c_binding, only: c_ptr
-        !
-        ! Inputs
-        !
-        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-                                    elem_derived_dpdiss_biharmonic_ptr
-      end subroutine prim_advance_exp_pull_data_c
+!    interface
+!      subroutine prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+!                                               elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+!                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+!                                               elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+!        use iso_c_binding, only: c_ptr
+!        !
+!        ! Inputs
+!        !
+!        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+!                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+!                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+!                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+!                                    elem_derived_dpdiss_biharmonic_ptr
+!      end subroutine prim_advance_exp_pull_data_c
 
-      subroutine prim_advance_exp_c(dt, compute_diagnostics) bind(c)
-        use iso_c_binding, only: c_bool, c_double
-        !
-        ! Inputs
-        !
-        real    (kind=c_double), intent(in) :: dt
-        logical (kind=c_bool),   intent(in) :: compute_diagnostics
-      end subroutine prim_advance_exp_c
+!      subroutine prim_advance_exp_c(dt, compute_diagnostics) bind(c)
+!        use iso_c_binding, only: c_bool, c_double
+!        !
+!        ! Inputs
+!        !
+!        real    (kind=c_double), intent(in) :: dt
+!        logical (kind=c_bool),   intent(in) :: compute_diagnostics
+!      end subroutine prim_advance_exp_c
 
-      subroutine prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-                                                  elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                                  elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-                                                  elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
-        use iso_c_binding, only: c_ptr
-        !
-        ! Inputs
-        !
-        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-                                    elem_derived_dpdiss_biharmonic_ptr
-      end subroutine prim_advance_exp_push_results_c
-    end interface
-#endif
+!      subroutine prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+!                                                  elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+!                                                  elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+!                                                  elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+!        use iso_c_binding, only: c_ptr
+!        !
+!        ! Inputs
+!        !
+!        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+!                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+!                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+!                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+!                                    elem_derived_dpdiss_biharmonic_ptr
+!      end subroutine prim_advance_exp_push_results_c
+!    end interface
+!#endif
     !
     ! Inputs/Outputs
     !
@@ -1634,13 +1656,13 @@ use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
 
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
-#ifdef USE_KOKKOS_KERNELS
-    type (c_ptr) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
-                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
-                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
-                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
-                    elem_derived_dpdiss_biharmonic_ptr
-#endif
+!#ifdef USE_KOKKOS_KERNELS
+!    type (c_ptr) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+!                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+!                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+!                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+!                    elem_derived_dpdiss_biharmonic_ptr
+!#endif
 
     !call t_startf("prim_step_init")
     dt_q = dt*qsplit
@@ -1698,27 +1720,27 @@ use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
     n_Q = tl%n0  ! n_Q = timelevel of FV tracers at time t.  need to save this
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
-#ifdef USE_KOKKOS_KERNELS
-    elem_state_v_ptr                   = c_loc(elem_state_v)
-    elem_state_t_ptr                   = c_loc(elem_state_temp)
-    elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
-    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-    elem_derived_phi_ptr               = c_loc(elem_derived_phi)
-    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
-    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
-    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-    call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-                                       elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-                                       elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
-    call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
-    call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
-                                          elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
-                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
-                                          elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
-#else
+!#ifdef USE_KOKKOS_KERNELS
+!    elem_state_v_ptr                   = c_loc(elem_state_v)
+!    elem_state_t_ptr                   = c_loc(elem_state_temp)
+!    elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
+!    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+!    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+!    elem_derived_phi_ptr               = c_loc(elem_derived_phi)
+!    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+!    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+!    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+!    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+!    call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+!                                       elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+!                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+!                                       elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
+!    call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
+!    call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+!                                          elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+!                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+!                                          elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
+!#else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
     do n=2,qsplit
@@ -1727,7 +1749,7 @@ use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
             hybrid, dt, tl, nets, nete, .false.)
        ! defer final timelevel update until after Q update.
     enddo
-#endif
+!#endif
 
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
@@ -1841,7 +1863,7 @@ use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
     call t_stopf("prim_step_advec")
 
   end subroutine prim_step
-
+#endif
 
 !=======================================================================================================!
 
