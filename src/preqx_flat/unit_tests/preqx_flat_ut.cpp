@@ -122,7 +122,7 @@ public:
 
     functor.m_data.init_hvcoord(ps0, hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
-                        qn0,
+                        n0_qdp,
                         0); //for rsplit
 
     functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
@@ -192,7 +192,7 @@ public:
   static constexpr int n0_f90 = n0 + 1;
   static constexpr int np1 = 2;
   static constexpr int np1_f90 = np1 + 1;
-  static constexpr int qn0 = 0;
+  static constexpr int n0_qdp = 0;
   static constexpr Real ps0 = 1.0;
   static constexpr Real dt = 1.0;
   static constexpr Real eta_ave_w = 1.0;
@@ -661,7 +661,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
                                            hybrid_ai_mirror.data(),
                                            hybrid_bm_mirror.data(),
                                            hybrid_bi_mirror.data());
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, 0);
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, 0);
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                    TestType::dt, TestType::eta_ave_w, false);
 
@@ -884,7 +884,7 @@ TEST_CASE("moist virtual temperature",
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_temperature_tracers_c_int(
-        Kokkos::subview(test_functor.qdp, ie, test_functor.qn0, 0, Kokkos::ALL,
+        Kokkos::subview(test_functor.qdp, ie, test_functor.n0_qdp, 0, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL).data(),
         Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL).data(),
@@ -1010,7 +1010,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
 //  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-//       TestType::n0, TestType::np1, TestType::qn0, TestType::dt, TestType::ps0, false,
+//       TestType::n0, TestType::np1, TestType::n0_qdp, TestType::dt, TestType::ps0, false,
 //       TestType::eta_ave_w, test_functor.return_rsplit(),
 //       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
 //       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
@@ -1020,7 +1020,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                            hybrid_ai_mirror.data(),
                                            hybrid_bm_mirror.data(),
                                            hybrid_bi_mirror.data());
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, test_functor.return_rsplit());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
 
@@ -1111,7 +1111,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                            hybrid_ai_mirror.data(),
                                            hybrid_bm_mirror.data(),
                                            hybrid_bi_mirror.data());
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::qn0, test_functor.return_rsplit());
+  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
 
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);

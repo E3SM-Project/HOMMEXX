@@ -24,7 +24,7 @@ struct Control {
 
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
-             const int qn0,  const int rsplit);
+             const int n0_qdp,  const int rsplit);
 
   void random_init(int num_elems, int seed);
 
@@ -46,7 +46,7 @@ struct Control {
 
   // Tracers timelevel, inclusive range of 0-1
   // or time level for moist temp?
-  int qn0;
+  int n0_qdp;
   int np1_qdp;
 
   // Tracers options;
