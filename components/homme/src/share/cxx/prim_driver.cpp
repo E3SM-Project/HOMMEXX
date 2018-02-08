@@ -136,10 +136,11 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
     const auto qdp = elements.m_qdp;
     const auto np1_qdp = tl.np1_qdp;
     const auto np1 = tl.np1;
+    const auto qsize = data.qsize;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
-      const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;
-      const int iq   = (((idx / NUM_LEV) / NP) / NP) % data.qsize;
+      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
+      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
       const int igp  =  ((idx / NUM_LEV) / NP) % NP;
       const int jgp  =   (idx / NUM_LEV) % NP;
       const int ilev =    idx % NUM_LEV;
