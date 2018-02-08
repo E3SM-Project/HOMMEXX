@@ -347,7 +347,6 @@ program prim_main
           tl%n0    = n0_c  + 1
           tl%np1   = np1_c + 1
           if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nstep) then
-print *, tl%nstep, nstep, statefreq, tl%nstep
             call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
                                          elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
                                          elem_derived_omega_p_ptr)
