@@ -11,7 +11,13 @@ function (HOMMEXX_set_fpmodel_flags fpmodel_string flags)
       ("${fpmodel_string_lower}" STREQUAL "fast") OR
       ("${fpmodel_string_lower}" STREQUAL "fast=1") OR
       ("${fpmodel_string_lower}" STREQUAL "fast=2"))
-    set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
+    if (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
+      set (${flags} "-fp-model ${fpmodel_string_lower}" PARENT_SCOPE)
+    elseif (CMAKE_Fortran_COMPILER_ID STREQUAL GNU)
+      if ("${fpmodel_string_lower}" STREQUAL "strict")
+        set (${flags} "-ffp-contract=off" PARENT_SCOPE)
+      endif ()
+    endif ()
   elseif ("${fpmodel_string_lower}" STREQUAL "")
     set (${flags} "" PARENT_SCOPE)
   else()
@@ -21,14 +27,12 @@ endfunction()
 
 set (FP_MODEL_FLAG "")
 set (UT_FP_MODEL_FLAG "")
-IF (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
-  IF (DEFINED HOMMEXX_FPMODEL)
-    HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" FP_MODEL_FLAG)
-    HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FP_MODEL_FLAG)
-  ELSE ()
-    SET(${FP_MODEL_FLAG} "-fp-model precise")
-    SET(${UT_FP_MODEL} "-fp-model precise")
-  ENDIF ()
+IF (DEFINED HOMMEXX_FPMODEL)
+  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL}" FP_MODEL_FLAG)
+  HOMMEXX_set_fpmodel_flags("${HOMMEXX_FPMODEL_UT}" UT_FP_MODEL_FLAG)
+ELSEIF (CMAKE_Fortran_COMPILER_ID STREQUAL Intel)
+  SET(${FP_MODEL_FLAG} "-fp-model precise")
+  SET(${UT_FP_MODEL} "-fp-model precise")
 ENDIF ()
 
 # Need this for a fix in repro_sum_mod
@@ -49,7 +53,7 @@ IF (DEFINED BASE_FFLAGS)
   SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${BASE_FFLAGS}")
 ELSE ()
   IF (CMAKE_Fortran_COMPILER_ID STREQUAL GNU)
-    SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none")
+    SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none ${FP_MODEL_FLAG}")
   ELSEIF (CMAKE_Fortran_COMPILER_ID STREQUAL PGI)
     SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Mextend -Mflushz")
     # Needed by csm_share
@@ -92,9 +96,7 @@ ENDIF ()
 IF (DEFINED BASE_CPPFLAGS)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BASE_CPPFLAGS}")
 ELSE ()
-  IF (CMAKE_CXX_COMPILER_ID STREQUAL Intel)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FP_MODEL_FLAG}")
-  ENDIF ()
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FP_MODEL_FLAG}")
 ENDIF ()
 
 # C++ Flags
@@ -241,6 +243,10 @@ ELSE ()
 
 ENDIF ()
 
+OPTION(DEBUG_TRACE "Enables TRACE level debugging checks. Very slow" FALSE)
+IF (${DEBUG_TRACE})
+  SET (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_TRACE")
+ENDIF ()
 
 ##############################################################################
 # OpenMP

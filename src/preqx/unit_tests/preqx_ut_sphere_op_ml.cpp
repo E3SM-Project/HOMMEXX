@@ -211,7 +211,7 @@ class compute_sphere_operator_test_ml {
 
     genRandArray(&nu_ratio, 1, engine,
                  std::uniform_real_distribution<Real>(
-                     -1000, 1000.0));
+                     0.0001, 1000.0));
 // setting everything to 1 is good for debugging
 #if 0
     for(int i1=0; i1<_num_elems; i1++) {

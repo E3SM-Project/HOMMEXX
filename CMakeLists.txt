@@ -116,6 +116,10 @@ SET (HOMMEXX_FPMODEL_UT "strict" CACHE STRING "Floating point model for HOMMEXX 
 
 INCLUDE(SetCompilerFlags)
 
+if (${CUDA_FOUND})
+  add_definitions(-DHOMMEXX_GPU_BFB_WITH_CPU)
+endif ()
+
 # Print the compiler flags to be used
 STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
 MESSAGE(STATUS "Fortran Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_Fortran_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")

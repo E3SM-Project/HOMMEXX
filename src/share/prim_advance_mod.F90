@@ -19,7 +19,7 @@ module prim_advance_mod
   use perf_mod,       only: t_startf, t_stopf, t_barrierf, t_adj_detailf ! _EXTERNAL
   use parallel_mod,   only: abortmp, parallel_t, iam
   use time_mod,       only: timelevel_t
-  use prim_advance_exp_mod, only: prim_advance_exp, ur_weights
+  use prim_advance_exp_mod, only: ur_weights
   use prim_advance_caar_mod, only: edge3p1
 
   implicit none
