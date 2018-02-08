@@ -56,7 +56,7 @@ void Control::init_hvcoord(const Real ps0_in,
     const auto hdp0 = Kokkos::create_mirror_view(dp0);
     for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
       // BFB way of writing it.
-      hdp0(ilev) = hybrid_ai_delta[ilev]*ps0 + hybrid_bi_delta[ilev]*ps0;
+      hdp0(ilev) = host_hybrid_ai_delta[ilev]*ps0 + host_hybrid_bi_delta[ilev]*ps0;
     }
     Kokkos::deep_copy(dp0, hdp0);
   }
