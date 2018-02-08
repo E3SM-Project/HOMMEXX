@@ -225,6 +225,7 @@ public:
             m_data.num_elems),
         *this);
 
+    ExecSpace::fence();
     GPTLstop("esf-precompute_divdp run");
     profiling_pause();
   }
@@ -296,7 +297,7 @@ public:
     const auto qdp    = m_elements.m_qdp;
     const int qsize   = m_data.qsize;
 
-    constexpr Real rkstage = 3.0;
+    const Real rkstage = 3.0;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
@@ -317,12 +318,11 @@ public:
     const int rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
     const Real dt = m_data.dt;
-    auto qdp = m_elements.m_qdp;
-    auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
-    auto qlim = m_elements.buffers.qlim;
-    auto derived_dp = m_elements.m_derived_dp;
-    auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
-    Elements elements = m_elements;
+    const auto qdp = m_elements.m_qdp;
+    const auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
+    const auto qlim = m_elements.buffers.qlim;
+    const auto derived_dp = m_elements.m_derived_dp;
+    const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
     Kokkos::RangePolicy<ExecSpace> policy1(0, m_data.num_elems * m_data.qsize *
                                                   NP * NP * NUM_LEV);
     Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
