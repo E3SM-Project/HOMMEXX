@@ -3,8 +3,6 @@
 
 #include "Types.hpp"
 
-#include <cstdlib>
-
 namespace Homme {
 
 struct Control {

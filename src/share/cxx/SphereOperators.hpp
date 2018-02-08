@@ -6,6 +6,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "PhysicalConstants.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 #include <Kokkos_Core.hpp>
 

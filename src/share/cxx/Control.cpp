@@ -1,5 +1,5 @@
 #include "Control.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
 
 #include <random>
 
