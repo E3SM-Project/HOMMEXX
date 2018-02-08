@@ -1,0 +1,30 @@
+# CMake initial cache file for Sandia's bowman
+# tested with stock intel & openmpi
+
+SET (CMAKE_Fortran_COMPILER mpif90 CACHE FILEPATH "")
+SET (CMAKE_C_COMPILER mpicc CACHE FILEPATH "")
+SET (CMAKE_CXX_COMPILER mpicxx CACHE FILEPATH "")
+
+# Michael's prefix directory which contains HDF5, PNetCDF, NetCDF, and NetCDF Fortran
+SET (MDEAKIN_PREFIX "/home/mdeakin/prefix" CACHE FILEPATH "")
+SET (KOKKOS_PATH "/home/onguba/kokkos/build-omp-debug" CACHE FILEPATH "")
+
+#exact arithm
+#does not work here, needed to to -D HOMMEXX_FPMODEL=strict
+SET (HOMMEXX_FPMODEL "strict" CACHE STRING "")
+
+SET (PNETCDF_DIR ${MDEAKIN_PREFIX} CACHE FILEPATH "")
+SET (NETCDF_DIR ${MDEAKIN_PREFIX} CACHE FILEPATH "")
+SET (HDF5_DIR ${MDEAKIN_PREFIX} CACHE FILEPATH "")
+SET (ZLIB_DIR $ENV{ZLIB_ROOT} CACHE FILEPATH "")
+
+SET (USE_QUEUING FALSE CACHE BOOL "")
+SET (HOMME_FIND_BLASLAPACK TRUE CACHE BOOL "")
+
+SET (ENABLE_INTEL_PHI TRUE CACHE BOOL "")
+
+SET (USE_TRILINOS OFF CACHE BOOL "")
+SET (USE_MPI_OPTIONS "--bind-to core" CACHE FILEPATH "")
+
+
+
