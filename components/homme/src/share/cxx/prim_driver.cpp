@@ -3,8 +3,8 @@
 #include "Elements.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
-
 #include "ErrorDefs.hpp"
+#include "profiling.hpp"
 
 #include <iostream>
 
@@ -19,6 +19,7 @@ extern "C" {
 
 void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1)
 {
+  GPTLstart("tl-sc prim_run_subcycle_c");
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -90,6 +91,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   }
 
   // Initialize dp3d from ps
+  GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
   const auto hybrid_ai_delta = data.hybrid_ai_delta;
   const auto hybrid_bi_delta = data.hybrid_bi_delta;
@@ -110,13 +112,16 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
     });
   }
   ExecSpace::fence();
+  GPTLstop("tl-sc dp3d-from-ps");
 
   // Loop over rsplit vertically lagrangian timesteps
+  GPTLstop("tl-sc prim_step");
   prim_step(dt,compute_diagnostics);
   for (int r=1; r<params.rsplit; ++r) {
     tl.update_dynamics_levels(UpdateType::LEAPFROG);
     prim_step(dt,false);
   }
+  GPTLstop("tl-sc prim_step-loop");
 
   ////////////////////////////////////////////////////////////////////////
   // apply vertical remap
@@ -124,13 +129,16 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // if rsplit>0:  also remap dynamics and compute reference level ps_v
   ////////////////////////////////////////////////////////////////////////
   tl.update_tracers_levels(params.qsplit);
+  GPTLstart("tl-sc vertical_remap");
   vertical_remap(dt_remap);
+  GPTLstop("tl-sc vertical_remap");
 
   ////////////////////////////////////////////////////////////////////////
   // time step is complete.  update some diagnostic variables:
   // lnps (we should get rid of this)
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
+  GPTLstart("tl-sc Q-from-qdp");
   {
     const auto Q = elements.m_Q;
     const auto qdp = elements.m_qdp;
@@ -151,6 +159,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
     });
   }
   ExecSpace::fence();
+  GPTLstop("tl-sc Q-from-qdp");
 
   if (compute_diagnostics) {
     Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
@@ -194,6 +203,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   nm1   = tl.nm1;
   n0    = tl.n0;
   np1   = tl.np1;
+
+  GPTLstop("tl-sc prim_run_subcycle_c");
 }
 
 } // extern "C"

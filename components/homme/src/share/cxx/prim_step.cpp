@@ -3,6 +3,7 @@
 #include "Elements.hpp"
 #include "TimeLevel.hpp"
 #include "SimulationParams.hpp"
+#include "profiling.hpp"
 
 namespace Homme
 {
@@ -13,6 +14,7 @@ void prim_advec_tracers_remap(const Real);
 
 void prim_step (const Real dt, const bool compute_diagnostics)
 {
+  GPTLstart("tl-s prim_step");
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -28,6 +30,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // initialize mean flux accumulation variables and save some variables at n0
   // for use by advection
   // ===============
+  GPTLstart("tl-s deep_copy");
   Kokkos::deep_copy(elements.m_eta_dot_dpdn,0);
   Kokkos::deep_copy(elements.m_derived_vn0,0);
   Kokkos::deep_copy(elements.m_omega_p,0);
@@ -35,11 +38,13 @@ void prim_step (const Real dt, const bool compute_diagnostics)
     Kokkos::deep_copy(elements.m_derived_dpdiss_ave,0);
     Kokkos::deep_copy(elements.m_derived_dpdiss_biharmonic,0);
   }
+  GPTLstop("tl-s deep_copy");
 
   if (params.use_semi_lagrangian_transport) {
     Errors::runtime_abort("[prim_step]", Errors::err_not_implemented);
     // Set derived_star = v
   }
+  GPTLstart("tl-s derived_dp");
   {
     const auto derived_dp = elements.m_derived_dp;
     const auto dp3d = elements.m_dp3d;
@@ -54,10 +59,12 @@ void prim_step (const Real dt, const bool compute_diagnostics)
     });
   }
   ExecSpace::fence();
+  GPTLstop("tl-s derived_dp");
 
   // ===============
   // Dynamical Step
   // ===============
+  GPTLstart("tl-s prim_advance_exp-loop");
   prim_advance_exp(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
   tl.tevolve += dt;
   for (int n=1; n<params.qsplit; ++n) {
@@ -65,6 +72,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
     prim_advance_exp(tl.nm1,tl.n0,tl.np1,dt,false);
     tl.tevolve += dt;
   }
+  GPTLstop("tl-s prim_advance_exp-loop");
 
   // ===============
   // Tracer Advection.
@@ -79,9 +87,12 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // Advect tracers if their count is > 0.
   // not be advected.  This will be cleaned up when the physgrid is merged into CAM trunk
   // Currently advecting all species
+  GPTLstart("tl-s prim_advec_tracers_remap");
   if (params.qsize>0) {
     prim_advec_tracers_remap(dt*params.qsplit);
   }
+  GPTLstop("tl-s prim_advec_tracers_remap");
+  GPTLstop("tl-s prim_step");
 }
 
 } // namespace Homme
