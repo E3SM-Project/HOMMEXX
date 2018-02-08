@@ -7,6 +7,7 @@ SET(UTILS_TIMING_DIR ${HOMME_SOURCE_DIR}/utils/timing)
 ### Infrastructure unit stest
 
 SET (INFRASTRUCTURE_UT_CXX_SRCS
+  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
@@ -38,6 +39,7 @@ cxx_unit_test (infrastructure_ut "${INFRASTRUCTURE_UT_F90_SRCS}" "${INFRASTRUCTU
 
 SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
@@ -84,6 +86,7 @@ SET (SPHERE_OPERATORS_UT_F90_SRCS
 SET (SPHERE_OPERATORS_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
@@ -142,6 +145,7 @@ SET (BOUNDARY_EXCHANGE_UT_F90_SRCS
   ${UTILS_TIMING_DIR}/perf_utils.F90
 )
 SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
+  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Control.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
