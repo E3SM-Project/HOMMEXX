@@ -3,7 +3,8 @@
 #include "dimensions_remap_tests.hpp"
 
 #include "remap.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"

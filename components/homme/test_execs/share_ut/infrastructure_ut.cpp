@@ -5,7 +5,6 @@
 
 #include "ExecSpaceDefs.hpp"
 #include "Types.hpp"
-#include "Utility.hpp"
 
 using namespace Homme;
 
