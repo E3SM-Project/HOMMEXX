@@ -37,62 +37,36 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   TimeLevel& tl = Context::singleton().get_time_level();
   tl.update_tracers_levels(params.qsplit);
 
-  // Get the elements and derivative structure
-  Elements& elements = Context::singleton().get_elements();
-  Derivative& deriv  = Context::singleton().get_derivative();
+  // Create the ESF
+  data.rhs_viss = 0;
+  EulerStepFunctor esf(data);
 
   // Precompute divdp
-  auto divdp      = elements.m_derived_divdp;
-  auto divdp_proj = elements.m_derived_divdp_proj;
-  auto policy = Homme::get_default_team_policy<ExecSpace>(data.num_elems);
-  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember& team) {
-    KernelVariables kv(team);
-    divergence_sphere(
-        kv, elements.m_dinv, elements.m_metdet, deriv.get_dvv(),
-        Homme::subview(elements.m_derived_vn0, kv.ie),
-        elements.buffers.div_buf, Homme::subview(divdp, kv.ie));
-  });
+  esf.precompute_divdp();
   Kokkos::fence();
-  Kokkos::deep_copy(divdp_proj,divdp);
 
   // Euler steps
-  data.dt = dt/2;
+  Control::DSSOption::Enum DSSopt;
+  int rhs_multiplier;
 
   // Euler step 1
-  data.n0_qdp  = tl.n0_qdp;
-  data.np1_qdp = tl.np1_qdp;
-  data.rhs_multiplier = 0;
-  data.DSSopt = Control::DSSOption::div_vdp_ave;
-  EulerStepFunctor::euler_step(data);
+  rhs_multiplier = 0;
+  DSSopt = Control::DSSOption::div_vdp_ave;
+  esf.euler_step(tl.np1_qdp,tl.n0_qdp,dt/2.0,rhs_multiplier,DSSopt);
 
   // Euler step 2
-  data.n0_qdp  = tl.np1_qdp;
-  data.np1_qdp = tl.np1_qdp;
-  data.rhs_multiplier = 1;
-  data.DSSopt = Control::DSSOption::eta;
-  EulerStepFunctor::euler_step(data);
+  rhs_multiplier = 1;
+  DSSopt = Control::DSSOption::eta;
+  esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
 
   // Euler step 3
-  data.n0_qdp  = tl.np1_qdp;
-  data.np1_qdp = tl.np1_qdp;
-  data.rhs_multiplier = 2;
-  data.DSSopt = Control::DSSOption::omega;
-  EulerStepFunctor::euler_step(data);
+  rhs_multiplier = 2;
+  DSSopt = Control::DSSOption::omega;
+  esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
 
   // to finish the 2D advection step, we need to average the t and t+2 results to get a second order estimate for t+1.
-  constexpr Real rkstage = 3.0;
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;
-    const int iq   = (((idx / NUM_LEV) / NP) / NP) % data.qsize;
-    const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-    const int jgp  =   (idx / NUM_LEV) % NP;
-    const int ilev =    idx % NUM_LEV;
-
-    elements.m_qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) =
-          (elements.m_qdp(ie,tl.n0_qdp,iq,igp,jgp,ilev) +
-           (rkstage-1)*elements.m_qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev)) / rkstage;
-  });
+  esf.qdp_time_avg(tl.n0_qdp,tl.np1_qdp);
+  Kokkos::fence();
 
   if (params.limiter_option!=8) {
     Errors::runtime_abort("[prim_advec_tracers_remap_RK2]", Errors::err_not_implemented);
