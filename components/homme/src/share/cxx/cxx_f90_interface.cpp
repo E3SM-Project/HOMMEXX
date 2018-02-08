@@ -2,12 +2,15 @@
 #include "Elements.hpp"
 #include "Control.hpp"
 #include "Context.hpp"
-
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
+#include "HommexxEnums.hpp"
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "RemapFunctor.hpp"
-#include "BoundaryExchange.hpp"
-#include "BuffersManager.hpp"
+#include "mpi/BoundaryExchange.hpp"
+#include "mpi/BuffersManager.hpp"
+#include "ErrorDefs.hpp"
 
 #include "Utility.hpp"
 
@@ -19,43 +22,113 @@ namespace Homme
 extern "C"
 {
 
-void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
-                          const int& qn0, const Real& ps0, 
-                          const int& rsplit,
-                          CRCPtr& hybrid_am_ptr,
-                          CRCPtr& hybrid_ai_ptr,
-                          CRCPtr& hybrid_bm_ptr,
-                          CRCPtr& hybrid_bi_ptr)
+void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
+                               const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
+                               const int& qsize, const int& state_frequency,
+                               const Real& nu, const Real& nu_p, const Real& nu_s, const Real& nu_div, const Real& nu_top,
+                               const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
+                               const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
 {
-  Control& control = Context::singleton().get_control ();
+  // Get the simulation params struct
+  SimulationParams& params = Context::singleton().get_simulation_params();
 
-  control.init(nets, nete, num_elems, qn0, ps0, rsplit, 
-               hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr);
+  if (remap_alg==1) {
+    params.remap_alg = RemapAlg::PPM_MIRRORED;
+  } else if (remap_alg==2) {
+    params.remap_alg = RemapAlg::PPM_FIXED;
+  } else {
+    Errors::runtime_abort("Error in init_simulation_params_c: unknown remap algorithm.\n",
+                           Errors::err_unknown_option);
+  }
+
+  params.limiter_option                = limiter_option;
+  params.rsplit                        = rsplit;
+  params.qsplit                        = qsplit;
+  params.time_step_type                = time_step_type;
+  params.prescribed_wind               = (prescribed_wind>0);
+  params.energy_fixer                  = (energy_fixer>0);
+  params.state_frequency               = state_frequency;
+  params.qsize                         = qsize;
+  params.nu                            = nu;
+  params.nu_p                          = nu_p;
+  params.nu_s                          = nu_s;
+  params.nu_div                        = nu_div;
+  params.nu_top                        = nu_top;
+  params.hypervis_order                = hypervis_order;
+  params.hypervis_subcycle             = hypervis_subcycle;
+  params.disable_diagnostics           = disable_diagnostics;
+  params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
+  params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
+
+  // Check that the simulation options are supported. This helps us in the future, since we
+  // are currently 'assuming' some option have/not have certain values. As we support for more
+  // options in the C++ build, we will remove some checks
+  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(hypervis_scaling==0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_not_implemented);
+  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_not_implemented);
+
+  // Now this structure can be used safely
+  params.params_set = true;
+
+  // Set some parameters in the Control structure already
+  Control& data = Context::singleton().get_control();
+  data.rsplit = params.rsplit;
+  data.nu     = params.nu;
+  data.nu_s   = params.nu_s;
+  data.nu_p   = params.nu_p;
+  data.nu_top = params.nu_top;
+  data.hypervis_scaling = params.hypervis_scaling;
 }
 
-void init_control_euler_c (const int& nets, const int& nete, const int& DSSopt,
-                           const int& rhs_multiplier, const int& qn0, const int& qsize, const Real& dt,
-                           const int& np1_qdp, const double& nu_p, const double& nu_q,
-                           const int& limiter_option)
+void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
+                                      CRCPtr& hybrid_bm_ptr, CRCPtr& hybrid_bi_ptr)
+{
+  Control& data = Context::singleton().get_control();
+  data.init_hvcoord(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
+}
+
+void init_control_c (const int& nets, const int& nete, const int& num_elems)
+{
+  // Setting elements count in the control once and for all
+  Control& control = Context::singleton().get_control ();
+
+  control.nets      = nets-1;
+  control.nete      = nete;       // F90 ranges are closed, c ranges are open on the right, so this can stay the same
+  control.num_elems = num_elems;
+
+}
+
+void init_control_caar_c (const int& nets, const int& nete, const int& num_elems,
+                          const int& qn0, const int& rsplit)
 {
   Control& control = Context::singleton().get_control ();
 
-  control.DSSopt = Control::DSSOption::from(DSSopt);
-  control.rhs_multiplier = rhs_multiplier;
+  control.init(nets, nete, num_elems, qn0, rsplit);
+}
+
+void init_control_euler_c(const int &nets, const int &nete, const int &qsize,
+                          const Real &dt, const int &np1_qdp,
+                          const double &nu_p, const double &nu_q,
+                          const int &limiter_option) {
+  Control &control = Context::singleton().get_control();
+
+  // Adjust indices
+  control.nets = nets - 1;
+  control.nete = nete; // F90 ranges are closed, c ranges are open on the right,
+                       // so this can stay the same
+  control.np1_qdp = np1_qdp - 1;
+
   control.rhs_viss = 0;
   control.nu_p = nu_p;
   control.nu_q = nu_q;
   control.limiter_option = limiter_option;
 
-  // Adjust indices
-  control.nets  = nets-1;
-  control.nete  = nete;  // F90 ranges are closed, c ranges are open on the right, so this can stay the same
-  control.qn0   = qn0-1;
-
   control.qsize = qsize;
-  control.dt    = dt;
-
-  control.np1_qdp = np1_qdp-1;
+  control.dt = dt;
 }
 
 void init_euler_neighbor_minmax_c (const int& qsize)
@@ -73,42 +146,8 @@ void init_euler_neighbor_minmax_c (const int& qsize)
   }
 }
 
-void euler_neighbor_minmax_c (const int& nets, const int& nete)
-{
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  assert(be.is_registration_completed());
-  be.exchange_min_max(nets-1, nete);
-}
-
-void euler_neighbor_minmax_start_c (const int& nets, const int& nete)
-{
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.pack_and_send_min_max(nets-1, nete);
-}
-
-void euler_neighbor_minmax_finish_c (const int& nets, const int& nete)
-{
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-  be.recv_and_unpack_min_max(nets-1, nete);
-}
-
-void euler_minmax_and_biharmonic_c (const int& nets, const int& nete) {
-  const auto& c = Context::singleton().get_control();
-  if (c.rhs_multiplier != 2) return;
-  const auto& e = Context::singleton().get_elements();
-  const auto be = Context::singleton().get_boundary_exchange(
-    "Euler step: min/max & qtens_biharmonic");
-  if ( ! be->is_registration_completed()) {
-    be->set_buffers_manager(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
-    be->set_num_fields(0, 0, c.qsize);
-    be->register_field(e.buffers.qtens_biharmonic, c.qsize, 0);
-    be->registration_completed();
-  }
-  euler_neighbor_minmax_start_c(nets, nete);
-  EulerStepFunctor::compute_biharmonic_pre();
-  be->exchange();
-  EulerStepFunctor::compute_biharmonic_post();
-  euler_neighbor_minmax_finish_c(nets, nete);
+void euler_precompute_divdp_c() {
+  EulerStepFunctor::precompute_divdp_c();
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -117,13 +156,40 @@ void init_derivative_c (CF90Ptr& dvv)
   deriv.init(dvv);
 }
 
+void init_time_level_c (const int& nm1, const int& n0, const int& np1,
+                        const int& nstep, const int& nstep0)
+{
+  TimeLevel& tl = Context::singleton().get_time_level ();
+  tl.nm1    = nm1-1;
+  tl.n0     = n0-1;
+  tl.np1    = np1-1;
+  tl.nstep  = nstep;
+  tl.nstep0 = nstep0;
+}
+
+void update_time_level_c (const int& update_type)
+{
+  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_not_implemented);
+
+  TimeLevel& tl = Context::singleton().get_time_level();
+  if (update_type==0) {
+    tl.update_dynamics_levels(UpdateType::LEAPFROG);
+  }
+}
+
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
-                         CF90Ptr& spheremp, CF90Ptr& rspheremp, CF90Ptr& metdet, CF90Ptr& phis)
+                         CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
+                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
 {
   Control& control = Context::singleton().get_control ();
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, control.rsplit == 0);
-  r.init_2d(D,Dinv,fcor,spheremp,rspheremp,metdet,phis);
+  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+
+  // We also set nets, nete and num_elems in the Control
+  control.nets      = 0;
+  control.nete      = num_elems;
+  control.num_elems = num_elems;
 }
 
 void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
@@ -140,7 +206,7 @@ void caar_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF9
 }
 
 void caar_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                          F90Ptr& elem_derived_phi_ptr, 
+                          F90Ptr& elem_derived_phi_ptr,
                           F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
                           F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr)
 {
@@ -313,57 +379,8 @@ void u3_5stage_timestep_c(const int& nm1, const int& n0, const int& np1,
   caar_monolithic_c(elements,functor,*be[np1],policy_pre,policy_post);
 }
 
-void advance_qdp_c()
-{
-  EulerStepFunctor::advect_and_limit();
-}
-
-void euler_exchange_qdp_dss_var_c ()
-{
-  Control data = Context::singleton().get_control();
-  Elements& elements = Context::singleton().get_elements();
-
-  // Note: we have three separate BE structures, all of which register qdp. They
-  //       differ only in the last field registered. This allows us to have a SINGLE
-  //       mpi call to exchange qsize+1 fields, rather than one for qdp and one for the
-  //       last DSS variable.
-  // TODO: move this setup in init_control_euler and move that function one stack frame up
-  //       of euler_step in F90, making it set the common parameters to all euler_steps
-  //       calls (nets, nete, dt, nu_p, nu_q)
-
-  std::stringstream ss;
-  ss << "exchange qdp "
-     << (data.DSSopt == Control::DSSOption::eta ?
-         "eta" :
-         data.DSSopt == Control::DSSOption::omega ?
-         "omega" :
-         "div_vdp_ave")
-     << " " << data.np1_qdp;
-
-  const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
-    Context::singleton().get_boundary_exchange(ss.str());
-
-  const auto& dss_var = (data.DSSopt==Control::DSSOption::eta ? elements.m_eta_dot_dpdn :
-                         (data.DSSopt==Control::DSSOption::omega ? elements.m_omega_p   :
-                          elements.m_derived_divdp_proj));
-
-  if (!be_qdp_dss_var->is_registration_completed()) {
-    // If it is the first time we call this method, we need to set up the BE
-    std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-    be_qdp_dss_var->set_buffers_manager(buffers_manager);
-    be_qdp_dss_var->set_num_fields(0,0,data.qsize+1);
-    be_qdp_dss_var->register_field(elements.m_qdp,data.np1_qdp,data.qsize,0);
-    be_qdp_dss_var->register_field(dss_var);
-    be_qdp_dss_var->registration_completed();
-  }
-
-  be_qdp_dss_var->exchange();
-
-  EulerStepFunctor::apply_rspheremp();
-}
-
-void euler_qmin_qmax_c() {
-  EulerStepFunctor::compute_qmin_qmax();
+void euler_step_c(const int &n0_qdp, const int &DSSopt, const int &rhs_multiplier) {
+  EulerStepFunctor::euler_step(n0_qdp, Control::DSSOption::from(DSSopt), rhs_multiplier);
 }
 
 } // extern "C"

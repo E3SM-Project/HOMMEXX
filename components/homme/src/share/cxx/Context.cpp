@@ -7,6 +7,8 @@
 #include "BuffersManager.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
+#include "SimulationParams.hpp"
+#include "TimeLevel.hpp"
 
 namespace Homme {
 
@@ -39,6 +41,16 @@ Derivative& Context::get_derivative() {
   //if ( ! derivative_) derivative_ = std::make_shared<Derivative>();
   if ( ! derivative_) derivative_.reset(new Derivative());
   return *derivative_;
+}
+
+SimulationParams& Context::get_simulation_params() {
+  if ( ! simulation_params_) simulation_params_.reset(new SimulationParams());
+  return *simulation_params_;
+}
+
+TimeLevel& Context::get_time_level() {
+  if ( ! time_level_) time_level_.reset(new TimeLevel());
+  return *time_level_;
 }
 
 std::shared_ptr<BuffersManager> Context::get_buffers_manager(short int exchange_type) {
@@ -82,6 +94,8 @@ void Context::clear() {
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
+  simulation_params_ = nullptr;
+  time_level_ = nullptr;
 }
 
 Context& Context::singleton() {

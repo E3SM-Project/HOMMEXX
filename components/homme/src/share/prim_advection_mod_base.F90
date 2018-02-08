@@ -133,12 +133,6 @@ module prim_advection_mod_base
       type (c_ptr), intent(in) :: elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
            elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr
     end subroutine euler_push_results_c
-    subroutine advance_qdp_c() bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-    end subroutine advance_qdp_c
     subroutine euler_exchange_qdp_dss_var_c() bind(c)
     end subroutine euler_exchange_qdp_dss_var_c
   end interface
@@ -1423,10 +1417,40 @@ end subroutine ALE_parametric_coords
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
   subroutine Prim_Advec_Tracers_remap_rk2( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
+    use iso_c_binding , only : c_ptr, c_loc
+    use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
+         elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
+         elem_derived_divdp, elem_derived_dpdiss_biharmonic, elem_derived_dpdiss_ave
     use perf_mod      , only : t_startf, t_stopf            ! _EXTERNAL
     use derivative_mod, only : divergence_sphere
     use control_mod   , only : vert_remap_q_alg, qsplit
     implicit none
+
+    interface
+       subroutine init_control_euler_c (nets, nete, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
+         use iso_c_binding, only : c_int, c_double
+         !
+         ! Inputs
+         !
+         integer (kind=c_int),  intent(in) :: nets, nete, qsize, np1_qdp, limiter_option
+         real (kind=c_double), intent(in) :: dt, nu_p, nu_q
+       end subroutine init_control_euler_c
+       subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
+         use iso_c_binding, only : c_int
+         !
+         ! Inputs
+         !
+         integer (kind=c_int),  intent(in) :: qsize
+       end subroutine init_euler_neighbor_minmax_c
+       subroutine euler_step_c (n0_qdp, DSSopt, rhs_multiplier) bind(c)
+         use iso_c_binding, only : c_int
+         !
+         ! Inputs
+         !
+         integer (kind=c_int),  intent(in) :: n0_qdp, DSSopt, rhs_multiplier
+       end subroutine euler_step_c
+    end interface
+
     type (element_t)     , intent(inout) :: elem(:)
     type (derivative_t)  , intent(in   ) :: deriv
     type (hvcoord_t)     , intent(in   ) :: hvcoord
@@ -1440,6 +1464,12 @@ end subroutine ALE_parametric_coords
     integer :: i,j,k,l,ie,q,nmin
     integer :: nfilt,rkstage,rhs_multiplier
     integer :: n0_qdp, np1_qdp
+
+    type (c_ptr) :: qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
+         elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
+         elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
+         elem_state_Qdp_ptr, elem_derived_dpdiss_ave_ptr
+
 
     call t_barrierf('sync_prim_advec_tracers_remap_k2', hybrid%par%comm)
     call t_startf('prim_advec_tracers_remap_rk2')
@@ -1463,23 +1493,65 @@ end subroutine ALE_parametric_coords
     call precompute_divdp( elem , hybrid , deriv , dt , nets , nete , n0_qdp )
     call t_stopf('precomput_divdp')
 
+#ifdef USE_KOKKOS_KERNELS
+    ! Set up the boundary exchange for the minmax calls
+    call init_control_euler_c(nets, nete, qsize, &
+         dt/2, np1_qdp, nu_p, nu_q, limiter_option)
+    call init_euler_neighbor_minmax_c(qsize)
+
+    ! Bind the ptrs for the C calls
+    qmin_ptr = c_loc(qmin)
+    qmax_ptr = c_loc(qmax)
+
+    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+    elem_derived_dp_ptr                = c_loc(elem_derived_dp)
+    elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
+    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+    elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
+    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
+         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
+         elem_derived_dpdiss_ave_ptr)
+#endif
+
     !rhs_multiplier is for obtaining dp_tracers at each stage:
     !dp_tracers(stage) = dp - rhs_multiplier*dt*divdp_proj
 
     call t_startf('euler_step_0')
     rhs_multiplier = 0
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(n0_qdp, DSSdiv_vdp_ave, rhs_multiplier)
+#else
     call euler_step( np1_qdp , n0_qdp  , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSdiv_vdp_ave , rhs_multiplier )
+#endif
     call t_stopf('euler_step_0')
 
     call t_startf('euler_step_1')
     rhs_multiplier = 1
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(np1_qdp, DSSeta, rhs_multiplier)
+#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSeta         , rhs_multiplier )
+#endif
     call t_stopf('euler_step_1')
 
     call t_startf('euler_step_2')
     rhs_multiplier = 2
+#if defined(USE_KOKKOS_KERNELS) && 1
+    call euler_step_c(np1_qdp, DSSomega, rhs_multiplier)
+#else
     call euler_step( np1_qdp , np1_qdp , dt/2 , elem , hvcoord , hybrid , deriv , nets , nete , DSSomega       , rhs_multiplier )
+#endif
     call t_stopf('euler_step_2')
+
+#ifdef USE_KOKKOS_KERNELS
+    call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
+         elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
+#endif
 
     !to finish the 2D advection step, we need to average the t and t+2 results to get a second order estimate for t+1.
     call t_startf('qdp_tavg')
@@ -1554,394 +1626,271 @@ end subroutine ALE_parametric_coords
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
 
+#ifndef USE_KOKKOS_KERNELS
   subroutine euler_step( np1_qdp , n0_qdp , dt , elem , hvcoord , hybrid , deriv , nets , nete , DSSopt , rhs_multiplier )
-  ! ===================================
-  ! This routine is the basic foward
-  ! euler component used to construct RK SSP methods
-  !
-  !           u(np1) = u(n0) + dt2*DSS[ RHS(u(n0)) ]
-  !
-  ! n0 can be the same as np1.
-  !
-  ! DSSopt = DSSeta or DSSomega:   also DSS eta_dot_dpdn or omega
-  !
-  ! ===================================
-#ifdef USE_KOKKOS_KERNELS
-  use iso_c_binding  , only : c_ptr, c_loc
-#endif
-  use kinds          , only : real_kind
-  use dimensions_mod , only : np, nlev
-  use hybrid_mod     , only : hybrid_t
-  use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
-       elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
-       elem_derived_divdp, elem_derived_dpdiss_biharmonic, elem_derived_dpdiss_ave
-  use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, &
-       divergence_sphere_wk
-  use edge_mod       , only : edgevpack, edgevunpack
-  use bndry_mod      , only : bndry_exchangev
-  use hybvcoord_mod  , only : hvcoord_t
-  use parallel_mod, only : abortmp, iam
+    ! ===================================
+    ! This routine is the basic foward
+    ! euler component used to construct RK SSP methods
+    !
+    !           u(np1) = u(n0) + dt2*DSS[ RHS(u(n0)) ]
+    !
+    ! n0 can be the same as np1.
+    !
+    ! DSSopt = DSSeta or DSSomega:   also DSS eta_dot_dpdn or omega
+    !
+    ! ===================================
+    use kinds          , only : real_kind
+    use dimensions_mod , only : np, nlev
+    use hybrid_mod     , only : hybrid_t
+    use element_mod    , only : element_t, elem_state_Qdp, elem_derived_eta_dot_dpdn, &
+         elem_derived_omega_p, elem_derived_divdp_proj, elem_derived_vn0, elem_derived_dp, &
+         elem_derived_divdp, elem_derived_dpdiss_biharmonic, elem_derived_dpdiss_ave
+    use derivative_mod , only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere, &
+         divergence_sphere_wk
+    use edge_mod       , only : edgevpack, edgevunpack
+    use bndry_mod      , only : bndry_exchangev
+    use hybvcoord_mod  , only : hvcoord_t
+    use parallel_mod, only : abortmp, iam
 !!!!!!!!!!!!!!!!!!!!!!
-use utils_mod, only: FrobeniusNorm
+    use utils_mod, only: FrobeniusNorm
 !!!!!!!!!!!!!!!!!!!!!!
 
-  implicit none
+    implicit none
 
-  interface
-    subroutine init_control_euler_c (nets, nete, DSSopt, rhs_multiplier, &
-         n0_qdp, qsize, dt, np1_qdp, nu_p, nu_q, limiter_option) bind(c)
-      use iso_c_binding, only : c_int, c_double
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete, DSSopt, rhs_multiplier, &
-           n0_qdp, qsize, np1_qdp, limiter_option
-      real (kind=c_double), intent(in) :: dt, nu_p, nu_q
-    end subroutine init_control_euler_c
-    subroutine init_euler_neighbor_minmax_c(qsize) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: qsize
-    end subroutine init_euler_neighbor_minmax_c
-    subroutine euler_neighbor_minmax_c(nets, nete) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete
-    end subroutine euler_neighbor_minmax_c
-    subroutine euler_neighbor_minmax_start_c(nets, nete) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete
-    end subroutine euler_neighbor_minmax_start_c
-    subroutine euler_neighbor_minmax_finish_c(nets, nete) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete
-    end subroutine euler_neighbor_minmax_finish_c
-    subroutine euler_minmax_and_biharmonic_c(nets, nete) bind(c)
-      use iso_c_binding, only : c_int
-      !
-      ! Inputs
-      !
-      integer (kind=c_int),  intent(in) :: nets, nete
-    end subroutine euler_minmax_and_biharmonic_c
+    integer              , intent(in   )         :: np1_qdp, n0_qdp
+    real (kind=real_kind), intent(in   )         :: dt
+    type (element_t)     , intent(inout), target :: elem(:)
+    type (hvcoord_t)     , intent(in   )         :: hvcoord
+    type (hybrid_t)      , intent(in   )         :: hybrid
+    type (derivative_t)  , intent(in   )         :: deriv
+    integer              , intent(in   )         :: nets
+    integer              , intent(in   )         :: nete
+    integer              , intent(in   )         :: DSSopt
+    integer              , intent(in   )         :: rhs_multiplier
 
-    subroutine euler_qmin_qmax_c() bind(c)
-    end subroutine euler_qmin_qmax_c
-  end interface
+    ! local
+    real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
+    real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
+    real(kind=real_kind), dimension(np,np,nlev,nets:nete), target       :: dpdissk
+    real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
+    real(kind=real_kind), dimension(np,np,2)                            :: gradQ
+    real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
+    real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens_biharmonic
+    real(kind=real_kind), dimension(:,:,:), pointer                     :: DSSvar
+    real(kind=real_kind), dimension(nlev)                               :: dp0
+    integer :: ie,q,i,j,k, kptr
+    integer :: rhs_viss
 
-  integer              , intent(in   )         :: np1_qdp, n0_qdp
-  real (kind=real_kind), intent(in   )         :: dt
-  type (element_t)     , intent(inout), target :: elem(:)
-  type (hvcoord_t)     , intent(in   )         :: hvcoord
-  type (hybrid_t)      , intent(in   )         :: hybrid
-  type (derivative_t)  , intent(in   )         :: deriv
-  integer              , intent(in   )         :: nets
-  integer              , intent(in   )         :: nete
-  integer              , intent(in   )         :: DSSopt
-  integer              , intent(in   )         :: rhs_multiplier
-
-  ! local
-  real(kind=real_kind), dimension(np,np,2,nlev,nets:nete),     target :: Vstar
-  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens
-  real(kind=real_kind), dimension(np,np,nlev,nets:nete), target       :: dpdissk
-  real(kind=real_kind), dimension(np,np  )                            :: divdp, dpdiss
-  real(kind=real_kind), dimension(np,np,2)                            :: gradQ
-  real(kind=real_kind), dimension(np,np,nlev                )         :: dp,dp_star
-  real(kind=real_kind), dimension(np,np,nlev,qsize,nets:nete), target :: Qtens_biharmonic
-  real(kind=real_kind), dimension(:,:,:), pointer                     :: DSSvar
-  real(kind=real_kind), dimension(nlev)                               :: dp0
-  integer :: ie,q,i,j,k, kptr
-  integer :: rhs_viss
-#ifdef USE_KOKKOS_KERNELS
-  real(kind=real_kind) :: grads(np,np,2), lap_p(np,np)
-  type (c_ptr) :: Vstar_ptr, elem_state_Qdp_ptr, Qtens_biharmonic_ptr, &
-       qmin_ptr, qmax_ptr, elem_derived_eta_dot_dpdn_ptr, &
-       elem_derived_omega_p_ptr, elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, &
-       elem_derived_dp_ptr, elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, &
-       elem_derived_dpdiss_ave_ptr
-
-  ! Set up the boundary exchange for the minmax calls
-  call init_control_euler_c(nets, nete, DSSopt, rhs_multiplier, n0_qdp, qsize, &
-       dt, np1_qdp, nu_p, nu_q, limiter_option)
-  call init_euler_neighbor_minmax_c(qsize)
-
-  ! Bind the ptrs for the C calls
-  qmin_ptr = c_loc(qmin)
-  qmax_ptr = c_loc(qmax)
-
-  Qtens_biharmonic_ptr               = c_loc(Qtens_biharmonic)
-
-  elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
-  elem_derived_dp_ptr                = c_loc(elem_derived_dp)
-  elem_derived_divdp_ptr             = c_loc(elem_derived_divdp)
-  elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
-  elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
-  elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
-  elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
-  elem_derived_divdp_proj_ptr        = c_loc(elem_derived_divdp_proj)
-  elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
-#endif
-
-!  call t_barrierf('sync_euler_step', hybrid%par%comm)
-OMP_SIMD
-  do k = 1 , nlev
-    dp0(k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-          ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*hvcoord%ps0
-  enddo
-!pw  call t_startf('euler_step')
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !   compute Q min/max values for lim8
-  !   compute biharmonic mixing term f
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  rhs_viss = 0
-  if ( limiter_option == 8  ) then
-    call t_startf('bihmix_qminmax')
-    ! when running lim8, we also need to limit the biharmonic, so that term needs
-    ! to be included in each euler step.  three possible algorithms here:
-    ! 1) most expensive:
-    !     compute biharmonic (which also computes qmin/qmax) during all 3 stages
-    !     be sure to set rhs_viss=1
-    !     cost:  3 biharmonic steps with 3 DSS
-    !
-    ! 2) cheapest:
-    !     compute biharmonic (which also computes qmin/qmax) only on first stage
-    !     be sure to set rhs_viss=3
-    !     reuse qmin/qmax for all following stages (but update based on local qmin/qmax)
-    !     cost:  1 biharmonic steps with 1 DSS
-    !     main concern:  viscosity
-    !
-    ! 3)  compromise:
-    !     compute biharmonic (which also computes qmin/qmax) only on last stage
-    !     be sure to set rhs_viss=3
-    !     compute qmin/qmax directly on first stage
-    !     reuse qmin/qmax for 2nd stage stage (but update based on local qmin/qmax)
-    !     cost:  1 biharmonic steps, 2 DSS
-    !
-    !  NOTE  when nu_p=0 (no dissipation applied in dynamics to dp equation), we should
-    !        apply dissipation to Q (not Qdp) to preserve Q=1
-    !        i.e.  laplace(Qdp) ~  dp0 laplace(Q)
-    !        for nu_p=nu_q>0, we need to apply dissipation to Q * diffusion_dp
-    !
-    ! initialize dp, and compute Q from Qdp (and store Q in Qtens_biharmonic)
-#ifdef USE_KOKKOS_KERNELS
-    call euler_pull_data_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-         elem_derived_divdp_proj_ptr, elem_derived_vn0_ptr, elem_derived_dp_ptr, &
-         elem_derived_divdp_ptr, elem_derived_dpdiss_biharmonic_ptr, elem_state_Qdp_ptr, &
-         elem_derived_dpdiss_ave_ptr)
-    call euler_qmin_qmax_c()
-    if ( rhs_multiplier == 0 ) then
-      ! update qmin/qmax based on neighbor data for lim8
-      call t_startf('eus_neighbor_minmax1')
-      call euler_neighbor_minmax_c(nets,nete)
-      call t_stopf('eus_neighbor_minmax1')
-    endif
-  !call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-       !elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
-#else
-    do ie = nets , nete
-      ! add hyperviscosity to RHS.  apply to Q at timelevel n0, Qdp(n0)/dp
-OMP_SIMD
-      do k = 1 , nlev    !  Loop index added with implicit inversion (AAM)
-        dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier*dt*elem(ie)%derived%divdp_proj(:,:,k)
-      enddo
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k) collapse(2)
-#endif
-      do q = 1 , qsize
-        do k=1,nlev
-          Qtens_biharmonic(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp)/dp(:,:,k)
-          if ( rhs_multiplier == 1 ) then
-             ! for this stage, we skip neighbor_minmax() call, but update
-             ! qmin/qmax with any new local extrema:
-              qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
-              qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
-          else
-             ! for rhs_multiplier=0,2 we will call neighbor_minmax and compute
-             ! the correct min/max values
-              qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
-              qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
-          endif
-        enddo
-      enddo
+    !  call t_barrierf('sync_euler_step', hybrid%par%comm)
+    OMP_SIMD
+    do k = 1 , nlev
+       dp0(k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+            ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*hvcoord%ps0
     enddo
-    ! compute element qmin/qmax
-    if ( rhs_multiplier == 0 ) then
-      ! update qmin/qmax based on neighbor data for lim8
-      call t_startf('eus_neighbor_minmax1')
-      call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-      call t_stopf('eus_neighbor_minmax1')
-    endif
-#endif
+    !pw  call t_startf('euler_step')
 
-#ifdef USE_KOKKOS_KERNELS
-
-    call euler_minmax_and_biharmonic_c(nets, nete)
-
-! ifdef USE_KOKKOS_KERNELS
-#else
-
-    ! get new min/max values, and also compute biharmonic mixing term
-    if ( rhs_multiplier == 2 ) then
-      rhs_viss = 3
-      ! two scalings depending on nu_p:
-      ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
-      ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
-      if ( nu_p > 0 ) then
-        do ie = nets , nete
-#ifdef NEWEULER_B4B
-#if (defined COLUMN_OPENMP)
-       !$omp parallel do private(k, q) collapse(2)
-#endif
-          do k = 1 , nlev
-            do q = 1 , qsize
-              ! NOTE: divide by dp0 since we multiply by dp0 below
-              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)&
-                *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
-            enddo
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !   compute Q min/max values for lim8
+    !   compute biharmonic mixing term f
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    rhs_viss = 0
+    if ( limiter_option == 8  ) then
+       call t_startf('bihmix_qminmax')
+       ! when running lim8, we also need to limit the biharmonic, so that term needs
+       ! to be included in each euler step.  three possible algorithms here:
+       ! 1) most expensive:
+       !     compute biharmonic (which also computes qmin/qmax) during all 3 stages
+       !     be sure to set rhs_viss=1
+       !     cost:  3 biharmonic steps with 3 DSS
+       !
+       ! 2) cheapest:
+       !     compute biharmonic (which also computes qmin/qmax) only on first stage
+       !     be sure to set rhs_viss=3
+       !     reuse qmin/qmax for all following stages (but update based on local qmin/qmax)
+       !     cost:  1 biharmonic steps with 1 DSS
+       !     main concern:  viscosity
+       !
+       ! 3)  compromise:
+       !     compute biharmonic (which also computes qmin/qmax) only on last stage
+       !     be sure to set rhs_viss=3
+       !     compute qmin/qmax directly on first stage
+       !     reuse qmin/qmax for 2nd stage stage (but update based on local qmin/qmax)
+       !     cost:  1 biharmonic steps, 2 DSS
+       !
+       !  NOTE  when nu_p=0 (no dissipation applied in dynamics to dp equation), we should
+       !        apply dissipation to Q (not Qdp) to preserve Q=1
+       !        i.e.  laplace(Qdp) ~  dp0 laplace(Q)
+       !        for nu_p=nu_q>0, we need to apply dissipation to Q * diffusion_dp
+       !
+       ! initialize dp, and compute Q from Qdp (and store Q in Qtens_biharmonic)
+       do ie = nets , nete
+          ! add hyperviscosity to RHS.  apply to Q at timelevel n0, Qdp(n0)/dp
+          OMP_SIMD
+          do k = 1 , nlev    !  Loop index added with implicit inversion (AAM)
+             dp(:,:,k) = elem(ie)%derived%dp(:,:,k) - rhs_multiplier*dt*elem(ie)%derived%divdp_proj(:,:,k)
           enddo
-#else
 #if (defined COLUMN_OPENMP)
-        !$omp parallel do private(k)
-#endif
-          do k = 1 , nlev
-            ! NOTE: divide by dp0 since we multiply by dp0 below
-            dpdissk(:,:,k,ie) = elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
-          enddo
-#if (defined COLUMN_OPENMP)
-        !$omp parallel do private(q,k) collapse(2)
+          !$omp parallel do private(q,k) collapse(2)
 #endif
           do q = 1 , qsize
-            do k = 1 , nlev
-              Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)*dpdissk(:,:,k,ie)
-            enddo
+             do k=1,nlev
+                Qtens_biharmonic(:,:,k,q,ie) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp)/dp(:,:,k)
+                if ( rhs_multiplier == 1 ) then
+                   ! for this stage, we skip neighbor_minmax() call, but update
+                   ! qmin/qmax with any new local extrema:
+                   qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
+                   qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
+                else
+                   ! for rhs_multiplier=0,2 we will call neighbor_minmax and compute
+                   ! the correct min/max values
+                   qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
+                   qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
+                endif
+             enddo
           enddo
-#endif
-        enddo ! ie loop
-      endif ! nu_p > 0
+       enddo
+       ! compute element qmin/qmax
+       if ( rhs_multiplier == 0 ) then
+          ! update qmin/qmax based on neighbor data for lim8
+          call t_startf('eus_neighbor_minmax1')
+          call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+          call t_stopf('eus_neighbor_minmax1')
+       endif
 
-!   Previous version of biharmonic_wk_scalar_minmax included a min/max
-!   calculation into the boundary exchange.  This was causing cache issues.
-!   Split the single operation into two separate calls
-!      call neighbor_minmax()
-!      call biharmonic_wk_scalar()
-!
-!      call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
-!           nets , nete , qmin(:,:,nets:nete) , qmax(:,:,nets:nete) )
+       ! get new min/max values, and also compute biharmonic mixing term
+       if ( rhs_multiplier == 2 ) then
+          rhs_viss = 3
+          ! two scalings depending on nu_p:
+          ! nu_p=0:    qtens_biharmonic *= dp0                   (apply viscosity only to q)
+          ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
+          if ( nu_p > 0 ) then
+             do ie = nets , nete
+#ifdef NEWEULER_B4B
+#if (defined COLUMN_OPENMP)
+                !$omp parallel do private(k, q) collapse(2)
+#endif
+                do k = 1 , nlev
+                   do q = 1 , qsize
+                      ! NOTE: divide by dp0 since we multiply by dp0 below
+                      Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)&
+                           *elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+                   enddo
+                enddo
+#else
+#if (defined COLUMN_OPENMP)
+                !$omp parallel do private(k)
+#endif
+                do k = 1 , nlev
+                   ! NOTE: divide by dp0 since we multiply by dp0 below
+                   dpdissk(:,:,k,ie) = elem(ie)%derived%dpdiss_ave(:,:,k)/dp0(k)
+                enddo
+#if (defined COLUMN_OPENMP)
+                !$omp parallel do private(q,k) collapse(2)
+#endif
+                do q = 1 , qsize
+                   do k = 1 , nlev
+                      Qtens_biharmonic(:,:,k,q,ie)=Qtens_biharmonic(:,:,k,q,ie)*dpdissk(:,:,k,ie)
+                   enddo
+                enddo
+#endif
+             enddo ! ie loop
+          endif ! nu_p > 0
+
+          !   Previous version of biharmonic_wk_scalar_minmax included a min/max
+          !   calculation into the boundary exchange.  This was causing cache issues.
+          !   Split the single operation into two separate calls
+          !      call neighbor_minmax()
+          !      call biharmonic_wk_scalar()
+          !
+          !      call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
+          !           nets , nete , qmin(:,:,nets:nete) , qmax(:,:,nets:nete) )
 #ifdef OVERLAP
-      call neighbor_minmax_start(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
-      do ie = nets , nete
+          call neighbor_minmax_start(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+          call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
+          do ie = nets , nete
 #if (defined COLUMN_OPENMP_notB4B)
-!$omp parallel do private(k, q)
+             !$omp parallel do private(k, q)
 #endif
-        do q = 1 , qsize
-          do k = 1 , nlev    !  Loop inversion (AAM)
-            ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
-            qtens_biharmonic(:,:,k,q,ie) = &
-                     -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+             do q = 1 , qsize
+                do k = 1 , nlev    !  Loop inversion (AAM)
+                   ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
+                   qtens_biharmonic(:,:,k,q,ie) = &
+                        -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+                enddo
+             enddo
           enddo
-        enddo
-      enddo
-      call neighbor_minmax_finish(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+          call neighbor_minmax_finish(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
 #else
 
-      call t_startf('eus_neighbor_minmax2')
-      call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
-      call t_stopf('eus_neighbor_minmax2')
-      call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
+          call t_startf('eus_neighbor_minmax2')
+          call neighbor_minmax(hybrid,edgeAdvQminmax,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
+          call t_stopf('eus_neighbor_minmax2')
+          call biharmonic_wk_scalar(elem,qtens_biharmonic,deriv,edgeAdv,hybrid,nets,nete)
 
-      do ie = nets , nete
+          do ie = nets , nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q) collapse(2)
+             !$omp parallel do private(k, q) collapse(2)
 #endif
-        do q = 1 , qsize
-          do k = 1 , nlev    !  Loop inversion (AAM)
-            ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
-            qtens_biharmonic(:,:,k,q,ie) = &
-                     -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+             do q = 1 , qsize
+                do k = 1 , nlev    !  Loop inversion (AAM)
+                   ! note: biharmonic_wk() output has mass matrix already applied. Un-apply since we apply again below:
+                   qtens_biharmonic(:,:,k,q,ie) = &
+                        -rhs_viss*dt*nu_q*dp0(k)*Qtens_biharmonic(:,:,k,q,ie) / elem(ie)%spheremp(:,:)
+                enddo
+             enddo
           enddo
-        enddo
-      enddo
 #endif
 
-    endif
-! ifdef USE_KOKKOS_KERNELS
-#endif
-    call t_stopf('bihmix_qminmax')
-  endif  ! compute biharmonic mixing term and qmin/qmax
-  ! end of limiter_option == 8
+       endif
+       call t_stopf('bihmix_qminmax')
+    endif  ! compute biharmonic mixing term and qmin/qmax
+    ! end of limiter_option == 8
 
 
-  call t_startf('eus_2d_advec')
-#ifdef USE_KOKKOS_KERNELS
-  if ( limiter_option == 4 ) then
-     call abortmp('limiter_option = 4 is not supported in HOMMEXX right now.')
-  endif
-  call t_startf("advance_qdp")
+    call t_startf('eus_2d_advec')
+    ! else (USE_KOKKOS_KERNELS)
+    call t_startf("advance_qdp")
+    call advance_qdp_f90(nets,nete, &
+         rhs_multiplier,DSSopt,dp,dpdissk, &
+         n0_qdp,dt,Vstar,elem,deriv,Qtens, &
+         rhs_viss,Qtens_biharmonic,np1_qdp)
+    call t_stopf("advance_qdp")
+    call t_startf('eus_bexchV')
+    call bndry_exchangeV( hybrid , edgeAdvp1 )
+    call t_stopf('eus_bexchV')
 
-  call advance_qdp_c()
+    do ie = nets , nete
+       if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
+       if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
+       if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
 
-  call t_stopf("advance_qdp")
-
-  call euler_exchange_qdp_dss_var_c()
-
-  call euler_push_results_c(elem_derived_eta_dot_dpdn_ptr, elem_derived_omega_p_ptr, &
-       elem_derived_divdp_proj_ptr, elem_state_Qdp_ptr, qmin_ptr, qmax_ptr)
-
-#else
-! else (USE_KOKKOS_KERNELS)
-  call t_startf("advance_qdp")
-  call advance_qdp_f90(nets,nete, &
-       rhs_multiplier,DSSopt,dp,dpdissk, &
-       n0_qdp,dt,Vstar,elem,deriv,Qtens, &
-       rhs_viss,Qtens_biharmonic,np1_qdp)
-  call t_stopf("advance_qdp")
-  call t_startf('eus_bexchV')
-  call bndry_exchangeV( hybrid , edgeAdvp1 )
-  call t_stopf('eus_bexchV')
-
-  do ie = nets , nete
-    if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
-    if ( DSSopt == DSSomega       ) DSSvar => elem(ie)%derived%omega_p(:,:,:)
-    if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
-
-    call edgeVunpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , ie )
-OMP_SIMD
-    do k = 1 , nlev
-      DSSvar(:,:,k) = DSSvar(:,:,k) * elem(ie)%rspheremp(:,:)
-    enddo
+       call edgeVunpack( edgeAdvp1 , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , ie )
+       OMP_SIMD
+       do k = 1 , nlev
+          DSSvar(:,:,k) = DSSvar(:,:,k) * elem(ie)%rspheremp(:,:)
+       enddo
 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k)
+       !$omp parallel do private(q,k)
 #endif
-    do q = 1 , qsize
-      call edgeVunpack( edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
-      do k = 1 , nlev    !  Potential loop inversion (AAM)
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
-      enddo
+       do q = 1 , qsize
+          call edgeVunpack( edgeAdvp1 , elem(ie)%state%Qdp(:,:,:,q,np1_qdp) , nlev , nlev*(q-1) , ie )
+          do k = 1 , nlev    !  Potential loop inversion (AAM)
+             elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
+          enddo
+       enddo
     enddo
-  enddo
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
-!$OMP BARRIER
-#endif
+    !$OMP BARRIER
 #endif
 #endif
 
-  call t_stopf('eus_2d_advec')
-!pw call t_stopf('euler_step')
+    call t_stopf('eus_2d_advec')
+    !pw call t_stopf('euler_step')
 
   end subroutine euler_step
+#endif ! USE_KOKKOS_KERNELS
 !-----------------------------------------------------------------------------
 
 

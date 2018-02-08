@@ -165,7 +165,7 @@ struct CaarFunctor {
         kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
-        m_elements.buffers.vort_buf,
+        m_elements.buffers.curl_buf,
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;

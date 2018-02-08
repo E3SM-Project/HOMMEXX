@@ -34,8 +34,10 @@ module prim_driver_mod
   implicit none
 
   private
-  public :: prim_init1, prim_init2 , prim_run, prim_run_subcycle, prim_finalize, leapfrog_bootstrap
-  public :: smooth_topo_datasets
+#ifndef USE_KOKKOS_KERNELS
+  public :: prim_run, leapfrog_bootstrap, smooth_topo_datasets
+#endif
+  public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
   type (quadrature_t)   :: gp                     ! element GLL points
@@ -108,7 +110,9 @@ contains
     use params_mod,         only: sfcurve
     use physical_constants, only: dd_pi
     use prim_advection_mod, only: prim_advec_init1
+#ifndef USE_KOKKOS_KERNELS
     use prim_advance_mod,   only: prim_advance_init
+#endif
     use prim_state_mod,     only: prim_printstate_init
     use schedtype_mod,      only: schedule
     use schedule_mod,       only: genEdgeSched,  PrintSchedule
@@ -536,7 +540,9 @@ contains
     allocate(cm(0:n_domains-1))
 #endif
     allocate(cg(0:n_domains-1))
+#ifndef USE_KOKKOS_KERNELS
     call prim_advance_init(par,elem,integration)
+#endif
 #ifdef TRILINOS
     call prim_implicit_init(par, elem)
 #endif
@@ -588,9 +594,13 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use element_mod,          only: elem_D, elem_Dinv, elem_fcor, elem_spheremp, &
-                                    elem_rspheremp, elem_metdet, elem_state_phis
-    use iso_c_binding,        only: c_ptr, c_loc
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor,                   &
+                                    elem_mp, elem_spheremp, elem_rspheremp,         &
+                                    elem_metdet, elem_metinv, elem_state_phis
+    use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
+                                    nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
+                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport
+    use iso_c_binding,        only: c_ptr, c_loc, c_bool
 #endif
 
 #ifdef TRILINOS
@@ -634,8 +644,8 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
-    type (c_ptr) :: elem_spheremp_ptr, elem_rspheremp_ptr
-    type (c_ptr) :: elem_metdet_ptr, elem_state_phis_ptr
+    type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
+    type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
 #endif
 
 #ifdef TRILINOS
@@ -677,17 +687,33 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
   interface
-    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr, &
-                                   elem_spheremp_ptr, elem_rspheremp_ptr,  &
-                                   elem_metdet_ptr, phis_ptr) bind(c)
+    subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
+                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
+                                         nu, nu_p, nu_s, nu_div, nu_top,                           &
+                                         hypervis_order, hypervis_subcycle, hypervis_scaling,      &
+                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
+      use iso_c_binding, only: c_int, c_bool, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
+      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
+      integer(kind=c_int),  intent(in) :: state_frequency, qsize
+      real(kind=c_double),  intent(in) :: nu, nu_p, nu_s, nu_div, nu_top, hypervis_scaling
+      integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
+    end subroutine init_simulation_params_c
+    subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
+                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
       use iso_c_binding, only : c_ptr, c_int
       !
       ! Inputs
       !
       integer (kind=c_int), intent(in) :: nelemd
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
-      type (c_ptr) , intent(in) :: elem_spheremp_ptr, elem_rspheremp_ptr
-      type (c_ptr) , intent(in) :: elem_metdet_ptr, phis_ptr
+      type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
+      type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
     end subroutine init_elements_2d_c
   end interface
 #endif
@@ -1006,24 +1032,33 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     call init_caar_derivative_c(deriv(hybrid%ithr))
 
-    elem_D_ptr          = c_loc(elem_D)
-    elem_Dinv_ptr       = c_loc(elem_Dinv)
-    elem_fcor_ptr       = c_loc(elem_fcor)
-    elem_spheremp_ptr   = c_loc(elem_spheremp)
-    elem_rspheremp_ptr  = c_loc(elem_rspheremp)
-    elem_metdet_ptr     = c_loc(elem_metdet)
-    elem_state_phis_ptr = c_loc(elem_state_phis)
-    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr, &
-                             elem_spheremp_ptr, elem_rspheremp_ptr,            &
-                             elem_metdet_ptr, elem_state_phis_ptr)
+    elem_D_ptr            = c_loc(elem_D)
+    elem_Dinv_ptr         = c_loc(elem_Dinv)
+    elem_fcor_ptr         = c_loc(elem_fcor)
+    elem_mp_ptr           = c_loc(elem_mp)
+    elem_spheremp_ptr     = c_loc(elem_spheremp)
+    elem_rspheremp_ptr    = c_loc(elem_rspheremp)
+    elem_metdet_ptr       = c_loc(elem_metdet)
+    elem_metinv_ptr       = c_loc(elem_metinv)
+    elem_state_phis_ptr   = c_loc(elem_state_phis)
+    call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
+                                   elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
+                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
+
+    call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
+                                   prescribed_wind, energy_fixer, qsize, statefreq,               &
+                                   nu, nu_p, nu_s, nu_div, nu_top,                                &
+                                   hypervis_order, hypervis_subcycle, hypervis_scaling,           &
+                                   LOGICAL(moisture/="dry",c_bool),                               &
+                                   LOGICAL(disable_diagnostics,c_bool),                           &
+                                   LOGICAL(use_semi_lagrange_transport,c_bool))
 #endif
 
   end subroutine prim_init2
 
 !=======================================================================================================!
 
-
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine leapfrog_bootstrap(elem, hybrid,nets,nete,tstep,tl,hvcoord)
 
   !
@@ -1064,11 +1099,11 @@ contains
   tl%nstep=tl%nstep-1        ! count all of that as 1 timestep
 
   end subroutine leapfrog_bootstrap
-
+#endif
 
 !=======================================================================================================!
 
-
+#ifndef USE_KOKKOS_KERNELS
   subroutine prim_run(elem, hybrid,nets,nete, dt, tl, hvcoord, advance_name)
     use hybvcoord_mod, only : hvcoord_t
     use time_mod, only : TimeLevel_t, timelevel_update, smooth
@@ -1241,6 +1276,7 @@ contains
        call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
     end if
   end subroutine prim_run
+#endif
 
 !=======================================================================================================!
 
@@ -1264,7 +1300,9 @@ contains
     use fvm_control_volume_mod, only: n0_fvm
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
+#ifdef CAM
     use prim_advance_mod,   only: applycamforcing, applycamforcing_dynamics
+#endif
     use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1512,13 +1550,67 @@ contains
     use fvm_mod,            only: fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: overwrite_SEdensity
+    !use prim_advance_mod,   only: overwrite_SEdensity
+#ifndef USE_KOKKOS_KERNELS
     use prim_advance_exp_mod, only: prim_advance_exp
+#endif
     use prim_advection_mod, only: prim_advec_tracers_fvm
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
+use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d
+#ifdef USE_KOKKOS_KERNELS
+    use element_mod,        only: elem_state_v, elem_state_temp, elem_state_dp3d, &
+                                  elem_derived_eta_dot_dpdn, elem_state_Qdp,      &
+                                  elem_derived_phi, elem_derived_omega_p,         &
+                                  elem_derived_vn0, elem_derived_dpdiss_ave,      &
+                                  elem_derived_dpdiss_biharmonic
+    use iso_c_binding,      only: c_int, c_bool, c_double, c_ptr, c_loc
 
+    interface
+      subroutine prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                               elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                               elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                               elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+        use iso_c_binding, only: c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                                    elem_derived_dpdiss_biharmonic_ptr
+      end subroutine prim_advance_exp_pull_data_c
+
+      subroutine prim_advance_exp_c(dt, compute_diagnostics) bind(c)
+        use iso_c_binding, only: c_bool, c_double
+        !
+        ! Inputs
+        !
+        real    (kind=c_double), intent(in) :: dt
+        logical (kind=c_bool),   intent(in) :: compute_diagnostics
+      end subroutine prim_advance_exp_c
+
+      subroutine prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                                  elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                                  elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                                  elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr) bind(c)
+        use iso_c_binding, only: c_ptr
+        !
+        ! Inputs
+        !
+        type (c_ptr), intent(in) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                                    elem_derived_dpdiss_biharmonic_ptr
+      end subroutine prim_advance_exp_push_results_c
+    end interface
+#endif
+    !
+    ! Inputs/Outputs
+    !
     type(element_t),      intent(inout) :: elem(:)
     type(fvm_struct),     intent(inout) :: fvm(:)
     type(hybrid_t),       intent(in)    :: hybrid   ! distributed parallel structure (shared)
@@ -1528,7 +1620,9 @@ contains
     real(kind=real_kind), intent(in)    :: dt       ! "timestep dependent" timestep
     type(TimeLevel_t),    intent(inout) :: tl
     integer,              intent(in)    :: rstep    ! vertical remap subcycling step
-
+    !
+    ! Locals
+    !
     real(kind=real_kind) :: st, st1, dp, dt_q
     integer :: ie, t, q,k,i,j,n, n_Q
 
@@ -1540,6 +1634,13 @@ contains
 
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
+#ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: elem_state_t_ptr, elem_state_v_ptr, elem_state_dp3d_ptr,  &
+                    elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,        &
+                    elem_derived_phi_ptr, elem_derived_omega_p_ptr,           &
+                    elem_derived_vn0_ptr, elem_derived_dpdiss_ave_ptr,        &
+                    elem_derived_dpdiss_biharmonic_ptr
+#endif
 
     !call t_startf("prim_step_init")
     dt_q = dt*qsplit
@@ -1597,6 +1698,27 @@ contains
     n_Q = tl%n0  ! n_Q = timelevel of FV tracers at time t.  need to save this
                  ! FV tracers still carry 3 timelevels
                  ! SE tracers only carry 2 timelevels
+#ifdef USE_KOKKOS_KERNELS
+    elem_state_v_ptr                   = c_loc(elem_state_v)
+    elem_state_t_ptr                   = c_loc(elem_state_temp)
+    elem_state_dp3d_ptr                = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr                 = c_loc(elem_state_Qdp)
+    elem_derived_vn0_ptr               = c_loc(elem_derived_vn0)
+    elem_derived_phi_ptr               = c_loc(elem_derived_phi)
+    elem_derived_omega_p_ptr           = c_loc(elem_derived_omega_p)
+    elem_derived_eta_dot_dpdn_ptr      = c_loc(elem_derived_eta_dot_dpdn)
+    elem_derived_dpdiss_ave_ptr        = c_loc(elem_derived_dpdiss_ave)
+    elem_derived_dpdiss_biharmonic_ptr = c_loc(elem_derived_dpdiss_biharmonic)
+    call prim_advance_exp_pull_data_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                       elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                       elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                       elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
+    call prim_advance_exp_c(dt, LOGICAL(compute_diagnostics,kind=c_bool))
+    call prim_advance_exp_push_results_c (elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr,               &
+                                          elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr,  &
+                                          elem_derived_eta_dot_dpdn_ptr, elem_state_Qdp_ptr,                     &
+                                          elem_derived_dpdiss_ave_ptr, elem_derived_dpdiss_biharmonic_ptr)
+#else
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
          hybrid, dt, tl, nets, nete, compute_diagnostics)
     do n=2,qsplit
@@ -1605,6 +1727,8 @@ contains
             hybrid, dt, tl, nets, nete, .false.)
        ! defer final timelevel update until after Q update.
     enddo
+#endif
+
 #ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
     if (0<ntrac.and.rstep==1) then
       do ie=nets,nete
@@ -1855,7 +1979,7 @@ contains
 !=======================================================================================================!
 
 
-
+#ifndef USE_KOKKOS_KERNELS
     subroutine smooth_topo_datasets(phis,sghdyn,sgh30dyn,elem,hybrid,nets,nete)
     use control_mod, only : smooth_phis_numcycle,smooth_sgh_numcycle
     use hybrid_mod, only : hybrid_t
@@ -1890,6 +2014,7 @@ contains
     call smooth_phis(sgh30dyn,elem,hybrid,deriv(hybrid%ithr),nets,nete,minf,smooth_sgh_numcycle)
 
     end subroutine smooth_topo_datasets
+#endif
 
 end module prim_driver_mod
 
