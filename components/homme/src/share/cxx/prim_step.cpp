@@ -53,7 +53,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
       derived_dp(ie,igp,jgp,ilev) = dp3d(ie,tl.n0,igp,jgp,ilev);
     });
   }
-  ExecSpace::fencep();
+  ExecSpace::fence();
 
   // ===============
   // Dynamical Step
