@@ -92,6 +92,8 @@ void Control::random_init(int num_elems_in, int seed) {
   HostViewManaged<Real[NUM_INTERFACE_LEV]> host_hybrid_ai("Host hybrid ai coefs");
   Kokkos::deep_copy(host_hybrid_ai, hybrid_ai);
 
+  hybrid_ai0 = host_hybrid_ai(0);
+
   // p = a + b must be monotonically increasing
   // OG: what is this for? does a test require it?
   // (not critisizm, but i don't understand)
@@ -102,7 +104,6 @@ void Control::random_init(int num_elems_in, int seed) {
     coords(1) = 1.0;
     // Put them in order
     std::sort(coords.data(), coords.data() + coords.size());
-//    Real p_prev = host_hybrid_ai(0) + coords(0);
     Real p_prev = hybrid_ai0 + coords(0);
     // Make certain they're all distinct
     for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
