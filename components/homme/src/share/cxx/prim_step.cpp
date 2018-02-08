@@ -40,15 +40,20 @@ void prim_step (const Real dt, const bool compute_diagnostics)
     Errors::runtime_abort("[prim_step]", Errors::err_not_implemented);
     // Set derived_star = v
   }
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie   = ((idx / NUM_LEV) / NP) / NP;
-    const int igp  = ((idx / NUM_LEV) / NP) % NP;
-    const int jgp  =  (idx / NUM_LEV) % NP;
-    const int ilev =   idx % NUM_LEV;
+  {
+    const auto derived_dp = elements.m_derived_dp;
+    const auto dp3d = elements.m_dp3d;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int ie   = ((idx / NUM_LEV) / NP) / NP;
+      const int igp  = ((idx / NUM_LEV) / NP) % NP;
+      const int jgp  =  (idx / NUM_LEV) % NP;
+      const int ilev =   idx % NUM_LEV;
 
-    elements.m_derived_dp(ie,igp,jgp,ilev) = elements.m_dp3d(ie,tl.n0,igp,jgp,ilev);
-  });
+      derived_dp(ie,igp,jgp,ilev) = dp3d(ie,tl.n0,igp,jgp,ilev);
+    });
+  }
+  ExecSpace::fencep();
 
   // ===============
   // Dynamical Step
