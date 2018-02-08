@@ -148,18 +148,23 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
-  Kokkos::parallel_for(
-    policy_post,
-    KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
-       const int ie = it / (NP*NP*NUM_LEV);
-       const int igp = (it / (NP*NUM_LEV)) % NP;
-       const int jgp = (it / NUM_LEV) % NP;
-       const int ilev = it % NUM_LEV;
-       elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,0,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,0,igp,jgp,ilev)-elements.m_v(ie,n0,0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,1,igp,jgp,ilev)-elements.m_v(ie,n0,1,igp,jgp,ilev))/4.0;
-       elements.m_dp3d(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_dp3d(ie,nm1,igp,jgp,ilev)-elements.m_dp3d(ie,n0,igp,jgp,ilev))/4.0;
-  });
+  {
+    const auto t = elements.m_t;
+    const auto v = elements.m_v;
+    const auto dp3d = elements.m_dp3d;
+    Kokkos::parallel_for(
+      policy_post,
+      KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
+         const int ie = it / (NP*NP*NUM_LEV);
+         const int igp = (it / (NP*NUM_LEV)) % NP;
+         const int jgp = (it / NUM_LEV) % NP;
+         const int ilev = it % NUM_LEV;
+         t(ie,nm1,igp,jgp,ilev) = (5.0*t(ie,nm1,igp,jgp,ilev)-t(ie,n0,igp,jgp,ilev))/4.0;
+         v(ie,nm1,0,igp,jgp,ilev) = (5.0*v(ie,nm1,0,igp,jgp,ilev)-v(ie,n0,0,igp,jgp,ilev))/4.0;
+         v(ie,nm1,1,igp,jgp,ilev) = (5.0*v(ie,nm1,1,igp,jgp,ilev)-v(ie,n0,1,igp,jgp,ilev))/4.0;
+         dp3d(ie,nm1,igp,jgp,ilev) = (5.0*dp3d(ie,nm1,igp,jgp,ilev)-dp3d(ie,n0,igp,jgp,ilev))/4.0;
+    });
+  }
   ExecSpace::fence();
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
