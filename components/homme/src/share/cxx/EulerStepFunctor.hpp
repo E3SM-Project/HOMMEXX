@@ -257,11 +257,11 @@ public:
     profiling_resume();
     GPTLstart("esf-rspheremp run");
 
-    const auto& f_dss = (m_data.DSSopt == Control::DSSOption::eta ?
-                         m_elements.m_eta_dot_dpdn :
-                         m_data.DSSopt == Control::DSSOption::omega ?
-                         m_elements.m_omega_p :
-                         m_elements.m_derived_divdp_proj);
+    const auto f_dss = (m_data.DSSopt == Control::DSSOption::eta ?
+                        m_elements.m_eta_dot_dpdn :
+                        m_data.DSSopt == Control::DSSOption::omega ?
+                        m_elements.m_omega_p :
+                        m_elements.m_derived_divdp_proj);
 
     const auto qdp = m_elements.m_qdp;
     const auto rspheremp = m_elements.m_rspheremp;
