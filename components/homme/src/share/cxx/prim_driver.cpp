@@ -97,6 +97,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   const auto ps_v = elements.m_ps_v;
   {
     const auto dp3d = elements.m_dp3d;
+    const auto n0 = tl.n0;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = ((idx / NUM_LEV) / NP) / NP;
@@ -104,8 +105,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
       const int jgp  =  (idx / NUM_LEV) % NP;
       const int ilev =   idx % NUM_LEV;
 
-      dp3d(ie,tl.n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*ps0
-                                  + hybrid_bi_delta[ilev]*ps_v(ie,tl.n0,igp,jgp);
+      dp3d(ie,n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*ps0
+                               + hybrid_bi_delta[ilev]*ps_v(ie,n0,igp,jgp);
     });
   }
   ExecSpace::fence();
@@ -133,6 +134,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   {
     const auto Q = elements.m_Q;
     const auto qdp = elements.m_qdp;
+    const auto np1_qdp = tl.np1_qdp;
+    const auto np1 = tl.np1;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;
@@ -141,9 +144,9 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
       const int jgp  =   (idx / NUM_LEV) % NP;
       const int ilev =    idx % NUM_LEV;
 
-      Q(ie,iq,igp,jgp,ilev) = qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) /
+      Q(ie,iq,igp,jgp,ilev) = qdp(ie,np1_qdp,iq,igp,jgp,ilev) /
                               ( hybrid_ai_delta[ilev]*ps0 +
-                                hybrid_bi_delta[ilev]*ps_v(ie,tl.np1,igp,jgp));
+                                hybrid_bi_delta[ilev]*ps_v(ie,np1,igp,jgp));
     });
   }
   ExecSpace::fence();
