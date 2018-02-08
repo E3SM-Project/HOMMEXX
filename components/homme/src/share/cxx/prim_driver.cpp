@@ -122,14 +122,6 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // lnps (we should get rid of this)
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*NP*NP),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie   = (idx / NP) / NP;
-    const int igp  = (idx / NP) % NP;
-    const int jgp  =  idx % NP;
-
-    elements.m_lnps(ie,tl.np1,igp,jgp) = log(elements.m_ps_v(ie,tl.np1,igp,jgp));
-  });
   Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
                        KOKKOS_LAMBDA(const int idx) {
     const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;

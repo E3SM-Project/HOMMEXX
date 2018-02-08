@@ -41,7 +41,6 @@ void Elements::init(const int num_elems) {
       "DP3D", m_num_elems);
 
   m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
-  m_lnps = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("LNPS", m_num_elems);
 
   m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("q", m_num_elems);
   m_qdp =

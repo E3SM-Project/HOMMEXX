@@ -157,7 +157,7 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
 }
 
 void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_temp_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                             CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& elem_state_ps_v_ptr, CF90Ptr& elem_state_lnps_ptr)
+                             CF90Ptr& elem_state_Qdp_ptr, CF90Ptr& elem_state_ps_v_ptr)
 {
   Elements& elements = Context::singleton().get_elements ();
   elements.pull_4d(elem_state_v_ptr,elem_state_temp_ptr,elem_state_dp3d_ptr);
@@ -167,15 +167,11 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)
   Control& data = Context::singleton().get_control();
   HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NP][NP]> ps_v_f90(elem_state_ps_v_ptr,data.num_elems);
-  HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NP][NP]> lnps_f90(elem_state_lnps_ptr,data.num_elems);
 
   decltype(elements.m_ps_v)::HostMirror ps_v_host = Kokkos::create_mirror_view(elements.m_ps_v);
-  decltype(elements.m_ps_v)::HostMirror lnps_host = Kokkos::create_mirror_view(elements.m_lnps);
 
   Kokkos::deep_copy(ps_v_host,ps_v_f90);
   Kokkos::deep_copy(elements.m_ps_v,ps_v_host);
-  Kokkos::deep_copy(lnps_host,lnps_f90);
-  Kokkos::deep_copy(elements.m_lnps,lnps_host);
 }
 
 void init_boundary_exchanges_c ()
