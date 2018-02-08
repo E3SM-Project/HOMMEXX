@@ -83,9 +83,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   data.nu_top = params.nu_top;
   data.hypervis_scaling = params.hypervis_scaling;
   data.qsize  = params.qsize;
-
-
-std::cout << "INIT: nu_q = " << nu_q << "\n";
 }
 
 void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
