@@ -37,7 +37,7 @@ program prim_main
   use prim_state_mod,      only: prim_printstate
   use prim_cxx_driver_mod, only: cleanup_cxx_structures
   use element_mod,         only: elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                 elem_state_Qdp, elem_state_ps_v,                &
+                                 elem_state_Qdp, elem_state_Q, elem_state_ps_v,  &
                                  elem_derived_omega_p
   use iso_c_binding,       only: c_ptr, c_loc, c_int
 #endif
@@ -88,14 +88,14 @@ program prim_main
 
 
     subroutine cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
-                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr,                    &
+                                       elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,  &
                                        elem_derived_omega_p_ptr) bind(c)
       use iso_c_binding , only : c_ptr
       !
       ! Inputs
       !
       type (c_ptr),          intent(in) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-      type (c_ptr),          intent(in) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+      type (c_ptr),          intent(in) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
       type (c_ptr),          intent(in) :: elem_derived_omega_p_ptr
     end subroutine cxx_push_results_to_f90
 
@@ -116,7 +116,7 @@ program prim_main
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
   type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-  type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+  type (c_ptr) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
   type (c_ptr) :: elem_derived_omega_p_ptr
   integer (kind=c_int) :: nstep_c, nm1_c, n0_c, np1_c
 #endif
@@ -315,6 +315,7 @@ program prim_main
   elem_state_temp_ptr      = c_loc(elem_state_temp)
   elem_state_dp3d_ptr      = c_loc(elem_state_dp3d)
   elem_state_Qdp_ptr       = c_loc(elem_state_Qdp)
+  elem_state_Q_ptr         = c_loc(elem_state_Q)
   elem_state_ps_v_ptr      = c_loc(elem_state_ps_v)
   elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
 #endif
@@ -348,7 +349,7 @@ program prim_main
           if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nstep) then
 print *, tl%nstep, nstep, statefreq, tl%nstep
             call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
-                                         elem_state_Qdp_ptr, elem_state_ps_v_ptr,                    &
+                                         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
                                          elem_derived_omega_p_ptr)
           endif
 
