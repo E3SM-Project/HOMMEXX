@@ -47,20 +47,20 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
 
   // Euler steps
   Control::DSSOption::Enum DSSopt;
-  int rhs_multiplier;
+  Real rhs_multiplier;
 
   // Euler step 1
-  rhs_multiplier = 0;
+  rhs_multiplier = 0.0;
   DSSopt = Control::DSSOption::div_vdp_ave;
   esf.euler_step(tl.np1_qdp,tl.n0_qdp,dt/2.0,rhs_multiplier,DSSopt);
 
   // Euler step 2
-  rhs_multiplier = 1;
+  rhs_multiplier = 1.0;
   DSSopt = Control::DSSOption::eta;
   esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
 
   // Euler step 3
-  rhs_multiplier = 2;
+  rhs_multiplier = 2.0;
   DSSopt = Control::DSSOption::omega;
   esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
 

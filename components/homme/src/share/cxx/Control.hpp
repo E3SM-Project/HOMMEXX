@@ -52,7 +52,7 @@ struct Control {
   // Tracers options;
   DSSOption::Enum DSSopt;
   Real nu_q;
-  int rhs_viss, rhs_multiplier;
+  Real rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
   // Hyperviscosity options

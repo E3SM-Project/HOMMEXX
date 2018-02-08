@@ -51,8 +51,8 @@ public:
     profiling_resume();
     GPTLstart("esf-bih-pre run");
 
-    assert(m_data.rhs_multiplier == 2);
-    m_data.rhs_viss = 3;
+    assert(m_data.rhs_multiplier == 2.0);
+    m_data.rhs_viss = 3.0;
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
                              m_data.num_elems * m_data.qsize),
@@ -67,7 +67,7 @@ public:
     profiling_resume();
     GPTLstart("esf-bih-post run");
 
-    assert(m_data.rhs_multiplier == 2);
+    assert(m_data.rhs_multiplier == 2.0);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
                              m_data.num_elems * m_data.qsize),
@@ -315,7 +315,7 @@ public:
   void compute_qmin_qmax() {
     // Temporaries, due to issues capturing *this on device
     const int qsize = m_data.qsize;
-    const int rhs_multiplier = m_data.rhs_multiplier;
+    const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
     const Real dt = m_data.dt;
     const auto qdp = m_elements.m_qdp;
@@ -343,7 +343,7 @@ public:
 
     Kokkos::RangePolicy<ExecSpace> policy2(0, m_data.num_elems * m_data.qsize *
                                                   NUM_LEV);
-    if (m_data.rhs_multiplier == 1) {
+    if (m_data.rhs_multiplier == 1.0) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
         const int ie = (loop_idx / NUM_LEV) / qsize;
         const int q = (loop_idx / NUM_LEV) % qsize;
@@ -438,7 +438,7 @@ public:
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
-                  const int rhs_multiplier, const Control::DSSOption::Enum DSSopt) {
+                  const Real rhs_multiplier, const Control::DSSOption::Enum DSSopt) {
 
     m_data.n0_qdp         = n0_qdp;
     m_data.np1_qdp        = np1_qdp;
@@ -477,11 +477,11 @@ public:
 
       compute_qmin_qmax();
 
-      if (m_data.rhs_multiplier == 0) {
+      if (m_data.rhs_multiplier == 0.0) {
         GPTLstart("eus_neighbor_minmax1");
         neighbor_minmax();
         GPTLstop("eus_neighbor_minmax1");
-      } else if (m_data.rhs_multiplier == 2) {
+      } else if (m_data.rhs_multiplier == 2.0) {
         minmax_and_biharmonic();
       }
       GPTLstop("bihmix_qminmax");
@@ -512,7 +512,7 @@ private:
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
-    if (m_data.rhs_viss != 0) {
+    if (m_data.rhs_viss != 0.0) {
       add_hyperviscosity(kv);
       kv.team_barrier();
     }
@@ -528,7 +528,7 @@ private:
     const auto& c = m_data;
     const auto& e = m_elements;
     const bool lim8 = c.limiter_option == 8;
-    const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0;
+    const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0.0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
     const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
                          e.m_eta_dot_dpdn :
