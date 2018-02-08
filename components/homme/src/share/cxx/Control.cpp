@@ -59,14 +59,6 @@ void Control::init_hvcoord(const Real ps0_in,
       hdp0(ilev) = host_hybrid_ai_delta[ilev]*ps0 + host_hybrid_bi_delta[ilev]*ps0;
     }
     Kokkos::deep_copy(dp0, hdp0);
-
-    // Workaround for GPU. Need to investigate why this is needed.
-    for (int level=0;level<NUM_PHYSICAL_LEV; ++level) {
-      const int ilev = level / VECTOR_SIZE;
-      const int ivec = level % VECTOR_SIZE;
-      hdp0(ilev)[ivec] = host_hybrid_ai_delta(ilev)[ivec]*ps0 + host_hybrid_bi_delta(ilev)[ivec]*ps0;
-    }
-    Kokkos::deep_copy(dp0, hdp0);
   }
 }
 
