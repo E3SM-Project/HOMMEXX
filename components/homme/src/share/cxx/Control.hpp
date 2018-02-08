@@ -24,7 +24,7 @@ struct Control {
 
   // This constructor should only be used by the host
   void init (const int nets, const int nete, const int num_elems,
-             const int qn0,  const int rsplit);
+             const int n0_qdp,  const int rsplit);
 
   void random_init(int num_elems, int seed);
 
@@ -46,13 +46,13 @@ struct Control {
 
   // Tracers timelevel, inclusive range of 0-1
   // or time level for moist temp?
-  int qn0;
+  int n0_qdp;
   int np1_qdp;
 
   // Tracers options;
   DSSOption::Enum DSSopt;
   Real nu_q;
-  int rhs_viss, rhs_multiplier;
+  Real rhs_viss, rhs_multiplier;
   int limiter_option; // we handle = 8
 
   // Hyperviscosity options
@@ -86,8 +86,10 @@ struct Control {
   Real hybrid_ai0;
   // hybrid ai
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_ai;
+  ExecViewManaged<Scalar[NUM_LEV]> hybrid_ai_delta;
   // hybrid bi
   ExecViewManaged<Real[NUM_INTERFACE_LEV]> hybrid_bi;
+  ExecViewManaged<Scalar[NUM_LEV]> hybrid_bi_delta;
   ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 
