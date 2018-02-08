@@ -30,7 +30,12 @@ public:
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
-  {}
+  {
+    if (m_data.limiter_option == 4) {
+      Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
+                            Errors::err_not_implemented);
+    }
+  }
 
   struct BIHPre {};
   struct BIHPost {};
@@ -203,22 +208,22 @@ public:
     KernelVariables kv(team);
     run_setup_phase(kv);
     for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
+    {
       run_tracer_phase(kv);
+    }
     stop_timer("esf-aal-fused compute");
   }
 
   struct PrecomputeDivDp {};
 
-  static void precompute_divdp_c() {
+  void precompute_divdp() {
     profiling_resume();
     GPTLstart("esf-precompute_divdp run");
 
-    Control &data = Context::singleton().get_control();
-    EulerStepFunctor func(data);
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
-            data.num_elems),
-        func);
+            m_data.num_elems),
+        *this);
 
     GPTLstop("esf-precompute_divdp run");
     profiling_pause();
@@ -247,107 +252,128 @@ public:
     stop_timer("esf-precompute_divdp compute");
   }
 
-  static void apply_rspheremp(const Control &c, const Elements &e) {
+  void apply_rspheremp() {
     profiling_resume();
     GPTLstart("esf-rspheremp run");
 
-    const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
-                         e.m_eta_dot_dpdn :
-                         c.DSSopt == Control::DSSOption::omega ?
-                         e.m_omega_p :
-                         e.m_derived_divdp_proj);
+    const auto& f_dss = (m_data.DSSopt == Control::DSSOption::eta ?
+                         m_elements.m_eta_dot_dpdn :
+                         m_data.DSSopt == Control::DSSOption::omega ?
+                         m_elements.m_omega_p :
+                         m_elements.m_derived_divdp_proj);
 
+    const auto qdp = m_elements.m_qdp;
+    const auto rspheremp = m_elements.m_rspheremp;
+    const int qsize = m_data.qsize;
+    const int np1_qdp = m_data.np1_qdp;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, c.num_elems*c.qsize*NP*NP*NUM_LEV),
+      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
-        const int ie = it / (c.qsize*NP*NP*NUM_LEV);
-        const int q = (it / (NP*NP*NUM_LEV)) % c.qsize;
+        const int ie = it / (qsize*NP*NP*NUM_LEV);
+        const int q = (it / (NP*NP*NUM_LEV)) % qsize;
         const int igp = (it / (NP*NUM_LEV)) % NP;
         const int jgp = (it / NUM_LEV) % NP;
         const int ilev = it % NUM_LEV;
-        e.m_qdp(ie,c.np1_qdp,q,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
-      });
+        qdp(ie,np1_qdp,q,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
+    });
 
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, c.num_elems*NP*NP*NUM_LEV),
+      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*NP*NP*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
         const int ie = it / (NP*NP*NUM_LEV);
         const int igp = (it / (NP*NUM_LEV)) % NP;
         const int jgp = (it / NUM_LEV) % NP;
         const int ilev = it % NUM_LEV;
-        f_dss(ie,igp,jgp,ilev) *= e.m_rspheremp(ie,igp,jgp);
-      });
+        f_dss(ie,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
+    });
 
     ExecSpace::fence();
     GPTLstop("esf-rspheremp run");
     profiling_pause();
   }
 
-  static void compute_qmin_qmax() {
-    const Control &state = Context::singleton().get_control();
-    const Elements &elems = Context::singleton().get_elements();
+  void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
+    const auto qdp    = m_elements.m_qdp;
+    const int qsize   = m_data.qsize;
 
-    Kokkos::RangePolicy<ExecSpace> policy1(0, state.num_elems * state.qsize *
+    constexpr Real rkstage = 3.0;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
+      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
+      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
+      const int jgp  =   (idx / NUM_LEV) % NP;
+      const int ilev =    idx % NUM_LEV;
+
+      qdp(ie,np1_qdp,iq,igp,jgp,ilev) =
+            (qdp(ie,n0_qdp,iq,igp,jgp,ilev) +
+             (rkstage-1)*qdp(ie,np1_qdp,iq,igp,jgp,ilev)) / rkstage;
+    });
+  }
+
+  void compute_qmin_qmax() {
+    // Temporaries, due to issues capturing *this on device
+    const int qsize = m_data.qsize;
+    const int rhs_multiplier = m_data.rhs_multiplier;
+    const int n0_qdp = m_data.n0_qdp;
+    const Real dt = m_data.dt;
+    auto qdp = m_elements.m_qdp;
+    auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
+    auto qlim = m_elements.buffers.qlim;
+    auto derived_dp = m_elements.m_derived_dp;
+    auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
+    Elements elements = m_elements;
+    Kokkos::RangePolicy<ExecSpace> policy1(0, m_data.num_elems * m_data.qsize *
                                                   NP * NP * NUM_LEV);
     Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
-      const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / state.qsize;
-      const int q = (((loop_idx / NUM_LEV) / NP) / NP) % state.qsize;
+      const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / qsize;
+      const int q = (((loop_idx / NUM_LEV) / NP) / NP) % qsize;
       const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
       const int jgp = (loop_idx / NUM_LEV) % NP;
       const int lev = loop_idx % NUM_LEV;
 
-      Scalar dp = elems.m_derived_dp(ie, igp, jgp, lev) -
-                  state.rhs_multiplier * state.dt *
-                      elems.m_derived_divdp_proj(ie, igp, jgp, lev);
+      Scalar dp = derived_dp(ie, igp, jgp, lev) -
+                  rhs_multiplier * dt *
+                      derived_divdp_proj(ie, igp, jgp, lev);
 
-      Scalar tmp = elems.m_qdp(ie, state.n0_qdp, q, igp, jgp, lev) / dp;
-      elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
+      Scalar tmp = qdp(ie, n0_qdp, q, igp, jgp, lev) / dp;
+      qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
     });
     ExecSpace::fence();
 
-    Kokkos::RangePolicy<ExecSpace> policy2(0, state.num_elems * state.qsize *
+    Kokkos::RangePolicy<ExecSpace> policy2(0, m_data.num_elems * m_data.qsize *
                                                   NUM_LEV);
-    if (state.rhs_multiplier == 1) {
+    if (m_data.rhs_multiplier == 1) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / state.qsize;
-        const int q = (loop_idx / NUM_LEV) % state.qsize;
+        const int ie = (loop_idx / NUM_LEV) / qsize;
+        const int q = (loop_idx / NUM_LEV) % qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
+        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
         Scalar max_biharmonic = min_biharmonic;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic =
-                min(min_biharmonic,
-                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic =
-                max(max_biharmonic,
-                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
+            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
+            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
           }
         }
-        elems.buffers.qlim(ie, q, 0, lev) =
-            min(elems.buffers.qlim(ie, q, 0, lev), min_biharmonic);
-        elems.buffers.qlim(ie, q, 1, lev) =
-            max(elems.buffers.qlim(ie, q, 1, lev), max_biharmonic);
+        qlim(ie, q, 0, lev) = min(qlim(ie, q, 0, lev), min_biharmonic);
+        qlim(ie, q, 1, lev) = max(qlim(ie, q, 1, lev), max_biharmonic);
       });
     } else {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / state.qsize;
-        const int q = (loop_idx / NUM_LEV) % state.qsize;
+        const int ie = (loop_idx / NUM_LEV) / qsize;
+        const int q = (loop_idx / NUM_LEV) % qsize;
         const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = elems.buffers.qtens_biharmonic(ie, q, 0, 0, lev);
+        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
         Scalar max_biharmonic = min_biharmonic;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic =
-                min(min_biharmonic,
-                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic =
-                max(max_biharmonic,
-                    elems.buffers.qtens_biharmonic(ie, q, igp, jgp, lev));
+            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
+            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
           }
         }
-        elems.buffers.qlim(ie, q, 0, lev) = min_biharmonic;
-        elems.buffers.qlim(ie, q, 1, lev) = max_biharmonic;
+        qlim(ie, q, 0, lev) = min_biharmonic;
+        qlim(ie, q, 1, lev) = max_biharmonic;
       });
     }
     ExecSpace::fence();
@@ -366,7 +392,6 @@ public:
   }
 
   void minmax_and_biharmonic() {
-    // euler_minmax_and_biharmonic_c()
     const auto be = Context::singleton().get_boundary_exchange(
         "Euler step: min/max & qtens_biharmonic");
     if (!be->is_registration_completed()) {
@@ -383,14 +408,14 @@ public:
     neighbor_minmax_finish();
   }
 
-  static void neighbor_minmax(const Control &data) {
+  void neighbor_minmax() {
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     assert(be.is_registration_completed());
-    be.exchange_min_max(data.nets, data.nete);
+    be.exchange_min_max(m_data.nets, m_data.nete);
   }
 
-  static void exchange_qdp_dss_var(const Control &data, const Elements &elements) {
+  void exchange_qdp_dss_var () {
     // Note: we have three separate BE structures, all of which register qdp.
     // They differ only in the last field registered.
     // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
@@ -400,44 +425,28 @@ public:
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
 
     std::stringstream ss;
-    ss << "exchange qdp " << (data.DSSopt == Control::DSSOption::eta
+    ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
                                   ? "eta"
-                                  : data.DSSopt == Control::DSSOption::omega
+                                  : m_data.DSSopt == Control::DSSOption::omega
                                         ? "omega"
-                                        : "div_vdp_ave") << " " << data.np1_qdp;
+                                        : "div_vdp_ave") << " " << m_data.np1_qdp;
 
     const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
         Context::singleton().get_boundary_exchange(ss.str());
 
-    const auto &dss_var = (data.DSSopt == Control::DSSOption::eta
-                               ? elements.m_eta_dot_dpdn
-                               : (data.DSSopt == Control::DSSOption::omega
-                                      ? elements.m_omega_p
-                                      : elements.m_derived_divdp_proj));
-
-    if (!be_qdp_dss_var->is_registration_completed()) {
-      // If it is the first time we call this method, we need to set up the BE
-      std::shared_ptr<BuffersManager> buffers_manager =
-          Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-      be_qdp_dss_var->set_buffers_manager(buffers_manager);
-      be_qdp_dss_var->set_num_fields(0, 0, data.qsize + 1);
-      be_qdp_dss_var->register_field(elements.m_qdp, data.np1_qdp, data.qsize,
-                                     0);
-      be_qdp_dss_var->register_field(dss_var);
-      be_qdp_dss_var->registration_completed();
-    }
-
     be_qdp_dss_var->exchange();
   }
 
-  static void euler_step(const Control& data) {
-    if (data.limiter_option == 4) {
-      Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
-                            Errors::err_not_implemented);
-    }
-    EulerStepFunctor functor(data);
-    const auto &elements = Context::singleton().get_elements();
-    if (data.limiter_option == 8) {
+  void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
+                  const int rhs_multiplier, const Control::DSSOption::Enum DSSopt) {
+
+    m_data.n0_qdp         = n0_qdp;
+    m_data.np1_qdp        = np1_qdp;
+    m_data.dt             = dt;
+    m_data.rhs_multiplier = rhs_multiplier;
+    m_data.DSSopt         = DSSopt;
+
+    if (m_data.limiter_option == 8) {
       // when running lim8, we also need to limit the biharmonic, so that term
       // needs to be included in each euler step.  three possible algorithms
       // here:
@@ -466,28 +475,27 @@ public:
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
       GPTLstart("bihmix_qminmax");
 
-      // euler_qmin_qmax_c()
       compute_qmin_qmax();
 
-      if (data.rhs_multiplier == 0) {
+      if (m_data.rhs_multiplier == 0) {
         GPTLstart("eus_neighbor_minmax1");
-        neighbor_minmax(data);
+        neighbor_minmax();
         GPTLstop("eus_neighbor_minmax1");
-      } else if (data.rhs_multiplier == 2) {
-        functor.minmax_and_biharmonic();
+      } else if (m_data.rhs_multiplier == 2) {
+        minmax_and_biharmonic();
       }
       GPTLstop("bihmix_qminmax");
     }
     GPTLstart("eus_2d_advec");
     GPTLstart("advance_qdp");
 
-    functor.advect_and_limit();
+    advect_and_limit();
 
     GPTLstop("advance_qdp");
 
-    exchange_qdp_dss_var(data, elements);
+    exchange_qdp_dss_var();
 
-    apply_rspheremp(data, elements);
+    apply_rspheremp();
 
     GPTLstop("eus_2d_advec");
   }
