@@ -91,16 +91,24 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   // Initialize dp3d from ps
   Elements& elements = Context::singleton().get_elements();
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie   = ((idx / NUM_LEV) / NP) / NP;
-    const int igp  = ((idx / NUM_LEV) / NP) % NP;
-    const int jgp  =  (idx / NUM_LEV) % NP;
-    const int ilev =   idx % NUM_LEV;
+  const auto hybrid_ai_delta = data.hybrid_ai_delta;
+  const auto hybrid_bi_delta = data.hybrid_bi_delta;
+  const auto ps0 = data.ps0;
+  const auto ps_v = elements.m_ps_v;
+  {
+    const auto dp3d = elements.m_dp3d;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int ie   = ((idx / NUM_LEV) / NP) / NP;
+      const int igp  = ((idx / NUM_LEV) / NP) % NP;
+      const int jgp  =  (idx / NUM_LEV) % NP;
+      const int ilev =   idx % NUM_LEV;
 
-    elements.m_dp3d(ie,tl.n0,igp,jgp,ilev) = data.hybrid_ai_delta[ilev]*data.ps0
-                                           + data.hybrid_bi_delta[ilev]*elements.m_ps_v(ie,tl.n0,igp,jgp);
-  });
+      dp3d(ie,tl.n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*data.ps0
+                                  + hybrid_bi_delta[ilev]*ps_v(ie,tl.n0,igp,jgp);
+    });
+  }
+  ExecSpace::fence();
 
   // Loop over rsplit vertically lagrangian timesteps
   prim_step(dt,compute_diagnostics);
@@ -122,18 +130,23 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // lnps (we should get rid of this)
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;
-    const int iq   = (((idx / NUM_LEV) / NP) / NP) % data.qsize;
-    const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-    const int jgp  =   (idx / NUM_LEV) % NP;
-    const int ilev =    idx % NUM_LEV;
+  {
+    const auto Q = elements.m_Q;
+    const auto qdp = elements.m_qdp;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int ie   = (((idx / NUM_LEV) / NP) / NP) / data.qsize;
+      const int iq   = (((idx / NUM_LEV) / NP) / NP) % data.qsize;
+      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
+      const int jgp  =   (idx / NUM_LEV) % NP;
+      const int ilev =    idx % NUM_LEV;
 
-    elements.m_Q(ie,iq,igp,jgp,ilev) = elements.m_qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) /
-                                         ( data.hybrid_ai_delta[ilev]*data.ps0 +
-                                           data.hybrid_bi_delta[ilev]*elements.m_ps_v(ie,tl.np1,igp,jgp));
-  });
+      Q(ie,iq,igp,jgp,ilev) = qdp(ie,tl.np1_qdp,iq,igp,jgp,ilev) /
+                              ( hybrid_ai_delta[ilev]*ps0 +
+                                hybrid_bi_delta[ilev]*ps_v(ie,tl.np1,igp,jgp));
+    });
+  }
+  ExecSpace::fence();
 
   if (compute_diagnostics) {
     Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
