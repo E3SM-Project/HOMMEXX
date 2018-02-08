@@ -681,7 +681,6 @@ private:
 
         const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
         using Kokkos::parallel_for;
-        using Kokkos::parallel_reduce;
 
         Real* const data = team_data ?
           team_data + 2 * NP2 * team.team_rank() :
@@ -696,10 +695,10 @@ private:
           });
 
         Real sumc = 0;
-        parallel_reduce(tvr, [&] (const int& k, Real& isumc) { isumc += c[k]; }, sumc);
+        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& isumc) { isumc += c[k]; }, sumc);
         if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
         Real mass = 0;
-        parallel_reduce(tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
+        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
 
         Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
 
@@ -749,11 +748,10 @@ public: // Expose for unit testing.
 
         const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
         using Kokkos::parallel_for;
-        using Kokkos::parallel_reduce;
 
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
-          parallel_reduce(tvr, [&] (const int& k, Real& iaddmass) {
+          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
               if (x[k] > maxp) {
                 iaddmass += (x[k] - maxp)*c[k];
                 x[k] = maxp;
@@ -768,7 +766,7 @@ public: // Expose for unit testing.
 
           Real weightssum = 0;
           if (addmass > 0) {
-            parallel_reduce(tvr, [&] (const int& k, Real& iweightssum) {
+            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
                 if (x[k] < maxp)
                   iweightssum += c[k];
               }, weightssum);
@@ -778,7 +776,7 @@ public: // Expose for unit testing.
                   x[k] += adw;
               });
           } else {
-            parallel_reduce(tvr, [&] (const int& k, Real& iweightssum) {
+            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
                 if (x[k] > minp)
                   iweightssum += c[k];
               }, weightssum);
@@ -811,11 +809,10 @@ public: // Expose for unit testing.
 
         const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
         using Kokkos::parallel_for;
-        using Kokkos::parallel_reduce;
 
         // Clip.
         Real addmass = 0;
-        parallel_reduce(tvr, [&] (const int& k, Real& iaddmass) {
+        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
             if (x[k] > maxp) {
               iaddmass += (x[k] - maxp)*c[k];
               x[k] = maxp;
@@ -832,7 +829,7 @@ public: // Expose for unit testing.
         Real fac = 0;
         if (addmass > 0) {
           // Get sum of weights. Don't store them; we don't want another array.
-          parallel_reduce(tvr, [&] (const int& k, Real& ifac) {
+          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
               ifac += c[k]*(maxp - x[k]);
             }, fac);
           if (fac > 0) {
@@ -841,7 +838,7 @@ public: // Expose for unit testing.
             parallel_for(tvr, [&] (const int& k) { x[k] += fac*(maxp - x[k]); });
           }
         } else {
-          parallel_reduce(tvr, [&] (const int& k, Real& ifac) {
+          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
               ifac += c[k]*(x[k] - minp);
             }, fac);
           if (fac > 0) {
