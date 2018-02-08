@@ -43,7 +43,6 @@ public:
   ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
 
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_lnps;
 
   // q is tracer ratio, qdp is tracer mass
   ExecViewManaged<Scalar *                    [QSIZE_D][NP][NP][NUM_LEV]> m_Q;

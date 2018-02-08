@@ -653,13 +653,13 @@ contains
       type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
     end subroutine init_elements_2d_c
     subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
-                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr) bind(c)
+                                       elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
       type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-      type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+      type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
     end subroutine init_elements_states_c
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
@@ -1074,7 +1074,7 @@ contains
     elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
     elem_state_lnps_ptr = c_loc(elem_state_lnps)
     call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
-                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr)
+                                 elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 
     call init_boundary_exchanges_c ()
 #endif
