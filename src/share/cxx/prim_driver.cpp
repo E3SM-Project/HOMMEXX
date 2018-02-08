@@ -104,7 +104,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
       const int jgp  =  (idx / NUM_LEV) % NP;
       const int ilev =   idx % NUM_LEV;
 
-      dp3d(ie,tl.n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*data.ps0
+      dp3d(ie,tl.n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*ps0
                                   + hybrid_bi_delta[ilev]*ps_v(ie,tl.n0,igp,jgp);
     });
   }
