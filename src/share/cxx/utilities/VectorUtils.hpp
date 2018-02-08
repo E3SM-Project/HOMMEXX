@@ -1,8 +1,8 @@
 #ifndef HOMMEXX_VECTOR_UTILS_HPP
 #define HOMMEXX_VECTOR_UTILS_HPP
 
-#include "KokkosKernels_Vector.hpp"
-#include "Utility.hpp"
+#include "vector/KokkosKernels_Vector.hpp"
+#include "utilities/MathUtils.hpp"
 
 namespace KokkosKernels {
 namespace Batched {
