@@ -33,6 +33,7 @@ static constexpr const int VECTOR_SIZE = 4;
 #elif (AVX_VERSION == 512)
 static constexpr const int VECTOR_SIZE = 8;
 #endif
+static_assert(VECTOR_SIZE>0, "Error: VECTOR_SIZE=0!");
 
 static constexpr const int NUM_PHYSICAL_LEV = PLEV;
 static constexpr const int NUM_LEV =
