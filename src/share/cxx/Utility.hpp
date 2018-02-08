@@ -417,18 +417,16 @@ typename std::enable_if<
     void>::type
 sync_to_host(Source_T source, Dest_T dest) {
   typename Source_T::HostMirror source_mirror(
-      Kokkos::create_mirror_view(source));
+    Kokkos::create_mirror_view(source));
   Kokkos::deep_copy(source_mirror, source);
   for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int tracer = 0; tracer < QSIZE_D; ++tracer) {
-      for (int vector_level = 0, level = 0; vector_level < NUM_LEV;
-           ++vector_level) {
-        for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-          for (int igp = 0; igp < NP; ++igp) {
-            for (int jgp = 0; jgp < NP; ++jgp) {
-              dest(ie, tracer, level, igp, jgp) =
-                  source_mirror(ie, tracer, igp, jgp, vector_level)[vector];
-            }
+    for (int tracer = 0; tracer < source.extent_int(1); ++tracer) {
+      for (int k = 0; k < dest.extent_int(2); ++k) {
+        const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest(ie, tracer, k, igp, jgp) =
+              source_mirror(ie, tracer, igp, jgp, vi)[si];
           }
         }
       }
