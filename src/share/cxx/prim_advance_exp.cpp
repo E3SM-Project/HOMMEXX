@@ -22,6 +22,7 @@ void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
 void prim_advance_exp (const int nm1, const int n0, const int np1,
                        const Real dt, const bool compute_diagnostics)
 {
+  GPTLstart("tl-ae prim_advance_exp");
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -79,9 +80,9 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
-    GPTLstart("advance_hypervis_dp");
+    GPTLstart("tl-ae advance_hypervis_dp");
     advance_hypervis_dp(np1,dt,eta_ave_w);
-    GPTLstop("advance_hypervis_dp");
+    GPTLstop("tl-ae advance_hypervis_dp");
   }
 
 #ifdef ENERGY_DIAGNOSTICS
@@ -90,12 +91,13 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
                           Errors::err_not_implemented);
   }
 #endif
+  GPTLstop("tl-ae prim_advance_exp");
 }
 
 void u3_5stage_timestep(const int nm1, const int n0, const int np1,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics)
 {
-  GPTLstart("U3-5stage_timestep");
+  GPTLstart("tl-ae U3-5stage_timestep");
   // Get control and elements structures
   Control& data  = Context::singleton().get_control();
   Elements& elements = Context::singleton().get_elements();
@@ -169,7 +171,7 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
-  GPTLstop("U3-5stage_timestep");
+  GPTLstop("tl-ae U3-5stage_timestep");
 }
 
 void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,

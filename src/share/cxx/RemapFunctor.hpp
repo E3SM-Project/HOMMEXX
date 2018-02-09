@@ -728,9 +728,14 @@ template <> struct _RemapFunctorRSplit<true> {
   }
 };
 
+struct Remapper {
+  virtual ~Remapper () {}
+  virtual void run_remap(int np1, int n0_qdp, double dt) = 0;
+};
+
 template <bool nonzero_rsplit, template <int, typename...> class _RemapType,
           typename... RemapOptions>
-struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
+struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit> {
   static constexpr int remap_dim =
       _RemapFunctorRSplit<nonzero_rsplit>::remap_dim;
 
@@ -916,6 +921,13 @@ struct RemapFunctor : public _RemapFunctorRSplit<nonzero_rsplit> {
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     compute_intrinsic_state(kv, tgt_layer_thickness, state_remap[var]);
+  }
+
+  void run_remap(int np1, int n0_qdp, double dt) override {
+    m_data.np1 = np1;
+    m_data.n0_qdp = n0_qdp;
+    m_data.dt  = dt;
+    run_remap();
   }
 
   void run_remap() {
