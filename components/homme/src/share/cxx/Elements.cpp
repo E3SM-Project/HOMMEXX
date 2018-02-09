@@ -297,7 +297,7 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d) 
 
 void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   HostViewUnmanaged<const Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
-  sync_to_device(eta_dot_dpdn_f90,m_eta_dot_dpdn);
+  sync_to_device_i2p(eta_dot_dpdn_f90,m_eta_dot_dpdn);
 }
 
 void Elements::pull_qdp(CF90Ptr &state_qdp) {
@@ -338,7 +338,7 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) con
 
 void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   HostViewUnmanaged<Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
-  sync_to_host(m_eta_dot_dpdn,eta_dot_dpdn_f90);
+  sync_to_host_p2i(m_eta_dot_dpdn,eta_dot_dpdn_f90);
 }
 
 void Elements::push_qdp(F90Ptr &state_qdp) const {
