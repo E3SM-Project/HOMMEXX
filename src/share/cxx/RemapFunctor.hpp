@@ -12,6 +12,10 @@
 #include "Elements.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "utilities/LoopsUtils.hpp"
+#include "utilities/MathUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
+#include "utilities/SyncUtils.hpp"
 
 #include "profiling.hpp"
 

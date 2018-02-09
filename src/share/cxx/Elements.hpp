@@ -1,10 +1,7 @@
-#ifndef HOMMEXX_REGION_HPP
-#define HOMMEXX_REGION_HPP
+#ifndef HOMMEXX_ELEMENTS_HPP
+#define HOMMEXX_ELEMENTS_HPP
 
 #include "Types.hpp"
-#include "Utility.hpp"
-
-#include <Kokkos_Core.hpp>
 
 namespace Homme {
 
@@ -164,4 +161,4 @@ private:
 
 } // Homme
 
-#endif // HOMMEXX_REGION_HPP
+#endif // HOMMEXX_ELEMENTS_HPP

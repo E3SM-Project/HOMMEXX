@@ -6,7 +6,6 @@
 #include "ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
-#include "Utility.hpp"
 
 namespace Homme
 {

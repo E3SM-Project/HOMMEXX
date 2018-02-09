@@ -9,7 +9,7 @@
 #include "mpi/BuffersManager.hpp"
 #include "ErrorDefs.hpp"
 
-#include "Utility.hpp"
+#include "utilities/SyncUtils.hpp"
 
 #include "profiling.hpp"
 

@@ -8,7 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
 
 #include <assert.h>
 #include <stdio.h>
