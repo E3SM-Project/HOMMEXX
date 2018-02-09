@@ -189,6 +189,11 @@ ENDIF()
 
 IF(${BUILD_HOMME_PREQX_FLAT})
   ADD_SUBDIRECTORY(preqx_flat_ut)
+  # Setting HOMME_TESTS_NE and HOMME_TESTS_NDAYS, so the namelist.nl file in
+  # the test_exec/prtc* directories is usable. Since that namelist should be
+  # used for development/debugging purposes only, we use ne=2 and ndays=1
+  SET (HOMME_TESTS_NE 2)
+  SET (HOMME_TESTS_NDAYS 1)
   ADD_SUBDIRECTORY(prtcA_flat)
   ADD_SUBDIRECTORY(prtcA_flat_c)
   ADD_SUBDIRECTORY(prtcB_flat)
