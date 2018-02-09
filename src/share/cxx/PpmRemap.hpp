@@ -152,7 +152,7 @@ struct PpmVertRemap : public VertRemapAlg {
                                                                data.num_elems)),
         pin(ExecViewManaged<Real * [NP][NP][PIN_PHYSICAL_LEV]>("pin",
                                                                data.num_elems)),
-        ppmdx(ExecViewManaged<Real * [NP][NP][PPMDX_PHYSICAL_LEV][10]>(
+        ppmdx(ExecViewManaged<Real * [NP][NP][10][PPMDX_PHYSICAL_LEV]>(
             "ppmdx", data.num_elems)),
         z2(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z2",
                                                               data.num_elems)),
@@ -318,18 +318,18 @@ struct PpmVertRemap : public VertRemapAlg {
   void compute_grids(
       KernelVariables &kv,
       const ExecViewUnmanaged<const Real[DPO_PHYSICAL_LEV]> dx,
-      const ExecViewUnmanaged<Real[PPMDX_PHYSICAL_LEV][10]> grids) const {
+      const ExecViewUnmanaged<Real[10][PPMDX_PHYSICAL_LEV]> grids) const {
     {
       auto bounds = boundaries::grid_indices_1();
       Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, bounds.iterations()),
           [&](const int zoffset_j) {
             const int j = zoffset_j + *bounds.begin();
-            grids(j, 0) = dx(j + 1) / (dx(j) + dx(j + 1) + dx(j + 2));
+            grids(0, j) = dx(j + 1) / (dx(j) + dx(j + 1) + dx(j + 2));
 
-            grids(j, 1) = (2.0 * dx(j) + dx(j + 1)) / (dx(j + 1) + dx(j + 2));
+            grids(1, j) = (2.0 * dx(j) + dx(j + 1)) / (dx(j + 1) + dx(j + 2));
 
-            grids(j, 2) = (dx(j + 1) + 2.0 * dx(j + 2)) / (dx(j) + dx(j + 1));
+            grids(2, j) = (dx(j + 1) + 2.0 * dx(j + 2)) / (dx(j) + dx(j + 1));
           });
     }
 
@@ -339,20 +339,20 @@ struct PpmVertRemap : public VertRemapAlg {
                                                      bounds.iterations()),
                            [&](const int zoffset_j) {
         const int j = zoffset_j + *bounds.begin();
-        grids(j, 3) = dx(j + 1) / (dx(j + 1) + dx(j + 2));
+        grids(3, j) = dx(j + 1) / (dx(j + 1) + dx(j + 2));
 
-        grids(j, 4) = 1.0 / (dx(j) + dx(j + 1) + dx(j + 2) + dx(j + 3));
+        grids(4, j) = 1.0 / (dx(j) + dx(j + 1) + dx(j + 2) + dx(j + 3));
 
-        grids(j, 5) = (2.0 * dx(j + 1) * dx(j + 2)) / (dx(j + 1) + dx(j + 2));
+        grids(5, j) = (2.0 * dx(j + 1) * dx(j + 2)) / (dx(j + 1) + dx(j + 2));
 
-        grids(j, 6) = (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
+        grids(6, j) = (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
 
-        grids(j, 7) = (dx(j + 3) + dx(j + 2)) / (2.0 * dx(j + 2) + dx(j + 1));
+        grids(7, j) = (dx(j + 3) + dx(j + 2)) / (2.0 * dx(j + 2) + dx(j + 1));
 
-        grids(j, 8) =
+        grids(8, j) =
             dx(j + 1) * (dx(j) + dx(j + 1)) / (2.0 * dx(j + 1) + dx(j + 2));
 
-        grids(j, 9) =
+        grids(9, j) =
             dx(j + 2) * (dx(j + 2) + dx(j + 3)) / (dx(j + 1) + 2.0 * dx(j + 2));
       });
     }
@@ -362,7 +362,7 @@ struct PpmVertRemap : public VertRemapAlg {
   void compute_ppm(KernelVariables &kv,
                    // input  views
                    ExecViewUnmanaged<const Real[AO_PHYSICAL_LEV]> cell_means,
-                   ExecViewUnmanaged<const Real[PPMDX_PHYSICAL_LEV][10]> dx,
+                   ExecViewUnmanaged<const Real[10][PPMDX_PHYSICAL_LEV]> dx,
                    // buffer views
                    ExecViewUnmanaged<Real[DMA_PHYSICAL_LEV]> dma,
                    ExecViewUnmanaged<Real[AI_PHYSICAL_LEV]> ai,
@@ -379,8 +379,8 @@ struct PpmVertRemap : public VertRemapAlg {
                 (cell_means(j + 1) - cell_means(j)) >
             0.0) {
           Real da =
-              dx(j, 0) * (dx(j, 1) * (cell_means(j + 2) - cell_means(j + 1)) +
-                          dx(j, 2) * (cell_means(j + 1) - cell_means(j)));
+              dx(0, j) * (dx(1, j) * (cell_means(j + 2) - cell_means(j + 1)) +
+                          dx(2, j) * (cell_means(j + 1) - cell_means(j)));
 
           dma(j) = min(fabs(da), 2.0 * fabs(cell_means(j + 1) - cell_means(j)),
                        2.0 * fabs(cell_means(j + 2) - cell_means(j + 1))) *
@@ -397,10 +397,10 @@ struct PpmVertRemap : public VertRemapAlg {
           [&](const int zoffset_j) {
             const int j = zoffset_j + *bounds.begin();
             ai(j) = cell_means(j + 1) +
-                    dx(j, 3) * (cell_means(j + 2) - cell_means(j + 1)) +
-                    dx(j, 4) * (dx(j, 5) * (dx(j, 6) - dx(j, 7)) *
+                    dx(3, j) * (cell_means(j + 2) - cell_means(j + 1)) +
+                    dx(4, j) * (dx(5, j) * (dx(6, j) - dx(7, j)) *
                                     (cell_means(j + 2) - cell_means(j + 1)) -
-                                dx(j, 8) * dma(j + 1) + dx(j, 9) * dma(j));
+                                dx(8, j) * dma(j + 1) + dx(9, j) * dma(j));
           });
     }
     // TODO: Figure out and fix the issue which needs the Kokkos::single,
@@ -591,7 +591,7 @@ struct PpmVertRemap : public VertRemapAlg {
 
       ExecViewUnmanaged<Real[DPO_PHYSICAL_LEV]> point_dpo =
           Homme::subview(dpo, kv.ie, igp, jgp);
-      ExecViewUnmanaged<Real[PPMDX_PHYSICAL_LEV][10]> point_ppmdx =
+      ExecViewUnmanaged<Real[10][PPMDX_PHYSICAL_LEV]> point_ppmdx =
           Homme::subview(ppmdx, kv.ie, igp, jgp);
       compute_grids(kv, point_dpo, point_ppmdx);
     });
@@ -614,7 +614,7 @@ struct PpmVertRemap : public VertRemapAlg {
   ExecViewManaged<Real * [NP][NP][PIO_PHYSICAL_LEV]> pio;
   // pin corresponds to the points in each layer of the target layer thickness
   ExecViewManaged<Real * [NP][NP][PIN_PHYSICAL_LEV]> pin;
-  ExecViewManaged<Real * [NP][NP][PPMDX_PHYSICAL_LEV][10]> ppmdx;
+  ExecViewManaged<Real * [NP][NP][10][PPMDX_PHYSICAL_LEV]> ppmdx;
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z2;
   ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]> kid;
 
