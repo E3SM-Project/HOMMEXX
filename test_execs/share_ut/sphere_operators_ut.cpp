@@ -310,7 +310,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
   ExecViewManaged<Real * [2][2][NP][NP]> D_exec("D_cxx_exec", nelems);
   ExecViewManaged<Real * [NP][NP]> metdet_exec("metdet_cxx_exec", nelems);
   ExecViewManaged<Real * [2][NP][NP]> tmp_exec("tmp_cxx", nelems);
-  ExecViewManaged<Real * [2][NP][NP]> buffer("buffer_cxx");
+  ExecViewManaged<Real * [2][NP][NP]> buffer("buffer_cxx", nelems);
 
   // Output exec views
   HostViewManaged<Real * [NP][NP]> scalar_output("scalar_exec_output", nelems);
