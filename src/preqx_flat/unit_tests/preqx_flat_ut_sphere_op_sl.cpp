@@ -197,7 +197,9 @@ class compute_sphere_operator_test {
       Kokkos::subview(scalar_output_d, _index,
                       Kokkos::ALL, Kokkos::ALL);
 
-    laplace_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+    laplace_wk_sl(kv.team,
+                  Homme::subview(dinv_d,kv.ie),
+                  Homme::subview(spheremp_d,kv.ie), dvv_d,
                   local_temp1_d, local_scalar_input_d,
                   local_sphere_buf, local_scalar_output_d);
   };  // end of op() for laplace_simple
@@ -244,7 +246,9 @@ class compute_sphere_operator_test {
       Kokkos::subview(scalar_output_d, _index,
                       Kokkos::ALL, Kokkos::ALL);
 
-    divergence_sphere_wk_sl(kv, dinv_d, spheremp_d, dvv_d,
+    divergence_sphere_wk_sl(kv.team,
+                            Homme::subview(dinv_d,kv.ie),
+                            Homme::subview(spheremp_d,kv.ie), dvv_d,
                             local_vector_input_d,
                             local_sphere_buf,
                             local_scalar_output_d);
@@ -267,7 +271,7 @@ class compute_sphere_operator_test {
                       Kokkos::ALL, Kokkos::ALL,
                       Kokkos::ALL);
 
-    gradient_sphere_sl(kv, dinv_d, dvv_d,
+    gradient_sphere_sl(kv.team, Homme::subview(dinv_d,kv.ie), dvv_d,
                        local_scalar_input_d,
                        local_sphere_buf,
                        local_vector_output_d);

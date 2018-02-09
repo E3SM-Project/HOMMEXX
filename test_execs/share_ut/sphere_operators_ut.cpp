@@ -147,9 +147,11 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      gradient_sphere(kv, D_exec, dvv_exec,
-                      subview(input_exec, kv.ie, ALL, ALL, ALL), Homme::subview(buffer, kv.ie),
-                      subview(output_exec, kv.ie, ALL, ALL, ALL, ALL));
+      gradient_sphere(kv.team,
+                      Homme::subview(D_exec,kv.ie), dvv_exec,
+                      Homme::subview(input_exec, kv.ie),
+                      Homme::subview(buffer, kv.ie),
+                      Homme::subview(output_exec, kv.ie));
     });
 
     // Deep copy back to host
@@ -201,10 +203,13 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      divergence_sphere(kv, D_exec, metdet_exec,
+      divergence_sphere(kv.team,
+                        Homme::subview(D_exec,kv.ie),
+                        Homme::subview(metdet_exec,kv.ie),
                         dvv_exec,
-                        subview(input_exec, kv.ie, ALL, ALL, ALL, ALL),
-                        buffer, subview(output_exec, kv.ie, ALL, ALL, ALL));
+                        Homme::subview(input_exec, kv.ie),
+                        Homme::subview(buffer,kv.ie),
+                        Homme::subview(output_exec, kv.ie));
     });
 
     // Deep copy back to host
@@ -250,10 +255,13 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      vorticity_sphere_vector(kv, D_exec, metdet_exec,
-                       dvv_exec,
-                       subview(input_exec, kv.ie, ALL, ALL, ALL, ALL), buffer,
-                       subview(output_exec, kv.ie, ALL, ALL, ALL));
+      vorticity_sphere_vector(kv.team,
+                              Homme::subview(D_exec,kv.ie),
+                              Homme::subview(metdet_exec,kv.ie),
+                              dvv_exec,
+                              Homme::subview(input_exec, kv.ie),
+                              Homme::subview(buffer,kv.ie),
+                              Homme::subview(output_exec, kv.ie));
     });
 
     // Deep copy back to host
@@ -311,7 +319,7 @@ TEST_CASE("Single_Level_Sphere_Operators",
   ExecViewManaged<Real * [2][2][NP][NP]> D_exec("D_cxx_exec", nelems);
   ExecViewManaged<Real * [NP][NP]> metdet_exec("metdet_cxx_exec", nelems);
   ExecViewManaged<Real * [2][NP][NP]> tmp_exec("tmp_cxx", nelems);
-  ExecViewManaged<Real[2][NP][NP]> buffer("buffer_cxx");
+  ExecViewManaged<Real * [2][NP][NP]> buffer("buffer_cxx");
 
   // Output exec views
   HostViewManaged<Real * [NP][NP]> scalar_output("scalar_exec_output", nelems);
@@ -345,9 +353,11 @@ TEST_CASE("Single_Level_Sphere_Operators",
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         KernelVariables kv(team_member);
 
-        gradient_sphere_sl(kv, DInv_exec, deriv.get_dvv(),
-                           subview(scalar_exec, kv.ie, ALL, ALL), buffer,
-                           subview(vector_exec, kv.ie, ALL, ALL, ALL));
+        gradient_sphere_sl(kv.team,
+                           Homme::subview(DInv_exec,kv.ie), deriv.get_dvv(),
+                           Homme::subview(scalar_exec, kv.ie),
+                           Homme::subview(buffer,kv.ie),
+                           Homme::subview(vector_exec, kv.ie));
       });
 
       // Deep copy back to host
@@ -397,8 +407,12 @@ TEST_CASE("Single_Level_Sphere_Operators",
         ExecViewUnmanaged<Real[NP][NP]> div_ie =
             subview(scalar_exec, kv.ie, ALL, ALL);
 
-        divergence_sphere_sl(kv, DInv_exec, metdet_exec, deriv.get_dvv(),
-                             vector_ie, buffer, div_ie);
+        divergence_sphere_sl(kv.team,
+                             Homme::subview(DInv_exec,kv.ie),
+                             Homme::subview(metdet_exec,kv.ie), deriv.get_dvv(),
+                             Homme::subview(vector_exec,kv.ie),
+                             Homme::subview(buffer,kv.ie),
+                             Homme::subview(scalar_exec,kv.ie));
       });
 
       // Deep copy back to host
@@ -440,15 +454,14 @@ TEST_CASE("Single_Level_Sphere_Operators",
       Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
         KernelVariables kv(team_member);
 
-        ExecViewUnmanaged<Real[NP][NP]> vector_x_ie =
-            subview(vector_exec, kv.ie, 0, ALL, ALL);
-        ExecViewUnmanaged<Real[NP][NP]> vector_y_ie =
-            subview(vector_exec, kv.ie, 1, ALL, ALL);
-        ExecViewUnmanaged<Real[NP][NP]> vort_ie =
-            subview(scalar_exec, kv.ie, ALL, ALL);
-
-        vorticity_sphere_sl(kv, D_exec, metdet_exec, deriv.get_dvv(),
-                            vector_x_ie, vector_y_ie, buffer, vort_ie);
+        vorticity_sphere_sl(kv.team,
+                            Homme::subview(D_exec,kv.ie),
+                            Homme::subview(metdet_exec,kv.ie),
+                            deriv.get_dvv(),
+                            Homme::subview(vector_exec,kv.ie,0),
+                            Homme::subview(vector_exec,kv.ie,1),
+                            Homme::subview(buffer,kv.ie),
+                            Homme::subview(scalar_exec,kv.ie));
       });
 
       // Deep copy back to host
@@ -456,11 +469,11 @@ TEST_CASE("Single_Level_Sphere_Operators",
 
       for (int ie = 0; ie < nelems; ++ie) {
         // Compute f90
-        vorticity_sphere_c_callable(subview(vector_h, ie, ALL, ALL, ALL).data(),
+        vorticity_sphere_c_callable(Homme::subview(vector_h, ie).data(),
                                     dvv_h.data(),
-                                    subview(metdet_h, ie, ALL, ALL).data(),
-                                    subview(D_h, ie, ALL, ALL, ALL, ALL).data(),
-                                    subview(scalar_h, ie, ALL, ALL).data());
+                                    Homme::subview(metdet_h, ie).data(),
+                                    Homme::subview(D_h, ie).data(),
+                                    Homme::subview(scalar_h, ie).data());
         // Check the answer
         for (int i = 0; i < NP; ++i) {
           for (int j = 0; j < NP; ++j) {

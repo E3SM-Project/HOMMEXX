@@ -100,7 +100,8 @@ public:
         });
       kv.team_barrier();
     }
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+    laplace_simple(kv.team, Homme::subview(e.m_dinv,kv.ie),
+                   Homme::subview(e.m_spheremp,kv.ie), m_deriv.get_dvv(),
                    Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
@@ -129,7 +130,8 @@ public:
         });
     }
     kv.team_barrier();
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
+    laplace_simple(kv.team, Homme::subview(e.m_dinv,kv.ie),
+                   Homme::subview(e.m_spheremp,kv.ie), m_deriv.get_dvv(),
                    Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
@@ -235,10 +237,12 @@ public:
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
     start_timer("esf-precompute_divdp compute");
     KernelVariables kv(team);
-    divergence_sphere(kv, m_elements.m_dinv, m_elements.m_metdet,
+    divergence_sphere(kv.team,
+                      Homme::subview(m_elements.m_dinv,kv.ie),
+                      Homme::subview(m_elements.m_metdet,kv.ie),
                       m_deriv.get_dvv(),
                       Homme::subview(m_elements.m_derived_vn0, kv.ie),
-                      m_elements.buffers.div_buf,
+                      Homme::subview(m_elements.buffers.div_buf,kv.ie),
                       Homme::subview(m_elements.m_derived_divdp, kv.ie));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
@@ -606,7 +610,7 @@ private:
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     divergence_sphere_update(
-      kv, -m_data.dt, 1.0, dinv, metdet, dvv,
+      kv.team, -m_data.dt, 1.0, dinv, metdet, dvv,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qwrk, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
