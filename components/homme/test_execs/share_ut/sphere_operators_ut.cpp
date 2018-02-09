@@ -7,7 +7,9 @@
 #include "Derivative.hpp"
 #include "SphereOperators.hpp"
 #include "KernelVariables.hpp"
-#include "Utility.hpp"
+
+#include "utilities/SyncUtils.hpp"
+#include "utilities/TestUtils.hpp"
 
 using namespace Homme;
 
@@ -238,11 +240,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> input_h("input host",
                                                                   nelems);
     genRandArray(input_h, engine, dreal);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> input_1_exec("input 1 exec",
+    ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> input_exec("input exec",
                                                              nelems);
-    ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> input_2_exec("input 2 exec",
-                                                             nelems);
-    sync_to_device(input_h, input_1_exec, input_2_exec);
+    sync_to_device(input_h, input_exec);
 
     ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> output_exec("output exec",
                                                             nelems);
@@ -250,10 +250,9 @@ TEST_CASE("Multi_Level_Sphere_Operators",
     // Compute cxx
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(TeamMember team_member) {
       KernelVariables kv(team_member);
-      vorticity_sphere(kv, D_exec, metdet_exec,
+      vorticity_sphere_vector(kv, D_exec, metdet_exec,
                        dvv_exec,
-                       subview(input_1_exec, kv.ie, ALL, ALL, ALL),
-                       subview(input_2_exec, kv.ie, ALL, ALL, ALL), buffer,
+                       subview(input_exec, kv.ie, ALL, ALL, ALL, ALL), buffer,
                        subview(output_exec, kv.ie, ALL, ALL, ALL));
     });
 

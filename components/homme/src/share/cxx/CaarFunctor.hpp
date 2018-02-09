@@ -8,7 +8,8 @@
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
 
-#include "Utility.hpp"
+#include "utilities/SubviewUtils.hpp"
+
 #include "profiling.hpp"
 
 #include <assert.h>
@@ -78,7 +79,7 @@ struct CaarFunctor {
                    m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
                        m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev));
         m_elements.buffers.ephi(kv.ie, igp, jgp, ilev) =
-            k_energy + m_elements.m_phi(kv.ie, igp, jgp, ilev); 
+            k_energy + m_elements.m_phi(kv.ie, igp, jgp, ilev);
       });
     });
     kv.team_barrier();
@@ -116,7 +117,7 @@ struct CaarFunctor {
       compute_eta_dot_dpdn_vertadv_euler(kv);
       preq_vertadv(kv);
       accumulate_eta_dot_dpdn(kv);
-    } 
+    }
     compute_omega_p(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
@@ -220,8 +221,8 @@ struct CaarFunctor {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       for(int k = 0; k < NUM_LEV; ++k){
-        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) += 
-           m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k); 
+        m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) +=
+           m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k);
       }//k loop
     });
     kv.team_barrier();
@@ -253,7 +254,7 @@ struct CaarFunctor {
         const int kp1 = k+1;
         const int ilevp1 = kp1 / VECTOR_SIZE;
         const int ivecp1 = kp1 % VECTOR_SIZE;
-        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) += 
+        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) +=
            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
            m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
@@ -264,14 +265,14 @@ struct CaarFunctor {
         const int ivec = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
         m_elements.buffers.sdot_sum(kv.ie, igp, jgp) +=
            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
-      }      
+      }
 
       //note that index starts from 1
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
-        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] = 
-           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) - 
+        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] =
+           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
@@ -432,7 +433,7 @@ struct CaarFunctor {
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
-        const Scalar ttens = 
+        const Scalar ttens =
               (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
                   - vgrad_t
                   + PhysicalConstants::kappa *
@@ -484,7 +485,7 @@ struct CaarFunctor {
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
-      
+
       //first level
       int k = 0;
       int ilev = k / VECTOR_SIZE;
@@ -497,11 +498,11 @@ struct CaarFunctor {
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                        * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
       Real facm;
-      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] = 
+      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                   facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
       m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
-                  facp * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevp1)[ivecp1] - 
+                  facp * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec]       );
       m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
                   facp * (m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilevp1)[ivecp1] -
@@ -515,20 +516,20 @@ struct CaarFunctor {
         const int ivecm1 = km1 % VECTOR_SIZE;
         const int kp1 = k+1;
         const int ilevp1 = kp1 / VECTOR_SIZE;
-        const int ivecp1 = kp1 % VECTOR_SIZE; 
-        
+        const int ivecp1 = kp1 % VECTOR_SIZE;
+
         facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
         facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
-                 
+
         m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
                            m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    +
                    facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
                            m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
-       
+
         m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevp1)[ivecp1] -
                            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec] )
@@ -549,8 +550,8 @@ struct CaarFunctor {
       ivec = k % VECTOR_SIZE;
       const int km1 = k-1;
       const int ilevm1 = km1 / VECTOR_SIZE;
-      const int ivecm1 = km1 % VECTOR_SIZE;     
-      //note the (), just to comply with F 
+      const int ivecm1 = km1 % VECTOR_SIZE;
+      //note the (), just to comply with F
       facm = (0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]) )
            * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
 
@@ -568,7 +569,7 @@ struct CaarFunctor {
 
      });//NP*NP
      kv.team_barrier();
-  } // TESTED against preq_vertadv 
+  } // TESTED against preq_vertadv
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagPreExchange&, const TeamMember& team) const {
