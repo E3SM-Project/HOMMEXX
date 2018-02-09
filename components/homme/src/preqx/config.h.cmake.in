@@ -42,21 +42,14 @@
 /* Quadruple-precision */
 #cmakedefine01 HOMME_QUAD_PREC
 
-/* Fortran or C++ loops */
-#cmakedefine USE_KOKKOS_KERNELS
-
 /* Horizontal OpenMP (over elements) */
-#ifndef USE_KOKKOS_KERNELS
 #cmakedefine HORIZ_OPENMP
-#endif
 
 /* Vertical OpenMP (within elements) */
 #cmakedefine COLUMN_OPENMP
 
 /* Nested OpenMP (both horizontal and vertical) */
-#ifndef USE_KOKKOS_KERNELS
 #cmakedefine NESTED_OPENMP
-#endif
 
 /* Zoltan partitioning library */
 #cmakedefine01 HAVE_ZOLTAN
@@ -69,9 +62,3 @@
 
 /* Whether to use OpenMP4 */
 #cmakedefine OMP4
-
-/* Pointers in SW and PRIM */
-#cmakedefine HOMME_USE_FLAT_ARRAYS
-
-/* Whether to let kokkos parallelize also on elements (not just vertical levels) */
-#cmakedefine KOKKOS_PARALLELIZE_ON_ELEMENTS
