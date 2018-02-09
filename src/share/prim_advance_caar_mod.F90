@@ -9,13 +9,11 @@
 !
 module prim_advance_caar_mod
   use edgetype_mod,   only: EdgeBuffer_t
-#ifndef USE_KOKKOS_KERNELS
   use control_mod,    only: qsplit,rsplit
   use derivative_mod, only: derivative_t, vorticity, divergence, gradient, gradient_wk
   use dimensions_mod, only: np, nlev, nlevp, nvar, nc, nelemd
   use element_mod,    only: element_t
   use perf_mod,       only: t_startf, t_stopf
-#endif
   implicit none
   private
   save
@@ -23,7 +21,6 @@ module prim_advance_caar_mod
 
   type (EdgeBuffer_t) :: edge3p1
   public :: edge3p1
-#ifndef USE_KOKKOS_KERNELS
   public :: distribute_flux_at_corners, compute_and_apply_rhs
 
 contains
@@ -225,5 +222,4 @@ contains
       cflux(2,2,2) =                (corners(np  ,np+1) - corners(np,np  ))
     endif
   end subroutine distribute_flux_at_corners
-#endif
 end module prim_advance_caar_mod
