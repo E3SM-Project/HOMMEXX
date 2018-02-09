@@ -181,27 +181,15 @@ class compute_sphere_operator_test {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagSimpleLaplace &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-      Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                      Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_temp1_d =
-      Kokkos::subview(temp1_d, _index, Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-      Kokkos::subview(scalar_output_d, _index,
-                      Kokkos::ALL, Kokkos::ALL);
-
-    laplace_wk_sl(kv.team,
-                  Homme::subview(dinv_d,kv.ie),
-                  Homme::subview(spheremp_d,kv.ie), dvv_d,
-                  local_temp1_d, local_scalar_input_d,
-                  local_sphere_buf, local_scalar_output_d);
+    laplace_wk_sl(team, dvv_d,
+                  Homme::subview(dinv_d,ie),
+                  Homme::subview(spheremp_d,ie),
+                  Homme::subview(temp1_d,ie),
+                  Homme::subview(scalar_input_d,ie),
+                  Homme::subview(sphere_buf,ie),
+                  Homme::subview(scalar_output_d,ie));
   };  // end of op() for laplace_simple
 
   /*
@@ -233,48 +221,26 @@ class compute_sphere_operator_test {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagDivergenceSphereWk &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Real[2][NP][NP]> local_vector_input_d =
-      Kokkos::subview(vector_input_d, _index, Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[NP][NP]> local_scalar_output_d =
-      Kokkos::subview(scalar_output_d, _index,
-                      Kokkos::ALL, Kokkos::ALL);
-
-    divergence_sphere_wk_sl(kv.team,
-                            Homme::subview(dinv_d,kv.ie),
-                            Homme::subview(spheremp_d,kv.ie), dvv_d,
-                            local_vector_input_d,
-                            local_sphere_buf,
-                            local_scalar_output_d);
+    divergence_sphere_wk_sl(team, dvv_d,
+                            Homme::subview(dinv_d,ie),
+                            Homme::subview(spheremp_d,ie),
+                            Homme::subview(vector_input_d,ie),
+                            Homme::subview(sphere_buf,ie),
+                            Homme::subview(scalar_output_d,ie));
   };  // end of op() for divergence_sphere_wk
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradientSphere &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Real[NP][NP]> local_scalar_input_d =
-      Kokkos::subview(scalar_input_d, _index, Kokkos::ALL,
-                      Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_sphere_buf =
-      Kokkos::subview(sphere_buf, _index, Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Real[2][NP][NP]> local_vector_output_d =
-      Kokkos::subview(vector_output_d, _index,
-                      Kokkos::ALL, Kokkos::ALL,
-                      Kokkos::ALL);
-
-    gradient_sphere_sl(kv.team, Homme::subview(dinv_d,kv.ie), dvv_d,
-                       local_scalar_input_d,
-                       local_sphere_buf,
-                       local_vector_output_d);
+    gradient_sphere_sl(team, dvv_d,
+                       Homme::subview(dinv_d,ie),
+                       Homme::subview(scalar_input_d,ie),
+                       Homme::subview(sphere_buf,ie),
+                       Homme::subview(vector_output_d,ie));
   };
 
   // this could be even nicer,
@@ -323,19 +289,17 @@ TEST_CASE("testing_laplace_simple_sl",
 
   HostViewManaged<Real[NP][NP]> local_fortran_output("fortran results");
 
-  for(int _index = 0; _index < elements; _index++) {
-    HostViewManaged<Real[NP][NP]> local_scalar_input =
-        Kokkos::subview(testing_laplace.scalar_input_host,
-                        _index, Kokkos::ALL, Kokkos::ALL);
+  for(int ie = 0; ie < elements; ie++) {
+    HostViewUnmanaged<Real[NP][NP]> local_scalar_input =
+        Homme::subview(testing_laplace.scalar_input_host,
+                        ie);
 
-    HostViewManaged<Real[2][2][NP][NP]> local_dinv =
-        Kokkos::subview(testing_laplace.dinv_host, _index,
-                        Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[2][2][NP][NP]> local_dinv =
+        Homme::subview(testing_laplace.dinv_host, ie);
 
-    HostViewManaged<Real[NP][NP]> local_spheremp =
-        Kokkos::subview(testing_laplace.spheremp_host,
-                        _index, Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[NP][NP]> local_spheremp =
+        Homme::subview(testing_laplace.spheremp_host,
+                        ie);
 
     // run F code
     laplace_simple_c_callable(
@@ -351,14 +315,14 @@ TEST_CASE("testing_laplace_simple_sl",
             !std::isnan(local_fortran_output(igp, jgp)));
         REQUIRE(
             !std::isnan(testing_laplace.scalar_output_host(
-                _index, igp, jgp)));
+                ie, igp, jgp)));
         Real rel_error = compare_answers(
                     local_fortran_output(igp, jgp),
                     testing_laplace.scalar_output_host(
-                        _index, igp, jgp));
+                        ie, igp, jgp));
         REQUIRE(local_fortran_output(igp, jgp) ==
                     testing_laplace.scalar_output_host(
-                        _index, igp, jgp));
+                        ie, igp, jgp));
       }  // jgp
     }    // igp
   }      // end of for loop for elements
@@ -375,22 +339,18 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
 
   testing_divwk.run_functor_div_wk();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     Real local_fortran_output[NP][NP];
 
-    HostViewManaged<Real[2][NP][NP]> local_vector_input =
-        Kokkos::subview(testing_divwk.vector_input_host,
-                        _index, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL);
+    HostViewUnmanaged<Real[2][NP][NP]> local_vector_input =
+        Homme::subview(testing_divwk.vector_input_host,
+                        ie);
 
-    HostViewManaged<Real[2][2][NP][NP]> local_dinv =
-        Kokkos::subview(testing_divwk.dinv_host, _index,
-                        Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[2][2][NP][NP]> local_dinv =
+        Homme::subview(testing_divwk.dinv_host, ie);
 
-    HostViewManaged<Real[NP][NP]> local_spheremp =
-        Kokkos::subview(testing_divwk.spheremp_host, _index,
-                        Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[NP][NP]> local_spheremp =
+        Homme::subview(testing_divwk.spheremp_host, ie);
 
     Real vf[2][NP][NP];
     Real dvvf[NP][NP];
@@ -420,10 +380,10 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
             !std::isnan(local_fortran_output[igp][jgp]));
         REQUIRE(
             !std::isnan(testing_divwk.scalar_output_host(
-                _index, igp, jgp)));
+                ie, igp, jgp)));
         REQUIRE(local_fortran_output[igp][jgp] ==
                     testing_divwk.scalar_output_host(
-                        _index, igp, jgp));
+                        ie, igp, jgp));
       }  // jgp
     }    // igp
   };     // end of elements loop
@@ -441,17 +401,15 @@ TEST_CASE("Testing gradient_sphere_sl()",
   // running kokkos version of operator
   testing_grad.run_functor_gradient_sphere();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     Real local_fortran_output[2][NP][NP];
 
-    HostViewManaged<Real[NP][NP]> local_scalar_input =
-        Kokkos::subview(testing_grad.scalar_input_host,
-                        _index, Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[NP][NP]> local_scalar_input =
+        Homme::subview(testing_grad.scalar_input_host,
+                        ie);
 
-    HostViewManaged<Real[2][2][NP][NP]> local_dinv =
-        Kokkos::subview(testing_grad.dinv_host, _index,
-                        Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
+    HostViewUnmanaged<Real[2][2][NP][NP]> local_dinv =
+        Homme::subview(testing_grad.dinv_host, ie);
 
     Real sf[NP][NP];
     Real dvvf[NP][NP];
@@ -481,10 +439,10 @@ TEST_CASE("Testing gradient_sphere_sl()",
               local_fortran_output[_d][igp][jgp]));
           REQUIRE(
               !std::isnan(testing_grad.vector_output_host(
-                  _index, _d, igp, jgp)));
+                  ie, _d, igp, jgp)));
           REQUIRE(local_fortran_output[_d][igp][jgp] ==
                       testing_grad.vector_output_host(
-                          _index, _d, igp, jgp));
+                          ie, _d, igp, jgp));
         }  // end of comparing answers
 
   }  // end of loop for elements
