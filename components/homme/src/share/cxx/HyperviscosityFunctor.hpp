@@ -30,31 +30,30 @@ public:
   void operator() (const TagFirstLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    vlaplace_sphere_wk_contra(kv.team,
+    vlaplace_sphere_wk_contra(kv.team, m_data.nu_ratio, m_deriv.get_dvv(),
                               Homme::subview(m_elements.m_d,kv.ie),
                               Homme::subview(m_elements.m_dinv,kv.ie),
                               Homme::subview(m_elements.m_mp,kv.ie),
                               Homme::subview(m_elements.m_spheremp,kv.ie),
                               Homme::subview(m_elements.m_metinv,kv.ie),
                               Homme::subview(m_elements.m_metdet,kv.ie),
-                              m_deriv.get_dvv(), m_data.nu_ratio,
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
                               Homme::subview(m_elements.buffers.vorticity_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
@@ -68,31 +67,30 @@ public:
   void operator() (const TagLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie),
                    Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie),
                    Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    vlaplace_sphere_wk_contra(kv.team,
+    vlaplace_sphere_wk_contra(kv.team, m_data.nu_ratio, m_deriv.get_dvv(),
                               Homme::subview(m_elements.m_d,kv.ie),
                               Homme::subview(m_elements.m_dinv,kv.ie),
                               Homme::subview(m_elements.m_mp,kv.ie),
                               Homme::subview(m_elements.m_spheremp,kv.ie),
                               Homme::subview(m_elements.m_metinv,kv.ie),
                               Homme::subview(m_elements.m_metdet, kv.ie),
-                              m_deriv.get_dvv(), m_data.nu_ratio,
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
                               Homme::subview(m_elements.buffers.vorticity_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
@@ -172,14 +170,13 @@ public:
     // ThreadVectorRange
     if (m_data.nu_top > 0) {
       // TODO: Only run on the levels we need to 0-2
-    vlaplace_sphere_wk_contra(kv.team,
+    vlaplace_sphere_wk_contra(kv.team, m_data.nu_ratio, m_deriv.get_dvv(),
                               Homme::subview(m_elements.m_d,kv.ie),
                               Homme::subview(m_elements.m_dinv,kv.ie),
                               Homme::subview(m_elements.m_mp,kv.ie),
                               Homme::subview(m_elements.m_spheremp,kv.ie),
                               Homme::subview(m_elements.m_metinv,kv.ie),
                               Homme::subview(m_elements.m_metdet, kv.ie),
-                              m_deriv.get_dvv(), m_data.nu_ratio,
                               Homme::subview(m_elements.buffers.lapl_buf_1, kv.ie),
                               Homme::subview(m_elements.buffers.lapl_buf_2, kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf, kv.ie),
@@ -190,9 +187,9 @@ public:
                               // output
                               Homme::subview(laplace_v, kv.ie));
 
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    // input
                    Homme::subview(m_elements.m_t, kv.ie, m_data.np1),
@@ -200,9 +197,9 @@ public:
                    // output
                    Homme::subview(laplace_t, kv.ie));
 
-    laplace_simple(kv.team,
+    laplace_simple(kv.team, m_deriv.get_dvv(),
                    Homme::subview(m_elements.m_dinv,kv.ie),
-                   Homme::subview(m_elements.m_spheremp,kv.ie), m_deriv.get_dvv(),
+                   Homme::subview(m_elements.m_spheremp,kv.ie),
                    Homme::subview(m_elements.buffers.grad_buf, kv.ie),
                    // input
                    Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),

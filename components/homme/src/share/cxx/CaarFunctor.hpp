@@ -85,7 +85,8 @@ struct CaarFunctor {
     kv.team_barrier();
 
     gradient_sphere_update(
-        kv.team, Homme::subview(m_elements.m_dinv,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.ephi, kv.ie),
         Homme::subview(m_elements.buffers.grad_buf,kv.ie),
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
@@ -163,8 +164,9 @@ struct CaarFunctor {
     compute_energy_grad(kv);
 
     vorticity_sphere(
-        kv.team, Homme::subview(m_elements.m_d,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_d,kv.ie),
+        Homme::subview(m_elements.m_metdet,kv.ie),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
         Homme::subview(m_elements.buffers.curl_buf,kv.ie),
@@ -375,8 +377,9 @@ struct CaarFunctor {
     kv.team_barrier();
 
     divergence_sphere(
-        kv.team, Homme::subview(m_elements.m_dinv,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
+        Homme::subview(m_elements.m_metdet,kv.ie),
         Homme::subview(m_elements.buffers.vdp, kv.ie),
         Homme::subview(m_elements.buffers.div_buf,kv.ie),
         Homme::subview(m_elements.buffers.div_vdp, kv.ie));
@@ -417,7 +420,8 @@ struct CaarFunctor {
   void compute_temperature_np1(KernelVariables &kv) const {
 
     gradient_sphere(
-        kv.team, Homme::subview(m_elements.m_dinv,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
@@ -747,8 +751,7 @@ private:
 
       // Precompy this to the integration array to minimize data access and ops
       // in the Kokkos::single-protected cumsum.
-      const auto integration = Kokkos::subview(m_elements.m_phi,
-                                               kv.ie, igp, jgp, Kokkos::ALL());
+      const auto integration = Homme::subview(m_elements.m_phi, kv.ie, igp, jgp);
       Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NUM_LEV-1), [&] (const int& ilev) {
           integration(ilev) = rgas_tv_dp_over_p(ilev+1);
@@ -783,7 +786,8 @@ private:
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
     gradient_sphere(
-        kv.team, Homme::subview(m_elements.m_dinv,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
@@ -827,7 +831,8 @@ private:
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
     gradient_sphere(
-        kv.team, Homme::subview(m_elements.m_dinv,kv.ie), m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
