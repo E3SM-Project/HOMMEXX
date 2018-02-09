@@ -9,6 +9,7 @@
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 #include "RemapFunctor.hpp"
+#include "PpmRemap.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -17,6 +18,8 @@
 #include <random>
 
 using namespace Homme;
+using namespace Remap;
+using namespace Ppm;
 
 using rngAlg = std::mt19937_64;
 
