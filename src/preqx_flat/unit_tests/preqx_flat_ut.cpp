@@ -1026,11 +1026,11 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                                 TestType::dt, TestType::eta_ave_w, false);
 
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_host(elements.m_eta_dot_dpdn, eta_dot_total_f90);
+  sync_to_host_p2i(elements.m_eta_dot_dpdn, eta_dot_total_f90);
   //will run on device
   test_functor.run_functor();
 
-  sync_to_host(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
+  sync_to_host_p2i(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_adjust_eta_dot_dpdn_c_int(test_functor.eta_ave_w,
