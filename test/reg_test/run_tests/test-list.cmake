@@ -4,29 +4,37 @@ SET(HOMME_TESTS
   prtcA-r3-dry-f
   prtcB-r0-dry-f
   prtcB-r3-dry-f
-  prtcA-r0-dry-c
-  prtcA-r3-dry-c
-  prtcB-r0-dry-c
-  prtcB-r3-dry-c
+  prtcA-flat-r0-dry-f
+  prtcA-flat-r3-dry-f
+  prtcA-flat-r0-dry-c
+  prtcA-flat-r3-dry-c
+  prtcB-flat-r0-dry-f
+  prtcB-flat-r3-dry-f
+  prtcB-flat-r0-dry-c
+  prtcB-flat-r3-dry-c
   prtcA-r0-moist-f
   prtcA-r3-moist-f
   prtcB-r0-moist-f
   prtcB-r3-moist-f
-  prtcA-r0-moist-c
-  prtcA-r3-moist-c
-  prtcB-r0-moist-c
-  prtcB-r3-moist-c
+  prtcA-flat-r0-moist-f
+  prtcA-flat-r3-moist-f
+  prtcA-flat-r0-moist-c
+  prtcA-flat-r3-moist-c
+  prtcB-flat-r0-moist-f
+  prtcB-flat-r3-moist-f
+  prtcB-flat-r0-moist-c
+  prtcB-flat-r3-moist-c
 )
 
 #This list (COMPARE_F_C_TEST) contains tests for which
 #F vc C comparison will be run.
 SET (COMPARE_F_C_TEST
-  prtcA-r0-dry
-  prtcA-r3-dry
-  prtcB-r0-dry
-  prtcB-r3-dry
-  prtcA-r0-moist
-  prtcA-r3-moist
-  prtcB-r0-moist
-  prtcB-r3-moist
+  prtcA-flat-r0-dry
+  prtcA-flat-r3-dry
+  prtcB-flat-r0-dry
+  prtcB-flat-r3-dry
+  prtcA-flat-r0-moist
+  prtcA-flat-r3-moist
+  prtcB-flat-r0-moist
+  prtcB-flat-r3-moist
 )
