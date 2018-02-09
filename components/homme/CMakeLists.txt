@@ -66,16 +66,7 @@ IF (${HOMME_QUAD_PREC})
 ENDIF ()
 
 # Some options for conditional builds
-OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" OFF)
-OPTION(BUILD_HOMME_SWEQX_FLAT "Shallow water equations FEM with flattened arrays" OFF)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
-OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
-OPTION(BUILD_HOMME_PREQX_ACC "Primitive equations FEM with OpenACC" OFF)
-OPTION(BUILD_HOMME_SWIM  "Shallow water equations implicit" OFF)
-OPTION(BUILD_HOMME_PRIM  "Primitive equations implicit" OFF)
-
-# Cristoph's "standalone" executables
-OPTION(BUILD_HOMME_FVM  "Standalone FVM tracers" OFF)
 
 OPTION(REFSOLN "Whether to read/write reference soln data" FALSE)
 # Reference solution data
@@ -230,32 +221,8 @@ IF(${BUILD_HOMME_SWEQX})
   ADD_SUBDIRECTORY(src/sweqx)
 ENDIF()
 
-IF(${BUILD_HOMME_SWEQX_FLAT})
-  ADD_SUBDIRECTORY(src/sweqx_flat)
-ENDIF()
-
 IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(src/preqx)
-ENDIF()
-
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(src/preqx_flat)
-ENDIF()
-
-IF(${BUILD_HOMME_PREQX_ACC})
-  ADD_SUBDIRECTORY(src/preqx_acc)
-ENDIF()
-
-IF(${BUILD_HOMME_FVM})
-  ADD_SUBDIRECTORY(src/fvm)
-ENDIF()
-
-IF(${BUILD_HOMME_SWIM})
-  ADD_SUBDIRECTORY(src/swim)
-ENDIF()
-
-IF(${BUILD_HOMME_PRIM})
-  ADD_SUBDIRECTORY(src/prim)
 ENDIF()
 
 ADD_SUBDIRECTORY(test_execs)

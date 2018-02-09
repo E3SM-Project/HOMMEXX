@@ -1,5 +1,7 @@
 #ifndef CAM
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 module dcmip_tests
 
@@ -96,7 +98,7 @@ subroutine dcmip2012_test1_1(elem,hybrid,hvcoord,nets,nete,time,n0,n1)
       eta_dot = -g*rho*w/p0
 
       ! store vertical mass flux
-      elem(ie)%derived%eta_dot_dpdn_prescribed(i,j,k) = eta_dot * dp_dn
+      elem(ie)%derived%eta_dot_dpdn(i,j,k) = eta_dot * dp_dn
 
   enddo; enddo; enddo; enddo
 
@@ -163,7 +165,7 @@ subroutine dcmip2012_test1_2(elem,hybrid,hvcoord,nets,nete,time,n0,n1)
       eta_dot = -g*rho*w/p0
 
       ! store vertical mass flux
-      elem(ie)%derived%eta_dot_dpdn_prescribed(i,j,k) = eta_dot * dp_dn
+      elem(ie)%derived%eta_dot_dpdn(i,j,k) = eta_dot * dp_dn
 
   enddo; enddo; enddo; enddo
 
@@ -232,10 +234,10 @@ subroutine dcmip2012_test1_3(elem,hybrid,hvcoord,nets,nete,time,n0,n1,deriv)
 
       ! get vertical mass flux
       grad_p = gradient_sphere(p_i,deriv,elem(ie)%Dinv)
-      elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,k) = -u_i*grad_p(:,:,1) - v_i*grad_p(:,:,2)
+      elem(ie)%derived%eta_dot_dpdn(:,:,k) = -u_i*grad_p(:,:,1) - v_i*grad_p(:,:,2)
     enddo;
-    elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,1)     = 0
-    elem(ie)%derived%eta_dot_dpdn_prescribed(:,:,nlevp) = 0
+    elem(ie)%derived%eta_dot_dpdn(:,:,1)     = 0
+    elem(ie)%derived%eta_dot_dpdn(:,:,nlevp) = 0
   enddo;
 
 end subroutine
@@ -296,7 +298,7 @@ subroutine dcmip2012_test2_x(elem,hybrid,hvcoord,nets,nete,shear)
   logical,  parameter :: use_eta = .true.                               ! we are using hybrid eta coords
   real(rl), parameter ::   &
       Teq     = 300.d0,    &                                            ! temperature at equator
-      ztop    = 30000.d0,	 &                                            ! model top (m)
+      ztop    = 30000.d0,  &                                            ! model top (m)
       H       = Rd*Teq/g                                                ! characteristic height scale
 
   integer :: i,j,k,ie                                                   ! loop indices
@@ -345,7 +347,7 @@ subroutine dcmip2012_test2_x_forcing(elem,hybrid,hvcoord,nets,nete,n,dt)
 
   real(rl), parameter ::  &
     tau     = 25.0,       &   ! rayleigh function relaxation time
-    ztop    = 30000.d0,		&   ! model top
+    ztop    = 30000.d0,   &   ! model top
     zh      = 20000.d0        ! sponge-layer cutoff height
 
   real(rl) :: f_d(nlev)                                                 ! damping function
@@ -382,7 +384,7 @@ subroutine dcmip2012_test3(elem,hybrid,hvcoord,nets,nete)
   logical,  parameter :: use_eta = .true.                               ! we are using hybrid eta coords
 
   real(rl), parameter ::    &                                           ! parameters needed to get eta from z
-    T0      = 300.d0,       &	! temperature (k)
+    T0      = 300.d0,       & ! temperature (k)
     ztop    = 10000.d0,     & ! model top (m)
     N       = 0.01d0,       & ! Brunt-Vaisala frequency
     bigG    = (g*g)/(N*N*Cp)  ! temperature, isothermal

@@ -156,60 +156,16 @@ ENDIF ()
 # Test some stuff in the shared folder
 ADD_SUBDIRECTORY (share_ut)
 
-# Add the test exec subdirs for the sweqx executable
-IF(${BUILD_HOMME_SWEQX})
-  ADD_SUBDIRECTORY(swtcA)
-#  ADD_SUBDIRECTORY(swtcB)
-ENDIF()
-
-IF(${BUILD_HOMME_SWEQX_FLAT})
-  ADD_SUBDIRECTORY(sweqx_flat_ut)
-  ADD_SUBDIRECTORY(swtcA_flat)
-  ADD_SUBDIRECTORY(swtcB_flat)
-  ADD_SUBDIRECTORY(swtcA_flat_c)
-  ADD_SUBDIRECTORY(swtcB_flat_c)
-ENDIF()
-
-
 SET (HOMME_TESTS_NE 2)
 SET (HOMME_TESTS_NDAYS 1)
 
 # Add the test exec subdirs for the preqx executable
 IF(${BUILD_HOMME_PREQX})
-#  ADD_SUBDIRECTORY(baroC)
-#  ADD_SUBDIRECTORY(baroCam)
-#  ADD_SUBDIRECTORY(preqx-nlev20-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev20-native)
-#  ADD_SUBDIRECTORY(preqx-nlev30-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev30-native)
-#  ADD_SUBDIRECTORY(preqx-nlev60-interp)
-#  ADD_SUBDIRECTORY(preqx-nlev60-native)
-#  IF(${BUILD_HOMME_PREQX_ACC})
-#    ADD_SUBDIRECTORY(baroCam-acc)
-#  ENDIF()
-   ADD_SUBDIRECTORY(prtcA)
-   ADD_SUBDIRECTORY(prtcB)
-ENDIF()
-
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(preqx_flat_ut)
-  # Setting HOMME_TESTS_NE and HOMME_TESTS_NDAYS, so the namelist.nl file in
-  # the test_exec/prtc* directories is usable. Since that namelist should be
-  # used for development/debugging purposes only, we use ne=2 and ndays=1
-  ADD_SUBDIRECTORY(prtcA_flat)
-  ADD_SUBDIRECTORY(prtcA_flat_c)
-  ADD_SUBDIRECTORY(prtcB_flat)
-  ADD_SUBDIRECTORY(prtcB_flat_c)
-ENDIF()
-
-# Add the test exec subdirs for the prim executable
-IF(${BUILD_HOMME_PRIM})
-  ADD_SUBDIRECTORY(primA)
-ENDIF()
-
-# Add the test exec subdirs for the swim executable
-IF(${BUILD_HOMME_SWIM})
-  ADD_SUBDIRECTORY(swim5)
+  ADD_SUBDIRECTORY(prtcA)
+  ADD_SUBDIRECTORY(prtcB)
+  ADD_SUBDIRECTORY(preqx_ut)
+  ADD_SUBDIRECTORY(prtcA_c)
+  ADD_SUBDIRECTORY(prtcB_c)
 ENDIF()
 
 # Read the test-list.cmake file to get the HOMME_TESTS list
@@ -221,11 +177,6 @@ SET(TEST_DIR_LIST "")
 createTests(HOMME_TESTS ${HOMME_TESTING_PROFILE})
 
 CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST ${HOMME_TESTING_PROFILE})
-
-IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
-  # add a test dependency here:
-  set_property(TEST baroCamMoist-acc APPEND PROPERTY DEPENDS baroCamMoist)
-ENDIF()
 
 # End the file with the total number of test files
 FILE (APPEND ${HOMME_TEST_LIST} "\n")
