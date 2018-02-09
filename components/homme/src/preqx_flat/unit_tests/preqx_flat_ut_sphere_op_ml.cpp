@@ -851,6 +851,9 @@ TEST_CASE("Testing_laplace_tensor_replace_multilevel",
 
   compute_sphere_operator_test_ml testing_tensor_laplace(
       elements);
+  Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
+                    testing_tensor_laplace.scalar_input_d);
+
   testing_tensor_laplace
       .run_functor_tensor_laplace_replace();
 
@@ -876,9 +879,6 @@ TEST_CASE("Testing_laplace_tensor_replace_multilevel",
                 testing_tensor_laplace.dvv_host(_i, _j);
           }
         }
-        Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
-                          testing_tensor_laplace.scalar_input_d);
-
         Real _hp = 0.0;
         Real _hs = 1.0;
         bool _vc = true;
