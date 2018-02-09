@@ -109,17 +109,6 @@ contains
   end subroutine TimeLevel_Qdp
 
   subroutine TimeLevel_update(tl,uptype)
-#ifdef USE_KOKKOS_KERNELS
-    interface
-      subroutine update_time_level_c (uptype_int) bind(c)
-        use iso_c_binding, only: c_int
-        !
-        ! Inputs
-        !
-        integer (kind=c_int), intent(in) :: uptype_int
-      end subroutine update_time_level_c
-    end interface
-#endif
     type (TimeLevel_t) :: tl
     character(len=*)   :: uptype
 
@@ -149,13 +138,6 @@ contains
 !$OMP BARRIER
 #endif
 
-#ifdef USE_KOKKOS_KERNELS
-    if (uptype == "leapfrog") then
-      call update_time_level_c(0)
-    else
-      call update_time_level_c(-1)
-    endif
-#endif
   end subroutine TimeLevel_update
 
 end module time_mod
