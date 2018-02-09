@@ -225,6 +225,24 @@ sync_to_host(Source_T source, Dest_T dest)
   }
 }
 
+template <typename Source_T, typename Dest_T>
+typename std::enable_if<
+    (exec_view_mappable<Source_T, Real[10][NUM_PHYSICAL_LEV + 2]>::value &&
+         host_view_mappable<Dest_T, Real[NUM_PHYSICAL_LEV + 2][10]>::value),
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  typename Source_T::HostMirror source_mirror =
+      Kokkos::create_mirror_view(source);
+  Kokkos::deep_copy(source_mirror, source);
+  for (int i = 0; i < 10; ++i) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV + 2; ++level) {
+      const int ilev = level / VECTOR_SIZE;
+      const int ivec = level % VECTOR_SIZE;
+      dest(level, i) = source_mirror(i, level);
+    }
+  }
+}
+
 // These last two sync_to_host deal with views with NUM_INTERFACE_LEV levels on host,
 // and either copy the whole view to a view with NUM_LEV_P level packs (1st version) ,
 // or copy only the first NUM_PHYSICAL_LEV to a view with NUM_LEV level packs (2nd version)
