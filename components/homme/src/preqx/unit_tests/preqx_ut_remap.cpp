@@ -3,7 +3,8 @@
 #include "dimensions_remap_tests.hpp"
 
 #include "remap.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
@@ -375,7 +376,7 @@ TEST_CASE("remap_interface", "vertical remap") {
   Elements elements;
   elements.random_init(num_elems);
   data.np1 = 0;
-  data.qn0 = 0;
+  data.n0_qdp = 0;
   SECTION("states_only") {
     constexpr int rsplit = 1;
     data.qsize = 0;

@@ -6,7 +6,6 @@
 #include "ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
-#include "Utility.hpp"
 
 namespace Homme
 {
@@ -17,90 +16,13 @@ void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange&
                        Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre,
                        Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange>& policy_post);
 void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
-void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
-                            const Real dt, const bool compute_diagnostics);
 
 // -------------- IMPLEMENTATIONS -------------- //
 
-extern "C"
+void prim_advance_exp (const int nm1, const int n0, const int np1,
+                       const Real dt, const bool compute_diagnostics)
 {
-
-void prim_advance_exp_pull_data_c (CF90Ptr& elem_state_v_ptr, CF90Ptr& elem_state_t_ptr, CF90Ptr& elem_state_dp3d_ptr,
-                                   CF90Ptr& elem_derived_phi_ptr, CF90Ptr& elem_derived_omega_p_ptr, CF90Ptr& elem_derived_vn0_ptr,
-                                   CF90Ptr& elem_derived_eta_dot_dpdn_ptr, CF90Ptr& elem_state_Qdp_ptr,
-                                   CF90Ptr& elem_derived_dpdiss_ave_ptr, CF90Ptr& elem_derived_dpdiss_biharmonic_ptr)
-{
-  // Get elements and control structures
-  Elements& elements = Context::singleton().get_elements();
-  Control& control = Context::singleton().get_control ();
-
-  // Push data from Fortran pointers to C++ views
-  elements.pull_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
-  elements.pull_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
-  elements.pull_eta_dot(elem_derived_eta_dot_dpdn_ptr);
-  elements.pull_qdp(elem_state_Qdp_ptr);
-
-  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
-  HostViewUnmanaged<const Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
-
-  sync_to_device(dpdiss_ave_f90       , elements.m_derived_dpdiss_ave       );
-  sync_to_device(dpdiss_biharmonic_f90, elements.m_derived_dpdiss_biharmonic);
-}
-
-void prim_advance_exp_push_results_c (F90Ptr& elem_state_v_ptr, F90Ptr& elem_state_t_ptr, F90Ptr& elem_state_dp3d_ptr,
-                                      F90Ptr& elem_derived_phi_ptr, F90Ptr& elem_derived_omega_p_ptr, F90Ptr& elem_derived_vn0_ptr,
-                                      F90Ptr& elem_derived_eta_dot_dpdn_ptr, F90Ptr& elem_state_Qdp_ptr,
-                                      F90Ptr& elem_derived_dpdiss_ave_ptr, F90Ptr& elem_derived_dpdiss_biharmonic_ptr)
-{
-  // Get elements and control structures
-  Elements& elements = Context::singleton().get_elements();
-  Control& control = Context::singleton().get_control ();
-
-  // Push data from C++ views to Fortran pointers
-  elements.push_4d(elem_state_v_ptr, elem_state_t_ptr, elem_state_dp3d_ptr);
-  elements.push_3d(elem_derived_phi_ptr, elem_derived_omega_p_ptr, elem_derived_vn0_ptr);
-  elements.push_eta_dot(elem_derived_eta_dot_dpdn_ptr);
-  elements.push_qdp(elem_state_Qdp_ptr);
-
-  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_ave_f90       (elem_derived_dpdiss_ave_ptr,        control.num_elems);
-  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> dpdiss_biharmonic_f90(elem_derived_dpdiss_biharmonic_ptr, control.num_elems);
-
-  sync_to_host(elements.m_derived_dpdiss_ave,        dpdiss_ave_f90);
-  sync_to_host(elements.m_derived_dpdiss_biharmonic, dpdiss_biharmonic_f90);
-}
-
-void prim_advance_exp_c(const Real& dt, const bool& compute_diagnostics)
-{
-  // Get simulation params
-  SimulationParams& params = Context::singleton().get_simulation_params();
-
-  // Sanity check
-  assert(params.params_set);
-
-  // Get time level info
-  TimeLevel& tl = Context::singleton().get_time_level();
-
-  prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
-  tl.tevolve += dt;
-  for (int iter=1; iter<params.qsplit; ++iter) {
-    // Update time levels
-    tl.update_dynamics_levels(UpdateType::LEAPFROG);
-
-    prim_advance_exp_iter(tl.nm1,tl.n0,tl.np1,dt,false);
-    tl.tevolve += dt;
-  }
-  // Note: Fortran comment says "the last time level update is deferred till after Q update"
-  //       Since I don't knokw exactly when that is, I put a hook in the TimeLevel_update
-  //       subroutine in Fortran for a c function that updates the C++ TimeLevel structure.
-  //       This way, I don't have to worry where that update is. After all, soon enough we
-  //       will convert to C that part too (wherever it is), so this is just temporary.
-}
-
-} // extern "C"
-
-void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
-                            const Real dt, const bool compute_diagnostics)
-{
+  GPTLstart("tl-ae prim_advance_exp");
   // Get control and simulation params
   Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -111,10 +33,10 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
 
   // Get time level info, and determine the tracers time level
   TimeLevel& tl = Context::singleton().get_time_level();
-  data.qn0 = -1;
+  data.n0_qdp= -1;
   if (params.moisture == MoistDry::MOIST) {
     tl.update_tracers_levels(params.qsplit);
-    data.qn0 = tl.n0_qdp;
+    data.n0_qdp = tl.n0_qdp;
   }
 
   // Set eta_ave_w
@@ -158,9 +80,9 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
-    GPTLstart("advance_hypervis_dp");
+    GPTLstart("tl-ae advance_hypervis_dp");
     advance_hypervis_dp(np1,dt,eta_ave_w);
-    GPTLstop("advance_hypervis_dp");
+    GPTLstop("tl-ae advance_hypervis_dp");
   }
 
 #ifdef ENERGY_DIAGNOSTICS
@@ -169,12 +91,13 @@ void prim_advance_exp_iter (const int nm1, const int n0, const int np1,
                           Errors::err_not_implemented);
   }
 #endif
+  GPTLstop("tl-ae prim_advance_exp");
 }
 
 void u3_5stage_timestep(const int nm1, const int n0, const int np1,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics)
 {
-  GPTLstart("U3-5stage_timestep");
+  GPTLstart("tl-ae U3-5stage_timestep");
   // Get control and elements structures
   Control& data  = Context::singleton().get_control();
   Elements& elements = Context::singleton().get_elements();
@@ -226,24 +149,29 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
-  Kokkos::parallel_for(
-    policy_post,
-    KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
-       const int ie = it / (NP*NP*NUM_LEV);
-       const int igp = (it / (NP*NUM_LEV)) % NP;
-       const int jgp = (it / NUM_LEV) % NP;
-       const int ilev = it % NUM_LEV;
-       elements.m_t(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_t(ie,nm1,igp,jgp,ilev)-elements.m_t(ie,n0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,0,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,0,igp,jgp,ilev)-elements.m_v(ie,n0,0,igp,jgp,ilev))/4.0;
-       elements.m_v(ie,nm1,1,igp,jgp,ilev) = (5.0*elements.m_v(ie,nm1,1,igp,jgp,ilev)-elements.m_v(ie,n0,1,igp,jgp,ilev))/4.0;
-       elements.m_dp3d(ie,nm1,igp,jgp,ilev) = (5.0*elements.m_dp3d(ie,nm1,igp,jgp,ilev)-elements.m_dp3d(ie,n0,igp,jgp,ilev))/4.0;
-  });
+  {
+    const auto t = elements.m_t;
+    const auto v = elements.m_v;
+    const auto dp3d = elements.m_dp3d;
+    Kokkos::parallel_for(
+      policy_post,
+      KOKKOS_LAMBDA(const CaarFunctor::TagPostExchange&, const int it) {
+         const int ie = it / (NP*NP*NUM_LEV);
+         const int igp = (it / (NP*NUM_LEV)) % NP;
+         const int jgp = (it / NUM_LEV) % NP;
+         const int ilev = it % NUM_LEV;
+         t(ie,nm1,igp,jgp,ilev) = (5.0*t(ie,nm1,igp,jgp,ilev)-t(ie,n0,igp,jgp,ilev))/4.0;
+         v(ie,nm1,0,igp,jgp,ilev) = (5.0*v(ie,nm1,0,igp,jgp,ilev)-v(ie,n0,0,igp,jgp,ilev))/4.0;
+         v(ie,nm1,1,igp,jgp,ilev) = (5.0*v(ie,nm1,1,igp,jgp,ilev)-v(ie,n0,1,igp,jgp,ilev))/4.0;
+         dp3d(ie,nm1,igp,jgp,ilev) = (5.0*dp3d(ie,nm1,igp,jgp,ilev)-dp3d(ie,n0,igp,jgp,ilev))/4.0;
+    });
+  }
   ExecSpace::fence();
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   caar_monolithic(elements,functor,*be[np1],policy_pre,policy_post);
-  GPTLstop("U3-5stage_timestep");
+  GPTLstop("tl-ae U3-5stage_timestep");
 }
 
 void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,

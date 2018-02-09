@@ -22,7 +22,7 @@ public:
   using value_type = double;
   using real_type = double;
 
-  enum : int { vector_length = 4 };
+  static const int vector_length = 4;
 
   union data_type {
     __m256d v;

@@ -8,7 +8,8 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -768,14 +769,10 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
                 local_fortran_output[1][igp][jgp]));
 
             // what is 128 here?
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+            REQUIRE(local_fortran_output[0][igp][jgp] ==
+                        coutput0);
+            REQUIRE(local_fortran_output[1][igp][jgp] ==
+                        coutput1);
           }  // jgp
         }    // igp
       }      // v
@@ -832,11 +829,8 @@ TEST_CASE("Testing divergence_sphere_wk()",
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
-            // what is 128 here?
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[igp][jgp],
-                        coutput0, 128.0));
+            REQUIRE(local_fortran_output[igp][jgp] ==
+                        coutput0);
           }  // jgp
         }    // igp
       }      // v
@@ -895,10 +889,8 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
             // what is 128 here?
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[igp][jgp],
-                        coutput0, 128.0));
+            REQUIRE(local_fortran_output[igp][jgp] ==
+                        coutput0);
           }  // jgp
         }    // igp
       }      // v
@@ -968,17 +960,11 @@ TEST_CASE("Testing laplace_tensor() multilevel",
                 testing_tensor_laplace.scalar_output_host(
                     _index, igp, jgp, level)[v];
 
-            // std::cout << igp << "," << jgp << " F output
-            // = " <<  local_fortran_output[igp][jgp] << ", C
-            // output" << coutput0 << "\n";
-
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[igp][jgp],
-                        coutput0, 128.0));
+            REQUIRE(local_fortran_output[igp][jgp] ==
+                        coutput0);
           }  // jgp
         }    // igp
       }      // v
@@ -1045,10 +1031,8 @@ TEST_CASE("Testing_laplace_tensor_replace_multilevel",
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[igp][jgp],
-                        coutput0, 128.0));
+            REQUIRE(local_fortran_output[igp][jgp] ==
+                        coutput0);
           }  // jgp
         }    // igp
       }      // v
@@ -1103,26 +1087,6 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             Real coutput1 = testing_curl.vector_output_host(
                 _index, 1, igp, jgp, level)[v];
 
-            /*
-            std::cout << igp << "," << jgp << " F output0  =
-            " << local_fortran_output[0][igp][jgp] << ", C
-            output0 = " << coutput0 << "\n"; std::cout <<
-            "difference=" <<
-            local_fortran_output[0][igp][jgp] - coutput0 <<
-            "\n"; std::cout << "rel difference=" <<
-            (local_fortran_output[0][igp][jgp] -
-            coutput0)/coutput0 << "\n";
-
-            std::cout << "difference=" <<
-            local_fortran_output[1][igp][jgp] - coutput1 <<
-            "\n"; std::cout << "rel difference=" <<
-            (local_fortran_output[1][igp][jgp] -
-            coutput1)/coutput1 << "\n";
-
-            std::cout << "epsilon = " <<
-            std::numeric_limits<Real>::epsilon() << "\n";
-            */
-
             REQUIRE(!std::isnan(
                     local_fortran_output(0, igp, jgp)));
             REQUIRE(!std::isnan(
@@ -1131,27 +1095,9 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
 
-#ifdef KOKKOS_HAVE_CUDA
-            if (level == 0 && igp == 0 && jgp == 0)
-              std::cout << "***** BAD Remove this when this gets figured out on GPU *****\n";
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output(0, igp, jgp),
-                        coutput0, 10024.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output(1, igp, jgp),
-                        coutput1, 10024.0));
-#else
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output(0, igp, jgp),
-                        coutput0, 1024.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output(1, igp, jgp),
-                        coutput1, 1024.0));
-#endif
+            REQUIRE(local_fortran_output(0, igp, jgp) ==
+                        coutput0);
+            REQUIRE(local_fortran_output(1, igp, jgp) == coutput1);
 
           }  // jgp
         }    // igp
@@ -1216,26 +1162,6 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
             Real coutput1 = testing_grad.vector_output_host(
                 _index, 1, igp, jgp, level)[v];
 
-            /*
-             * std::cout << igp << "," << jgp << " F output0
-             * = " << local_fortran_output[0][igp][jgp] <<
-             * ", C output0 = " << coutput0 << "\n";
-             * std::cout << "difference=" <<
-             * local_fortran_output[0][igp][jgp] - coutput0
-             * << "\n"; std::cout << "rel difference=" <<
-             * (local_fortran_output[0][igp][jgp] -
-             * coutput0)/coutput0 << "\n";
-             *
-             * std::cout << "difference=" <<
-             * local_fortran_output[1][igp][jgp] - coutput1
-             * << "\n"; std::cout << "rel difference=" <<
-             * (local_fortran_output[1][igp][jgp] -
-             * coutput1)/coutput1 << "\n";
-             *
-             * std::cout << "epsilon = " <<
-             * std::numeric_limits<Real>::epsilon() << "\n";
-             * */
-
             REQUIRE(!std::isnan(
                 local_fortran_output[0][igp][jgp]));
 
@@ -1244,14 +1170,10 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
 
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+            REQUIRE(local_fortran_output[0][igp][jgp] ==
+                        coutput0);
+            REQUIRE(local_fortran_output[1][igp][jgp] ==
+                        coutput1);
 
           }  // jgp
         }    // igp
@@ -1342,14 +1264,10 @@ TEST_CASE(
                 local_fortran_output[1][igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+            REQUIRE(local_fortran_output[0][igp][jgp] ==
+                        coutput0);
+            REQUIRE(local_fortran_output[1][igp][jgp] ==
+                        coutput1);
           }  // jgp
         }    // igp
       }      // v
@@ -1445,14 +1363,10 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
                 local_fortran_output[1][igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[0][igp][jgp],
-                        coutput0, 128.0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[1][igp][jgp],
-                        coutput1, 128.0));
+            REQUIRE(local_fortran_output[0][igp][jgp] ==
+                        coutput0);
+            REQUIRE(local_fortran_output[1][igp][jgp] ==
+                        coutput1);
           }  // jgp
         }    // igp
       }      // v
@@ -1507,10 +1421,8 @@ TEST_CASE("Testing vorticity_sphere_vector()",
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
-            REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                    compare_answers(
-                        local_fortran_output[igp][jgp],
-                        coutput0, 128.0));
+            REQUIRE(local_fortran_output[igp][jgp] ==
+                        coutput0);
           }  // jgp
         }    // igp
       }      // v

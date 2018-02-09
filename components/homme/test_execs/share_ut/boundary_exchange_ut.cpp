@@ -4,7 +4,7 @@
 #include "BuffersManager.hpp"
 #include "BoundaryExchange.hpp"
 #include "Connectivity.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
 #include "Types.hpp"
 
 #include <random>

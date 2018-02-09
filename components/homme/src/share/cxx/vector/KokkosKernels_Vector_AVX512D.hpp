@@ -19,7 +19,7 @@ public:
   using value_type = double;
   using real_type = double;
 
-  enum : int { vector_length = 8 };
+  static const int vector_length = 8;
 
   union data_type {
     __m512d v;

@@ -5,7 +5,7 @@
 #include "Control.hpp"
 #include "profiling.hpp"
 
-#include "vector/VectorUtils.hpp"
+#include "utilities/VectorUtils.hpp"
 
 namespace Homme
 {
@@ -468,7 +468,7 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
             fields_3d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
                                   helpers.CONNECTION_PTS_FWD[icorner][0].jp, ilev)
               += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
-        }        
+        }
       });
   }
   ExecSpace::fence();
@@ -554,7 +554,7 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
       // local connections we need to manually copy on the remote element
       // lid. We can do it here
       const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
-      
+
       send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MAX_ID) =
         fields_1d(field_lidpos.lid, ifield, MAX_ID)[ilev];
       send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MIN_ID) =
