@@ -378,7 +378,7 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    gradient_sphere(kv, dinv_d, dvv_d,
+    gradient_sphere(kv.team, Homme::subview(dinv_d,kv.ie), dvv_d,
                     local_scalar_input_d,
                     Homme::subview(sphere_buf, kv.ie),
                     local_vector_output_d);
@@ -401,7 +401,9 @@ class compute_sphere_operator_test_ml {
             scalar_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    divergence_sphere_wk(kv, dinv_d, spheremp_d,
+    divergence_sphere_wk(kv.team,
+                         Homme::subview(dinv_d,kv.ie),
+                         Homme::subview(spheremp_d,kv.ie),
                          dvv_d, local_vector_input_d,
                          Homme::subview(sphere_buf, kv.ie),
                          local_scalar_output_d);
@@ -428,9 +430,13 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    laplace_simple(
-        kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-        local_scalar_input_d, Homme::subview(sphere_buf, kv.ie), local_scalar_output_d);
+    laplace_simple(kv.team,
+                   Homme::subview(dinv_d,kv.ie),
+                   Homme::subview(spheremp_d,kv.ie),
+                   dvv_d, local_temp1_d,
+                   local_scalar_input_d,
+                   Homme::subview(sphere_buf, kv.ie),
+                   local_scalar_output_d);
   }  // end of op() for laplace_wk_ml
 
   KOKKOS_INLINE_FUNCTION
@@ -454,10 +460,14 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
-                   tensor_d, local_temp1_d,
+    laplace_tensor(kv.team,
+                   Homme::subview(dinv_d,kv.ie),
+                   Homme::subview(spheremp_d,kv.ie),
+                   dvv_d,
+                   Homme::subview(tensor_d,kv.ie),
+                   local_temp1_d,
                    local_scalar_input_d,
-                   sphere_buf,
+                   Homme::subview(sphere_buf,kv.ie),
                    local_scalar_output_d);
   }  // end of op() for laplace_tensor multil
 
@@ -482,9 +492,13 @@ class compute_sphere_operator_test_ml {
             temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-          laplace_tensor_replace(
-              kv, dinv_d, spheremp_d, dvv_d, tensor_d,
-              local_temp1_d, sphere_buf, local_scalar_input_d);
+    laplace_tensor_replace(kv.team,
+                           Homme::subview(dinv_d,kv.ie),
+                           Homme::subview(spheremp_d,kv.ie), dvv_d,
+                           Homme::subview(tensor_d,kv.ie),
+                           local_temp1_d,
+                           Homme::subview(sphere_buf,kv.ie),
+                           local_scalar_input_d);
 
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
           [&](const int idx) {
@@ -512,9 +526,11 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
+    curl_sphere_wk_testcov(kv.team,
+                           Homme::subview(d_d,kv.ie),
+                           Homme::subview(mp_d,kv.ie), dvv_d,
                            local_scalar_input_d,
-                           sphere_buf,
+                           Homme::subview(sphere_buf,kv.ie),
                            local_vector_output_d);
   }  // end of op() for curl_sphere_wk_testcov
 
@@ -533,9 +549,14 @@ class compute_sphere_operator_test_ml {
             vector_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
 
-    grad_sphere_wk_testcov(
-        kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
-        local_scalar_input_d, sphere_buf, local_vector_output_d);
+    grad_sphere_wk_testcov(kv.team,
+                           Homme::subview(d_d,kv.ie),
+                           Homme::subview(mp_d,kv.ie),
+                           Homme::subview(metinv_d,kv.ie),
+                           Homme::subview(metdet_d,kv.ie), dvv_d,
+                           local_scalar_input_d,
+                           Homme::subview(sphere_buf,kv.ie),
+                           local_vector_output_d);
   }  // end of op() for grad_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
@@ -571,12 +592,14 @@ class compute_sphere_operator_test_ml {
         Kokkos::subview(temp6_d, _index, Kokkos::ALL,
                         Kokkos::ALL, Kokkos::ALL);
 
-    vlaplace_sphere_wk_cartesian_reduced(
-        kv, dinv_d, spheremp_d, tensor_d,
-        vec_sph2cart_d, dvv_d, local_temp1_d,
-        local_temp4_d, local_temp5_d, local_temp6_d,
-        sphere_buf,
-        local_vector_input_d, local_vector_output_d);
+    vlaplace_sphere_wk_cartesian_reduced (kv.team,
+                                          Homme::subview(dinv_d,kv.ie),
+                                          Homme::subview(spheremp_d,kv.ie),
+                                          Homme::subview(tensor_d,kv.ie),
+                                          Homme::subview(vec_sph2cart_d,kv.ie), dvv_d, local_temp1_d,
+                                          local_temp4_d, local_temp5_d, local_temp6_d,
+                                          Homme::subview(sphere_buf,kv.ie),
+                                          local_vector_input_d, local_vector_output_d);
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -614,12 +637,17 @@ class compute_sphere_operator_test_ml {
                         Kokkos::ALL, Kokkos::ALL);
 
     // don't forget to introduce nu_ratio
-    vlaplace_sphere_wk_contra(
-        kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
-        metdet_d, dvv_d, nu_ratio, local_temp4_d,
-        local_temp5_d, local_temp1_d, local_temp2_d,
-        sphere_buf,
-        local_vector_input_d, local_vector_output_d);
+    vlaplace_sphere_wk_contra(kv.team,
+                              Homme::subview(d_d,kv.ie),
+                              Homme::subview(dinv_d,kv.ie),
+                              Homme::subview(mp_d,kv.ie),
+                              Homme::subview(spheremp_d,kv.ie),
+                              Homme::subview(metinv_d,kv.ie),
+                              Homme::subview(metdet_d,kv.ie),
+                              dvv_d, nu_ratio, local_temp4_d,
+                              local_temp5_d, local_temp1_d, local_temp2_d,
+                              Homme::subview(sphere_buf,kv.ie),
+                              local_vector_input_d, local_vector_output_d);
   }  // end of op() for laplace_tensor multil
 
 
@@ -639,10 +667,13 @@ class compute_sphere_operator_test_ml {
             scalar_output_d, _index, Kokkos::ALL,
             Kokkos::ALL, Kokkos::ALL);
 
-    vorticity_sphere_vector(kv, d_d, metdet_d,
-                         dvv_d, local_vector_input_d,
-                         sphere_buf,
-                         local_scalar_output_d);
+    vorticity_sphere_vector(kv.team,
+                            Homme::subview(d_d,kv.ie),
+                            Homme::subview(metdet_d,kv.ie),
+                            dvv_d,
+                            local_vector_input_d,
+                            Homme::subview(sphere_buf,kv.ie),
+                            local_scalar_output_d);
   }  // end of op() for vorticity_sphere_vector multilevel
 
 
