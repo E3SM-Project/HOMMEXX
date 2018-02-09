@@ -137,7 +137,7 @@ template <class T, int l> struct VectorTag {
       "KokkosKernels:: Invalid VectorUnitTag<> type.");
 
   using type = VectorTag;
-  enum : int { length = l };
+  static const int length = l;
 };
 
 // Tags for BLAS

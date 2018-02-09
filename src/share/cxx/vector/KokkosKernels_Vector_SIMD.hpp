@@ -19,9 +19,7 @@ public:
   using member_type = typename tag_type::member_type;
   using data_type = value_type[l];
 
-  enum : int {
-    vector_length = tag_type::length
-  };
+  static const int vector_length = tag_type::length;
 
   KOKKOS_INLINE_FUNCTION
   static const char *label() { return "SIMD"; }

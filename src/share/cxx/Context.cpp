@@ -9,6 +9,7 @@
 #include "BoundaryExchange.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
+#include "VerticalRemapManager.hpp"
 
 namespace Homme {
 
@@ -51,6 +52,11 @@ SimulationParams& Context::get_simulation_params() {
 TimeLevel& Context::get_time_level() {
   if ( ! time_level_) time_level_.reset(new TimeLevel());
   return *time_level_;
+}
+
+VerticalRemapManager& Context::get_vertical_remap_manager() {
+  if ( ! vertical_remap_mgr_) vertical_remap_mgr_.reset(new VerticalRemapManager());
+  return *vertical_remap_mgr_;
 }
 
 std::shared_ptr<BuffersManager> Context::get_buffers_manager(short int exchange_type) {
@@ -96,6 +102,7 @@ void Context::clear() {
   buffers_managers_ = nullptr;
   simulation_params_ = nullptr;
   time_level_ = nullptr;
+  vertical_remap_mgr_ = nullptr;
 }
 
 Context& Context::singleton() {

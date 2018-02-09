@@ -156,13 +156,13 @@ ENDIF ()
 # Test some stuff in the shared folder
 ADD_SUBDIRECTORY (share_ut)
 
+SET (HOMME_TESTS_NE 2)
+SET (HOMME_TESTS_NDAYS 1)
+
 # Add the test exec subdirs for the preqx executable
 IF(${BUILD_HOMME_PREQX})
-   ADD_SUBDIRECTORY(prtcA)
-   ADD_SUBDIRECTORY(prtcB)
-ENDIF()
-
-IF(${BUILD_HOMME_PREQX})
+  ADD_SUBDIRECTORY(prtcA)
+  ADD_SUBDIRECTORY(prtcB)
   ADD_SUBDIRECTORY(preqx_ut)
   ADD_SUBDIRECTORY(prtcA_c)
   ADD_SUBDIRECTORY(prtcB_c)

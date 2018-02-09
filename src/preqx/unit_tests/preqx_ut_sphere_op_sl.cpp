@@ -8,7 +8,7 @@
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-#include "Utility.hpp"
+#include "utilities/TestUtils.hpp"
 
 #include <assert.h>
 #include <stdio.h>
@@ -352,11 +352,9 @@ TEST_CASE("testing_laplace_simple_sl",
                     local_fortran_output(igp, jgp),
                     testing_laplace.scalar_output_host(
                         _index, igp, jgp));
-        REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                compare_answers(
-                    local_fortran_output(igp, jgp),
+        REQUIRE(local_fortran_output(igp, jgp) ==
                     testing_laplace.scalar_output_host(
-                        _index, igp, jgp)));
+                        _index, igp, jgp));
       }  // jgp
     }    // igp
   }      // end of for loop for elements
@@ -419,11 +417,9 @@ TEST_CASE("Testing div_wk_sl()", "div_wk_sl") {
         REQUIRE(
             !std::isnan(testing_divwk.scalar_output_host(
                 _index, igp, jgp)));
-        REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                compare_answers(
-                    local_fortran_output[igp][jgp],
+        REQUIRE(local_fortran_output[igp][jgp] ==
                     testing_divwk.scalar_output_host(
-                        _index, igp, jgp)));
+                        _index, igp, jgp));
       }  // jgp
     }    // igp
   };     // end of elements loop
@@ -482,11 +478,9 @@ TEST_CASE("Testing gradient_sphere_sl()",
           REQUIRE(
               !std::isnan(testing_grad.vector_output_host(
                   _index, _d, igp, jgp)));
-          REQUIRE(std::numeric_limits<Real>::epsilon() >=
-                  compare_answers(
-                      local_fortran_output[_d][igp][jgp],
+          REQUIRE(local_fortran_output[_d][igp][jgp] ==
                       testing_grad.vector_output_host(
-                          _index, _d, igp, jgp)));
+                          _index, _d, igp, jgp));
         }  // end of comparing answers
 
   }  // end of loop for elements
