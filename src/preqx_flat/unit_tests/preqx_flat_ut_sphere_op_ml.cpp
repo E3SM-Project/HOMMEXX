@@ -348,8 +348,8 @@ class compute_sphere_operator_test_ml {
   struct TagCurlSphereWkTestCovML {};
   // tag for grad_sphere_wk_testcov
   struct TagGradSphereWkTestCovML {};
-  // tag for vlaplace_sphere_wk_cartesian_reduced
-  struct TagVLaplaceCartesianReducedML {};
+  // tag for vlaplace_sphere_wk_cartesian
+  struct TagVLaplaceCartesianML {};
   // tag for vlaplace_sphere_wk_contra
   struct TagVLaplaceContraML {};
   // tag for vorticity_sphere
@@ -419,20 +419,6 @@ class compute_sphere_operator_test_ml {
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagTensorLaplaceReplaceML &,
-                  TeamMember team) const {
-    const int ie = team.league_rank();
-
-    laplace_tensor_replace(team, dvv_d,
-                           Homme::subview(dinv_d,ie),
-                           Homme::subview(spheremp_d,ie),
-                           Homme::subview(tensor_d,ie),
-                           Homme::subview(temp1_d,ie),
-                           Homme::subview(sphere_buf,ie),
-                           Homme::subview(scalar_input_d,ie));
-  }  // end of op() for laplace_tensor multil
-
-  KOKKOS_INLINE_FUNCTION
   void operator()(const TagCurlSphereWkTestCovML &,
                   TeamMember team) const {
     const int ie = team.league_rank();
@@ -461,22 +447,22 @@ class compute_sphere_operator_test_ml {
   }  // end of op() for grad_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagVLaplaceCartesianReducedML &,
+  void operator()(const TagVLaplaceCartesianML &,
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    vlaplace_sphere_wk_cartesian_reduced (team, dvv_d,
-                                          Homme::subview(dinv_d,ie),
-                                          Homme::subview(spheremp_d,ie),
-                                          Homme::subview(tensor_d,ie),
-                                          Homme::subview(vec_sph2cart_d,ie),
-                                          Homme::subview(temp1_d,ie),
-                                          Homme::subview(temp4_d,ie),
-                                          Homme::subview(temp5_d,ie),
-                                          Homme::subview(temp6_d,ie),
-                                          Homme::subview(sphere_buf,ie),
-                                          Homme::subview(vector_input_d,ie),
-                                          Homme::subview(vector_output_d,ie));
+    vlaplace_sphere_wk_cartesian (team, dvv_d,
+                                  Homme::subview(dinv_d,ie),
+                                  Homme::subview(spheremp_d,ie),
+                                  Homme::subview(tensor_d,ie),
+                                  Homme::subview(vec_sph2cart_d,ie),
+                                  Homme::subview(temp1_d,ie),
+                                  Homme::subview(temp4_d,ie),
+                                  Homme::subview(temp5_d,ie),
+                                  Homme::subview(temp6_d,ie),
+                                  Homme::subview(sphere_buf,ie),
+                                  Homme::subview(vector_input_d,ie),
+                                  Homme::subview(vector_output_d,ie));
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
@@ -546,13 +532,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_tensor_laplace_replace() const {
-    auto policy = Homme::get_default_team_policy<ExecSpace, TagTensorLaplaceReplaceML>(_num_elems);
-    Kokkos::parallel_for(policy, *this);
-    ExecSpace::fence();
-    Kokkos::deep_copy(scalar_output_host, scalar_input_d);
-  };
-
   void run_functor_curl_sphere_wk_testcov() const {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagCurlSphereWkTestCovML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
@@ -568,7 +547,7 @@ class compute_sphere_operator_test_ml {
   };
 
   void run_functor_vlaplace_cartesian_reduced() const {
-    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianReducedML>(_num_elems);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
@@ -844,74 +823,6 @@ TEST_CASE("Testing laplace_tensor() multilevel",
       << "test laplace_tensor multilevel finished. \n";
 
 }  // end of test laplace_tensor multilevel
-
-TEST_CASE("Testing_laplace_tensor_replace_multilevel",
-          "laplace_tensor_replace") {
-  constexpr const int elements = 10;
-
-  compute_sphere_operator_test_ml testing_tensor_laplace(
-      elements);
-  Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
-                    testing_tensor_laplace.scalar_input_d);
-
-  testing_tensor_laplace
-      .run_functor_tensor_laplace_replace();
-
-  for(int ie = 0; ie < elements; ie++) {
-    for(int level = 0; level < NUM_LEV; ++level) {
-      for(int v = 0; v < VECTOR_SIZE; ++v) {
-        Real local_fortran_output[NP][NP];
-        Real sf[NP][NP];
-        Real dvvf[NP][NP];
-        Real sphf[NP][NP];
-
-        for(int _i = 0; _i < NP; _i++) {
-          for(int _j = 0; _j < NP; _j++) {
-
-            sf[_i][_j] =
-                testing_tensor_laplace.scalar_input_host(
-                    ie, _i, _j, level)[v];
-
-            sphf[_i][_j] =
-                testing_tensor_laplace.spheremp_host(
-                    ie, _i, _j);
-            dvvf[_i][_j] =
-                testing_tensor_laplace.dvv_host(_i, _j);
-          }
-        }
-        Real _hp = 0.0;
-        Real _hs = 1.0;
-        bool _vc = true;
-
-        laplace_sphere_wk_c_callable(
-            &(sf[0][0]), &(dvvf[0][0]),
-            &testing_tensor_laplace.dinv_host(ie, 0, 0, 0, 0),
-            &(sphf[0][0]),
-            &testing_tensor_laplace.tensor_host(ie, 0, 0, 0, 0),
-            _hp, _hs, _vc,
-            &(local_fortran_output[0][0]));
-
-        for(int igp = 0; igp < NP; ++igp) {
-          for(int jgp = 0; jgp < NP; ++jgp) {
-            Real coutput0 =
-                testing_tensor_laplace.scalar_output_host(
-                    ie, igp, jgp, level)[v];
-
-            REQUIRE(!std::isnan(
-                local_fortran_output[igp][jgp]));
-            REQUIRE(!std::isnan(coutput0));
-            REQUIRE(local_fortran_output[igp][jgp] ==
-                        coutput0);
-          }  // jgp
-        }    // igp
-      }      // v
-    }        // level
-  }          //ie
-
-  std::cout << "test laplace_tensor_replace multilevel "
-               "finished. \n";
-
-}  // end of test laplace_tensor_replace multilevel
 
 TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
           "curl_sphere_wk_testcov") {

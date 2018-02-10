@@ -596,47 +596,6 @@ laplace_tensor(const TeamMember &team,
   divergence_sphere_wk(team, dvv, DInv, spheremp, grad_s, sphere_buf, laplace);
 }//end of laplace_tensor
 
-//a version of laplace_tensor where input is replaced by output
-KOKKOS_INLINE_FUNCTION void
-laplace_tensor_replace(const TeamMember &team,
-                       const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
-                       const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          DInv, // for grad, div
-                       const ExecViewUnmanaged<const Real         [NP][NP]>          spheremp,     // for div
-                       const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
-                             ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> grad_s, // temp to store grad
-                             ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
-                             ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace) //input/output
-{
-  gradient_sphere(team, dvv, DInv, laplace, sphere_buf, grad_s);
-  constexpr int num_iters = NP * NP;
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_iters),
-                     [&](const int loop_idx) {
-    const int igp = loop_idx / NP;
-    const int jgp = loop_idx % NP;
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV), [&] (const int& ilev) {
-      sphere_buf(0,igp,jgp,ilev) = tensorVisc(0,0,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                                       + tensorVisc(1,0,igp,jgp) * grad_s(1,igp,jgp,ilev);
-      sphere_buf(1,igp,jgp,ilev) = tensorVisc(0,1,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                                       + tensorVisc(1,1,igp,jgp) * grad_s(1,igp,jgp,ilev);
-    });
-  });
-  team.team_barrier();
-
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_iters),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP;
-    const int jgp = loop_idx % NP;
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV), [&] (const int& ilev) {
-      grad_s(0,igp,jgp,ilev) = sphere_buf(0,igp,jgp,ilev);
-      grad_s(1,igp,jgp,ilev) = sphere_buf(1,igp,jgp,ilev);
-    });
-  });
-  team.team_barrier();
-
-  divergence_sphere_wk(team, dvv, DInv, spheremp, grad_s, sphere_buf, laplace);
-}//end of laplace_tensor_replace
-
-//check mp, why is it an ie quantity?
 KOKKOS_INLINE_FUNCTION void
 curl_sphere_wk_testcov(const TeamMember &team,
                        const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
@@ -761,10 +720,6 @@ grad_sphere_wk_testcov(const TeamMember &team,
   team.team_barrier();
 }
 
-
-//this version needs too many temp vars
-//needs dvv, dinv, spheremp, tensor, vec_sph2cart,
-//NOT TESTED, not verified, MISSING LINES FOR RIGID ROTATION
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_cartesian(const TeamMember &team,
                              const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
@@ -772,88 +727,16 @@ vlaplace_sphere_wk_cartesian(const TeamMember &team,
                              const ExecViewUnmanaged<const Real         [NP][NP]>          spheremp,
                              const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
                              const ExecViewUnmanaged<const Real   [2][3][NP][NP]>          vec_sph2cart,
-                            //temps to store results
+                             //temp vars
                                    ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> grads,
-                                   ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> component0,
-                                   ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> component1,
-                                   ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> component2,
                                    ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace0,
                                    ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace1,
                                    ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace2,
-                             const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
                                    ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
-                                   ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) {
-//  Scalar dum_cart[2][NP][NP];
-  constexpr int np_squared = NP * NP;
-//  constexpr int np_squared_3;
-/* // insert after debugging? still won't work because dum_comp cannot be input for laplace
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared_3),
-                       [&](const int loop_idx) {
-    const int comp = loop_idx % 3 ;        //fastest
-    const int igp = (loop_idx / 3 ) / NP ; //slowest
-    const int jgp = (loop_idx / 3 ) % NP;
-    dum_cart[comp][igp][jgp] = vec_sph2cart(0,comp,igp,jgp)*vector(0,igp,jgp)
-                        + vec_sph2cart(1,comp,igp,jgp)*vector(1,igp,jgp) ;
-}
-*/
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-//this is for debug
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV), [&] (const int& ilev) {
-      component0(igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,0,igp,jgp)*vector(1,igp,jgp,ilev);
-      component1(igp,jgp,ilev) = vec_sph2cart(0,1,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,1,igp,jgp)*vector(1,igp,jgp,ilev);
-      component2(igp,jgp,ilev) = vec_sph2cart(0,2,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,2,igp,jgp)*vector(1,igp,jgp,ilev);
-    });
-  });
-  team.team_barrier();
-//apply laplace to each component
-//WE NEED LAPLACE_UPDATE(or replace?), way too many temp vars
-  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,component0,sphere_buf,laplace0);
-  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,component1,sphere_buf,laplace1);
-  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,component2,sphere_buf,laplace2);
-
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV), [&] (const int& ilev) {
-      laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
-                              + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
-                              + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev);
-
-      laplace(1,igp,jgp,ilev) = vec_sph2cart(1,0,igp,jgp)*laplace0(igp,jgp,ilev)
-                              + vec_sph2cart(1,1,igp,jgp)*laplace1(igp,jgp,ilev)
-                              + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev);
-    });
-  });
-  team.team_barrier();
-
-}//end of vlaplace_cartesian
-
-
-
-KOKKOS_INLINE_FUNCTION void
-vlaplace_sphere_wk_cartesian_reduced(const TeamMember &team,
-                                     const ExecViewUnmanaged<const Real         [NP][NP]>          dvv,
-                                     const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          Dinv,
-                                     const ExecViewUnmanaged<const Real         [NP][NP]>          spheremp,
-                                     const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
-                                     const ExecViewUnmanaged<const Real   [2][3][NP][NP]>          vec_sph2cart,
-                                     //temp vars
-                                           ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> grads,
-                                           ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace0,
-                                           ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace1,
-                                           ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace2,
-                                           ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
-                                     //input
-                                     const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
-                                     //output
-                                           ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace)
+                             //input
+                             const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
+                             //output
+                                   ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace)
 {
   constexpr int np_squared = NP * NP;
   Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
@@ -871,9 +754,10 @@ vlaplace_sphere_wk_cartesian_reduced(const TeamMember &team,
   });
   team.team_barrier();
 
-  laplace_tensor_replace(team,dvv,Dinv,spheremp,tensorVisc,grads,sphere_buf,laplace0);
-  laplace_tensor_replace(team,dvv,Dinv,spheremp,tensorVisc,grads,sphere_buf,laplace1);
-  laplace_tensor_replace(team,dvv,Dinv,spheremp,tensorVisc,grads,sphere_buf,laplace2);
+  // Use laplace* as input, and then overwrite it with the output (saves temporaries)
+  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace0,sphere_buf,laplace0);
+  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace1,sphere_buf,laplace1);
+  laplace_tensor(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace2,sphere_buf,laplace2);
 
   Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
                        [&](const int loop_idx) {
@@ -904,27 +788,7 @@ vlaplace_sphere_wk_cartesian_reduced(const TeamMember &team,
     });
   });
   team.team_barrier();
-} // end of divergence_sphere_wk
-
-/*
-#define UNDAMPRRCART
-#ifdef UNDAMPRRCART
-//rigid rotation is not damped
-//this code can be brought to the loop above
-
-  Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
-                       [&](const int loop_idx) {
-    const int igp = loop_idx / NP; //slowest
-    const int jgp = loop_idx % NP; //fastest
-    laplace(0,igp,jgp,team.ilev) += 2.0*spheremp(igp,jgp)*vector(0,igp,jgp,team.ilev)
-                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
-
-    laplace(1,igp,jgp,team.ilev) += 2.0*spheremp(igp,jgp)*vector(1,igp,jgp,team.ilev)
-                               *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
-  });
-
-#endif
-*/
+} // end of vlaplace_sphere_wk_cartesian
 
 KOKKOS_INLINE_FUNCTION void
 vlaplace_sphere_wk_contra(const TeamMember &team,
@@ -942,9 +806,7 @@ vlaplace_sphere_wk_contra(const TeamMember &team,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> gradcov,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> curlcov,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
-//input, later write a version to replace input with output
                           const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
-//output
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) {
 
   divergence_sphere(team,dvv,dinv,metdet,vector,sphere_buf,div);
