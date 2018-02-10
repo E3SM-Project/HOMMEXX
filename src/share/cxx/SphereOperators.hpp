@@ -814,17 +814,15 @@ vlaplace_sphere_wk_contra(const TeamMember &team,
                           const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          metinv,
                           const ExecViewUnmanaged<const Real         [NP][NP]>          metdet,
 //temps
-                                ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> div,
-                                ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> vort,
+                                ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> div_vort_temp,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> gradcov,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> curlcov,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> sphere_buf,
                           const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) {
 
-  divergence_sphere<NUM_LEV_REQUEST>(team,dvv,dinv,metdet,vector,sphere_buf,div);
-  vorticity_sphere_vector<NUM_LEV_REQUEST>(team,dvv,d,metdet,vector,sphere_buf,vort);
-
+  // grad(div(v))
+  divergence_sphere<NUM_LEV_REQUEST>(team,dvv,dinv,metdet,vector,sphere_buf,div_vort_temp);
   constexpr int np_squared = NP * NP;
   if (nu_ratio>0 && nu_ratio!=1.0) {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
@@ -832,14 +830,16 @@ vlaplace_sphere_wk_contra(const TeamMember &team,
       const int igp = loop_idx / NP; //slow
       const int jgp = loop_idx % NP; //fast
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        div(igp,jgp,ilev) *= nu_ratio;
+        div_vort_temp(igp,jgp,ilev) *= nu_ratio;
       });
     });
     team.team_barrier();
   }
+  grad_sphere_wk_testcov<NUM_LEV_REQUEST>(team,dvv,d,mp,metinv,metdet,div_vort_temp,sphere_buf,gradcov);
 
-  grad_sphere_wk_testcov<NUM_LEV_REQUEST>(team,dvv,d,mp,metinv,metdet,div,sphere_buf,gradcov);
-  curl_sphere_wk_testcov<NUM_LEV_REQUEST>(team,dvv,d,mp,vort,sphere_buf,curlcov);
+  // curl(curl(v))
+  vorticity_sphere_vector<NUM_LEV_REQUEST>(team,dvv,d,metdet,vector,sphere_buf,div_vort_temp);
+  curl_sphere_wk_testcov<NUM_LEV_REQUEST>(team,dvv,d,mp,div_vort_temp,sphere_buf,curlcov);
 
   Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
                       [&](const int loop_idx) {
