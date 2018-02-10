@@ -157,9 +157,9 @@ public:
                    ++parabola_coeff) {
                 REQUIRE(!std::isnan(f90_result(k, parabola_coeff)));
                 REQUIRE(!std::isnan(
-                             kokkos_result(ie, igp, jgp, k, parabola_coeff)));
+                             kokkos_result(ie, igp, jgp, parabola_coeff, k)));
                 REQUIRE(f90_result(k, parabola_coeff) ==
-                        kokkos_result(ie, igp, jgp, k, parabola_coeff));
+                        kokkos_result(ie, igp, jgp, parabola_coeff, k));
               }
             }
           }

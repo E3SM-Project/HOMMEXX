@@ -78,7 +78,7 @@ struct PpmMirrored : public PpmBoundaryConditions {
   KOKKOS_INLINE_FUNCTION
   static void apply_ppm_boundary(
       ExecViewUnmanaged<const Real[AO_PHYSICAL_LEV]> cell_means,
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {}
+      ExecViewUnmanaged<Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs) {}
 
   static constexpr const char *name() { return "Mirrored PPM"; }
 };
@@ -115,22 +115,22 @@ struct PpmFixed : public PpmBoundaryConditions {
   KOKKOS_INLINE_FUNCTION
   static void apply_ppm_boundary(
       ExecViewUnmanaged<const Real[AO_PHYSICAL_LEV]> cell_means,
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs) {
+      ExecViewUnmanaged<Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs) {
     parabola_coeffs(0, 0) = cell_means(2);
-    parabola_coeffs(1, 0) = cell_means(3);
+    parabola_coeffs(0, 1) = cell_means(3);
 
-    parabola_coeffs(NUM_PHYSICAL_LEV - 2, 0) = cell_means(NUM_PHYSICAL_LEV);
-    parabola_coeffs(NUM_PHYSICAL_LEV - 1, 0) = cell_means(NUM_PHYSICAL_LEV + 1);
+    parabola_coeffs(0, NUM_PHYSICAL_LEV - 2) = cell_means(NUM_PHYSICAL_LEV);
+    parabola_coeffs(0, NUM_PHYSICAL_LEV - 1) = cell_means(NUM_PHYSICAL_LEV + 1);
 
-    parabola_coeffs(0, 1) = 0.0;
+    parabola_coeffs(1, 0) = 0.0;
     parabola_coeffs(1, 1) = 0.0;
-    parabola_coeffs(0, 2) = 0.0;
-    parabola_coeffs(1, 2) = 0.0;
+    parabola_coeffs(2, 0) = 0.0;
+    parabola_coeffs(2, 1) = 0.0;
 
-    parabola_coeffs(NUM_PHYSICAL_LEV - 2, 1) = 0.0;
-    parabola_coeffs(NUM_PHYSICAL_LEV - 1, 1) = 0.0;
-    parabola_coeffs(NUM_PHYSICAL_LEV - 2, 2) = 0.0;
-    parabola_coeffs(NUM_PHYSICAL_LEV - 1, 2) = 0.0;
+    parabola_coeffs(1, NUM_PHYSICAL_LEV - 2) = 0.0;
+    parabola_coeffs(1, NUM_PHYSICAL_LEV - 1) = 0.0;
+    parabola_coeffs(2, NUM_PHYSICAL_LEV - 2) = 0.0;
+    parabola_coeffs(2, NUM_PHYSICAL_LEV - 1) = 0.0;
   }
 
   static constexpr const char *name() { return "Fixed PPM"; }
@@ -168,7 +168,7 @@ struct PpmVertRemap : public VertRemapAlg {
       ai[i] = ExecViewManaged<Real * [NP][NP][AI_PHYSICAL_LEV]>("ai",
                                                                 data.num_elems);
       parabola_coeffs[i] =
-          ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV][3]>(
+          ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]>(
               "Coefficients for the interpolating parabola", data.num_elems);
     }
   }
@@ -253,15 +253,16 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  Real compute_mass(ExecViewUnmanaged<const Real[3]> parabola_coeffs,
-                    const Real prev_mass, const Real prev_dp,
-                    const Real x2) const {
+  Real compute_mass(const Real sq_coeff, const Real lin_coeff,
+                    const Real const_coeff, const Real prev_mass,
+                    const Real prev_dp, const Real x2) const {
     // This remapping assumes we're starting from the left interface of an
     // old grid cell
     // In fact, we're usually integrating very little or almost all of the
     // cell in question
     const Real x1 = -0.5;
-    const Real integral = integrate_parabola(parabola_coeffs, x1, x2);
+    const Real integral =
+        integrate_parabola(sq_coeff, lin_coeff, const_coeff, x1, x2);
     const Real mass = prev_mass + integral * prev_dp;
     return mass;
   }
@@ -270,7 +271,7 @@ struct PpmVertRemap : public VertRemapAlg {
   void compute_remap(
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
-      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs,
+      ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
       ExecViewUnmanaged<const Real[MASS_O_PHYSICAL_LEV]> prev_mass,
       ExecViewUnmanaged<const Real[DPO_PHYSICAL_LEV]> prev_dp,
       ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
@@ -290,9 +291,10 @@ struct PpmVertRemap : public VertRemapAlg {
         if (k > 0) {
           const Real x2_prev_lev = integral_bounds(k - 1);
           const int kk_prev_lev = k_id(k - 1) - 1;
-          return compute_mass(Homme::subview(parabola_coeffs, kk_prev_lev),
-                              prev_mass(kk_prev_lev), prev_dp(kk_prev_lev + 2),
-                              x2_prev_lev);
+          return compute_mass(
+              parabola_coeffs(2, kk_prev_lev), parabola_coeffs(1, kk_prev_lev),
+              parabola_coeffs(0, kk_prev_lev), prev_mass(kk_prev_lev),
+              prev_dp(kk_prev_lev + 2), x2_prev_lev);
         } else {
           return 0.0;
         }
@@ -302,10 +304,11 @@ struct PpmVertRemap : public VertRemapAlg {
 
       const int kk_cur_lev = k_id(k) - 1;
       assert(kk_cur_lev >= 0);
-      assert(kk_cur_lev < parabola_coeffs.extent_int(0));
+      assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
       const Real mass_2 = compute_mass(
-          Homme::subview(parabola_coeffs, kk_cur_lev), prev_mass(kk_cur_lev),
+          parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
           prev_dp(kk_cur_lev + 2), x2_cur_lev);
 
       const int ilevel = k / VECTOR_SIZE;
@@ -367,7 +370,7 @@ struct PpmVertRemap : public VertRemapAlg {
                    ExecViewUnmanaged<Real[DMA_PHYSICAL_LEV]> dma,
                    ExecViewUnmanaged<Real[AI_PHYSICAL_LEV]> ai,
                    // result view
-                   ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV][3]> parabola_coeffs)
+                   ExecViewUnmanaged<Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs)
       const {
     {
       auto bounds = boundaries::ppm_indices_1();
@@ -434,12 +437,12 @@ struct PpmVertRemap : public VertRemapAlg {
           // coordinates: xi=(x-x0)/dx
 
           assert(parabola_coeffs.data() != nullptr);
-          assert(j - 1 < parabola_coeffs.extent_int(0));
-          assert(2 < parabola_coeffs.extent_int(1));
+          assert(j - 1 < parabola_coeffs.extent_int(1));
+          assert(2 < parabola_coeffs.extent_int(0));
 
-          parabola_coeffs(j - 1, 0) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
-          parabola_coeffs(j - 1, 1) = ar - al;
-          parabola_coeffs(j - 1, 2) =
+          parabola_coeffs(0, j - 1) = 1.5 * cell_means(j + 1) - (al + ar) / 4.0;
+          parabola_coeffs(1, j - 1) = ar - al;
+          parabola_coeffs(2, j - 1) =
               3.0 * (-2.0 * cell_means(j + 1) + (al + ar));
         }
       }
@@ -598,13 +601,10 @@ struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION Real
-  integrate_parabola(ExecViewUnmanaged<const Real[3]> coeffs, Real x1,
-                     Real x2) const {
-    const Real a0 = coeffs(0);
-    const Real a1 = coeffs(1);
-    const Real a2 = coeffs(2);
-    return (a0 * (x2 - x1) + a1 * (x2 * x2 - x1 * x1) / 2.0) +
-           a2 * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
+  integrate_parabola(const Real sq_coeff, const Real lin_coeff,
+                     const Real const_coeff, Real x1, Real x2) const {
+    return (const_coeff * (x2 - x1) + lin_coeff * (x2 * x2 - x1 * x1) / 2.0) +
+           sq_coeff * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
   }
 
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][AO_PHYSICAL_LEV]>, remap_dim>
@@ -625,7 +625,7 @@ struct PpmVertRemap : public VertRemapAlg {
   Kokkos::Array<ExecViewManaged<Real * [NP][NP][AI_PHYSICAL_LEV]>, remap_dim>
   ai;
 
-  Kokkos::Array<ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV][3]>,
+  Kokkos::Array<ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]>,
                 remap_dim> parabola_coeffs;
 };
 
