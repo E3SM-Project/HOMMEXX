@@ -150,44 +150,6 @@ public:
     auto &laplace_dp3d = m_elements.buffers.lapl_buf_2;
     // laplace subfunctors cannot be called from a TeamThreadRange or
     // ThreadVectorRange
-    if (m_data.nu_top > 0) {
-      // TODO: Only run on the levels we need to 0-2
-      vlaplace_sphere_wk_contra(
-          kv, m_elements.m_d, m_elements.m_dinv, m_elements.m_mp,
-          m_elements.m_spheremp, m_elements.m_metinv, m_elements.m_metdet,
-          m_deriv.get_dvv(), m_data.nu_ratio,
-          Homme::subview(m_elements.buffers.lapl_buf_1, kv.ie),
-          Homme::subview(m_elements.buffers.lapl_buf_2, kv.ie),
-          Homme::subview(m_elements.buffers.grad_buf, kv.ie),
-          Homme::subview(m_elements.buffers.curl_buf, kv.ie),
-          m_elements.buffers.sphere_vector_buf,
-          // input
-          Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
-          // output
-          Homme::subview(laplace_v, kv.ie));
-
-      laplace_simple(
-          kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-          Homme::subview(m_elements.buffers.grad_buf, kv.ie),
-          // input
-          Homme::subview(m_elements.m_t, kv.ie, m_data.np1),
-          Homme::subview(m_elements.buffers.sphere_vector_buf, kv.ie),
-          // output
-          Homme::subview(laplace_t, kv.ie));
-
-      laplace_simple(
-          kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
-          Homme::subview(m_elements.buffers.grad_buf, kv.ie),
-          // input
-          Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
-          Homme::subview(m_elements.buffers.sphere_vector_buf, kv.ie),
-          // output
-          Homme::subview(laplace_dp3d, kv.ie));
-    }
-    kv.team_barrier();
-
-    constexpr int num_biharmonic_levels = 3;
-    const Real lev_nu_scale_top[num_biharmonic_levels] = { 4.0, 2.0, 1.0 };
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &point_idx) {
       const int igp = point_idx / NP;
@@ -201,24 +163,57 @@ public:
       });
 
       if (m_data.nu_top > 0) {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, num_biharmonic_levels),
-                             [&](const int phys_lev) {
-          const int lev = phys_lev / VECTOR_SIZE;
-          const int vec = phys_lev % VECTOR_SIZE;
-          m_elements.buffers.vtens(kv.ie, 0, igp, jgp, lev)[vec] +=
-              lev_nu_scale_top[phys_lev] * m_data.nu_top *
-              laplace_v(kv.ie, 0, igp, jgp, lev)[vec];
-          m_elements.buffers.vtens(kv.ie, 1, igp, jgp, lev)[vec] +=
-              lev_nu_scale_top[phys_lev] * m_data.nu_top *
-              laplace_v(kv.ie, 1, igp, jgp, lev)[vec];
+        constexpr int NUM_BIHARMONIC_PHYSICAL_LEVELS = 3;
+        constexpr int NUM_BIHARMONIC_LEV = (NUM_BIHARMONIC_PHYSICAL_LEVELS + VECTOR_SIZE - 1) / VECTOR_SIZE;
 
-          m_elements.buffers.ttens(kv.ie, igp, jgp, lev)[vec] +=
-              lev_nu_scale_top[phys_lev] * m_data.nu_top *
-              laplace_t(kv.ie, igp, jgp, lev)[vec];
+        // TODO: Only run on the levels we need to 0-2
+        vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
+            kv, m_elements.m_d, m_elements.m_dinv, m_elements.m_mp,
+            m_elements.m_spheremp, m_elements.m_metinv, m_elements.m_metdet,
+            m_deriv.get_dvv(), m_data.nu_ratio,
+            Homme::subview(m_elements.buffers.lapl_buf_1, kv.ie),
+            Homme::subview(m_elements.buffers.lapl_buf_2, kv.ie),
+            Homme::subview(m_elements.buffers.grad_buf, kv.ie),
+            Homme::subview(m_elements.buffers.curl_buf, kv.ie),
+            m_elements.buffers.sphere_vector_buf,
+            // input
+            Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+            // output
+            Homme::subview(laplace_v, kv.ie));
 
-          m_elements.buffers.dptens(kv.ie, igp, jgp, lev)[vec] +=
-              lev_nu_scale_top[phys_lev] * m_data.nu_top *
-              laplace_dp3d(kv.ie, igp, jgp, lev)[vec];
+        laplace_simple<NUM_BIHARMONIC_LEV>(
+            kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
+            Homme::subview(m_elements.buffers.grad_buf, kv.ie),
+            // input
+            Homme::subview(m_elements.m_t, kv.ie, m_data.np1),
+            Homme::subview(m_elements.buffers.sphere_vector_buf, kv.ie),
+            // output
+            Homme::subview(laplace_t, kv.ie));
+
+        laplace_simple<NUM_BIHARMONIC_LEV>(
+            kv, m_elements.m_dinv, m_elements.m_spheremp, m_deriv.get_dvv(),
+            Homme::subview(m_elements.buffers.grad_buf, kv.ie),
+            // input
+            Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+            Homme::subview(m_elements.buffers.sphere_vector_buf, kv.ie),
+            // output
+            Homme::subview(laplace_dp3d, kv.ie));
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_BIHARMONIC_LEV),
+                             [&](const int ilev) {
+          m_elements.buffers.vtens(kv.ie, 0, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 0, igp, jgp, ilev);
+          m_elements.buffers.vtens(kv.ie, 1, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 1, igp, jgp, ilev);
+
+          m_elements.buffers.ttens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_t(kv.ie, igp, jgp, ilev);
+
+          m_elements.buffers.dptens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_dp3d(kv.ie, igp, jgp, ilev);
         });
       }
 
@@ -238,6 +233,8 @@ public:
   Control       m_data;
   Elements      m_elements;
   Derivative    m_deriv;
+
+  ExecViewManaged<Scalar[NUM_LEV]> m_nu_scale_top;
 };
 
 } // namespace Homme
