@@ -82,28 +82,31 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
     start_timer("esf-bih-pre compute");
-    KernelVariables kv(team, m_data.qsize);
+    const int ie = team.league_rank() / m_data.qsize;
+    const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
     if (m_data.nu_p > 0) {
-      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
+      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, ie);
       Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
           const int i = loop_idx / NP;
           const int j = loop_idx % NP;
           Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
             });
         });
-      kv.team_barrier();
+      team.team_barrier();
     }
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
-                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+    laplace_simple(team, m_deriv.get_dvv(),
+                   Homme::subview(e.m_dinv,ie),
+                   Homme::subview(e.m_spheremp,ie),
+                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
                    qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
     stop_timer("esf-bih-pre compute");
   }
@@ -111,39 +114,42 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
     start_timer("esf-bih-post compute");
-    KernelVariables kv(team, m_data.qsize);
+    const int ie = team.league_rank() / m_data.qsize;
+    const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
     {
-      const auto rspheremp = Homme::subview(e.m_rspheremp, kv.ie);
+      const auto rspheremp = Homme::subview(e.m_rspheremp, ie);
       Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
           const int i = loop_idx / NP;
           const int j = loop_idx % NP;
           Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) *= rspheremp(i,j);
             });
         });
     }
-    kv.team_barrier();
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
-                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+    team.team_barrier();
+    laplace_simple(team, m_deriv.get_dvv(),
+                   Homme::subview(e.m_dinv,ie),
+                   Homme::subview(e.m_spheremp,ie),
+                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
                    qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
-      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+      const auto spheremp = Homme::subview(e.m_spheremp, ie);
       Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
           const int i = loop_idx / NP;
           const int j = loop_idx % NP;
           Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
                                          m_data.dp0(k) * qtens_biharmonic(i,j,k) /
@@ -234,20 +240,21 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
     start_timer("esf-precompute_divdp compute");
-    KernelVariables kv(team);
-    divergence_sphere(kv, m_elements.m_dinv, m_elements.m_metdet,
-                      m_deriv.get_dvv(),
-                      Homme::subview(m_elements.m_derived_vn0, kv.ie),
-                      m_elements.buffers.div_buf,
-                      Homme::subview(m_elements.m_derived_divdp, kv.ie));
+    const int ie = team.league_rank();
+    divergence_sphere(team, m_deriv.get_dvv(),
+                      Homme::subview(m_elements.m_dinv,ie),
+                      Homme::subview(m_elements.m_metdet,ie),
+                      Homme::subview(m_elements.m_derived_vn0, ie),
+                      Homme::subview(m_elements.buffers.div_buf,ie),
+                      Homme::subview(m_elements.m_derived_divdp, ie));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
                            [&](const int ilev) {
-        m_elements.m_derived_divdp_proj(kv.ie, igp, jgp, ilev) =
-            m_elements.m_derived_divdp(kv.ie, igp, jgp, ilev);
+        m_elements.m_derived_divdp_proj(ie, igp, jgp, ilev) =
+            m_elements.m_derived_divdp(ie, igp, jgp, ilev);
       });
     });
 
@@ -606,7 +613,7 @@ private:
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     divergence_sphere_update(
-      kv, -m_data.dt, 1.0, dinv, metdet, dvv,
+      kv.team, -m_data.dt, 1.0, dvv, dinv, metdet,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qwrk, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
