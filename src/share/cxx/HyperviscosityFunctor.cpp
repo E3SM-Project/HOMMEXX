@@ -11,6 +11,7 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
  , m_deriv    (deriv)
 {
   if (m_data.nu_top>0) {
+    m_nu_scale_top = ExecViewManaged<Scalar[NUM_LEV]>("nu_scale_top");
     ExecViewManaged<Scalar[NUM_LEV]>::HostMirror h_nu_scale_top;
     h_nu_scale_top = Kokkos::create_mirror_view(m_nu_scale_top);
 
