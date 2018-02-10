@@ -554,8 +554,8 @@ laplace_simple(const KernelVariables &kv,
                      ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace)
 {
     // let's ignore var coef and tensor hv
-  gradient_sphere(kv, DInv, dvv, field, sphere_buf, grad_s);
-  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
+  gradient_sphere<NUM_LEV_REQUEST>(kv, DInv, dvv, field, sphere_buf, grad_s);
+  divergence_sphere_wk<NUM_LEV_REQUEST>(kv, DInv, spheremp, dvv, grad_s, sphere_buf, laplace);
 }//end of laplace_simple
 
 //analog of laplace_wk_c_callable
@@ -574,7 +574,7 @@ laplace_tensor(const KernelVariables &kv,
                      ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace)
 {
   const auto sb = Homme::subview(sphere_buf, kv.ie);
-  gradient_sphere(kv, DInv, dvv, field, sb, grad_s);
+  gradient_sphere<NUM_LEV_REQUEST>(kv, DInv, dvv, field, sb, grad_s);
 //now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
 //but it requires a temp var to store a result. the result is then placed to grad_s,
 //or should it be an extra temp var instead of an extra loop?
@@ -603,7 +603,7 @@ laplace_tensor(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, sb, laplace);
+  divergence_sphere_wk<NUM_LEV_REQUEST>(kv, DInv, spheremp, dvv, grad_s, sb, laplace);
 }//end of laplace_tensor
 
 //a version of laplace_tensor where input is replaced by output
@@ -618,7 +618,7 @@ laplace_tensor_replace(const KernelVariables &kv,
                              ExecViewUnmanaged<      Scalar*   [2][NP][NP][NUM_LEV]> sphere_buf,
                              ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace) //input/output
 {
-  gradient_sphere(kv, DInv, dvv, laplace, Homme::subview(sphere_buf, kv.ie), grad_s);
+  gradient_sphere<NUM_LEV_REQUEST>(kv, DInv, dvv, laplace, Homme::subview(sphere_buf, kv.ie), grad_s);
   constexpr int num_iters = NP * NP;
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_iters),
                      [&](const int loop_idx) {
@@ -644,7 +644,7 @@ laplace_tensor_replace(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  divergence_sphere_wk(kv, DInv, spheremp, dvv, grad_s, Homme::subview(sphere_buf, kv.ie), laplace);
+  divergence_sphere_wk<NUM_LEV_REQUEST>(kv, DInv, spheremp, dvv, grad_s, Homme::subview(sphere_buf, kv.ie), laplace);
 }//end of laplace_tensor_replace
 
 //check mp, why is it an ie quantity?
@@ -827,9 +827,9 @@ vlaplace_sphere_wk_cartesian(const KernelVariables &kv,
   kv.team_barrier();
 //apply laplace to each component
 //WE NEED LAPLACE_UPDATE(or replace?), way too many temp vars
-  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component0,sphere_buf,laplace0);
-  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component1,sphere_buf,laplace1);
-  laplace_tensor(kv,Dinv,spheremp,dvv,tensorVisc,grads,component2,sphere_buf,laplace2);
+  laplace_tensor<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,component0,sphere_buf,laplace0);
+  laplace_tensor<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,component1,sphere_buf,laplace1);
+  laplace_tensor<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,component2,sphere_buf,laplace2);
 
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                        [&](const int loop_idx) {
@@ -886,9 +886,9 @@ vlaplace_sphere_wk_cartesian_reduced(const KernelVariables &kv,
   });
   kv.team_barrier();
 
-  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace0);
-  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace1);
-  laplace_tensor_replace(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace2);
+  laplace_tensor_replace<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace0);
+  laplace_tensor_replace<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace1);
+  laplace_tensor_replace<NUM_LEV_REQUEST>(kv,Dinv,spheremp,dvv,tensorVisc,grads,sphere_buf,laplace2);
 
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                        [&](const int loop_idx) {
@@ -963,8 +963,8 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
 //output
                                 ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) {
 
-  divergence_sphere(kv,dinv,metdet,dvv,vector,sphere_buf,div);
-  vorticity_sphere_vector(kv,d,metdet,dvv,vector,sphere_buf,vort);
+  divergence_sphere<NUM_LEV_REQUEST>(kv,dinv,metdet,dvv,vector,sphere_buf,div);
+  vorticity_sphere_vector<NUM_LEV_REQUEST>(kv,d,metdet,dvv,vector,sphere_buf,vort);
 
   constexpr int np_squared = NP * NP;
   if (nu_ratio>0 && nu_ratio!=1.0) {
@@ -979,8 +979,8 @@ vlaplace_sphere_wk_contra(const KernelVariables &kv,
     kv.team_barrier();
   }
 
-  grad_sphere_wk_testcov(kv,d,mp,metinv,metdet,dvv,div,sphere_buf,gradcov);
-  curl_sphere_wk_testcov(kv,d,mp,dvv,vort,sphere_buf,curlcov);
+  grad_sphere_wk_testcov<NUM_LEV_REQUEST>(kv,d,mp,metinv,metdet,dvv,div,sphere_buf,gradcov);
+  curl_sphere_wk_testcov<NUM_LEV_REQUEST>(kv,d,mp,dvv,vort,sphere_buf,curlcov);
 
   Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                       [&](const int loop_idx) {
