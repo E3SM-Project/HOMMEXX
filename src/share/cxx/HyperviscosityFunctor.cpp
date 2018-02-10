@@ -10,7 +10,19 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
  , m_elements (elements)
  , m_deriv    (deriv)
 {
-  // Nothing to be done here
+  if (m_data.nu_top>0) {
+    ExecViewManaged<Scalar[NUM_LEV]>::HostMirror h_nu_scale_top;
+    h_nu_scale_top = Kokkos::create_mirror_view(m_nu_scale_top);
+
+    constexpr int NUM_BIHARMONIC_PHYSICAL_LEVELS = 3;
+    const Real lev_nu_scale_top[NUM_BIHARMONIC_PHYSICAL_LEVELS] = { 4.0, 2.0, 1.0 };
+    for (int phys_lev=0; phys_lev<NUM_BIHARMONIC_PHYSICAL_LEVELS; ++phys_lev) {
+      const int ilev = phys_lev / VECTOR_SIZE;
+      const int ivec = phys_lev % VECTOR_SIZE;
+      h_nu_scale_top(ilev)[ivec] = lev_nu_scale_top[phys_lev]*m_data.nu_top;
+    }
+    Kokkos::deep_copy(m_nu_scale_top, h_nu_scale_top);
+  }
 }
 
 void HyperviscosityFunctor::run (const int hypervis_subcycle)
