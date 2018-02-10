@@ -16,7 +16,7 @@ HyperviscosityFunctor::HyperviscosityFunctor (const Control& m_data, const Eleme
     h_nu_scale_top = Kokkos::create_mirror_view(m_nu_scale_top);
 
     constexpr int NUM_BIHARMONIC_PHYSICAL_LEVELS = 3;
-    const Real lev_nu_scale_top[NUM_BIHARMONIC_PHYSICAL_LEVELS] = { 4.0, 2.0, 1.0 };
+    Kokkos::Array<Real,NUM_BIHARMONIC_PHYSICAL_LEVELS> lev_nu_scale_top = { 4.0, 2.0, 1.0 };
     for (int phys_lev=0; phys_lev<NUM_BIHARMONIC_PHYSICAL_LEVELS; ++phys_lev) {
       const int ilev = phys_lev / VECTOR_SIZE;
       const int ivec = phys_lev % VECTOR_SIZE;
