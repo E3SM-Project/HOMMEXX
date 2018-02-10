@@ -56,7 +56,6 @@ public:
                               Homme::subview(m_elements.m_metdet,kv.ie),
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
-                              Homme::subview(m_elements.buffers.curl_buf,kv.ie),
                               Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                               Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
@@ -92,7 +91,6 @@ public:
                               Homme::subview(m_elements.m_metdet, kv.ie),
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
-                              Homme::subview(m_elements.buffers.curl_buf,kv.ie),
                               Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
@@ -181,7 +179,6 @@ public:
             Homme::subview(m_elements.m_metdet, kv.ie),
             Homme::subview(m_elements.buffers.lapl_buf_1, kv.ie),
             Homme::subview(m_elements.buffers.grad_buf, kv.ie),
-            Homme::subview(m_elements.buffers.curl_buf, kv.ie),
             Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
             // input
             Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
