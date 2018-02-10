@@ -348,8 +348,8 @@ class compute_sphere_operator_test_ml {
   struct TagCurlSphereWkTestCovML {};
   // tag for grad_sphere_wk_testcov
   struct TagGradSphereWkTestCovML {};
-  // tag for vlaplace_sphere_wk_cartesian_reduced
-  struct TagVLaplaceCartesianReducedML {};
+  // tag for vlaplace_sphere_wk_cartesian
+  struct TagVLaplaceCartesianML {};
   // tag for vlaplace_sphere_wk_contra
   struct TagVLaplaceContraML {};
   // tag for vorticity_sphere
@@ -366,283 +366,138 @@ class compute_sphere_operator_test_ml {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradientSphereML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_output_d = Kokkos::subview(
-            vector_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    gradient_sphere(kv, dinv_d, dvv_d,
-                    local_scalar_input_d,
-                    Homme::subview(sphere_buf, kv.ie),
-                    local_vector_output_d);
+    gradient_sphere(team, dvv_d,
+                    Homme::subview(dinv_d,ie),
+                    Homme::subview(scalar_input_d,ie),
+                    Homme::subview(sphere_buf, ie),
+                    Homme::subview(vector_output_d,ie));
 
   }  // end of op() for grad_sphere_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagDivergenceSphereWkML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_input_d = Kokkos::subview(
-            vector_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_output_d = Kokkos::subview(
-            scalar_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    divergence_sphere_wk(kv, dinv_d, spheremp_d,
-                         dvv_d, local_vector_input_d,
-                         Homme::subview(sphere_buf, kv.ie),
-                         local_scalar_output_d);
+    divergence_sphere_wk(team, dvv_d,
+                         Homme::subview(dinv_d,ie),
+                         Homme::subview(spheremp_d,ie),
+                         Homme::subview(vector_input_d,ie),
+                         Homme::subview(sphere_buf, ie),
+                         Homme::subview(scalar_output_d,ie));
   }  // end of op() for divergence_sphere_wk_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagSimpleLaplaceML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_output_d = Kokkos::subview(
-            scalar_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp1_d = Kokkos::subview(
-            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    laplace_simple(
-        kv, dinv_d, spheremp_d, dvv_d, local_temp1_d,
-        local_scalar_input_d, Homme::subview(sphere_buf, kv.ie), local_scalar_output_d);
+    laplace_simple(team, dvv_d,
+                   Homme::subview(dinv_d,ie),
+                   Homme::subview(spheremp_d,ie),
+                   Homme::subview(temp1_d,ie),
+                   Homme::subview(scalar_input_d,ie),
+                   Homme::subview(sphere_buf, ie),
+                   Homme::subview(scalar_output_d,ie));
   }  // end of op() for laplace_wk_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagTensorLaplaceML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_output_d = Kokkos::subview(
-            scalar_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp1_d = Kokkos::subview(
-            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    laplace_tensor(kv, dinv_d, spheremp_d, dvv_d,
-                   tensor_d, local_temp1_d,
-                   local_scalar_input_d,
-                   sphere_buf,
-                   local_scalar_output_d);
-  }  // end of op() for laplace_tensor multil
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(const TagTensorLaplaceReplaceML &,
-                  TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_COPY2_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_output_d = Kokkos::subview(
-            scalar_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp1_d = Kokkos::subview(
-            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-          laplace_tensor_replace(
-              kv, dinv_d, spheremp_d, dvv_d, tensor_d,
-              local_temp1_d, sphere_buf, local_scalar_input_d);
-
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NP * NP),
-          [&](const int idx) {
-            const int igp = idx / NP;
-            const int jgp = idx % NP;
-            for (int ilev=0; ilev<NUM_LEV; ++ilev) {
-              local_scalar_output_d(igp, jgp, ilev) =
-                local_scalar_input_d(igp, jgp, ilev);
-            }
-    });
+    laplace_tensor(team, dvv_d,
+                   Homme::subview(dinv_d,ie),
+                   Homme::subview(spheremp_d,ie),
+                   Homme::subview(tensor_d,ie),
+                   Homme::subview(temp1_d,ie),
+                   Homme::subview(scalar_input_d,ie),
+                   Homme::subview(sphere_buf,ie),
+                   Homme::subview(scalar_output_d,ie));
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagCurlSphereWkTestCovML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_output_d = Kokkos::subview(
-            vector_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    curl_sphere_wk_testcov(kv, d_d, mp_d, dvv_d,
-                           local_scalar_input_d,
-                           sphere_buf,
-                           local_vector_output_d);
+    curl_sphere_wk_testcov(team, dvv_d,
+                           Homme::subview(d_d,ie),
+                           Homme::subview(mp_d,ie),
+                           Homme::subview(scalar_input_d,ie),
+                           Homme::subview(sphere_buf,ie),
+                           Homme::subview(vector_output_d,ie));
   }  // end of op() for curl_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradSphereWkTestCovML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_input_d = Kokkos::subview(
-            scalar_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_output_d = Kokkos::subview(
-            vector_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    grad_sphere_wk_testcov(
-        kv, d_d, mp_d, metinv_d, metdet_d, dvv_d,
-        local_scalar_input_d, sphere_buf, local_vector_output_d);
+    grad_sphere_wk_testcov(team, dvv_d,
+                           Homme::subview(d_d,ie),
+                           Homme::subview(mp_d,ie),
+                           Homme::subview(metinv_d,ie),
+                           Homme::subview(metdet_d,ie),
+                           Homme::subview(scalar_input_d,ie),
+                           Homme::subview(sphere_buf,ie),
+                           Homme::subview(vector_output_d,ie));
   }  // end of op() for grad_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagVLaplaceCartesianReducedML &,
+  void operator()(const TagVLaplaceCartesianML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
+    const int ie = team.league_rank();
 
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_input_d = Kokkos::subview(
-            vector_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_output_d = Kokkos::subview(
-            vector_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp1_d = Kokkos::subview(
-            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]> local_temp4_d =
-        Kokkos::subview(temp4_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]> local_temp5_d =
-        Kokkos::subview(temp5_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]> local_temp6_d =
-        Kokkos::subview(temp6_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    vlaplace_sphere_wk_cartesian_reduced(
-        kv, dinv_d, spheremp_d, tensor_d,
-        vec_sph2cart_d, dvv_d, local_temp1_d,
-        local_temp4_d, local_temp5_d, local_temp6_d,
-        sphere_buf,
-        local_vector_input_d, local_vector_output_d);
+    vlaplace_sphere_wk_cartesian (team, dvv_d,
+                                  Homme::subview(dinv_d,ie),
+                                  Homme::subview(spheremp_d,ie),
+                                  Homme::subview(tensor_d,ie),
+                                  Homme::subview(vec_sph2cart_d,ie),
+                                  Homme::subview(temp1_d,ie),
+                                  Homme::subview(temp4_d,ie),
+                                  Homme::subview(temp5_d,ie),
+                                  Homme::subview(temp6_d,ie),
+                                  Homme::subview(sphere_buf,ie),
+                                  Homme::subview(vector_input_d,ie),
+                                  Homme::subview(vector_output_d,ie));
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagVLaplaceContraML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_input_d = Kokkos::subview(
-            vector_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_output_d = Kokkos::subview(
-            vector_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp1_d = Kokkos::subview(
-            temp1_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_temp2_d = Kokkos::subview(
-            temp2_d, _index, Kokkos::ALL, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]> local_temp4_d =
-        Kokkos::subview(temp4_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]> local_temp5_d =
-        Kokkos::subview(temp5_d, _index, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL);
+    const int ie = team.league_rank();
 
     // don't forget to introduce nu_ratio
-    vlaplace_sphere_wk_contra(
-        kv, d_d, dinv_d, mp_d, spheremp_d, metinv_d,
-        metdet_d, dvv_d, nu_ratio, local_temp4_d,
-        local_temp5_d, local_temp1_d, local_temp2_d,
-        sphere_buf,
-        local_vector_input_d, local_vector_output_d);
+    vlaplace_sphere_wk_contra(team, nu_ratio, dvv_d,
+                              Homme::subview(d_d,ie),
+                              Homme::subview(dinv_d,ie),
+                              Homme::subview(mp_d,ie),
+                              Homme::subview(spheremp_d,ie),
+                              Homme::subview(metinv_d,ie),
+                              Homme::subview(metdet_d,ie),
+                              Homme::subview(temp4_d,ie),
+                              Homme::subview(temp5_d,ie),
+                              Homme::subview(temp1_d,ie),
+                              Homme::subview(temp2_d,ie),
+                              Homme::subview(sphere_buf,ie),
+                              Homme::subview(vector_input_d,ie),
+                              Homme::subview(vector_output_d,ie));
   }  // end of op() for laplace_tensor multil
 
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagVorticityVectorML &,
                   TeamMember team) const {
-    KernelVariables kv(team);
-    int _index = team.league_rank();
-
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>
-        local_vector_input_d = Kokkos::subview(
-            vector_input_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    ExecViewManaged<Scalar[NP][NP][NUM_LEV]>
-        local_scalar_output_d = Kokkos::subview(
-            scalar_output_d, _index, Kokkos::ALL,
-            Kokkos::ALL, Kokkos::ALL);
-
-    vorticity_sphere_vector(kv, d_d, metdet_d,
-                         dvv_d, local_vector_input_d,
-                         sphere_buf,
-                         local_scalar_output_d);
+    const int ie = team.league_rank();
+    vorticity_sphere_vector(team, dvv_d,
+                            Homme::subview(d_d,ie),
+                            Homme::subview(metdet_d,ie),
+                            Homme::subview(vector_input_d,ie),
+                            Homme::subview(sphere_buf,ie),
+                            Homme::subview(scalar_output_d,ie));
   }  // end of op() for vorticity_sphere_vector multilevel
 
 
@@ -677,13 +532,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_tensor_laplace_replace() const {
-    auto policy = Homme::get_default_team_policy<ExecSpace, TagTensorLaplaceReplaceML>(_num_elems);
-    Kokkos::parallel_for(policy, *this);
-    ExecSpace::fence();
-    Kokkos::deep_copy(scalar_output_host, scalar_output_d);
-  };
-
   void run_functor_curl_sphere_wk_testcov() const {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagCurlSphereWkTestCovML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
@@ -699,7 +547,7 @@ class compute_sphere_operator_test_ml {
   };
 
   void run_functor_vlaplace_cartesian_reduced() const {
-    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianReducedML>(_num_elems);
+    auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianML>(_num_elems);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
@@ -728,7 +576,7 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
   compute_sphere_operator_test_ml testing_grad_ml(elements);
   testing_grad_ml.run_functor_gradient_sphere();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         // fortran output
@@ -741,14 +589,14 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
         for(int _i = 0; _i < NP; _i++) {
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] = testing_grad_ml.scalar_input_host(
-                _index, _i, _j, level)[v];
+                ie, _i, _j, level)[v];
           }
         }
 
         // running F version of operator
         gradient_sphere_c_callable(
             &(sf[0][0]), testing_grad_ml.dvv_host.data(),
-            &testing_grad_ml.dinv_host(_index, 0, 0, 0, 0),
+            &testing_grad_ml.dinv_host(ie, 0, 0, 0, 0),
             &(local_fortran_output[0][0][0]));
 
         // compare with the part from C run
@@ -756,10 +604,10 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
           for(int jgp = 0; jgp < NP; ++jgp) {
             const Real coutput0 =
                 testing_grad_ml.vector_output_host(
-                    _index, 0, igp, jgp, level)[v];
+                    ie, 0, igp, jgp, level)[v];
             const Real coutput1 =
                 testing_grad_ml.vector_output_host(
-                    _index, 1, igp, jgp, level)[v];
+                    ie, 1, igp, jgp, level)[v];
             REQUIRE(!std::isnan(coutput0));
             REQUIRE(!std::isnan(coutput1));
 
@@ -777,7 +625,7 @@ TEST_CASE("Testing_gradient_sphere", "gradient_sphere") {
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test grad multilevel finished. \n";
 
@@ -790,7 +638,7 @@ TEST_CASE("Testing divergence_sphere_wk()",
   compute_sphere_operator_test_ml testing_div_ml(elements);
   testing_div_ml.run_functor_divergence_sphere_wk();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         // fortran output
@@ -804,15 +652,15 @@ TEST_CASE("Testing divergence_sphere_wk()",
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
             sphf[_i][_j] = testing_div_ml.spheremp_host(
-                _index, _i, _j);
+                ie, _i, _j);
             dvvf[_i][_j] = testing_div_ml.dvv_host(_i, _j);
             for(int _d1 = 0; _d1 < 2; _d1++) {
               vf[_d1][_i][_j] =
                   testing_div_ml.vector_input_host(
-                      _index, _d1, _i, _j, level)[v];
+                      ie, _d1, _i, _j, level)[v];
               for(int _d2 = 0; _d2 < 2; _d2++)
                 dinvf[_d1][_d2][_i][_j] =
-                    testing_div_ml.dinv_host(_index, _d1,
+                    testing_div_ml.dinv_host(ie, _d1,
                                              _d2, _i, _j);
             }
           }
@@ -825,7 +673,7 @@ TEST_CASE("Testing divergence_sphere_wk()",
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_div_ml.scalar_output_host(
-                    _index, igp, jgp, level)[v];
+                    ie, igp, jgp, level)[v];
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
@@ -835,7 +683,7 @@ TEST_CASE("Testing divergence_sphere_wk()",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test div_wk multilevel finished. \n";
 
@@ -848,7 +696,7 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
       elements);
   testing_laplace_ml.run_functor_laplace_wk();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         // fortran output
@@ -863,16 +711,16 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] =
                 testing_laplace_ml.scalar_input_host(
-                    _index, _i, _j, level)[v];
+                    ie, _i, _j, level)[v];
             sphf[_i][_j] = testing_laplace_ml.spheremp_host(
-                _index, _i, _j);
+                ie, _i, _j);
             dvvf[_i][_j] =
                 testing_laplace_ml.dvv_host(_i, _j);
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++)
                 dinvf[_d1][_d2][_i][_j] =
                     testing_laplace_ml.dinv_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
           }
 
         laplace_simple_c_callable(
@@ -884,7 +732,7 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_laplace_ml.scalar_output_host(
-                    _index, igp, jgp, level)[v];
+                    ie, igp, jgp, level)[v];
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
@@ -895,7 +743,7 @@ TEST_CASE("Testing simple laplace_wk()", "laplace_wk") {
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout
       << "test laplace_simple multilevel finished. \n";
@@ -910,7 +758,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
       elements);
   testing_tensor_laplace.run_functor_tensor_laplace();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real local_fortran_output[NP][NP];
@@ -925,21 +773,21 @@ TEST_CASE("Testing laplace_tensor() multilevel",
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] =
                 testing_tensor_laplace.scalar_input_host(
-                    _index, _i, _j, level)[v];
+                    ie, _i, _j, level)[v];
             sphf[_i][_j] =
                 testing_tensor_laplace.spheremp_host(
-                    _index, _i, _j);
+                    ie, _i, _j);
             dvvf[_i][_j] =
                 testing_tensor_laplace.dvv_host(_i, _j);
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++) {
                 dinvf[_d1][_d2][_i][_j] =
                     testing_tensor_laplace.dinv_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
 
                 tensorf[_d1][_d2][_i][_j] =
                     testing_tensor_laplace.tensor_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
 
               }  // end of d2 loop
           }
@@ -958,7 +806,7 @@ TEST_CASE("Testing laplace_tensor() multilevel",
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_tensor_laplace.scalar_output_host(
-                    _index, igp, jgp, level)[v];
+                    ie, igp, jgp, level)[v];
 
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
@@ -969,80 +817,12 @@ TEST_CASE("Testing laplace_tensor() multilevel",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout
       << "test laplace_tensor multilevel finished. \n";
 
 }  // end of test laplace_tensor multilevel
-
-TEST_CASE("Testing_laplace_tensor_replace_multilevel",
-          "laplace_tensor_replace") {
-  constexpr const int elements = 10;
-
-  compute_sphere_operator_test_ml testing_tensor_laplace(
-      elements);
-  testing_tensor_laplace
-      .run_functor_tensor_laplace_replace();
-
-  for(int _index = 0; _index < elements; _index++) {
-    for(int level = 0; level < NUM_LEV; ++level) {
-      for(int v = 0; v < VECTOR_SIZE; ++v) {
-        Real local_fortran_output[NP][NP];
-        Real sf[NP][NP];
-        Real dvvf[NP][NP];
-        Real sphf[NP][NP];
-
-        for(int _i = 0; _i < NP; _i++) {
-          for(int _j = 0; _j < NP; _j++) {
-
-            sf[_i][_j] =
-                testing_tensor_laplace.scalar_input_host(
-                    _index, _i, _j, level)[v];
-
-            sphf[_i][_j] =
-                testing_tensor_laplace.spheremp_host(
-                    _index, _i, _j);
-            dvvf[_i][_j] =
-                testing_tensor_laplace.dvv_host(_i, _j);
-          }
-        }
-        Kokkos::deep_copy(testing_tensor_laplace.scalar_input_host,
-                          testing_tensor_laplace.scalar_input_d);
-
-        Real _hp = 0.0;
-        Real _hs = 1.0;
-        bool _vc = true;
-
-        laplace_sphere_wk_c_callable(
-            &(sf[0][0]), &(dvvf[0][0]),
-            &testing_tensor_laplace.dinv_host(_index, 0, 0, 0, 0),
-            &(sphf[0][0]),
-            &testing_tensor_laplace.tensor_host(_index, 0, 0, 0, 0),
-            _hp, _hs, _vc,
-            &(local_fortran_output[0][0]));
-
-        for(int igp = 0; igp < NP; ++igp) {
-          for(int jgp = 0; jgp < NP; ++jgp) {
-            Real coutput0 =
-                testing_tensor_laplace.scalar_output_host(
-                    _index, igp, jgp, level)[v];
-
-            REQUIRE(!std::isnan(
-                local_fortran_output[igp][jgp]));
-            REQUIRE(!std::isnan(coutput0));
-            REQUIRE(local_fortran_output[igp][jgp] ==
-                        coutput0);
-          }  // jgp
-        }    // igp
-      }      // v
-    }        // level
-  }          //_index
-
-  std::cout << "test laplace_tensor_replace multilevel "
-               "finished. \n";
-
-}  // end of test laplace_tensor_replace multilevel
 
 TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
           "curl_sphere_wk_testcov") {
@@ -1052,7 +832,7 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
   testing_curl.run_functor_curl_sphere_wk_testcov();
 
   HostViewManaged<Real[2][NP][NP]> local_fortran_output("curl_sphere_wk_testcov fortran results");
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real sf[NP][NP];
@@ -1063,15 +843,15 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] = testing_curl.scalar_input_host(
-                _index, _i, _j, level)[v];
+                ie, _i, _j, level)[v];
             mpf[_i][_j] =
-                testing_curl.mp_host(_index, _i, _j);
+                testing_curl.mp_host(ie, _i, _j);
             dvvf[_i][_j] = testing_curl.dvv_host(_i, _j);
 
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++) {
                 df[_d1][_d2][_i][_j] = testing_curl.d_host(
-                    _index, _d1, _d2, _i, _j);
+                    ie, _d1, _d2, _i, _j);
 
               }  // end of d2 loop
           }
@@ -1082,10 +862,10 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 = testing_curl.vector_output_host(
-                _index, 0, igp, jgp, level)[v];
+                ie, 0, igp, jgp, level)[v];
 
             Real coutput1 = testing_curl.vector_output_host(
-                _index, 1, igp, jgp, level)[v];
+                ie, 1, igp, jgp, level)[v];
 
             REQUIRE(!std::isnan(
                     local_fortran_output(0, igp, jgp)));
@@ -1103,7 +883,7 @@ TEST_CASE("Testing curl_sphere_wk_testcov() multilevel",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test curl_sphere_wk_testcov multilevel "
                "finished. \n";
@@ -1117,7 +897,7 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
   compute_sphere_operator_test_ml testing_grad(elements);
   testing_grad.run_functor_grad_sphere_wk_testcov();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real local_fortran_output[2][NP][NP];
@@ -1131,20 +911,20 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
             sf[_i][_j] = testing_grad.scalar_input_host(
-                _index, _i, _j, level)[v];
+                ie, _i, _j, level)[v];
             mpf[_i][_j] =
-                testing_grad.mp_host(_index, _i, _j);
+                testing_grad.mp_host(ie, _i, _j);
             metdetf[_i][_j] =
-                testing_grad.metdet_host(_index, _i, _j);
+                testing_grad.metdet_host(ie, _i, _j);
             dvvf[_i][_j] = testing_grad.dvv_host(_i, _j);
 
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++) {
                 df[_d1][_d2][_i][_j] = testing_grad.d_host(
-                    _index, _d1, _d2, _i, _j);
+                    ie, _d1, _d2, _i, _j);
 
                 metinvf[_d1][_d2][_i][_j] =
-                    testing_grad.metinv_host(_index, _d1,
+                    testing_grad.metinv_host(ie, _d1,
                                              _d2, _i, _j);
               }  // end of d2 loop
           }
@@ -1157,10 +937,10 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
         for(int igp = 0; igp < NP; ++igp) {
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 = testing_grad.vector_output_host(
-                _index, 0, igp, jgp, level)[v];
+                ie, 0, igp, jgp, level)[v];
 
             Real coutput1 = testing_grad.vector_output_host(
-                _index, 1, igp, jgp, level)[v];
+                ie, 1, igp, jgp, level)[v];
 
             REQUIRE(!std::isnan(
                 local_fortran_output[0][igp][jgp]));
@@ -1179,7 +959,7 @@ TEST_CASE("Testing grad_sphere_wk_testcov() multilevel",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test grad_sphere_wk_testcov multilevel "
                "finished. \n";
@@ -1195,7 +975,7 @@ TEST_CASE(
       elements);
   testing_vlaplace.run_functor_vlaplace_cartesian_reduced();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real local_fortran_output[2][NP][NP];
@@ -1210,31 +990,31 @@ TEST_CASE(
           for(int _j = 0; _j < NP; _j++) {
             vf[0][_i][_j] =
                 testing_vlaplace.vector_input_host(
-                    _index, 0, _i, _j, level)[v];
+                    ie, 0, _i, _j, level)[v];
             vf[1][_i][_j] =
                 testing_vlaplace.vector_input_host(
-                    _index, 1, _i, _j, level)[v];
+                    ie, 1, _i, _j, level)[v];
 
             sphf[_i][_j] = testing_vlaplace.spheremp_host(
-                _index, _i, _j);
+                ie, _i, _j);
             dvvf[_i][_j] =
                 testing_vlaplace.dvv_host(_i, _j);
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++) {
                 dinvf[_d1][_d2][_i][_j] =
-                    testing_vlaplace.dinv_host(_index, _d1,
+                    testing_vlaplace.dinv_host(ie, _d1,
                                                _d2, _i, _j);
 
                 tensorf[_d1][_d2][_i][_j] =
                     testing_vlaplace.tensor_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
 
               }  // end of d2 loop
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 3; _d2++) {
                 vec_sph2cartf[_d1][_d2][_i][_j] =
                     testing_vlaplace.vec_sph2cart_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
               }  // end of d2 loop
           }      // end of j loop
 
@@ -1253,10 +1033,10 @@ TEST_CASE(
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_vlaplace.vector_output_host(
-                    _index, 0, igp, jgp, level)[v];
+                    ie, 0, igp, jgp, level)[v];
             Real coutput1 =
                 testing_vlaplace.vector_output_host(
-                    _index, 1, igp, jgp, level)[v];
+                    ie, 1, igp, jgp, level)[v];
 
             REQUIRE(!std::isnan(
                 local_fortran_output[0][igp][jgp]));
@@ -1272,7 +1052,7 @@ TEST_CASE(
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test vlaplace_sphere_wk_cartesian "
                "multilevel finished. \n";
@@ -1287,7 +1067,7 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
       elements);
   testing_vlaplace.run_functor_vlaplace_contra();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real local_fortran_output[2][NP][NP];
@@ -1308,17 +1088,17 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
           for(int _j = 0; _j < NP; _j++) {
             vf[0][_i][_j] =
                 testing_vlaplace.vector_input_host(
-                    _index, 0, _i, _j, level)[v];
+                    ie, 0, _i, _j, level)[v];
             vf[1][_i][_j] =
                 testing_vlaplace.vector_input_host(
-                    _index, 1, _i, _j, level)[v];
+                    ie, 1, _i, _j, level)[v];
 
             mpf[_i][_j] =
-                testing_vlaplace.mp_host(_index, _i, _j);
+                testing_vlaplace.mp_host(ie, _i, _j);
             sphf[_i][_j] = testing_vlaplace.spheremp_host(
-                _index, _i, _j);
+                ie, _i, _j);
             metdetf[_i][_j] = testing_vlaplace.metdet_host(
-                _index, _i, _j);
+                ie, _i, _j);
             rmetdetf[_i][_j] = 1.0 / metdetf[_i][_j];
 
             dvvf[_i][_j] =
@@ -1326,15 +1106,15 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
             for(int _d1 = 0; _d1 < 2; _d1++)
               for(int _d2 = 0; _d2 < 2; _d2++) {
                 df[_d1][_d2][_i][_j] =
-                    testing_vlaplace.d_host(_index, _d1,
+                    testing_vlaplace.d_host(ie, _d1,
                                             _d2, _i, _j);
                 dinvf[_d1][_d2][_i][_j] =
-                    testing_vlaplace.dinv_host(_index, _d1,
+                    testing_vlaplace.dinv_host(ie, _d1,
                                                _d2, _i, _j);
 
                 metinvf[_d1][_d2][_i][_j] =
                     testing_vlaplace.metinv_host(
-                        _index, _d1, _d2, _i, _j);
+                        ie, _d1, _d2, _i, _j);
               }  // end of d2 loop
           }      // end of j loop
 
@@ -1350,10 +1130,10 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_vlaplace.vector_output_host(
-                    _index, 0, igp, jgp, level)[v];
+                    ie, 0, igp, jgp, level)[v];
             Real coutput1 =
                 testing_vlaplace.vector_output_host(
-                    _index, 1, igp, jgp, level)[v];
+                    ie, 1, igp, jgp, level)[v];
             // std::cout << igp << "," << jgp << " F output0
             // = " <<  local_fortran_output[0][igp][jgp] << ",
             // C output0 = " << coutput0 << "\n";
@@ -1371,7 +1151,7 @@ TEST_CASE("Testing vlaplace_sphere_wk_contra() multilevel",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test vlaplace_sphere_wk_contra multilevel "
                "finished. \n";
@@ -1385,7 +1165,7 @@ TEST_CASE("Testing vorticity_sphere_vector()",
   compute_sphere_operator_test_ml testing_vort(elements);
   testing_vort.run_functor_vorticity_sphere_vector();
 
-  for(int _index = 0; _index < elements; _index++) {
+  for(int ie = 0; ie < elements; ie++) {
     for(int level = 0; level < NUM_LEV; ++level) {
       for(int v = 0; v < VECTOR_SIZE; ++v) {
         Real local_fortran_output[NP][NP];
@@ -1397,15 +1177,15 @@ TEST_CASE("Testing vorticity_sphere_vector()",
         for(int _i = 0; _i < NP; _i++)
           for(int _j = 0; _j < NP; _j++) {
             metdetf[_i][_j] = testing_vort.metdet_host(
-                _index, _i, _j);
+                ie, _i, _j);
             dvvf[_i][_j] = testing_vort.dvv_host(_i, _j);
             for(int _d1 = 0; _d1 < 2; _d1++) {
               vf[_d1][_i][_j] =
                   testing_vort.vector_input_host(
-                      _index, _d1, _i, _j, level)[v];
+                      ie, _d1, _i, _j, level)[v];
               for(int _d2 = 0; _d2 < 2; _d2++)
                 df[_d1][_d2][_i][_j] =
-                    testing_vort.d_host(_index, _d1,
+                    testing_vort.d_host(ie, _d1,
                                              _d2, _i, _j);
             }
           }
@@ -1417,7 +1197,7 @@ TEST_CASE("Testing vorticity_sphere_vector()",
           for(int jgp = 0; jgp < NP; ++jgp) {
             Real coutput0 =
                 testing_vort.scalar_output_host(
-                    _index, igp, jgp, level)[v];
+                    ie, igp, jgp, level)[v];
             REQUIRE(!std::isnan(
                 local_fortran_output[igp][jgp]));
             REQUIRE(!std::isnan(coutput0));
@@ -1427,7 +1207,7 @@ TEST_CASE("Testing vorticity_sphere_vector()",
         }    // igp
       }      // v
     }        // level
-  }          //_index
+  }          //ie
 
   std::cout << "test vorticity_sphere_vector multilevel finished. \n";
 
