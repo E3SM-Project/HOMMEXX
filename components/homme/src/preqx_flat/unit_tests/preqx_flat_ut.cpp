@@ -140,8 +140,7 @@ public:
     Kokkos::deep_copy(metdet, elements.m_metdet);
 
     for (int ie = 0; ie < elements.num_elems(); ++ie) {
-      elements.dinv(Kokkos::subview(dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                                  Kokkos::ALL, Kokkos::ALL).data(),
+      elements.dinv(Homme::subview(dinv, ie).data(),
                   ie);
     }
   }
@@ -272,13 +271,10 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
         }
         caar_compute_energy_grad_c_int(
             test_functor.dvv.data(),
-                Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data(),
-                Kokkos::subview(test_functor.phi, ie, level * VECTOR_SIZE + v,
-                                Kokkos::ALL, Kokkos::ALL).data(),
-                Kokkos::subview(test_functor.velocity, ie, test_functor.n0,
-                                level * VECTOR_SIZE + v, Kokkos::ALL,
-                                Kokkos::ALL, Kokkos::ALL).data(),
+                Homme::subview(test_functor.dinv, ie).data(),
+                Homme::subview(test_functor.phi, ie, level * VECTOR_SIZE + v).data(),
+                Homme::subview(test_functor.velocity, ie, test_functor.n0,
+                                level * VECTOR_SIZE + v).data(),
                 tvirt.data(),
                 press.data(),
                 press_grad.data(),
@@ -347,14 +343,11 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
       "Fortran omega_p");
   for (int ie = 0; ie < num_elems; ++ie) {
     preq_omega_ps_c_int(
-        omega_p_f90.data(), Kokkos::subview(pressure, ie, Kokkos::ALL,
-                                            Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.velocity, ie, test_functor.n0, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(div_vdp, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
+        omega_p_f90.data(), Homme::subview(pressure, ie).data(),
+        Homme::subview(test_functor.velocity, ie, test_functor.n0).data(),
+        Homme::subview(div_vdp, ie)
             .data(),
-        Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL).data(),
+        Homme::subview(test_functor.dinv, ie).data(),
         test_functor.dvv.data());
     for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
       // Note this MUST be this loop so that k is set properly
@@ -417,13 +410,11 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   for (int ie = 0; ie < num_elems; ++ie) {
     preq_hydrostatic_c_int(
         phi_f90.data(),
-        Kokkos::subview(test_functor.phis, ie, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(temperature_virt, ie, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL).data(),
-        Kokkos::subview(pressure, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
+        Homme::subview(test_functor.phis, ie).data(),
+        Homme::subview(temperature_virt, ie).data(),
+        Homme::subview(pressure, ie)
             .data(),
-        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL).data());
+        Homme::subview(test_functor.dp3d, ie, test_functor.n0).data());
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -486,14 +477,12 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
     caar_compute_dp3d_np1_c_int(
         test_functor.np1_f90, test_functor.nm1_f90,
         test_functor.functor.m_data.dt,
-        Kokkos::subview(test_functor.spheremp, ie, Kokkos::ALL, Kokkos::ALL)
+        Homme::subview(test_functor.spheremp, ie)
             .data(),
-        Kokkos::subview(div_vdp, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL)
+        Homme::subview(div_vdp, ie)
             .data(),
-        Kokkos::subview(eta_dot, ie, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL).data(),
-        Kokkos::subview(dp3d_f90, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-                        Kokkos::ALL).data());
+        Homme::subview(eta_dot, ie).data(),
+        Homme::subview(dp3d_f90, ie).data());
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -554,17 +543,13 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
       for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
         caar_compute_divdp_c_int(
             compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
-            Kokkos::subview(test_functor.velocity, ie, test_functor.n0, level,
-                            Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-            Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, level,
-                            Kokkos::ALL, Kokkos::ALL).data(),
-            Kokkos::subview(test_functor.dinv, ie, Kokkos::ALL, Kokkos::ALL,
-                            Kokkos::ALL, Kokkos::ALL).data(),
-            Kokkos::subview(test_functor.metdet, ie, Kokkos::ALL, Kokkos::ALL)
+            Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
+            Homme::subview(test_functor.dp3d, ie, test_functor.n0, level).data(),
+            Homme::subview(test_functor.dinv, ie).data(),
+            Homme::subview(test_functor.metdet, ie)
                 .data(),
             test_functor.dvv.data(),
-            Kokkos::subview(vn0_f90, ie, level, Kokkos::ALL, Kokkos::ALL,
-                            Kokkos::ALL).data(),
+            Homme::subview(vn0_f90, ie, level).data(),
             vdp_f90.data(), div_vdp_f90.data());
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
@@ -679,8 +664,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
         hybrid_ai_mirror(0), test_functor.functor.m_data.ps0,
-        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL).data(),
+        Homme::subview(test_functor.dp3d, ie, test_functor.n0).data(),
         pressure_f90.data());
     for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
       for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
@@ -748,29 +732,18 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
 
       caar_compute_temperature_c_int(test_functor.dt,
-                                     Kokkos::subview(test_functor.spheremp, ie,
-                                                     Kokkos::ALL,
-                                                     Kokkos::ALL).data(),
-                                     Kokkos::subview(test_functor.dinv, ie,
-                                                     Kokkos::ALL, Kokkos::ALL,
-                                                     Kokkos::ALL, Kokkos::ALL).data(),
+                                     Homme::subview(test_functor.spheremp, ie).data(),
+                                     Homme::subview(test_functor.dinv, ie).data(),
                                      test_functor.dvv.data(),
-                                     Kokkos::subview(test_functor.velocity, ie,
-                                                     test_functor.n0, level,
-                                                     Kokkos::ALL, Kokkos::ALL,
-                                                     Kokkos::ALL).data(),
-                                     Kokkos::subview(temperature_virt, ie, level,
-                                                     Kokkos::ALL, Kokkos::ALL).data(),
-                                     Kokkos::subview(omega_p, ie, level,
-                                                     Kokkos::ALL, Kokkos::ALL).data(),
-                                     Kokkos::subview(t_vadv_f90, ie, level,
-                                                     Kokkos::ALL, Kokkos::ALL).data(),
-                                     Kokkos::subview(test_functor.temperature, ie,
-                                                     test_functor.nm1, level, Kokkos::ALL,
-                                                     Kokkos::ALL).data(),
-                                     Kokkos::subview(test_functor.temperature, ie,
-                                                     test_functor.n0, level, Kokkos::ALL,
-                                                     Kokkos::ALL).data(),
+                                     Homme::subview(test_functor.velocity, ie,
+                                                     test_functor.n0, level).data(),
+                                     Homme::subview(temperature_virt, ie, level).data(),
+                                     Homme::subview(omega_p, ie, level).data(),
+                                     Homme::subview(t_vadv_f90, ie, level).data(),
+                                     Homme::subview(test_functor.temperature, ie,
+                                                     test_functor.nm1, level).data(),
+                                     Homme::subview(test_functor.temperature, ie,
+                                                     test_functor.n0, level).data(),
                                      temperature_f90.data());
 
       for (int igp = 0; igp < NP; ++igp) {
@@ -825,8 +798,7 @@ TEST_CASE("virtual temperature no tracers",
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_temperature_no_tracers_c_int(
-        Kokkos::subview(test_functor.temperature, ie, test_functor.n0,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Homme::subview(test_functor.temperature, ie, test_functor.n0).data(),
         temperature_virt_f90.data());
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
@@ -885,12 +857,9 @@ TEST_CASE("moist virtual temperature",
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_temperature_tracers_c_int(
-        Kokkos::subview(test_functor.qdp, ie, test_functor.n0_qdp, 0, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.dp3d, ie, test_functor.n0, Kokkos::ALL,
-                        Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.temperature, ie, test_functor.n0,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Homme::subview(test_functor.qdp, ie, test_functor.n0_qdp, 0).data(),
+        Homme::subview(test_functor.dp3d, ie, test_functor.n0).data(),
+        Homme::subview(test_functor.temperature, ie, test_functor.n0).data(),
         temperature_virt_f90.data());
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
@@ -956,11 +925,8 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_omega_p_c_int(test_functor.eta_ave_w,
-                               Kokkos::subview(source_omega_p, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(omega_p_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL,
-                                               Kokkos::ALL).data());
+                               Homme::subview(source_omega_p, ie).data(),
+                               Homme::subview(omega_p_f90, ie).data());
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -1034,10 +1000,8 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_adjust_eta_dot_dpdn_c_int(test_functor.eta_ave_w,
-                               Kokkos::subview(eta_dot_total_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(eta_dot, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data());
+                               Homme::subview(eta_dot_total_f90, ie).data(),
+                               Homme::subview(eta_dot, ie).data());
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -1126,12 +1090,9 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
-                               Kokkos::subview(eta_dot_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data(),
-                               Kokkos::subview(sdot_sum_f90, ie, Kokkos::ALL,
-                                               Kokkos::ALL).data(),
-                               Kokkos::subview(div_vdp, ie, Kokkos::ALL,
-                                               Kokkos::ALL, Kokkos::ALL).data(),
+                               Homme::subview(eta_dot_f90, ie).data(),
+                               Homme::subview(sdot_sum_f90, ie).data(),
+                               Homme::subview(div_vdp, ie).data(),
                                hybrid_bi_mirror.data());
 
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
@@ -1232,17 +1193,12 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
         }
     }//level loop
     preq_vertadv(
-        Kokkos::subview(test_functor.temperature, ie, n0,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(test_functor.velocity, ie, n0,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(eta_dot_f90, ie,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
+        Homme::subview(test_functor.temperature, ie, n0).data(),
+        Homme::subview(test_functor.velocity, ie, n0).data(),
+        Homme::subview(eta_dot_f90, ie).data(),
         rdp_f90.data(),
-        Kokkos::subview(t_vadv_f90, ie,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data(),
-        Kokkos::subview(v_vadv_f90, ie,
-                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL).data()
+        Homme::subview(t_vadv_f90, ie).data(),
+        Homme::subview(v_vadv_f90, ie).data()
     );//preq vertadv call
 
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
