@@ -28,9 +28,16 @@ void add_connection (const int& first_elem_lid,  const int& first_elem_gid,  con
     std::abort();
   }
 
+  // S, N, W, E is unpack order, so we want elem_pos to reflect
+  // that. Convert here.
+  const auto convert = [=] (int fpos) -> int {
+    return fpos <= 4 ? (((fpos-1) + 2) % 4) : (fpos-1);
+  };
+  const int fep = convert(first_elem_pos), sep = convert(second_elem_pos);
+
   Connectivity& connectivity = *Context::singleton().get_connectivity();
-  connectivity.add_connection(first_elem_lid-1, first_elem_gid-1, first_elem_pos-1, first_elem_pid-1,
-                              second_elem_lid-1,second_elem_gid-1,second_elem_pos-1,second_elem_pid-1);
+  connectivity.add_connection(first_elem_lid-1, first_elem_gid-1, fep, first_elem_pid-1,
+                              second_elem_lid-1,second_elem_gid-1,sep,second_elem_pid-1);
 }
 
 void finalize_connectivity ()

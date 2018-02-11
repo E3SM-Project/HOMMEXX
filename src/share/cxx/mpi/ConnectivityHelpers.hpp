@@ -114,10 +114,10 @@ struct ConnectionHelpers {
   };
 
   const ConnectionKind CONNECTION_KIND[NUM_CONNECTIONS] = {
-      ConnectionKind::EDGE,     // W
-      ConnectionKind::EDGE,     // E
       ConnectionKind::EDGE,     // S
       ConnectionKind::EDGE,     // N
+      ConnectionKind::EDGE,     // W
+      ConnectionKind::EDGE,     // E
       ConnectionKind::CORNER,   // SW
       ConnectionKind::CORNER,   // SE
       ConnectionKind::CORNER,   // NW
@@ -125,10 +125,10 @@ struct ConnectionHelpers {
   };
 
   const Direction CONNECTION_DIRECTION[NUM_CONNECTIONS][NUM_CONNECTIONS] = {
-    {Direction::BACKWARD, Direction::FORWARD,  Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // W/(W-E-S-N)
-    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // E/(W-E-S-N)
-    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD , Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // S/(W-E-S-N)
-    {Direction::BACKWARD, Direction::FORWARD,  Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // N/(W-E-S-N)
+    {Direction::BACKWARD, Direction::FORWARD , Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // S/(S-N-W-E)
+    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD,  Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // N/(S-N-W-E)
+    {Direction::FORWARD,  Direction::BACKWARD, Direction::BACKWARD, Direction::FORWARD,  Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // W/(S-N-W-E)
+    {Direction::BACKWARD, Direction::FORWARD , Direction::FORWARD,  Direction::BACKWARD, Direction::INVALID, Direction::INVALID, Direction::INVALID, Direction::INVALID}, // E/(S-N-W-E)
     {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
     {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
     {Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::INVALID,  Direction::FORWARD, Direction::FORWARD, Direction::FORWARD, Direction::FORWARD},
@@ -154,15 +154,15 @@ struct ConnectionHelpers {
   const GaussPoint GP_15      {  3,  3 };
   const GaussPoint GP_INVALID { -1, -1 };
 
-  const ArrayGP WEST_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
-  const ArrayGP EAST_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
   const ArrayGP SOUTH_PTS_FWD = {{ GP_0 , GP_1 , GP_2 , GP_3  }};
   const ArrayGP NORTH_PTS_FWD = {{ GP_12, GP_13, GP_14, GP_15 }};
+  const ArrayGP WEST_PTS_FWD  = {{ GP_0 , GP_4 , GP_8 , GP_12 }};
+  const ArrayGP EAST_PTS_FWD  = {{ GP_3 , GP_7 , GP_11, GP_15 }};
 
-  const ArrayGP WEST_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
-  const ArrayGP EAST_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
   const ArrayGP SOUTH_PTS_BWD = {{ GP_3 , GP_2 , GP_1 , GP_0  }};
   const ArrayGP NORTH_PTS_BWD = {{ GP_15, GP_14, GP_13, GP_12 }};
+  const ArrayGP WEST_PTS_BWD  = {{ GP_12, GP_8 , GP_4 , GP_0  }};
+  const ArrayGP EAST_PTS_BWD  = {{ GP_15, GP_11, GP_7 , GP_3  }};
 
   const ArrayGP SWEST_PTS = {{ GP_0 , GP_INVALID, GP_INVALID, GP_INVALID }};
   const ArrayGP SEAST_PTS = {{ GP_3 , GP_INVALID, GP_INVALID, GP_INVALID }};
@@ -175,23 +175,24 @@ struct ConnectionHelpers {
 
   // Connections fwd
   const ArrayGP CONNECTION_PTS_FWD [NUM_CONNECTIONS] =
-    { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+    { SOUTH_PTS_FWD, NORTH_PTS_FWD, WEST_PTS_FWD, EAST_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
 
   // Connections bwd
   const ArrayGP CONNECTION_PTS_BWD [NUM_CONNECTIONS] =
-    { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
+    { SOUTH_PTS_BWD, NORTH_PTS_BWD, WEST_PTS_BWD, EAST_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS };
 
   // All connections
+  // You should never access CONNECTIONS_PTS with Direction=INVALID
   const ArrayGP CONNECTION_PTS[NUM_DIRECTIONS][NUM_CONNECTIONS] =
     {
-      { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
-      { WEST_PTS_BWD, EAST_PTS_BWD, SOUTH_PTS_BWD, NORTH_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
-      { NO_PTS }  // You should never access CONNECTIONS_PTS with Direction=INVALID
+      { SOUTH_PTS_FWD, NORTH_PTS_FWD, WEST_PTS_FWD, EAST_PTS_FWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+      { SOUTH_PTS_BWD, NORTH_PTS_BWD, WEST_PTS_BWD, EAST_PTS_BWD, SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS },
+      { NO_PTS }
     };
 
   // Edges and corners (fwd), used in the unpacking
   const ArrayGP EDGE_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
-      { WEST_PTS_FWD, EAST_PTS_FWD, SOUTH_PTS_FWD, NORTH_PTS_FWD };
+    { SOUTH_PTS_FWD, NORTH_PTS_FWD, WEST_PTS_FWD, EAST_PTS_FWD };
 
   const ArrayGP CORNER_PTS_FWD [NUM_CONNECTIONS_PER_KIND] =
     { SWEST_PTS, SEAST_PTS, NWEST_PTS, NEAST_PTS};
