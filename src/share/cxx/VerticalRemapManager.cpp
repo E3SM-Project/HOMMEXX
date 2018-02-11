@@ -18,7 +18,7 @@ struct VerticalRemapManager::Impl {
         remapper = std::make_shared<Remap::RemapFunctor<
             false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixed> >(params.qsize, e, h);
       }
-    } else if (alg == RemapAlg::PPM_MIRRORED) {
+    } else if (params.remap_alg == RemapAlg::PPM_MIRRORED) {
       if (params.rsplit != 0) {
         remapper = std::make_shared<Remap::RemapFunctor<
             true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmMirrored> >(params.qsize, e, h);
