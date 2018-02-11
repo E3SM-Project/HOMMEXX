@@ -227,9 +227,9 @@ struct PpmVertRemap : public VertRemapAlg {
               [&](const int k) {
                 const int ilevel = k / VECTOR_SIZE;
                 const int ivector = k % VECTOR_SIZE;
-                ao[remap_idx](kv.ie, igp, jgp, k + 2) =
+                ao[remap_idx](kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
                     remap_var(igp, jgp, ilevel)[ivector] /
-                    dpo(kv.ie, igp, jgp, k + 2);
+                    dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING);
               });
 
           // Scan region
@@ -501,7 +501,7 @@ struct PpmVertRemap : public VertRemapAlg {
               [&](const int &k) {
                 int ilevel = k / VECTOR_SIZE;
                 int ivector = k % VECTOR_SIZE;
-                dpo(kv.ie, igp, jgp, k + 2) =
+                dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
                     src_layer_thickness(igp, jgp, ilevel)[ivector];
               });
         });
@@ -554,9 +554,11 @@ struct PpmVertRemap : public VertRemapAlg {
           const int jgp = loop_idx % NP;
           Kokkos::parallel_for(
               Kokkos::ThreadVectorRange(kv.team, gs), [&](const int &k) {
-                dpo(kv.ie, igp, jgp, 1 - k) = dpo(kv.ie, igp, jgp, k + 2);
-                dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + k + 2) =
-                    dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + 1 - k);
+                dpo(kv.ie, igp, jgp, _ppm_consts::INITIAL_PADDING - 1 - k) =
+                    dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING);
+                dpo(kv.ie, igp, jgp, NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING + k) =
+                    dpo(kv.ie, igp, jgp,
+                        NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING - 1 - k);
               });
         });
     kv.team_barrier();
@@ -625,7 +627,7 @@ struct PpmVertRemap : public VertRemapAlg {
                     (pin(kv.ie, igp, jgp, k + 1) -
                      (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) *
                          0.5) /
-                    dpo(kv.ie, igp, jgp, kk + 1);
+                    dpo(kv.ie, igp, jgp, kk + 1 + _ppm_consts::INITIAL_PADDING - gs);
               });
 
           ExecViewUnmanaged<Real[_ppm_consts::DPO_PHYSICAL_LEV]> point_dpo =
