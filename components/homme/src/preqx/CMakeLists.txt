@@ -134,8 +134,8 @@ SET(PREQX_DEPS_F90
 )
 
 IF (NOT ${USE_KOKKOS_KERNELS})
-  SET (PREQX_FLAT_DEPS_F90
-    ${PREQX_FLAT_DEPS_F90}
+  SET (PREQX_DEPS_F90
+    ${PREQX_DEPS_F90}
     ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
     ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
     ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
@@ -191,7 +191,7 @@ SET(PREQX_SRCS ${PREQX_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 
 SET(PREQX_UT_F90_SRCS
   ${TARGET_F90}
-  ${PREQX_FLAT_DEPS_F90}
+  ${PREQX_DEPS_F90}
   ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
