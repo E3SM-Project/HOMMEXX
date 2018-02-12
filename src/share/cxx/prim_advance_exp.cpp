@@ -107,7 +107,9 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1,
   Kokkos::RangePolicy<ExecSpace,CaarFunctor::TagPostExchange> policy_post(0, data.num_elems*NP*NP*NUM_LEV);
 
   // Create the functor
-  CaarFunctor functor(data, Context::singleton().get_elements(), Context::singleton().get_derivative());
+  CaarFunctor functor(data, Context::singleton().get_elements(),
+                      Context::singleton().get_derivative(),
+                      Context::singleton().get_hvcoord());
 
   // Setup the boundary exchange
   std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];

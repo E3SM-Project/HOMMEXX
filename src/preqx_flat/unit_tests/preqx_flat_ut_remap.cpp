@@ -377,12 +377,14 @@ TEST_CASE("remap_interface", "vertical remap") {
   elements.random_init(num_elems);
   data.np1 = 0;
   data.n0_qdp = 0;
+  HybridVCoord hvcoord;
+  hvcoord.random_init(std::random_device()());
   SECTION("states_only") {
     constexpr int rsplit = 1;
     data.qsize = 0;
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
+    _Remap remap(data, elements, hvcoord);
     remap.run_remap();
   }
   SECTION("tracers_only") {
@@ -390,7 +392,7 @@ TEST_CASE("remap_interface", "vertical remap") {
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
+    _Remap remap(data, elements, hvcoord);
     remap.run_remap();
   }
   SECTION("states_tracers") {
@@ -399,7 +401,7 @@ TEST_CASE("remap_interface", "vertical remap") {
     data.qsize = QSIZE_D;
     data.rsplit = rsplit;
     using _Remap = RemapFunctor<remap_dim, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
+    _Remap remap(data, elements, hvcoord);
     remap.run_remap();
   }
 }
