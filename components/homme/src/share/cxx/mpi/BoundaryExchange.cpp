@@ -8,7 +8,8 @@
 
 #include "utilities/VectorUtils.hpp"
 
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
+#define tstart(x)
+#define tstop(x)
 
 namespace Homme
 {
@@ -292,9 +293,9 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
-    GPTLstart("be build_buffer_views_and_requests");
+    tstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
-    GPTLstop("be build_buffer_views_and_requests");
+    tstop("be build_buffer_views_and_requests");
   }
 
   // If the user did not specify upper limit, process till the end of all elements
@@ -308,7 +309,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
 
   // ---- Pack ---- //
   // First, pack 2d fields (if any)...
-  GPTLstart("be pack");
+  tstart("be pack");
   auto connections = m_connectivity->get_connections<ExecMemSpace>();
   if (m_num_2d_fields>0) {
     auto fields_2d = m_2d_fields;
@@ -404,17 +405,17 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
     }
   }
   ExecSpace::fence();
-  GPTLstop("be pack");
+  tstop("be pack");
 
   // ---- Send ---- //
-  GPTLstart("be sync_send_buffer");
+  tstart("be sync_send_buffer");
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
-  GPTLstop("be sync_send_buffer");
-  GPTLstart("be send");
+  tstop("be sync_send_buffer");
+  tstart("be send");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  GPTLstop("be send");
+  tstop("be send");
 
   // Notify a send is ongoing
   m_send_pending = true;
@@ -429,7 +430,7 @@ void BoundaryExchange
 ::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete)
 {
   GPTLstart("be recv_and_unpack");
-  GPTLstart("be recv_and_unpack book");
+  tstart("be recv_and_unpack book");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -456,17 +457,17 @@ void BoundaryExchange
                               m_connectivity->get_comm().m_mpi_comm);
     m_recv_pending = true;
   }
-  GPTLstop("be recv_and_unpack book");
+  tstop("be recv_and_unpack book");
 
   // ---- Recv ---- //
-  GPTLstart("be recv waitall");
+  tstart("be recv waitall");
   if ( ! m_recv_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size(), m_recv_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   m_recv_pending = false;
-  GPTLstop("be recv waitall");
+  tstop("be recv waitall");
 
-  GPTLstart("be recv_and_unpack book");
+  tstart("be recv_and_unpack book");
   m_buffers_manager->sync_recv_buffer(this);
 
   // If the user did not specify upper limit, process till the end of all elements
@@ -477,9 +478,9 @@ void BoundaryExchange
   // Sanity check
   assert (nete>nets);
   assert (nets>=0);
-  GPTLstop("be recv_and_unpack book");
+  tstop("be recv_and_unpack book");
 
-  GPTLstart("be unpack");
+  tstart("be unpack");
   // --- Unpack --- //
   // First, unpack 2d fields (if any)...
   if (m_num_2d_fields>0) {
@@ -604,26 +605,26 @@ void BoundaryExchange
     }
   }
   ExecSpace::fence();
-  GPTLstop("be unpack");
+  tstop("be unpack");
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
   
-  GPTLstart("be waitall 2");
+  tstart("be waitall 2");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size(), m_send_requests.data(),
                                         MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be waitall 2");
+  tstop("be waitall 2");
 
-  GPTLstart("be recv_and_unpack book");
+  tstart("be recv_and_unpack book");
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
   m_send_pending = false;
   m_recv_pending = false;
-  GPTLstop("be recv_and_unpack book");
+  tstop("be recv_and_unpack book");
   GPTLstop("be recv_and_unpack");
 }
 
@@ -653,9 +654,9 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange_min_max method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
-    GPTLstart("be build_buffer_views_and_requests");
+    tstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
-    GPTLstop("be build_buffer_views_and_requests");
+    tstop("be build_buffer_views_and_requests");
   }
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
@@ -674,7 +675,7 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   assert (nets>=0);
 
   // ---- Pack ---- //
-  GPTLstart("be mm pack");
+  tstart("be mm pack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
     Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
@@ -698,15 +699,15 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
         fields_1d(field_lidpos.lid, ifield, MIN_ID)[ilev];
     });
   ExecSpace::fence();
-  GPTLstop("be mm pack");
+  tstop("be mm pack");
 
   // ---- Send ---- //
-  GPTLstart("be mm send");
+  tstart("be mm send");
   m_buffers_manager->sync_send_buffer(this);
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  GPTLstop("be mm send");
+  tstop("be mm send");
 
   // Mark send buffer as busy
   m_send_pending = true;
@@ -741,11 +742,11 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   }
 
   // ---- Recv ---- //
-  GPTLstart("be mm recv waitall");
+  tstart("be mm recv waitall");
   if ( ! m_recv_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size(), m_recv_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be mm recv waitall");
+  tstop("be mm recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
@@ -765,7 +766,7 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   assert (nets>=0);
 
   // --- Unpack --- //
-  GPTLstart("be mm unpack");
+  tstart("be mm unpack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
     Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
@@ -788,17 +789,17 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
       }
     });
   ExecSpace::fence();
-  GPTLstop("be mm unpack");
+  tstop("be mm unpack");
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
-  GPTLstart("be mm recv waitall 2");
+  tstart("be mm recv waitall 2");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size(), m_send_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be mm recv waitall 2");
+  tstop("be mm recv waitall 2");
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();

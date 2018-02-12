@@ -70,8 +70,6 @@ contains
 
     integer        :: i,j
 
-    call t_startf('bndry_exchangeV_core')
-
     pSchedule => Schedule(1)
     nlyr = buffer%nlyr
 
@@ -84,7 +82,6 @@ contains
     !  Fire off the sends
     !==================================================
 
-    call t_startf('bndry_exchangeV_core isend')
     do icycle=1,nSendCycles
        pCycle      => pSchedule%SendCycle(icycle)
        dest            = pCycle%dest - 1
@@ -100,7 +97,6 @@ contains
           print *,'bndry_exchangeV: Error after call to MPI_Isend: ',errorstring
        endif
     end do    ! icycle
-    call t_stopf('bndry_exchangeV_core isend')
 
     !==================================================
     !  Post the Receives 
@@ -128,10 +124,8 @@ contains
        call abortmp('edgebuffer threads does not match number of active threads')
     endif
 
-    call t_startf('bndry_exchangeV_core wait')
     call MPI_Waitall(nSendCycles,buffer%Srequest,buffer%status,ierr)
     call MPI_Waitall(nRecvCycles,buffer%Rrequest,buffer%status,ierr)
-    call t_stopf('bndry_exchangeV_core wait')
     !$OMP END MASTER
 !pw call t_startf('bndry_copy')
     !JMD ithr = omp_get_thread_num()+1
@@ -143,7 +137,6 @@ contains
         buffer%receive(iptr:iptr+length-1) = buffer%buf(iptr:iptr+length-1)
     endif
 !pw call t_stopf('bndry_copy')
-    call t_stopf('bndry_exchangeV_core')
   end subroutine bndry_exchangeV_core
 
   subroutine bndry_exchangeS_core(par,ithr,buffer)
