@@ -18,7 +18,9 @@ class EulerStepFunctor {
   Control          m_data;
   const Elements   m_elements;
   const Derivative m_deriv;
+
   bool             m_kernel_will_run_limiters;
+  std::shared_ptr<BoundaryExchange> nmm_bexch, eus_bexchs[9];
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
@@ -377,11 +379,10 @@ public:
   }
 
   void neighbor_minmax() {
-    static std::shared_ptr<BoundaryExchange> be = nullptr;
-    if ( ! be)
-      be = Context::singleton().get_boundary_exchange("min max Euler");
-    assert(be->is_registration_completed());
-    be->exchange_min_max(m_data.nets, m_data.nete);
+    if ( ! nmm_bexch)
+      nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler");
+    assert(nmm_bexch->is_registration_completed());
+    nmm_bexch->exchange_min_max(m_data.nets, m_data.nete);
   }
 
   void exchange_qdp_dss_var () {
@@ -393,9 +394,8 @@ public:
     // TODO: move this setup in init_control_euler and move that function one
     // stack frame up of euler_step in F90, making it set the common parameters
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
-    static std::shared_ptr<BoundaryExchange> bes[9] = {0};
     const int idx = 3*(static_cast<int>(m_data.DSSopt) - 1) + m_data.np1_qdp;
-    if ( ! bes[idx]) {
+    if ( ! eus_bexchs[idx]) {
       std::stringstream ss;
       ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
                                     ? "eta"
@@ -404,9 +404,9 @@ public:
                                           : "div_vdp_ave") << " " << m_data.np1_qdp;
       const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
           Context::singleton().get_boundary_exchange(ss.str());
-      bes[idx] = be_qdp_dss_var;
+      eus_bexchs[idx] = be_qdp_dss_var;
     }
-    bes[idx]->exchange(m_elements.m_rspheremp);
+    eus_bexchs[idx]->exchange(m_elements.m_rspheremp);
     GPTLstop("eus_bexchV");
   }
 
