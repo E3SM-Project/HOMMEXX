@@ -17,18 +17,13 @@ struct Control {
                     CRCPtr hybrid_bi_ptr);
 
   // This constructor should only be used by the host
-  void init (const int nets, const int nete, const int num_elems,
-             const int n0_qdp,  const int rsplit);
+  void init (const int num_elems, const int n0_qdp,  const int rsplit);
 
   void random_init(int num_elems, int seed);
 
   void set_rk_stage_data(const int nm1, const int n0, const int np1,
                          const Real dt, const Real eta_ave_w,
                          const bool compute_diagonstics);
-
-  // Range of element indices to be handled by this thread is [nets,nete)
-  int nets;
-  int nete;
 
   // The number of elements on this rank
   int num_elems;

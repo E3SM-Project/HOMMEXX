@@ -149,10 +149,8 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
 
-  // We also set nets, nete and num_elems in the Control
+  // We also set num_elems in the Control
   Control& control = Context::singleton().get_control ();
-  control.nets      = 0;
-  control.nete      = num_elems;
   control.num_elems = num_elems;
 }
 

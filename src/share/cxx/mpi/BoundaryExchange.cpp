@@ -25,6 +25,8 @@ BoundaryExchange::BoundaryExchange()
   m_connectivity    = std::shared_ptr<Connectivity>();
   m_buffers_manager = std::shared_ptr<BuffersManager>();
 
+  m_num_elems = -1;
+
   // Prohibit registration until the number of fields has been set
   m_registration_started   = false;
   m_registration_completed = false;
@@ -43,6 +45,7 @@ BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity, s
 {
   // Set the connectivity
   set_connectivity (connectivity);
+  m_num_elems = connectivity->get_num_local_elements();
 
   // Set the buffers manager
   set_buffers_manager (buffers_manager);
@@ -127,9 +130,9 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   //       we will check that they match the 2nd dimension of m_1d_fields, m_2d_fields and m_3d_fields.
 
   // Create the fields views
-  m_1d_fields = decltype(m_1d_fields)("1d fields", m_connectivity->get_num_local_elements(), num_1d_fields);
-  m_2d_fields = decltype(m_2d_fields)("2d fields", m_connectivity->get_num_local_elements(), num_2d_fields);
-  m_3d_fields = decltype(m_3d_fields)("3d fields", m_connectivity->get_num_local_elements(), num_3d_fields);
+  m_1d_fields = decltype(m_1d_fields)("1d fields", m_num_elems, num_1d_fields);
+  m_2d_fields = decltype(m_2d_fields)("2d fields", m_num_elems, num_2d_fields);
+  m_3d_fields = decltype(m_3d_fields)("3d fields", m_num_elems, num_3d_fields);
 
   // Now we can start register fields
   m_registration_started   = true;
@@ -197,16 +200,15 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 }
 
-void BoundaryExchange::exchange (int nets, int nete) {
-  exchange(nullptr, nets, nete);
+void BoundaryExchange::exchange () {
+  exchange(nullptr);
 }
 
-void BoundaryExchange
-::exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp, int nets, int nete) {
-  exchange(&rspheremp, nets, nete);
+void BoundaryExchange::exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp) {
+  exchange(&rspheremp);
 }
 
-void BoundaryExchange::exchange (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete)
+void BoundaryExchange::exchange (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -232,13 +234,13 @@ void BoundaryExchange::exchange (const ExecViewUnmanaged<const Real * [NP][NP]>*
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
-  pack_and_send (nets, nete);
+  pack_and_send ();
 
   // --- Recv and unpack --- //
-  recv_and_unpack (rspheremp, nets, nete);
+  recv_and_unpack (rspheremp);
 }
 
-void BoundaryExchange::exchange_min_max (int nets, int nete)
+void BoundaryExchange::exchange_min_max ()
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -270,7 +272,7 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
   recv_and_unpack_min_max ();
 }
 
-void BoundaryExchange::pack_and_send (int nets, int nete)
+void BoundaryExchange::pack_and_send ()
 {
   GPTLstart("be pack_and_send");
   // The registration MUST be completed by now
@@ -298,15 +300,6 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
     tstop("be build_buffer_views_and_requests");
   }
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
   // ---- Pack ---- //
   // First, pack 2d fields (if any)...
   tstart("be pack");
@@ -315,7 +308,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
     auto fields_2d = m_2d_fields;
     auto send_2d_buffers = m_send_2d_buffers;
     const ConnectionHelpers helpers;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({nets, 0, 0}, {nete, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({0, 0, 0}, {m_num_elems, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
       const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
@@ -339,9 +332,9 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
       Kokkos::parallel_for(
-        Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
         KOKKOS_LAMBDA(const int it) {
-          const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
+          const int ie = it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
           const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
           const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
           const int ilev = it % NUM_LEV;
@@ -361,7 +354,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
           }
         });
     } else {
-      const auto num_parallel_iterations = (nete - nets)*m_num_3d_fields;
+      const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
       ThreadPreferences tp;
       tp.max_threads_usable = NUM_CONNECTIONS;
       tp.max_vectors_usable = NUM_LEV;
@@ -375,7 +368,7 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
         policy,
         KOKKOS_LAMBDA(const TeamMember& team) {
           Homme::KernelVariables kv(team, num_3d_fields);
-          const int ie = nets + kv.ie;
+          const int ie = kv.ie;
           const int ifield = kv.iq;
           for (int iconn = 0; iconn < 8; ++iconn) {
             const ConnectionInfo& info = connections(ie, iconn);
@@ -422,12 +415,11 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   GPTLstop("be pack_and_send");
 }
 
-void BoundaryExchange::recv_and_unpack (int nets, int nete) {
-  recv_and_unpack(nullptr, nets, nete);
+void BoundaryExchange::recv_and_unpack () {
+  recv_and_unpack(nullptr);
 }
 
-void BoundaryExchange
-::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete)
+void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
   GPTLstart("be recv_and_unpack");
   tstart("be recv_and_unpack book");
@@ -470,14 +462,6 @@ void BoundaryExchange
   tstart("be recv_and_unpack book");
   m_buffers_manager->sync_recv_buffer(this);
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
   tstop("be recv_and_unpack book");
 
   tstart("be unpack");
@@ -487,7 +471,7 @@ void BoundaryExchange
     auto fields_2d = m_2d_fields;
     auto recv_2d_buffers = m_recv_2d_buffers;
     const ConnectionHelpers helpers;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({nets, 0}, {nete, m_num_2d_fields}, {1, 1}),
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_num_elems, m_num_2d_fields}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield) {
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
@@ -513,9 +497,9 @@ void BoundaryExchange
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
       Kokkos::parallel_for(
-        Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
+        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_LEV),
         KOKKOS_LAMBDA(const int it) {
-          const int ie = nets + it / (num_3d_fields*NUM_LEV);
+          const int ie = it / (num_3d_fields*NUM_LEV);
           const int ifield = (it / NUM_LEV) % num_3d_fields;
           const int ilev = it % NUM_LEV;
           const auto& f3 = fields_3d(ie, ifield);
@@ -536,9 +520,9 @@ void BoundaryExchange
       if (rspheremp) {
         const auto r = *rspheremp;
         Kokkos::parallel_for(
-          Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NP*NP*NUM_LEV),
+          Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NP*NP*NUM_LEV),
           KOKKOS_LAMBDA(const int it) {
-            const int ie = nets + it / (num_3d_fields*NUM_LEV*NP*NP);
+            const int ie = it / (num_3d_fields*NUM_LEV*NP*NP);
             const int ifield = (it / (NP*NP*NUM_LEV)) % num_3d_fields;
             const int i = (it / (NP*NUM_LEV)) % NP;
             const int j = (it / NUM_LEV) % NP;
@@ -547,12 +531,12 @@ void BoundaryExchange
           });
       }
     } else {
-      const auto num_parallel_iterations = (nete - nets)*m_num_3d_fields;
+      const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
       Kokkos::parallel_for(
         Kokkos::TeamPolicy<ExecSpace>(num_parallel_iterations, 1, NUM_LEV),
         KOKKOS_LAMBDA(const TeamMember& team) {
           Homme::KernelVariables kv(team, num_3d_fields);
-          const int ie = nets + kv.ie;
+          const int ie = kv.ie;
           const int ifield = kv.iq;
           const auto& f3 = fields_3d(ie, ifield);
           const auto ef = [&] (const int& iedge, const int& k, const int& ip, const int& jp) {
@@ -611,7 +595,7 @@ void BoundaryExchange
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
-  
+
   tstart("be waitall 2");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size(), m_send_requests.data(),
@@ -628,7 +612,7 @@ void BoundaryExchange
   GPTLstop("be recv_and_unpack");
 }
 
-void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
+void BoundaryExchange::pack_and_send_min_max ()
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -665,22 +649,13 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   auto fields_1d   = m_1d_fields;
   auto send_1d_buffers = m_send_1d_buffers;
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
   // ---- Pack ---- //
   tstart("be mm pack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
-      const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
+      const int ie = it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
       const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
       const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
       const int ilev = it % NUM_LEV;
@@ -713,7 +688,7 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   m_send_pending = true;
 }
 
-void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
+void BoundaryExchange::recv_and_unpack_min_max ()
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -756,22 +731,13 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   auto fields_1d = m_1d_fields;
   auto recv_1d_buffers = m_recv_1d_buffers;
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
   // --- Unpack --- //
   tstart("be mm unpack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
-      const int ie = nets + it / (num_1d_fields*NUM_LEV);
+      const int ie = it / (num_1d_fields*NUM_LEV);
       const int ifield = (it / NUM_LEV) % num_1d_fields;
       const int ilev = it % NUM_LEV;
       for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
@@ -809,8 +775,6 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
 
 void BoundaryExchange::build_buffer_views_and_requests()
 {
-  const auto nle = m_connectivity->get_num_local_elements();
-
   // If we already set the buffers before, then nothing to be done here
   if (m_buffer_views_and_requests_built) {
     return;
@@ -871,12 +835,12 @@ void BoundaryExchange::build_buffer_views_and_requests()
   h_all_recv_buffers[etoi(ConnectionSharing::MISSING)] = buffers_manager->get_blackhole_recv_buffer().data();
 
   // Create buffer views
-  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer", nle, m_num_1d_fields);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer", nle, m_num_1d_fields);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer", nle, m_num_2d_fields);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer", nle, m_num_2d_fields);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", nle, m_num_3d_fields);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", nle, m_num_3d_fields);
+  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer", m_num_elems, m_num_1d_fields);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer", m_num_elems, m_num_1d_fields);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer", m_num_elems, m_num_2d_fields);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer", m_num_elems, m_num_2d_fields);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", m_num_elems, m_num_3d_fields);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", m_num_elems, m_num_3d_fields);
 
   std::vector<int> slot_idx_to_elem_conn_pair, pids, pid_offsets;
   init_slot_idx_to_elem_conn_pair(slot_idx_to_elem_conn_pair, pids, pid_offsets);
@@ -896,7 +860,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto h_send_3d_buffers = Kokkos::create_mirror_view(m_send_3d_buffers);
   auto h_recv_3d_buffers = Kokkos::create_mirror_view(m_recv_3d_buffers);
   auto h_connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+  for (int k = 0; k < m_num_elems*NUM_CONNECTIONS; ++k) {
     const int ie = slot_idx_to_elem_conn_pair[k] / NUM_CONNECTIONS;
     const int iconn = slot_idx_to_elem_conn_pair[k] % NUM_CONNECTIONS;
     {
@@ -1013,8 +977,6 @@ void BoundaryExchange
   std::vector<int>& slot_idx_to_elem_conn_pair,
   std::vector<int>& pids, std::vector<int>& pid_offsets)
 {
-  const auto nle = m_connectivity->get_num_local_elements();
-
   struct IP {
     int i, ord, pid;
     bool operator< (const IP& o) const {
@@ -1023,10 +985,10 @@ void BoundaryExchange
       return ord < o.ord;
     }
   };
-  std::vector<IP> i2remote(nle*NUM_CONNECTIONS);
+  std::vector<IP> i2remote(m_num_elems*NUM_CONNECTIONS);
 
   const auto& connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int ie = 0; ie < nle; ++ie)
+  for (int ie = 0; ie < m_num_elems; ++ie)
     for (int iconn = 0; iconn < NUM_CONNECTIONS; ++iconn) {
       const auto& info = connections(ie, iconn);
       const int k = ie*NUM_CONNECTIONS + iconn;
@@ -1054,11 +1016,11 @@ void BoundaryExchange
 
   // Collect the unique remote_pids and get the offsets of the contiguous blocks
   // of them.
-  slot_idx_to_elem_conn_pair.resize(nle*NUM_CONNECTIONS);
+  slot_idx_to_elem_conn_pair.resize(m_num_elems*NUM_CONNECTIONS);
   pids.clear();
   pid_offsets.clear();
   int prev_pid = -2;
-  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+  for (int k = 0; k < m_num_elems*NUM_CONNECTIONS; ++k) {
     const auto& i2r = i2remote[k];
     if (i2r.pid > prev_pid && i2r.pid != -1) {
       pids.push_back(i2r.pid);
@@ -1069,7 +1031,7 @@ void BoundaryExchange
     const int iconn = i2r.i % NUM_CONNECTIONS;
     slot_idx_to_elem_conn_pair[k] = ie*NUM_CONNECTIONS + iconn;
   }
-  pid_offsets.push_back(nle*NUM_CONNECTIONS);
+  pid_offsets.push_back(m_num_elems*NUM_CONNECTIONS);
 }
 
 void BoundaryExchange::clear_buffer_views_and_requests ()
