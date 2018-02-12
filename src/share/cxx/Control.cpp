@@ -137,8 +137,4 @@ void Control::set_rk_stage_data(const int nm1_in, const int n0_in, const int np1
   compute_diagonstics = compute_diagonstics_in;
 }
 
-Control::DSSOption::Enum Control::DSSOption::from (int DSSopt) {
-  return static_cast<Enum>(DSSopt);
-}
-
 } // namespace Homme
