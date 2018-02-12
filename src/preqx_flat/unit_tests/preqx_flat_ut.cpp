@@ -1354,7 +1354,7 @@ struct LimiterTester {
   }
 
   size_t team_shmem_size (const int team_size) const {
-    return Homme::EulerStepFunctor::team_shmem_size(team_size);
+    return Homme::EulerStepFunctor::limiter_team_shmem_size(team_size);
   }
 
   struct Lim8 {};
