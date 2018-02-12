@@ -371,18 +371,21 @@ public:
     }
     neighbor_minmax_start();
     compute_biharmonic_pre();
-    GPTLstart("nmm_bexchS");
+    GPTLstart("biwksc_bexchV");
     be->exchange(m_elements.m_rspheremp);
-    GPTLstop("nmm_bexchS");
+    GPTLstop("biwksc_bexchV");
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
 
   void neighbor_minmax() {
-    if ( ! nmm_bexch)
-      nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler");
-    assert(nmm_bexch->is_registration_completed());
-    nmm_bexch->exchange_min_max(m_data.nets, m_data.nete);
+    GPTLstart("nmm_bexchS");
+    static std::shared_ptr<BoundaryExchange> s_nmm_bexch; //TODO Rm when functor is created just once.
+    if ( ! s_nmm_bexch)
+      s_nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler");
+    assert(s_nmm_bexch->is_registration_completed());
+    s_nmm_bexch->exchange_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS");
   }
 
   void exchange_qdp_dss_var () {
@@ -395,7 +398,8 @@ public:
     // stack frame up of euler_step in F90, making it set the common parameters
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
     const int idx = 3*(static_cast<int>(m_data.DSSopt) - 1) + m_data.np1_qdp;
-    if ( ! eus_bexchs[idx]) {
+    static std::shared_ptr<BoundaryExchange> s_eus_bexchs[9]; //TODO Rm when functor is created just once.
+    if ( ! s_eus_bexchs[idx]) {
       std::stringstream ss;
       ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
                                     ? "eta"
@@ -404,9 +408,9 @@ public:
                                           : "div_vdp_ave") << " " << m_data.np1_qdp;
       const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
           Context::singleton().get_boundary_exchange(ss.str());
-      eus_bexchs[idx] = be_qdp_dss_var;
+      s_eus_bexchs[idx] = be_qdp_dss_var;
     }
-    eus_bexchs[idx]->exchange(m_elements.m_rspheremp);
+    s_eus_bexchs[idx]->exchange(m_elements.m_rspheremp);
     GPTLstop("eus_bexchV");
   }
 
