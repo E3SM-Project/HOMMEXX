@@ -8,16 +8,10 @@ namespace Homme
 HyperviscosityFunctor::HyperviscosityFunctor (const SimulationParams& params, const Elements& elements, const Derivative& deriv)
  : m_elements (elements)
  , m_deriv    (deriv)
+ , m_data     (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
 {
   // Sanity check
   assert(params.params_set);
-
-  m_data.nu_top = params.nu_top;
-  m_data.nu = params.nu;
-  m_data.nu_s = params.nu_s;
-  m_data.nu_p = params.nu_p;
-  m_data.nu_ratio = 1.0;
-  m_data.hypervis_subcycle = params.hypervis_subcycle;
 
   if (m_data.nu_top>0) {
     m_nu_scale_top = ExecViewManaged<Scalar[NUM_LEV]>("nu_scale_top");

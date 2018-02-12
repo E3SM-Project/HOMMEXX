@@ -21,6 +21,7 @@ namespace Homme {
 struct CaarFunctor {
 
   struct CaarData {
+    CaarData (const int rsplit_in) : rsplit(rsplit_in) {}
     int       nm1;
     int       n0;
     int       np1;
@@ -29,7 +30,7 @@ struct CaarFunctor {
     Real      dt;
     Real      eta_ave_w;
 
-    int       rsplit;
+    const int rsplit;
     bool      compute_diagnostics;
   };
 
@@ -41,15 +42,14 @@ struct CaarFunctor {
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
 
-  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord)
-    : m_hvcoord(hvcoord)
+  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+    : m_data(rsplit)
+    , m_hvcoord(hvcoord)
     , m_elements(elements)
     , m_deriv(derivative)
   {
     // Nothing to be done here
   }
-
-  void set_rsplit (const int rsplit) { m_data.rsplit = rsplit; }
 
   void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }
 

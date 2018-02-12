@@ -35,15 +35,15 @@ public:
 
 private:
   // Note: using uniqe_ptr disables copy construction
-  std::unique_ptr<Comm>               comm_;
-  std::unique_ptr<Elements>           elements_;
-  std::unique_ptr<Derivative>         derivative_;
-  std::unique_ptr<HybridVCoord>            hvcoord_;
-  std::shared_ptr<Connectivity>       connectivity_;
-  std::shared_ptr<BMMap>              buffers_managers_;
-  std::unique_ptr<BEMap>              boundary_exchanges_;
-  std::unique_ptr<SimulationParams>   simulation_params_;
-  std::unique_ptr<TimeLevel>          time_level_;
+  std::unique_ptr<Comm>                 comm_;
+  std::unique_ptr<Elements>             elements_;
+  std::unique_ptr<Derivative>           derivative_;
+  std::unique_ptr<HybridVCoord>         hvcoord_;
+  std::shared_ptr<Connectivity>         connectivity_;
+  std::shared_ptr<BMMap>                buffers_managers_;
+  std::unique_ptr<BEMap>                boundary_exchanges_;
+  std::unique_ptr<SimulationParams>     simulation_params_;
+  std::unique_ptr<TimeLevel>            time_level_;
   std::unique_ptr<VerticalRemapManager> vertical_remap_mgr_;
 
   // Clear the objects Context manages.
