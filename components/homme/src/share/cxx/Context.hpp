@@ -17,6 +17,7 @@ class BuffersManager;
 class SimulationParams;
 class TimeLevel;
 class VerticalRemapManager;
+class HybridVCoord;
 
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
@@ -39,6 +40,7 @@ private:
   std::unique_ptr<Control>            control_;
   std::unique_ptr<Elements>           elements_;
   std::unique_ptr<Derivative>         derivative_;
+  std::unique_ptr<HybridVCoord>            hvcoord_;
   std::shared_ptr<Connectivity>       connectivity_;
   std::shared_ptr<BMMap>              buffers_managers_;
   std::unique_ptr<BEMap>              boundary_exchanges_;
@@ -58,6 +60,7 @@ public:
   Control& get_control();
   Elements& get_elements();
   Derivative& get_derivative();
+  HybridVCoord& get_hvcoord();
   SimulationParams& get_simulation_params();
   TimeLevel& get_time_level();
   VerticalRemapManager& get_vertical_remap_manager();

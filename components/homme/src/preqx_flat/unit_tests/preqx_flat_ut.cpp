@@ -10,6 +10,7 @@
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "Elements.hpp"
+#include "HybridVCoord.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
@@ -98,7 +99,8 @@ void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements)
-      : functor(elements, Context::singleton().get_derivative()),
+      : functor(elements, Context::singleton().get_derivative(),
+        Context::singleton().get_hvcoord()),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -121,7 +123,6 @@ public:
     Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
     Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
-    functor.m_data.init_hvcoord(ps0, hybrid_am, hybrid_ai, hybrid_bm, hybrid_bi);
     functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
                         n0_qdp,
                         0); //for rsplit
@@ -621,8 +622,6 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
-  TestType test_functor(elements);
-
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
@@ -640,13 +639,18 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bi_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 10.0));
 
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  HybridVCoord& hvc = Context::singleton().get_hvcoord();
+  hvc.init(TestType::ps0,
+           hybrid_am_mirror.data(),
+           hybrid_ai_mirror.data(),
+           hybrid_bm_mirror.data(),
+           hybrid_bi_mirror.data());
+
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
-  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
-                                           hybrid_am_mirror.data(),
-                                           hybrid_ai_mirror.data(),
-                                           hybrid_bm_mirror.data(),
-                                           hybrid_bi_mirror.data());
+  TestType test_functor(elements);
+
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, 0);
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                    TestType::dt, TestType::eta_ave_w, false);
@@ -663,7 +667,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
-        hybrid_ai_mirror(0), test_functor.functor.m_data.ps0,
+        hybrid_ai_mirror(0), test_functor.functor.m_hvcoord.ps0,
         Homme::subview(test_functor.dp3d, ie, test_functor.n0).data(),
         pressure_f90.data());
     for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
@@ -966,8 +970,6 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
 
-  TestType test_functor(elements);
-
 //check rsplit in m_data init!!! set to zero?
 //wahts going on with eta_ave_w? should be random
 //zeored, we don't need them in this test
@@ -981,12 +983,16 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 //       TestType::eta_ave_w, test_functor.return_rsplit(),
 //       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
 //       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  HybridVCoord& hvc = Context::singleton().get_hvcoord();
+  hvc.init(TestType::ps0,
+           hybrid_am_mirror.data(),
+           hybrid_ai_mirror.data(),
+           hybrid_bm_mirror.data(),
+           hybrid_bi_mirror.data());
 
-  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
-                                           hybrid_am_mirror.data(),
-                                           hybrid_ai_mirror.data(),
-                                           hybrid_bm_mirror.data(),
-                                           hybrid_bi_mirror.data());
+  TestType test_functor(elements);
+
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
@@ -1067,15 +1073,19 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(sdot_sum_f90, sdot_sum);
 
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  HybridVCoord& hvc = Context::singleton().get_hvcoord();
+  hvc.init(TestType::ps0,
+           hybrid_am_mirror.data(),
+           hybrid_ai_mirror.data(),
+           hybrid_bm_mirror.data(),
+           hybrid_bi_mirror.data());
+
   TestType test_functor(elements);
   const int rsplit = 0;
   test_functor.set_rsplit(rsplit);
 
-  test_functor.functor.m_data.init_hvcoord(TestType::ps0,
-                                           hybrid_am_mirror.data(),
-                                           hybrid_ai_mirror.data(),
-                                           hybrid_bm_mirror.data(),
-                                           hybrid_bi_mirror.data());
+
   test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
 
   test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,

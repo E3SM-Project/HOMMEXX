@@ -9,6 +9,7 @@
 #include "BoundaryExchange.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
+#include "HybridVCoord.hpp"
 #include "VerticalRemapManager.hpp"
 
 namespace Homme {
@@ -36,6 +37,11 @@ Elements& Context::get_elements() {
   //if ( ! elements_) elements_ = std::make_shared<Elements>();
   if ( ! elements_) elements_.reset(new Elements());
   return *elements_;
+}
+
+HybridVCoord& Context::get_hvcoord() {
+  if ( ! hvcoord_) hvcoord_.reset(new HybridVCoord());
+  return *hvcoord_;
 }
 
 Derivative& Context::get_derivative() {
@@ -97,6 +103,7 @@ void Context::clear() {
   control_ = nullptr;
   elements_ = nullptr;
   derivative_ = nullptr;
+  hvcoord_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;

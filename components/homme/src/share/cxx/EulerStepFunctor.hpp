@@ -5,6 +5,7 @@
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "Control.hpp"
+#include "HybridVCoord.hpp"
 #include "SphereOperators.hpp"
 #include "utilities/SubviewUtils.hpp"
 #include "utilities/VectorUtils.hpp"
@@ -15,9 +16,10 @@
 namespace Homme {
 
 class EulerStepFunctor {
-  Control          m_data;
-  const Elements   m_elements;
-  const Derivative m_deriv;
+  Control             m_data;
+  const Elements      m_elements;
+  const Derivative    m_deriv;
+  const HybridVCoord  m_hvcoord;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
@@ -31,6 +33,7 @@ public:
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
+   , m_hvcoord (Context::singleton().get_hvcoord())
   {
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
@@ -96,7 +99,7 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_hvcoord.dp0(k);
             });
         });
       team.team_barrier();
@@ -138,7 +141,7 @@ public:
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
-                                         m_data.dp0(k) * qtens_biharmonic(i,j,k) /
+                                         m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
         });
