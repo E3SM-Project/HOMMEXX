@@ -91,7 +91,6 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
-    start_timer("esf-bih-pre compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -118,12 +117,10 @@ public:
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
-    stop_timer("esf-bih-pre compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
-    start_timer("esf-bih-post compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -153,7 +150,6 @@ public:
             });
         });
     }
-    stop_timer("esf-bih-post compute");
   }
 
   struct AALSetupPhase {};
@@ -162,7 +158,6 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    GPTLstart("esf-aal-tot run");
     if (OnGpu<ExecSpace>::value) {
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
@@ -187,34 +182,27 @@ public:
           *this);
     }
     ExecSpace::fence();
-    GPTLstop("esf-aal-tot run");
     profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALSetupPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-noq compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
-    stop_timer("esf-aal-noq compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALTracerPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-q compute");
     KernelVariables kv(team, m_data.qsize);
     run_tracer_phase(kv);
-    stop_timer("esf-aal-q compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALFusedPhases&, const TeamMember& team) const {
-    start_timer("esf-aal-fused compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
     for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
       run_tracer_phase(kv);
-    stop_timer("esf-aal-fused compute");
   }
 
   struct PrecomputeDivDp {};
@@ -234,8 +222,7 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
-    start_timer("esf-precompute_divdp compute");
+  void operator() (const PrecomputeDivDp &, const TeamMember &team) const {
     const int ie = team.league_rank();
     divergence_sphere(team, m_deriv.get_dvv(),
                       Homme::subview(m_elements.m_dinv,ie),
@@ -253,8 +240,6 @@ public:
             m_elements.m_derived_divdp(ie, igp, jgp, ilev);
       });
     });
-
-    stop_timer("esf-precompute_divdp compute");
   }
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
@@ -276,7 +261,7 @@ public:
     });
   }
 
-  void compute_qmin_qmax() {
+  void compute_qmin_qmax () {
     // Temporaries, due to issues capturing *this on device
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
@@ -451,9 +436,7 @@ public:
 
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
       GPTLstart("bihmix_qminmax");
-
       compute_qmin_qmax();
-
       if (m_data.rhs_multiplier == 0.0) {
         GPTLstart("eus_neighbor_minmax1");
         neighbor_minmax();
@@ -465,13 +448,9 @@ public:
     }
     GPTLstart("eus_2d_advec");
     GPTLstart("advance_qdp");
-
     advect_and_limit();
-
     GPTLstop("advance_qdp");
-
     exchange_qdp_dss_var();
-
     GPTLstop("eus_2d_advec");
   }
 

@@ -180,14 +180,16 @@ void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange&
 {
   // --- Pre boundary exchange
   profiling_resume();
+  GPTLstart("caar compute");
   Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
+  GPTLstop("caar compute");
   ExecSpace::fence();
   profiling_pause();
 
   // Do the boundary exchange
-  start_timer("caar_bexchV");
+  GPTLstart("caar_bexchV");
   be.exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
+  GPTLstop("caar_bexchV");
 }
 
 } // namespace Homme
