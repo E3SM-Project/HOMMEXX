@@ -37,6 +37,27 @@ void parallel_reduce_NP2 (
     lambda(k, result);  
 }
 
+#if defined KOKKOS_HAVE_CUDA
+template<class Lambda>
+KOKKOS_FORCEINLINE_FUNCTION
+void parallel_for_NP2 (
+  const Kokkos::TeamPolicy<Hommexx_Cuda>::member_type& team,
+  const Lambda& lambda)
+{
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NP2), lambda);
+}
+
+template<class Lambda, typename ValueType>
+KOKKOS_FORCEINLINE_FUNCTION
+void parallel_reduce_NP2 (
+  const Kokkos::TeamPolicy<Hommexx_Cuda>::member_type& team,
+  const Lambda& lambda, ValueType& result)
+{
+  Homme::parallel_reduce(team, Kokkos::ThreadVectorRange(team, NP2),
+                         lambda, result);
+}
+#endif
+
 class EulerStepFunctor {
   Control          m_data;
   const Elements   m_elements;
