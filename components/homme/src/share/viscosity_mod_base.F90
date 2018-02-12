@@ -818,9 +818,9 @@ subroutine neighbor_minmax(hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh)
       call  edgeSpack(edgeMinMax,max_neigh(:,:,ie),qsize*nlev,kptr,ie)
    enddo
    
-   call t_startf('nmm_bexchV')
+   call t_startf('nmm_bexchS')
    call bndry_exchangeS(hybrid,edgeMinMax)
-   call t_stopf('nmm_bexchV')
+   call t_stopf('nmm_bexchS')
 
    do ie=nets,nete
       kptr = 0
