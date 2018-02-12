@@ -45,7 +45,6 @@ BoundaryExchange::BoundaryExchange(std::shared_ptr<Connectivity> connectivity, s
 {
   // Set the connectivity
   set_connectivity (connectivity);
-  m_num_elems = connectivity->get_num_local_elements();
 
   // Set the buffers manager
   set_buffers_manager (buffers_manager);
@@ -77,6 +76,7 @@ void BoundaryExchange::set_connectivity (std::shared_ptr<Connectivity> connectiv
 
   // Set the connectivity
   m_connectivity = connectivity;
+  m_num_elems = connectivity->get_num_local_elements();
 }
 
 void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager)
@@ -102,7 +102,7 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
 
   // If I don't store a connectivity, take it from the buffers manager (if it has one)
   if (m_buffers_manager->is_connectivity_set() && !m_connectivity) {
-    m_connectivity = m_buffers_manager->get_connectivity();
+    set_connectivity(m_buffers_manager->get_connectivity());
   }
 
   // Add myself as a customer of the BM
