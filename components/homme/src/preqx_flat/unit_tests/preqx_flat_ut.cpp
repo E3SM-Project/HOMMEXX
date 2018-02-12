@@ -112,8 +112,6 @@ public:
         metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), dvv("dvv"),
-        //nets(1),
-        //nete(elements.num_elems()),
         rsplit(0) {
 
 //make these random
@@ -179,9 +177,6 @@ public:
   HostViewManaged<Real * [2][2][NP][NP]> dinv;
   HostViewManaged<Real * [NP][NP]> spheremp;
   HostViewManaged<Real[NP][NP]> dvv;
-
-//  const int nets;
-//  const int nete;
 
   static constexpr int nm1 = 0;
   static constexpr int nm1_f90 = nm1 + 1;
