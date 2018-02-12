@@ -121,6 +121,7 @@ public:
     Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
     functor.set_n0_qdp(n0_qdp);
+    functor.set_rsplit(rsplit);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
 //is this one random?
