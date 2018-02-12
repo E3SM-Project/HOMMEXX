@@ -8,7 +8,6 @@
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
-#include "Control.hpp"
 #include "RemapFunctor.hpp"
 
 #include <assert.h>
@@ -47,13 +46,13 @@ template <typename boundary_cond, int _remap_dim> class ppm_remap_functor_test {
 public:
   static constexpr int num_remap = _remap_dim;
 
-  ppm_remap_functor_test(Control &data)
-      : ne(data.num_elems), remap(data),
-        src_layer_thickness_kokkos("source layer thickness", ne),
-        tgt_layer_thickness_kokkos("target layer thickness", ne) {
+  ppm_remap_functor_test(const int num_elems)
+      : ne(num_elems), remap(num_elems),
+        src_layer_thickness_kokkos("source layer thickness", num_elems),
+        tgt_layer_thickness_kokkos("target layer thickness", num_elems) {
     for (int var = 0; var < num_remap; ++var) {
       remap_vals[var] =
-          ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap var", ne);
+          ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("remap var", num_elems);
     }
   }
 
@@ -350,9 +349,7 @@ public:
 TEST_CASE("ppm_mirrored", "vertical remap") {
   constexpr int remap_dim = 3;
   constexpr int num_elems = 4;
-  Control data;
-  data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PpmMirrored, remap_dim> remap_test_mirrored(data);
+  ppm_remap_functor_test<PpmMirrored, remap_dim> remap_test_mirrored(num_elems);
   SECTION("grid test") { remap_test_mirrored.test_grid(); }
   SECTION("ppm test") { remap_test_mirrored.test_ppm(); }
   SECTION("remap test") { remap_test_mirrored.test_remap(); }
@@ -361,9 +358,7 @@ TEST_CASE("ppm_mirrored", "vertical remap") {
 TEST_CASE("ppm_fixed", "vertical remap") {
   constexpr int remap_dim = 3;
   constexpr int num_elems = 4;
-  Control data;
-  data.random_init(num_elems, std::random_device()());
-  ppm_remap_functor_test<PpmFixed, remap_dim> remap_test_fixed(data);
+  ppm_remap_functor_test<PpmFixed, remap_dim> remap_test_fixed(num_elems);
   SECTION("grid test") { remap_test_fixed.test_grid(); }
   SECTION("ppm test") { remap_test_fixed.test_ppm(); }
   SECTION("remap test") { remap_test_fixed.test_remap(); }
@@ -371,35 +366,36 @@ TEST_CASE("ppm_fixed", "vertical remap") {
 
 TEST_CASE("remap_interface", "vertical remap") {
   constexpr int num_elems = 4;
-  Control data;
-  data.random_init(num_elems, std::random_device()());
   Elements elements;
   elements.random_init(num_elems);
-  data.np1 = 0;
-  data.n0_qdp = 0;
+
+  // TODO: make dt random
+  constexpr int np1 = 0;
+  constexpr int n0_qdp = 0;
+  constexpr Real dt = 0.0;
+
+  HybridVCoord hvcoord;
+  hvcoord.random_init(std::random_device()());
   SECTION("states_only") {
     constexpr int rsplit = 1;
-    data.qsize = 0;
-    data.rsplit = rsplit;
+    constexpr int qsize = 0;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
-    remap.run_remap();
+    _Remap remap(qsize, elements, hvcoord);
+    remap.run_remap(np1,n0_qdp,dt);
   }
   SECTION("tracers_only") {
     constexpr int rsplit = 0;
-    data.qsize = QSIZE_D;
-    data.rsplit = rsplit;
+    constexpr int qsize = QSIZE_D;
     using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
-    remap.run_remap();
+    _Remap remap(qsize, elements, hvcoord);
+    remap.run_remap(np1,n0_qdp,dt);
   }
   SECTION("states_tracers") {
     constexpr int remap_dim = 3 + QSIZE_D;
     constexpr int rsplit = 1;
-    data.qsize = QSIZE_D;
-    data.rsplit = rsplit;
+    constexpr int qsize = QSIZE_D;
     using _Remap = RemapFunctor<remap_dim, PpmVertRemap, PpmMirrored>;
-    _Remap remap(data, elements);
-    remap.run_remap();
+    _Remap remap(qsize, elements, hvcoord);
+    remap.run_remap(np1,n0_qdp,dt);
   }
 }

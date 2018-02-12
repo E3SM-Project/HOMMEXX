@@ -2,8 +2,8 @@
 #define CAAR_FUNCTOR_HPP
 
 #include "Types.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
+#include "HybridVCoord.hpp"
 #include "Derivative.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
@@ -19,35 +19,50 @@
 namespace Homme {
 
 struct CaarFunctor {
-  Control           m_data;
-  const Elements    m_elements;
-  const Derivative  m_deriv;
+
+  struct CaarData {
+    CaarData (const int rsplit_in) : rsplit(rsplit_in) {}
+    int       nm1;
+    int       n0;
+    int       np1;
+    int       n0_qdp;
+
+    Real      dt;
+    Real      eta_ave_w;
+
+    const int rsplit;
+    bool      compute_diagnostics;
+  };
+
+  CaarData            m_data;
+  const HybridVCoord  m_hvcoord;
+  const Elements      m_elements;
+  const Derivative    m_deriv;
 
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
-  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
-  CaarFunctor(const Elements& elements, const Derivative& derivative)
-    : m_data(),
-      m_elements(elements),
-      m_deriv(derivative)
+  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+    : m_data(rsplit)
+    , m_hvcoord(hvcoord)
+    , m_elements(elements)
+    , m_deriv(derivative)
   {
     // Nothing to be done here
   }
 
-  CaarFunctor(const Control &data, const Elements& elements,
-              const Derivative& derivative)
-    : m_data(data),
-      m_elements(elements),
-      m_deriv(derivative)
-  {
-    // Nothing to be done here
-  }
+  void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }
 
   void set_rk_stage_data (const int nm1, const int n0,   const int np1,
                           const Real dt, const Real eta_ave_w,
-                          const bool compute_diagonstics) {
-    m_data.set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagonstics);
+                          const bool compute_diagnostics) {
+    m_data.nm1 = nm1;
+    m_data.n0  = n0;
+    m_data.np1 = np1;
+    m_data.dt  = dt;
+
+    m_data.eta_ave_w = eta_ave_w;
+    m_data.compute_diagnostics = compute_diagnostics;
   }
 
   // Depends on PHI (after preq_hydrostatic), PECND
@@ -275,7 +290,7 @@ struct CaarFunctor {
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] =
-           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
+           m_hvcoord.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
@@ -609,7 +624,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
+      Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
         const int vector_end = (ilev == NUM_LEV-1 ?
                                 ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
@@ -642,7 +657,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
+      Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;

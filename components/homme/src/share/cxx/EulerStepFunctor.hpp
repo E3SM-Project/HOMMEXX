@@ -4,7 +4,9 @@
 #include "Context.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
-#include "Control.hpp"
+#include "HybridVCoord.hpp"
+#include "HommexxEnums.hpp"
+#include "SimulationParams.hpp"
 #include "SphereOperators.hpp"
 #include "utilities/SubviewUtils.hpp"
 #include "utilities/VectorUtils.hpp"
@@ -15,21 +17,47 @@
 namespace Homme {
 
 class EulerStepFunctor {
-  Control          m_data;
-  const Elements   m_elements;
-  const Derivative m_deriv;
-  bool             m_kernel_will_run_limiters;
+
+  struct EulerStepData {
+    EulerStepData (const int qsize_in, const int limiter_option_in,
+                   const Real nu_p_in, const Real nu_q_in) :
+                   qsize(qsize_in), limiter_option(limiter_option_in),
+                   nu_p(nu_p_in), nu_q(nu_q_in) {}
+
+    const int   qsize;
+    const int   limiter_option;
+    Real        rhs_viss;
+    Real        rhs_multiplier;
+
+    const Real  nu_p;
+    const Real  nu_q;
+
+    Real        dt;
+    int         np1_qdp;
+    int         n0_qdp;
+
+    DSSOption   DSSopt;
+  };
+
+  const Elements      m_elements;
+  const Derivative    m_deriv;
+  const HybridVCoord  m_hvcoord;
+  EulerStepData       m_data;
+
+  bool                m_kernel_will_run_limiters;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
 public:
 
-  EulerStepFunctor (const Control& data)
-   : m_data    (data)
-   , m_elements(Context::singleton().get_elements())
+  EulerStepFunctor (const SimulationParams& params)
+   : m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
-   , m_kernel_will_run_limiters(false)
+   , m_hvcoord (Context::singleton().get_hvcoord())
+   , m_data (params.qsize,params.limiter_option,params.nu_p,params.nu_q)
   {
+    m_data.rhs_viss = 0.0;
+
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
@@ -64,7 +92,7 @@ public:
     m_data.rhs_viss = 3.0;
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
-                             m_data.num_elems * m_data.qsize),
+                             m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
@@ -79,7 +107,7 @@ public:
     assert(m_data.rhs_multiplier == 2.0);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
-                             m_data.num_elems * m_data.qsize),
+                             m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
@@ -104,7 +132,7 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_hvcoord.dp0(k);
             });
         });
       team.team_barrier();
@@ -146,7 +174,7 @@ public:
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
-                                         m_data.dp0(k) * qtens_biharmonic(i,j,k) /
+                                         m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
         });
@@ -165,7 +193,7 @@ public:
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
-              m_data.num_elems),
+              m_elements.num_elems()),
           *this);
       ExecSpace::fence();
       GPTLstop("esf-aal-noq run");
@@ -173,7 +201,7 @@ public:
       m_kernel_will_run_limiters = true;
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
-              m_data.num_elems * m_data.qsize),
+              m_elements.num_elems() * m_data.qsize),
           *this);
       ExecSpace::fence();
       m_kernel_will_run_limiters = false;
@@ -181,7 +209,7 @@ public:
     } else {
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(
-              m_data.num_elems),
+              m_elements.num_elems()),
           *this);
     }
     ExecSpace::fence();
@@ -225,7 +253,7 @@ public:
 
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
-            m_data.num_elems),
+            m_elements.num_elems()),
         *this);
 
     ExecSpace::fence();
@@ -262,7 +290,7 @@ public:
     const int qsize   = m_data.qsize;
 
     const Real rkstage = 3.0;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_elements.num_elems()*m_data.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
       const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
@@ -287,7 +315,7 @@ public:
     const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
-    Kokkos::RangePolicy<ExecSpace> policy1(0, m_data.num_elems * m_data.qsize *
+    Kokkos::RangePolicy<ExecSpace> policy1(0, m_elements.num_elems() * m_data.qsize *
                                                   NP * NP * NUM_LEV);
     Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
       const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / qsize;
@@ -305,7 +333,7 @@ public:
     });
     ExecSpace::fence();
 
-    Kokkos::RangePolicy<ExecSpace> policy2(0, m_data.num_elems * m_data.qsize *
+    Kokkos::RangePolicy<ExecSpace> policy2(0, m_elements.num_elems() * m_data.qsize *
                                                   NUM_LEV);
     if (m_data.rhs_multiplier == 1.0) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
@@ -346,13 +374,13 @@ public:
   void neighbor_minmax_start() {
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
-    be.pack_and_send_min_max(m_data.nets, m_data.nete);
+    be.pack_and_send_min_max();
   }
 
   void neighbor_minmax_finish() {
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
-    be.recv_and_unpack_min_max(m_data.nets, m_data.nete);
+    be.recv_and_unpack_min_max();
   }
 
   void minmax_and_biharmonic() {
@@ -376,7 +404,7 @@ public:
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     assert(be.is_registration_completed());
-    be.exchange_min_max(m_data.nets, m_data.nete);
+    be.exchange_min_max();
   }
 
   void exchange_qdp_dss_var () {
@@ -384,14 +412,11 @@ public:
     // They differ only in the last field registered.
     // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
     // rather than one for qdp and one for the last DSS variable.
-    // TODO: move this setup in init_control_euler and move that function one
-    // stack frame up of euler_step in F90, making it set the common parameters
-    // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
 
     std::stringstream ss;
-    ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
+    ss << "exchange qdp " << (m_data.DSSopt == DSSOption::ETA
                                   ? "eta"
-                                  : m_data.DSSopt == Control::DSSOption::omega
+                                  : m_data.DSSopt == DSSOption::OMEGA
                                         ? "omega"
                                         : "div_vdp_ave") << " " << m_data.np1_qdp;
 
@@ -402,7 +427,7 @@ public:
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
-                  const Real rhs_multiplier, const Control::DSSOption::Enum DSSopt) {
+                  const Real rhs_multiplier, const DSSOption DSSopt) {
 
     m_data.n0_qdp         = n0_qdp;
     m_data.np1_qdp        = np1_qdp;
@@ -492,9 +517,9 @@ private:
     const bool lim8 = c.limiter_option == 8;
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0.0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
-    const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
+    const auto& f_dss = (c.DSSopt == DSSOption::ETA ?
                          e.m_eta_dot_dpdn :
-                         c.DSSopt == Control::DSSOption::omega ?
+                         c.DSSopt == DSSOption::OMEGA ?
                          e.m_omega_p :
                          e.m_derived_divdp_proj);
     Kokkos::parallel_for (

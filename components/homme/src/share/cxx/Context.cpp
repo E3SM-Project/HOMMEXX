@@ -1,7 +1,6 @@
 #include "Context.hpp"
 
 #include "Comm.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "BuffersManager.hpp"
@@ -9,6 +8,7 @@
 #include "BoundaryExchange.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
+#include "HybridVCoord.hpp"
 #include "VerticalRemapManager.hpp"
 
 namespace Homme {
@@ -18,7 +18,6 @@ Context::Context() {}
 Context::~Context() {}
 
 Comm& Context::get_comm() {
-  //if ( ! control_) control_ = std::make_shared<Control>();
   if ( ! comm_) {
     comm_.reset(new Comm());
     comm_->init();
@@ -26,16 +25,15 @@ Comm& Context::get_comm() {
   return *comm_;
 }
 
-Control& Context::get_control() {
-  //if ( ! control_) control_ = std::make_shared<Control>();
-  if ( ! control_) control_.reset(new Control());
-  return *control_;
-}
-
 Elements& Context::get_elements() {
   //if ( ! elements_) elements_ = std::make_shared<Elements>();
   if ( ! elements_) elements_.reset(new Elements());
   return *elements_;
+}
+
+HybridVCoord& Context::get_hvcoord() {
+  if ( ! hvcoord_) hvcoord_.reset(new HybridVCoord());
+  return *hvcoord_;
 }
 
 Derivative& Context::get_derivative() {
@@ -94,9 +92,9 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 
 void Context::clear() {
   comm_ = nullptr;
-  control_ = nullptr;
   elements_ = nullptr;
   derivative_ = nullptr;
+  hvcoord_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;

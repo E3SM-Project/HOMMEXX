@@ -140,11 +140,11 @@ public:
   void registration_completed();
 
   // Exchange all registered 2d and 3d fields
-  void exchange (int nets = 0, int nete = -1);
-  void exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp, int nets = 0, int nete = -1);
+  void exchange ();
+  void exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp);
 
   // Exchange all registered 1d fields, performing min/max operations with neighbors
-  void exchange_min_max (int nets = 0, int nete = -1);
+  void exchange_min_max ();
 
   // Get the number of 2d/3d fields that this object handles
   int get_num_1d_fields () const { return m_num_1d_fields; }
@@ -166,12 +166,12 @@ public:
   };
 
   // Perform the pack_and_send and recv_and_unpack for boundary exchange of 2d/3d fields
-  void pack_and_send (int nets = 0, int nete = -1);
-  void recv_and_unpack (int nets = 0, int nete = -1);
+  void pack_and_send ();
+  void recv_and_unpack ();
 
   // Perform the pack_and_send and recv_and_unpack for min/max boundary exchange of 1d fields
-  void pack_and_send_min_max (int nets = 0, int nete = -1);
-  void recv_and_unpack_min_max (int nets = 0, int nete = -1);
+  void pack_and_send_min_max ();
+  void recv_and_unpack_min_max ();
 
   // If you are really not sure whether we are still transmitting, you can make sure we're done by calling this
   void waitall ();
@@ -232,14 +232,16 @@ private:
   bool        m_send_pending;
   bool        m_recv_pending;
 
+  int         m_num_elems;
+
   void init_slot_idx_to_elem_conn_pair(
     std::vector<int>& h_slot_idx_to_elem_conn_pair,
     std::vector<int>& pids, std::vector<int>& pids_os);
   void free_requests();
   // Only the impl knows about the raw pointer.
-  void exchange(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
+  void exchange(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp);
 public: // This is semantically private but must be public for nvcc.
-  void recv_and_unpack(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
+  void recv_and_unpack(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp);
 };
 
 // ============================ REGISTER METHODS ========================= //

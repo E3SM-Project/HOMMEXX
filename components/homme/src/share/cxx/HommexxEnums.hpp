@@ -50,6 +50,14 @@ enum class UpdateType {
   FORWARD
 };
 
+// =================== Euler Step DSS Option ====================== //
+
+enum class DSSOption {
+  ETA,
+  OMEGA,
+  DIV_VDP_AVE
+};
+
 // =================== Mesh connectivity enums ====================== //
 
 // The kind of connection: edge, corner or missing (one of the corner connections on one of the 8 cube vertices)

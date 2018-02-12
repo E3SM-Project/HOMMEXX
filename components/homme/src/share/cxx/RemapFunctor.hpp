@@ -8,8 +8,8 @@
 
 #include "ErrorDefs.hpp"
 
-#include "Control.hpp"
 #include "Elements.hpp"
+#include "HybridVCoord.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 #include "utilities/LoopsUtils.hpp"
@@ -135,31 +135,31 @@ struct PpmVertRemap : public VertRemapAlg {
   static constexpr auto remap_dim = _remap_dim;
   const int gs = 2;
 
-  explicit PpmVertRemap(const Control &data)
+  explicit PpmVertRemap(const int num_elems)
       : dpo(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
-            "dpo", data.num_elems)),
+            "dpo", num_elems)),
         pio(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>(
-            "pio", data.num_elems)),
+            "pio", num_elems)),
         pin(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>(
-            "pin", data.num_elems)),
+            "pin", num_elems)),
         ppmdx(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2][10]>(
-            "ppmdx", data.num_elems)),
+            "ppmdx", num_elems)),
         z2(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z2",
-                                                              data.num_elems)),
+                                                              num_elems)),
         kid(ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]>("kid",
-                                                              data.num_elems)) {
+                                                              num_elems)) {
     for (int i = 0; i < remap_dim; ++i) {
       ao[i] = ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 4]>(
-          "a0", data.num_elems);
+          "a0", num_elems);
       mass_o[i] = ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>(
-          "mass_o", data.num_elems);
+          "mass_o", num_elems);
       dma[i] = ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 2]>(
-          "dma", data.num_elems);
+          "dma", num_elems);
       ai[i] = ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV + 1]>(
-          "ai", data.num_elems);
+          "ai", num_elems);
       parabola_coeffs[i] =
           ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV][3]>(
-              "Coefficients for the interpolating parabola", data.num_elems);
+              "Coefficients for the interpolating parabola", num_elems);
     }
   }
 
@@ -744,8 +744,17 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
   static_assert(std::is_base_of<VertRemapAlg, RemapType>::value,
                 "RemapFunctor not given a remap algorithm to use");
 
-  Control m_data;
+  struct RemapData {
+    RemapData(const int qsize_in) : qsize(qsize_in) {}
+    const int   qsize;
+    int         np1;
+    int         n0_qdp;
+    Real        dt;
+  };
+
+  RemapData m_data;
   const Elements m_elements;
+  const HybridVCoord m_hvcoord;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
 
@@ -754,19 +763,21 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
 
   RemapType m_remap;
 
-  explicit RemapFunctor(const Control &data, const Elements &elements)
-      : _RemapFunctorRSplit<nonzero_rsplit>(data.num_elems), m_data(data),
-        m_elements(elements),
-        m_tgt_layer_thickness("Target Layer Thickness", data.num_elems),
+  explicit RemapFunctor(const int qsize, const Elements &elements, const HybridVCoord& hvcoord)
+      : _RemapFunctorRSplit<nonzero_rsplit>(elements.num_elems()),
+        m_data(qsize), m_elements(elements), m_hvcoord(hvcoord),
+        m_tgt_layer_thickness("Target Layer Thickness", elements.num_elems()),
         valid_layer_thickness(
             "Check for whether the surface thicknesses are positive",
-            data.num_elems),
+            elements.num_elems()),
         host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
-        m_remap(data) {}
+        m_remap(elements.num_elems()) {
+    // Nothing to be done here
+  }
 
   void input_valid_assert() {
     Kokkos::deep_copy(host_valid_input, valid_layer_thickness);
-    for (int ie = 0; ie < m_data.num_elems; ++ie) {
+    for (int ie = 0; ie < m_elements.num_elems(); ++ie) {
       if (host_valid_input(ie) == false) {
         Errors::runtime_abort("Negative layer thickness detected, aborting!",
                               Errors::err_negative_layer_thickness);
@@ -857,7 +868,7 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
     const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
     const int var = kv.ie % den;
     kv.ie /= den;
-    assert(kv.ie < m_data.num_elems);
+    assert(kv.ie < m_elements.num_elems());
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     compute_extrinsic_state(
@@ -894,7 +905,7 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
     assert(num_to_remap() != 0);
     const int var = kv.ie % num_to_remap();
     kv.ie /= num_to_remap();
-    assert(kv.ie < m_data.num_elems);
+    assert(kv.ie < m_elements.num_elems());
 
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
@@ -916,7 +927,7 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
     const int den = (this->num_states_remap > 0) ? this->num_states_remap : 1;
     const int var = kv.ie % den;
     kv.ie /= den;
-    assert(kv.ie < m_data.num_elems);
+    assert(kv.ie < m_elements.num_elems());
 
     auto state_remap = this->remap_states_array(kv, m_elements, m_data.np1);
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
@@ -935,21 +946,21 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
     // It also verifies the state of the simulation is valid
     // If there's nothing to remap, it will only perform the verification
     run_functor<ComputeThicknessTag>("Remap Compute Grids Functor",
-                                     this->m_data.num_elems);
+                                     this->m_elements.num_elems());
     if (num_to_remap() > 0) {
       // We don't want the latency of launching an empty kernel
       if (nonzero_rsplit) {
         run_functor<ComputeExtrinsicsTag>("Remap Scale States Functor",
-                                          m_data.num_elems *
+                                          m_elements.num_elems() *
                                               this->num_states_remap);
       }
       run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
-                                   this->m_data.num_elems);
+                                   this->m_elements.num_elems());
       run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                   this->m_data.num_elems * num_to_remap());
+                                   this->m_elements.num_elems() * num_to_remap());
       if (nonzero_rsplit) {
         run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
-                                          m_data.num_elems *
+                                          m_elements.num_elems() *
                                               this->num_states_remap);
       }
     }
@@ -989,7 +1000,7 @@ private:
           const int vlev = level % VECTOR_SIZE;
           ps_v(igp, jgp) += dp3d(igp, jgp, ilev)[vlev];
         }
-        ps_v(igp, jgp) += m_data.hybrid_ai0 * m_data.ps0;
+        ps_v(igp, jgp) += m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
       });
     });
     kv.team_barrier();
@@ -1048,13 +1059,13 @@ private:
           TRACE_PRINT(
               "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid ai: % .17e, "
               "hybrid bi: % .17e\n",
-              ilevel, ilev, vec_lev, m_data.ps0, m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp),
-              m_data.hybrid_ai(ilevel), m_data.hybrid_bi(ilevel));
+              ilevel, ilev, vec_lev, m_hvcoord.ps0, m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp),
+              m_hvcoord.hybrid_ai(ilevel), m_hvcoord.hybrid_bi(ilevel));
         }
         tgt_layer_thickness(igp, jgp, ilev)[vec_lev] =
-            (m_data.hybrid_ai(ilevel + 1) - m_data.hybrid_ai(ilevel)) *
-                m_data.ps0 +
-            (m_data.hybrid_bi(ilevel + 1) - m_data.hybrid_bi(ilevel)) *
+            (m_hvcoord.hybrid_ai(ilevel + 1) - m_hvcoord.hybrid_ai(ilevel)) *
+                m_hvcoord.ps0 +
+            (m_hvcoord.hybrid_bi(ilevel + 1) - m_hvcoord.hybrid_bi(ilevel)) *
                 m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp);
       });
     });

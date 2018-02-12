@@ -8,7 +8,6 @@
 namespace Homme {
 
 class Comm;
-class Control;
 class Elements;
 class Derivative;
 class Connectivity;
@@ -17,11 +16,12 @@ class BuffersManager;
 class SimulationParams;
 class TimeLevel;
 class VerticalRemapManager;
+class HybridVCoord;
 
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
  * the program. Second, a context need not be a singleton, and each Context
- * object can have different Elements, Control, Derivative, etc., objects. (That
+ * object can have different Elements, Derivative, etc., objects. (That
  * probably isn't needed, but Context immediately supports it.)
  *
  * Finally, Context has two singleton functions: singleton(), which returns
@@ -35,15 +35,15 @@ public:
 
 private:
   // Note: using uniqe_ptr disables copy construction
-  std::unique_ptr<Comm>               comm_;
-  std::unique_ptr<Control>            control_;
-  std::unique_ptr<Elements>           elements_;
-  std::unique_ptr<Derivative>         derivative_;
-  std::shared_ptr<Connectivity>       connectivity_;
-  std::shared_ptr<BMMap>              buffers_managers_;
-  std::unique_ptr<BEMap>              boundary_exchanges_;
-  std::unique_ptr<SimulationParams>   simulation_params_;
-  std::unique_ptr<TimeLevel>          time_level_;
+  std::unique_ptr<Comm>                 comm_;
+  std::unique_ptr<Elements>             elements_;
+  std::unique_ptr<Derivative>           derivative_;
+  std::unique_ptr<HybridVCoord>         hvcoord_;
+  std::shared_ptr<Connectivity>         connectivity_;
+  std::shared_ptr<BMMap>                buffers_managers_;
+  std::unique_ptr<BEMap>                boundary_exchanges_;
+  std::unique_ptr<SimulationParams>     simulation_params_;
+  std::unique_ptr<TimeLevel>            time_level_;
   std::unique_ptr<VerticalRemapManager> vertical_remap_mgr_;
 
   // Clear the objects Context manages.
@@ -55,9 +55,9 @@ public:
 
   // Getters for each managed object.
   Comm& get_comm();
-  Control& get_control();
   Elements& get_elements();
   Derivative& get_derivative();
+  HybridVCoord& get_hvcoord();
   SimulationParams& get_simulation_params();
   TimeLevel& get_time_level();
   VerticalRemapManager& get_vertical_remap_manager();
