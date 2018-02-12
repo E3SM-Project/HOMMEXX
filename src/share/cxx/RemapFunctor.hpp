@@ -8,7 +8,6 @@
 
 #include "ErrorDefs.hpp"
 
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "KernelVariables.hpp"
