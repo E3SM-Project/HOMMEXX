@@ -593,19 +593,6 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagPostExchange&, const int it) const {
-    const int ie = it / (NP*NP*NUM_LEV);
-    const int igp = (it / (NP*NUM_LEV)) % NP;
-    const int jgp = (it / NUM_LEV) % NP;
-    const int ilev = it % NUM_LEV;
-    // Rescaling tendencies by inverse mass matrix on sphere
-    m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-  }
-
-  KOKKOS_INLINE_FUNCTION
   size_t shmem_size(const int team_size) const {
     return KernelVariables::shmem_size(team_size);
   }

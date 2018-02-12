@@ -141,6 +141,7 @@ public:
 
   // Exchange all registered 2d and 3d fields
   void exchange (int nets = 0, int nete = -1);
+  void exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp, int nets = 0, int nete = -1);
 
   // Exchange all registered 1d fields, performing min/max operations with neighbors
   void exchange_min_max (int nets = 0, int nete = -1);
@@ -235,6 +236,9 @@ private:
     std::vector<int>& h_slot_idx_to_elem_conn_pair,
     std::vector<int>& pids, std::vector<int>& pids_os);
   void free_requests();
+  // Only the impl knows about the raw pointer.
+  void exchange(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
+  void recv_and_unpack(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
 };
 
 // ============================ REGISTER METHODS ========================= //

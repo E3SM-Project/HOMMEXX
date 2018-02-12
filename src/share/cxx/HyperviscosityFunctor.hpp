@@ -97,21 +97,6 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagApplyInvMass&, const int idx) const
-  {
-    const int ie   =  idx / (NP*NP*NUM_LEV);
-    const int igp  = (idx / (NP*NUM_LEV)) % NP;
-    const int jgp  = (idx / NUM_LEV) % NP;
-    const int ilev =  idx % NUM_LEV;
-
-    // Apply inverse mass matrix
-    m_elements.buffers.dptens(ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.ttens (ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-  }
-
-  KOKKOS_INLINE_FUNCTION
   void operator() (const TagUpdateStates&, const int idx) const {
     const int ie   =  idx / (NP*NP*NUM_LEV);
     const int igp  = (idx / (NP*NUM_LEV)) % NP;

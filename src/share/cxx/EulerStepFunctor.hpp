@@ -118,20 +118,6 @@ public:
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
-    {
-      const auto rspheremp = Homme::subview(e.m_rspheremp, ie);
-      Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(team, NP*NP),
-        [&] (const int loop_idx) {
-          const int i = loop_idx / NP;
-          const int j = loop_idx % NP;
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(team, NUM_LEV),
-            [&] (const int& k) {
-              qtens_biharmonic(i,j,k) *= rspheremp(i,j);
-            });
-        });
-    }
     team.team_barrier();
     laplace_simple(team, m_deriv.get_dvv(),
                    Homme::subview(e.m_dinv,ie),
@@ -261,46 +247,6 @@ public:
     stop_timer("esf-precompute_divdp compute");
   }
 
-  void apply_rspheremp() {
-    profiling_resume();
-    GPTLstart("esf-rspheremp run");
-
-    const auto f_dss = (m_data.DSSopt == Control::DSSOption::eta ?
-                        m_elements.m_eta_dot_dpdn :
-                        m_data.DSSopt == Control::DSSOption::omega ?
-                        m_elements.m_omega_p :
-                        m_elements.m_derived_divdp_proj);
-
-    const auto qdp = m_elements.m_qdp;
-    const auto rspheremp = m_elements.m_rspheremp;
-    const int qsize = m_data.qsize;
-    const int np1_qdp = m_data.np1_qdp;
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = it / (qsize*NP*NP*NUM_LEV);
-        const int q = (it / (NP*NP*NUM_LEV)) % qsize;
-        const int igp = (it / (NP*NUM_LEV)) % NP;
-        const int jgp = (it / NUM_LEV) % NP;
-        const int ilev = it % NUM_LEV;
-        qdp(ie,np1_qdp,q,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
-    });
-
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*NP*NP*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = it / (NP*NP*NUM_LEV);
-        const int igp = (it / (NP*NUM_LEV)) % NP;
-        const int jgp = (it / NUM_LEV) % NP;
-        const int ilev = it % NUM_LEV;
-        f_dss(ie,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
-    });
-
-    ExecSpace::fence();
-    GPTLstop("esf-rspheremp run");
-    profiling_pause();
-  }
-
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
     const auto qdp    = m_elements.m_qdp;
     const int qsize   = m_data.qsize;
@@ -411,7 +357,7 @@ public:
     }
     neighbor_minmax_start();
     compute_biharmonic_pre();
-    be->exchange();
+    be->exchange(m_elements.m_rspheremp);
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
@@ -442,7 +388,7 @@ public:
     const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
         Context::singleton().get_boundary_exchange(ss.str());
 
-    be_qdp_dss_var->exchange();
+    be_qdp_dss_var->exchange(m_elements.m_rspheremp);
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
@@ -502,8 +448,6 @@ public:
     GPTLstop("advance_qdp");
 
     exchange_qdp_dss_var();
-
-    apply_rspheremp();
 
     GPTLstop("eus_2d_advec");
   }

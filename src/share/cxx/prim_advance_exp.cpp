@@ -186,13 +186,7 @@ void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange&
 
   // Do the boundary exchange
   start_timer("caar_bexchV");
-  be.exchange();
-
-  // --- Post boundary echange
-  profiling_resume();
-  Kokkos::parallel_for("caar loop post-boundary exchange", policy_post, functor);
-  ExecSpace::fence();
-  profiling_pause();
+  be.exchange(Context::singleton().get_elements().m_rspheremp);
   stop_timer("caar_bexchV");
 }
 

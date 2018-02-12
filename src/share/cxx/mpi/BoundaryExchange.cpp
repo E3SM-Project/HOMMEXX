@@ -196,7 +196,16 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 }
 
-void BoundaryExchange::exchange (int nets, int nete)
+void BoundaryExchange::exchange (int nets, int nete) {
+  exchange(nullptr, nets, nete);
+}
+
+void BoundaryExchange
+::exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp, int nets, int nete) {
+  exchange(&rspheremp, nets, nete);
+}
+
+void BoundaryExchange::exchange (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete)
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -225,7 +234,7 @@ void BoundaryExchange::exchange (int nets, int nete)
   pack_and_send (nets, nete);
 
   // --- Recv and unpack --- //
-  recv_and_unpack (nets, nete);
+  recv_and_unpack (rspheremp, nets, nete);
 }
 
 void BoundaryExchange::exchange_min_max (int nets, int nete)
@@ -360,7 +369,6 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
           num_parallel_iterations, tp);
       const auto policy = Kokkos::TeamPolicy<ExecSpace>(
         num_parallel_iterations, threads_vectors.first, threads_vectors.second);
-      const auto num_conn = NUM_CONNECTIONS;
       HOMMEXX_STATIC const ConnectionHelpers helpers;
       Kokkos::parallel_for(
         policy,
@@ -413,7 +421,12 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   GPTLstop("be pack_and_send");
 }
 
-void BoundaryExchange::recv_and_unpack (int nets, int nete)
+void BoundaryExchange::recv_and_unpack (int nets, int nete) {
+  recv_and_unpack(nullptr, nets, nete);
+}
+
+void BoundaryExchange
+::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete)
 {
   GPTLstart("be recv_and_unpack");
   GPTLstart("be recv_and_unpack book");
@@ -556,12 +569,24 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
               Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
               [&] (const int& ilev) {
                 f3p[ilev] += r3p[ilev];
-              });            
+              });
           };
           cf(4, 0,    0);
           cf(5, 0,    NP-1);
           cf(6, NP-1, 0);
           cf(7, NP-1, NP-1);
+          if (rspheremp) {
+            for (int i = 0; i < NP; ++i)
+              for (int j = 0; j < NP; ++j) {
+                auto* const f3p = &f3(i, j, 0);
+                const auto& rsmp = (*rspheremp)(ie, i, j);
+                Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                  [&] (const int& ilev) {
+                    f3p[ilev] *= rsmp;
+                  });
+              }
+          }
         });
     }
   }
