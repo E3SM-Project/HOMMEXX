@@ -2,7 +2,6 @@
 #define CAAR_FUNCTOR_HPP
 
 #include "Types.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "Derivative.hpp"
