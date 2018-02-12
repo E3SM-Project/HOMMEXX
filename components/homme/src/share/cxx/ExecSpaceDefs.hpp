@@ -6,6 +6,7 @@
 #include <Kokkos_Core.hpp>
 
 #include "Hommexx_config.h"
+#include "Dimensions.hpp"
 
 namespace Homme
 {
@@ -216,41 +217,99 @@ struct Memory<Hommexx_Cuda> {
   };
 };
 
-// We want to get C++ on GPU to match F90 on CPU. Thus, need to serialize
-// parallel reductions.
+// A templated namespace to hold variations on intra-team parallel
+// dispatches.
+template <typename ExeSpace=ExecSpace>
+struct Dispatch {
+  // Match the HOMMEXX_GPU_BFB_WITH_CPU function in the Cuda
+  // specialization.
+  template<typename LoopBdyType, class Lambda, typename ValueType>
+  KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_reduce (
+    const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
+    const LoopBdyType& loop_boundaries,
+    const Lambda& lambda, ValueType& result)
+  {
+    Kokkos::parallel_reduce(loop_boundaries, lambda, result);
+  }
 
-// Call through to parallel_reduce.
-template< typename LoopBdyType, class Lambda, typename ValueType>
-KOKKOS_FORCEINLINE_FUNCTION
-void parallel_reduce (
-  const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
-  const LoopBdyType& loop_boundaries,
-  const Lambda& lambda, ValueType& result)
-{
-  Kokkos::parallel_reduce(loop_boundaries, lambda, result);
-}
+  // Improve performance in two ways: NP*NP is a compile-time range
+  // limit, and use pragma simd. This substantially speeds up the
+  // limiters, for example.
+  template<class Lambda>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_for_NP2 (
+    const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
+    const Lambda& lambda)
+  {
+#   pragma ivdep
+#   pragma simd
+    for (int k = 0; k < NP*NP; ++k)
+      lambda(k);
+  }
 
-#if defined KOKKOS_HAVE_CUDA && defined HOMMEXX_GPU_BFB_WITH_CPU
-// Serialize the parallel_reduce.
-template< typename iType, class Lambda, typename ValueType >
-KOKKOS_INLINE_FUNCTION
-void parallel_reduce (
-  const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
-  const Kokkos::Impl::ThreadVectorRangeBoundariesStruct<iType, Kokkos::Impl::CudaTeamMember>& loop_boundaries,
-  const Lambda& lambda, ValueType& result)
-{
-  // All threads init result.
-  result = ValueType();
-  // One thread sums.
-  Kokkos::single(Kokkos::PerThread(team), [&] () {
-      for (iType i = loop_boundaries.start; i < loop_boundaries.end; ++i)
-        lambda(i, result);
-    });
-  // Broadcast result to all threads by doing sum of one thread's
-  // non-0 value and the rest of the 0s.
-  Kokkos::Impl::CudaTeamMember::vector_reduce(
-    Kokkos::Experimental::Sum<ValueType>(result));
-}
+  template<class Lambda, typename ValueType>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_reduce_NP2 (
+    const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
+    const Lambda& lambda, ValueType& result)
+  {
+    result = ValueType();
+    for (int k = 0; k < NP*NP; ++k)
+      lambda(k, result);  
+  }
+};
+
+#if defined KOKKOS_HAVE_CUDA
+template <>
+struct Dispatch<Kokkos::Cuda> {
+  template<typename LoopBdyType, class Lambda, typename ValueType>
+  KOKKOS_FORCEINLINE_FUNCTION
+  static void parallel_reduce (
+    const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
+    const LoopBdyType& loop_boundaries,
+    const Lambda& lambda, ValueType& result)
+  {
+#if defined HOMMEXX_GPU_BFB_WITH_CPU
+    // We want to get C++ on GPU to match F90 on CPU. Thus, need to
+    // serialize parallel reductions.
+
+    // All threads init result.
+    result = ValueType();
+    // One thread sums.
+    Kokkos::single(Kokkos::PerThread(team), [&] () {
+        for (auto i = loop_boundaries.start; i < loop_boundaries.end; ++i)
+          lambda(i, result);
+      });
+    // Broadcast result to all threads by doing sum of one thread's
+    // non-0 value and the rest of the 0s.
+    Kokkos::Impl::CudaTeamMember::vector_reduce(
+      Kokkos::Experimental::Sum<ValueType>(result));
+#else
+    Kokkos::parallel_reduce(loop_boundaries, lambda, result);
+#endif
+  }
+
+  // Match the performance-improving impls in the non-GPU impl.
+  template<class Lambda>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_for_NP2 (
+    const Kokkos::TeamPolicy<Kokkos::Cuda>::member_type& team,
+    const Lambda& lambda)
+  {
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NP*NP), lambda);
+  }
+
+  template<class Lambda, typename ValueType>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_reduce_NP2 (
+    const Kokkos::TeamPolicy<Kokkos::Cuda>::member_type& team,
+    const Lambda& lambda, ValueType& result)
+  {
+    parallel_reduce(team, Kokkos::ThreadVectorRange(team, NP*NP),
+                    lambda, result);
+  }
+};
 #endif
 
 } // namespace Homme
