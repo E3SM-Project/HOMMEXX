@@ -478,10 +478,8 @@ class compute_sphere_operator_test_ml {
                               Homme::subview(spheremp_d,ie),
                               Homme::subview(metinv_d,ie),
                               Homme::subview(metdet_d,ie),
-                              Homme::subview(temp4_d,ie),
                               Homme::subview(temp5_d,ie),
                               Homme::subview(temp1_d,ie),
-                              Homme::subview(temp2_d,ie),
                               Homme::subview(sphere_buf,ie),
                               Homme::subview(vector_input_d,ie),
                               Homme::subview(vector_output_d,ie));

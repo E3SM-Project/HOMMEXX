@@ -67,12 +67,7 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   assert (be.is_registration_completed());
 
   // Exchange
-  be.exchange(m_data.nets, m_data.nete);
-
-  // Apply inverse mass matrix
-  Kokkos::RangePolicy<ExecSpace,TagApplyInvMass> policy_mass(0, m_data.num_elems*NP*NP*NUM_LEV);
-  Kokkos::parallel_for(policy_mass, *this);
-  Kokkos::fence();
+  be.exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian

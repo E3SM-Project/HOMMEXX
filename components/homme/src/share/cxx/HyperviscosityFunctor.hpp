@@ -55,9 +55,7 @@ public:
                               Homme::subview(m_elements.m_metinv,kv.ie),
                               Homme::subview(m_elements.m_metdet,kv.ie),
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
-                              Homme::subview(m_elements.buffers.vorticity_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
-                              Homme::subview(m_elements.buffers.curl_buf,kv.ie),
                               Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                               Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
@@ -92,27 +90,10 @@ public:
                               Homme::subview(m_elements.m_metinv,kv.ie),
                               Homme::subview(m_elements.m_metdet, kv.ie),
                               Homme::subview(m_elements.buffers.divergence_temp,kv.ie),
-                              Homme::subview(m_elements.buffers.vorticity_temp,kv.ie),
                               Homme::subview(m_elements.buffers.grad_buf,kv.ie),
-                              Homme::subview(m_elements.buffers.curl_buf,kv.ie),
                               Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(const TagApplyInvMass&, const int idx) const
-  {
-    const int ie   =  idx / (NP*NP*NUM_LEV);
-    const int igp  = (idx / (NP*NUM_LEV)) % NP;
-    const int jgp  = (idx / NUM_LEV) % NP;
-    const int ilev =  idx % NUM_LEV;
-
-    // Apply inverse mass matrix
-    m_elements.buffers.dptens(ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.ttens (ie,  igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,0,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
-    m_elements.buffers.vtens (ie,1,igp,jgp,ilev) *= m_elements.m_rspheremp(ie,igp,jgp);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -182,9 +163,7 @@ public:
             Homme::subview(m_elements.m_metinv,kv.ie),
             Homme::subview(m_elements.m_metdet, kv.ie),
             Homme::subview(m_elements.buffers.lapl_buf_1, kv.ie),
-            Homme::subview(m_elements.buffers.lapl_buf_2, kv.ie),
             Homme::subview(m_elements.buffers.grad_buf, kv.ie),
-            Homme::subview(m_elements.buffers.curl_buf, kv.ie),
             Homme::subview(m_elements.buffers.sphere_vector_buf,kv.ie),
             // input
             Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
