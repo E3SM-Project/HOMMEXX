@@ -299,9 +299,9 @@ public:
               //
               // The fortran returns NaN's, so make certain we only return NaN's
               // when the Fortran does
-              // REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
-              //         std::isnan(kokkos_remapped[var](ie, igp, jgp,
-              //                                         vector_level)[vector]));
+              REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
+                      std::isnan(kokkos_remapped[var](ie, igp, jgp,
+                                                      vector_level)[vector]));
               if (!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) &&
                   !std::isnan(kokkos_remapped[var](ie, igp, jgp,
                                                    vector_level)[vector])) {
