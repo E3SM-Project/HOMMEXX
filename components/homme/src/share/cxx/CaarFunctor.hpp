@@ -20,7 +20,21 @@
 namespace Homme {
 
 struct CaarFunctor {
-  Control             m_data;
+
+  struct CaarData {
+    int       nm1;
+    int       n0;
+    int       np1;
+    int       n0_qdp;
+
+    Real      dt;
+    Real      eta_ave_w;
+
+    int       rsplit;
+    bool      compute_diagnostics;
+  };
+
+  CaarData            m_data;
   const HybridVCoord  m_hvcoord;
   const Elements      m_elements;
   const Derivative    m_deriv;
@@ -30,28 +44,27 @@ struct CaarFunctor {
   struct TagPostExchange {};  // CAAR routine after boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord)
-    : m_data(),
-      m_hvcoord(hvcoord),
-      m_elements(elements),
-      m_deriv(derivative)
+    : m_hvcoord(hvcoord)
+    , m_elements(elements)
+    , m_deriv(derivative)
   {
     // Nothing to be done here
   }
 
-  CaarFunctor(const Control &data, const Elements& elements,
-              const Derivative& derivative, const HybridVCoord& hvcoord)
-    : m_data(data),
-      m_hvcoord(hvcoord),
-      m_elements(elements),
-      m_deriv(derivative)
-  {
-    // Nothing to be done here
-  }
+  void set_rsplit (const int rsplit) { m_data.rsplit = rsplit; }
+
+  void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }
 
   void set_rk_stage_data (const int nm1, const int n0,   const int np1,
                           const Real dt, const Real eta_ave_w,
-                          const bool compute_diagonstics) {
-    m_data.set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagonstics);
+                          const bool compute_diagnostics) {
+    m_data.nm1 = nm1;
+    m_data.n0  = n0;
+    m_data.np1 = np1;
+    m_data.dt  = dt;
+
+    m_data.eta_ave_w = eta_ave_w;
+    m_data.compute_diagnostics = compute_diagnostics;
   }
 
   // Depends on PHI (after preq_hydrostatic), PECND

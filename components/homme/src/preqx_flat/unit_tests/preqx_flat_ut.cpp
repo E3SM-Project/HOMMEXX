@@ -6,7 +6,6 @@
 
 #undef NDEBUG
 
-#include "Control.hpp"
 #include "CaarFunctor.hpp"
 #include "EulerStepFunctor.hpp"
 #include "Elements.hpp"
@@ -123,11 +122,8 @@ public:
     Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
     Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
-    functor.m_data.init(0, elements.num_elems(), elements.num_elems(),
-                        n0_qdp,
-                        0); //for rsplit
-
-    functor.m_data.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
+    functor.set_n0_qdp(n0_qdp);
+    functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
 //is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
@@ -158,7 +154,7 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_data.num_elems, 16, 4);
+    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_elements.num_elems(), 16, 4);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
   }
@@ -651,8 +647,9 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 //init makes device copies
   TestType test_functor(elements);
 
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, 0);
-  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+  test_functor.functor.set_n0_qdp(TestType::n0_qdp);
+  test_functor.functor.set_rsplit(0);
+  test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                    TestType::dt, TestType::eta_ave_w, false);
 
   test_functor.run_functor();
@@ -993,8 +990,10 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
   TestType test_functor(elements);
 
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
-  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+  test_functor.functor.set_n0_qdp(TestType::n0_qdp);
+  test_functor.functor.set_rsplit(test_functor.return_rsplit());
+
+  test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
 
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
@@ -1086,10 +1085,11 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   test_functor.set_rsplit(rsplit);
 
 
-  test_functor.functor.m_data.init(0, num_elems, num_elems, TestType::n0_qdp, test_functor.return_rsplit());
+  test_functor.functor.set_n0_qdp(TestType::n0_qdp);
+  test_functor.functor.set_rsplit(test_functor.return_rsplit());
 
-  test_functor.functor.m_data.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
-                                                TestType::dt, TestType::eta_ave_w, false);
+  test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
+                                         TestType::dt, TestType::eta_ave_w, false);
 
 
   //will run on device
