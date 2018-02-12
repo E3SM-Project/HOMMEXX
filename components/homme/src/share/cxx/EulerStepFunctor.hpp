@@ -458,6 +458,7 @@ private:
 
 #define ta(x) GPTLstart("aqdp " # x)
 #define to(x) GPTLstop("aqdp " # x)
+#define fork for (int k = 0; k < NP2; ++k)
 
   KOKKOS_INLINE_FUNCTION
   void run_setup_phase (const KernelVariables& kv) const {
@@ -607,7 +608,6 @@ private:
 #if 1
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
 #else
-#define fork for (int k = 0; k < NP2; ++k)
     const int NP2 = NP * NP;
     for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev) {
       const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
@@ -717,7 +717,7 @@ private:
   // x), where the limiter possibly alters x to place it in the constraint set
   //    {x: (i) minp <= x_k <= maxp and (ii) c'x = mass }.
   template <typename Limit, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
-  KOKKOS_FORCEINLINE_FUNCTION static void
+  KOKKOS_INLINE_FUNCTION static void
   with_limiter_shell (const TeamMember& team, const Limit& limit,
                       const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
                       const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
@@ -740,6 +740,7 @@ private:
           nullptr;
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
+#if 0
         parallel_for(tvr, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             const auto& dpm = dpmass(i,j,vpi)[vsi];
@@ -778,6 +779,41 @@ private:
             const int i = k / NP, j = k % NP;
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });
+#else
+#pragma ivdep
+#pragma simd
+        fork {
+          const int i = k / NP, j = k % NP;
+          const auto& dpm = dpmass(i,j,vpi)[vsi];
+          c[k] = sphweights(i,j)*dpm;
+          x[k] = ptens(i,j,vpi)[vsi]/dpm;
+        }
+
+        Real sumc = 0;
+        fork { sumc += c[k]; }
+        if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
+        Real mass = 0;
+        fork { mass += x[k]*c[k]; }
+
+        Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
+
+        if (minp < 0)
+          minp = qlim(0,vpi)[vsi] = 0;
+
+        if (mass < minp*sumc)
+          minp = qlim(0,vpi)[vsi] = mass/sumc;
+        if (mass > maxp*sumc)
+          maxp = qlim(1,vpi)[vsi] = mass/sumc;
+
+        limit(team, mass, minp, maxp, x.data(), c.data());
+
+#pragma ivdep
+#pragma simd
+        fork {
+          const int i = k / NP, j = k % NP;
+          ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
+        }
+#endif
       });
   }
 
@@ -790,7 +826,7 @@ public: // Expose for unit testing.
                            const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
                            const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
     struct Limit {
-      KOKKOS_FORCEINLINE_FUNCTION void
+      KOKKOS_INLINE_FUNCTION void
       operator() (const TeamMember& team, const Real& mass,
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
@@ -842,7 +878,6 @@ public: // Expose for unit testing.
           }
         }
 #else
-#define fork for (int k = 0; k < NP2; ++k)
         for (int iter = 0; iter < 15; ++iter) {
           Real addmass = 0;
           fork {
