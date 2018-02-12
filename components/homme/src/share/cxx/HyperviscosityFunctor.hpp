@@ -243,6 +243,8 @@ public:
   Derivative    m_deriv;
 
   ExecViewManaged<Scalar[NUM_LEV]> m_nu_scale_top;
+
+  mutable std::shared_ptr<BoundaryExchange> m_be;
 };
 
 } // namespace Homme

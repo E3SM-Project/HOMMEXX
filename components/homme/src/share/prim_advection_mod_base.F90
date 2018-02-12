@@ -242,8 +242,10 @@ contains
 
          if ( limiter_option == 8) then
             ! apply limiter to Q = Qtens / dp_star
+            call t_startf('aqdp lim')
             call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
                  qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+            call t_stopf('aqdp lim')
          endif
 
          ! apply mass matrix, overwrite np1 with solution:
@@ -1781,7 +1783,6 @@ end subroutine ALE_parametric_coords
     call t_stopf("advance_qdp")
     call t_startf('eus_bexchV')
     call bndry_exchangeV( hybrid , edgeAdvp1 )
-    call t_stopf('eus_bexchV')
 
     do ie = nets , nete
        if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
@@ -1809,6 +1810,7 @@ end subroutine ALE_parametric_coords
     !$OMP BARRIER
 #endif
 #endif
+    call t_stopf('eus_bexchV')
 
     call t_stopf('eus_2d_advec')
 

@@ -1,6 +1,7 @@
 #include "Context.hpp"
 #include "HyperviscosityFunctor.hpp"
 #include "BoundaryExchange.hpp"
+#include "profiling.hpp"
 
 namespace Homme
 {
@@ -33,19 +34,21 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
   auto policy_pre_exchange =
       Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
           m_data.num_elems);
+  static BoundaryExchange* s_be;
+  if ( ! s_be) {
+    s_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor").get();
+    assert (s_be->is_registration_completed());    
+  }
   for (int icycle = 0; icycle < hypervis_subcycle; ++icycle) {
     biharmonic_wk_dp3d ();
     // dispatch parallel_for for first kernel
     Kokkos::parallel_for(policy_pre_exchange, *this);
     Kokkos::fence();
 
-    // Boundary Echange
-    std::string be_name = "HyperviscosityFunctor";
-    BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
-    assert (be.is_registration_completed());
-
     // Exchange
-    be.exchange(m_data.nets, m_data.nete);
+    GPTLstart("ahdp_bexchV2");
+    s_be->exchange(m_data.nets, m_data.nete);
+    GPTLstop("ahdp_bexchV2");
 
     // Update states
     Kokkos::parallel_for(policy_update_states, *this);
@@ -62,12 +65,16 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   Kokkos::fence();
 
   // Get be structure
-  std::string be_name = "HyperviscosityFunctor";
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
-  assert (be.is_registration_completed());
+  static BoundaryExchange* s_be;
+  if ( ! s_be) {
+    s_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor").get();
+    assert (s_be->is_registration_completed());    
+  }
 
   // Exchange
-  be.exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
+  GPTLstart("biwkdp3d_bexchV");
+  s_be->exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
+  GPTLstop("biwkdp3d_bexchV");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian

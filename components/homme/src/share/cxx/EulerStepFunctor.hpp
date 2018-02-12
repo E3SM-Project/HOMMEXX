@@ -18,7 +18,9 @@ class EulerStepFunctor {
   Control          m_data;
   const Elements   m_elements;
   const Derivative m_deriv;
+
   bool             m_kernel_will_run_limiters;
+  std::shared_ptr<BoundaryExchange> nmm_bexch, eus_bexchs[9];
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
@@ -89,7 +91,6 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
-    start_timer("esf-bih-pre compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -116,12 +117,10 @@ public:
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
-    stop_timer("esf-bih-pre compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
-    start_timer("esf-bih-post compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -151,7 +150,6 @@ public:
             });
         });
     }
-    stop_timer("esf-bih-post compute");
   }
 
   struct AALSetupPhase {};
@@ -160,7 +158,6 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    GPTLstart("esf-aal-tot run");
     if (OnGpu<ExecSpace>::value) {
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
@@ -185,36 +182,27 @@ public:
           *this);
     }
     ExecSpace::fence();
-    GPTLstop("esf-aal-tot run");
     profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALSetupPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-noq compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
-    stop_timer("esf-aal-noq compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALTracerPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-q compute");
     KernelVariables kv(team, m_data.qsize);
     run_tracer_phase(kv);
-    stop_timer("esf-aal-q compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALFusedPhases&, const TeamMember& team) const {
-    start_timer("esf-aal-fused compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
     for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
-    {
       run_tracer_phase(kv);
-    }
-    stop_timer("esf-aal-fused compute");
   }
 
   struct PrecomputeDivDp {};
@@ -234,8 +222,7 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
-    start_timer("esf-precompute_divdp compute");
+  void operator() (const PrecomputeDivDp &, const TeamMember &team) const {
     const int ie = team.league_rank();
     divergence_sphere(team, m_deriv.get_dvv(),
                       Homme::subview(m_elements.m_dinv,ie),
@@ -253,8 +240,6 @@ public:
             m_elements.m_derived_divdp(ie, igp, jgp, ilev);
       });
     });
-
-    stop_timer("esf-precompute_divdp compute");
   }
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
@@ -276,7 +261,7 @@ public:
     });
   }
 
-  void compute_qmin_qmax() {
+  void compute_qmin_qmax () {
     // Temporaries, due to issues capturing *this on device
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
@@ -344,15 +329,19 @@ public:
   }
 
   void neighbor_minmax_start() {
+    GPTLstart("nmm_bexchS_start");
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     be.pack_and_send_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS_start");
   }
 
   void neighbor_minmax_finish() {
+    GPTLstart("nmm_bexchS_fini");
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     be.recv_and_unpack_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS_fini");
   }
 
   void minmax_and_biharmonic() {
@@ -367,19 +356,25 @@ public:
     }
     neighbor_minmax_start();
     compute_biharmonic_pre();
+    GPTLstart("biwksc_bexchV");
     be->exchange(m_elements.m_rspheremp);
+    GPTLstop("biwksc_bexchV");
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
 
   void neighbor_minmax() {
-    BoundaryExchange &be =
-        *Context::singleton().get_boundary_exchange("min max Euler");
-    assert(be.is_registration_completed());
-    be.exchange_min_max(m_data.nets, m_data.nete);
+    GPTLstart("nmm_bexchS");
+    static BoundaryExchange* s_nmm_bexch; //TODO Rm when functor is created just once.
+    if ( ! s_nmm_bexch)
+      s_nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler").get();
+    assert(s_nmm_bexch->is_registration_completed());
+    s_nmm_bexch->exchange_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS");
   }
 
   void exchange_qdp_dss_var () {
+    GPTLstart("eus_bexchV");
     // Note: we have three separate BE structures, all of which register qdp.
     // They differ only in the last field registered.
     // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
@@ -387,18 +382,21 @@ public:
     // TODO: move this setup in init_control_euler and move that function one
     // stack frame up of euler_step in F90, making it set the common parameters
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
-
-    std::stringstream ss;
-    ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
-                                  ? "eta"
-                                  : m_data.DSSopt == Control::DSSOption::omega
-                                        ? "omega"
-                                        : "div_vdp_ave") << " " << m_data.np1_qdp;
-
-    const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
-        Context::singleton().get_boundary_exchange(ss.str());
-
-    be_qdp_dss_var->exchange(m_elements.m_rspheremp);
+    const int idx = 3*(static_cast<int>(m_data.DSSopt) - 1) + m_data.np1_qdp;
+    static BoundaryExchange* s_eus_bexchs[9]; //TODO Rm when functor is created just once.
+    if ( ! s_eus_bexchs[idx]) {
+      std::stringstream ss;
+      ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
+                                    ? "eta"
+                                    : m_data.DSSopt == Control::DSSOption::omega
+                                          ? "omega"
+                                          : "div_vdp_ave") << " " << m_data.np1_qdp;
+      const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+          Context::singleton().get_boundary_exchange(ss.str());
+      s_eus_bexchs[idx] = be_qdp_dss_var.get();
+    }
+    s_eus_bexchs[idx]->exchange(m_elements.m_rspheremp);
+    GPTLstop("eus_bexchV");
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
@@ -438,9 +436,7 @@ public:
 
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
       GPTLstart("bihmix_qminmax");
-
       compute_qmin_qmax();
-
       if (m_data.rhs_multiplier == 0.0) {
         GPTLstart("eus_neighbor_minmax1");
         neighbor_minmax();
@@ -452,37 +448,48 @@ public:
     }
     GPTLstart("eus_2d_advec");
     GPTLstart("advance_qdp");
-
     advect_and_limit();
-
     GPTLstop("advance_qdp");
-
     exchange_qdp_dss_var();
-
     GPTLstop("eus_2d_advec");
   }
 
 private:
 
+#define ta(x) //GPTLstart("aqdp " # x)
+#define to(x) //GPTLstop("aqdp " # x)
+
   KOKKOS_INLINE_FUNCTION
   void run_setup_phase (const KernelVariables& kv) const {
+    ta("2dadvec");
     compute_2d_advection_step(kv);
+    to("2dadvec");
   }
 
   KOKKOS_INLINE_FUNCTION
   void run_tracer_phase (const KernelVariables& kv) const {
+    ta("vstar");
     compute_vstar_qdp(kv);
+    to("vstar");
+    ta("qtens");
     compute_qtens(kv);
     kv.team_barrier();
+    to("qtens");
     if (m_data.rhs_viss != 0.0) {
+      ta("hyp");
       add_hyperviscosity(kv);
       kv.team_barrier();
+      to("hyp");
     }
     if (m_data.limiter_option == 8) {
+      ta("lim");
       limiter_optim_iter_full(kv);
       kv.team_barrier();
+      to("lim");
     }
+    ta("spher");
     apply_spheremp(kv);
+    to("spher");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -641,15 +648,12 @@ private:
       [&] (const int ilev) {
         const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
 
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         Real* const data = team_data ?
           team_data + 2 * NP2 * team.team_rank() :
           nullptr;
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
-        parallel_for(tvr, [&] (const int& k) {
+        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             const auto& dpm = dpmass(i,j,vpi)[vsi];
             c[k] = sphweights(i,j)*dpm;
@@ -657,10 +661,14 @@ private:
           });
 
         Real sumc = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& isumc) { isumc += c[k]; }, sumc);
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& sumc) {
+            sumc += c[k];
+          }, sumc);
         if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
         Real mass = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& mass) {
+            mass += x[k]*c[k];
+          }, mass);
 
         Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
 
@@ -683,7 +691,7 @@ private:
 
         limit(team, mass, minp, maxp, x.data(), c.data());
 
-        parallel_for(tvr, [&] (const int& k) {
+        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });
@@ -704,21 +712,17 @@ public: // Expose for unit testing.
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
                   Real const* KOKKOS_RESTRICT const c) const {
-        const int NP2 = NP * NP;
         const int maxiter = NP*NP - 1;
         const Real tol_limiter = 5e-14;
 
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
               if (x[k] > maxp) {
-                iaddmass += (x[k] - maxp)*c[k];
+                addmass += (x[k] - maxp)*c[k];
                 x[k] = maxp;
               } else if (x[k] < minp) {
-                iaddmass += (x[k] - minp)*c[k];
+                addmass += (x[k] - minp)*c[k];
                 x[k] = minp;
               }
             }, addmass);
@@ -726,26 +730,25 @@ public: // Expose for unit testing.
           if (std::abs(addmass) <= tol_limiter*std::abs(mass))
             break;
 
-          Real weightssum = 0;
           if (addmass > 0) {
-            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
+            Real weightssum = 0;
+            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& iweightssum) {
                 if (x[k] < maxp)
                   iweightssum += c[k];
               }, weightssum);
             const auto adw = addmass/weightssum;
-            parallel_for(tvr, [&] (const int& k) {
-                if (x[k] < maxp)
-                  x[k] += adw;
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += (x[k] < maxp) ? adw : 0;
               });
           } else {
-            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
+            Real weightssum = 0;
+            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& weightssum) {
                 if (x[k] > minp)
-                  iweightssum += c[k];
+                  weightssum += c[k];
               }, weightssum);
             const auto adw = addmass/weightssum;
-            parallel_for(tvr, [&] (const int& k) {
-                if (x[k] > minp)
-                  x[k] += adw;
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += (x[k] > minp) ? adw : 0;
               });
           }
         }
@@ -767,19 +770,14 @@ public: // Expose for unit testing.
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
                   Real const* KOKKOS_RESTRICT const c) const {
-        const int NP2 = NP * NP;
-
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         // Clip.
         Real addmass = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
             if (x[k] > maxp) {
-              iaddmass += (x[k] - maxp)*c[k];
+              addmass += (x[k] - maxp)*c[k];
               x[k] = maxp;
             } else if (x[k] < minp) {
-              iaddmass += (x[k] - minp)*c[k];
+              addmass += (x[k] - minp)*c[k];
               x[k] = minp;
             }
           }, addmass);
@@ -788,24 +786,29 @@ public: // Expose for unit testing.
         // 0, then return early.
         if (addmass == 0) return;
 
-        Real fac = 0;
         if (addmass > 0) {
+          Real fac = 0;
           // Get sum of weights. Don't store them; we don't want another array.
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
-              ifac += c[k]*(maxp - x[k]);
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& fac) {
+              fac += c[k]*(maxp - x[k]);
             }, fac);
           if (fac > 0) {
             // Update.
             fac = addmass/fac;
-            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(maxp - x[k]); });
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += fac*(maxp - x[k]);
+              });
           }
         } else {
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
-              ifac += c[k]*(x[k] - minp);
+          Real fac = 0;
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& fac) {
+              fac += c[k]*(x[k] - minp);
             }, fac);
           if (fac > 0) {
             fac = addmass/fac;
-            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(x[k] - minp); });
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += fac*(x[k] - minp);
+              });
           }
         }
       }

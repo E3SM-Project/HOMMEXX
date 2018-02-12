@@ -64,10 +64,12 @@ std::shared_ptr<BuffersManager> Context::get_buffers_manager(short int exchange_
     buffers_managers_.reset(new BMMap());
   }
 
-  if (!(*buffers_managers_)[exchange_type]) {
+  auto it = buffers_managers_->find(exchange_type);
+  if (it == buffers_managers_->end()) {
     (*buffers_managers_)[exchange_type] = std::make_shared<BuffersManager>(get_connectivity());
+    it = buffers_managers_->find(exchange_type);
   }
-  return (*buffers_managers_)[exchange_type];
+  return it->second;
 }
 
 std::shared_ptr<Connectivity> Context::get_connectivity() {
@@ -86,10 +88,12 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 
   // Todo: should we accept a bool param 'must_already_exist'
   //       to make sure we are not creating a new BE?
-  if (!(*boundary_exchanges_)[name]) {
+  auto it = boundary_exchanges_->find(name);
+  if (it == boundary_exchanges_->end()) {
     (*boundary_exchanges_)[name] = std::make_shared<BoundaryExchange>();
+    it = boundary_exchanges_->find(name);
   }
-  return (*boundary_exchanges_)[name];
+  return it->second;
 }
 
 void Context::clear() {
