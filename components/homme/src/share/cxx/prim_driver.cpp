@@ -1,4 +1,3 @@
-#include "Control.hpp"
 #include "Context.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"

@@ -39,6 +39,8 @@ class EulerStepFunctor {
   const Derivative    m_deriv;
   const HybridVCoord  m_hvcoord;
 
+  bool                m_kernel_will_run_limiters;
+
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
 public:

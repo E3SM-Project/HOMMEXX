@@ -2,7 +2,6 @@
 
 #include <limits>
 
-#include "Control.hpp"
 #include "CaarFunctor.hpp"
 #include "Elements.hpp"
 #include "Dimensions.hpp"
