@@ -377,10 +377,11 @@ public:
   }
 
   void neighbor_minmax() {
-    BoundaryExchange &be =
-        *Context::singleton().get_boundary_exchange("min max Euler");
-    assert(be.is_registration_completed());
-    be.exchange_min_max(m_data.nets, m_data.nete);
+    static std::shared_ptr<BoundaryExchange> be = nullptr;
+    if ( ! be)
+      be = Context::singleton().get_boundary_exchange("min max Euler");
+    assert(be->is_registration_completed());
+    be->exchange_min_max(m_data.nets, m_data.nete);
   }
 
   void exchange_qdp_dss_var () {
@@ -392,18 +393,20 @@ public:
     // TODO: move this setup in init_control_euler and move that function one
     // stack frame up of euler_step in F90, making it set the common parameters
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
-
-    std::stringstream ss;
-    ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
-                                  ? "eta"
-                                  : m_data.DSSopt == Control::DSSOption::omega
-                                        ? "omega"
-                                        : "div_vdp_ave") << " " << m_data.np1_qdp;
-
-    const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
-        Context::singleton().get_boundary_exchange(ss.str());
-
-    be_qdp_dss_var->exchange(m_elements.m_rspheremp);
+    static std::shared_ptr<BoundaryExchange> bes[9] = {0};
+    const int idx = 3*(static_cast<int>(m_data.DSSopt) - 1) + m_data.np1_qdp;
+    if ( ! bes[idx]) {
+      std::stringstream ss;
+      ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
+                                    ? "eta"
+                                    : m_data.DSSopt == Control::DSSOption::omega
+                                          ? "omega"
+                                          : "div_vdp_ave") << " " << m_data.np1_qdp;
+      const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
+          Context::singleton().get_boundary_exchange(ss.str());
+      bes[idx] = be_qdp_dss_var;
+    }
+    bes[idx]->exchange(m_elements.m_rspheremp);
     GPTLstop("eus_bexchV");
   }
 
