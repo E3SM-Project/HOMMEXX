@@ -1,6 +1,7 @@
 #include "Context.hpp"
 #include "HyperviscosityFunctor.hpp"
 #include "BoundaryExchange.hpp"
+#include "profiling.hpp"
 
 namespace Homme
 {
@@ -45,7 +46,9 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
     assert (be.is_registration_completed());
 
     // Exchange
+    GPTLstart("ahdp_bexchV2");
     be.exchange(m_data.nets, m_data.nete);
+    GPTLstop("ahdp_bexchV2");
 
     // Update states
     Kokkos::parallel_for(policy_update_states, *this);
@@ -67,7 +70,9 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   assert (be.is_registration_completed());
 
   // Exchange
+  GPTLstart("biwksc_bexchV");
   be.exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
+  GPTLstop("biwksc_bexchV");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian

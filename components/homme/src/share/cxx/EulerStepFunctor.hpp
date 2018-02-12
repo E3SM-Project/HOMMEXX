@@ -211,9 +211,7 @@ public:
     KernelVariables kv(team);
     run_setup_phase(kv);
     for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
-    {
       run_tracer_phase(kv);
-    }
     stop_timer("esf-aal-fused compute");
   }
 
@@ -344,15 +342,19 @@ public:
   }
 
   void neighbor_minmax_start() {
+    GPTLstart("nmm_bexchS_start");
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     be.pack_and_send_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS_start");
   }
 
   void neighbor_minmax_finish() {
+    GPTLstart("nmm_bexchS_fini");
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     be.recv_and_unpack_min_max(m_data.nets, m_data.nete);
+    GPTLstop("nmm_bexchS_fini");
   }
 
   void minmax_and_biharmonic() {
@@ -367,7 +369,9 @@ public:
     }
     neighbor_minmax_start();
     compute_biharmonic_pre();
+    GPTLstart("nmm_bexchS");
     be->exchange(m_elements.m_rspheremp);
+    GPTLstop("nmm_bexchS");
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
@@ -380,6 +384,7 @@ public:
   }
 
   void exchange_qdp_dss_var () {
+    GPTLstart("eus_bexchV");
     // Note: we have three separate BE structures, all of which register qdp.
     // They differ only in the last field registered.
     // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
@@ -399,6 +404,7 @@ public:
         Context::singleton().get_boundary_exchange(ss.str());
 
     be_qdp_dss_var->exchange(m_elements.m_rspheremp);
+    GPTLstop("eus_bexchV");
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
