@@ -41,7 +41,6 @@ struct CaarFunctor {
 
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
-  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
   CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord)
     : m_hvcoord(hvcoord)
