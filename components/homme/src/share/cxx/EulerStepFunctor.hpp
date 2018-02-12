@@ -158,7 +158,7 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    if (OnGpu<ExecSpace>::value) {
+    if (true || OnGpu<ExecSpace>::value) {
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
@@ -456,25 +456,40 @@ public:
 
 private:
 
+#define ta(x) GPTLstart("aqdp " # x)
+#define to(x) GPTLstop("aqdp " # x)
+
   KOKKOS_INLINE_FUNCTION
   void run_setup_phase (const KernelVariables& kv) const {
+    ta("2dadvec");
     compute_2d_advection_step(kv);
+    to("2dadvec");
   }
 
   KOKKOS_INLINE_FUNCTION
   void run_tracer_phase (const KernelVariables& kv) const {
+    ta("vstar");
     compute_vstar_qdp(kv);
+    to("vstar");
+    ta("qtens");
     compute_qtens(kv);
     kv.team_barrier();
+    to("qtens");
     if (m_data.rhs_viss != 0.0) {
+      ta("hyp");
       add_hyperviscosity(kv);
       kv.team_barrier();
+      to("hyp");
     }
     if (m_data.limiter_option == 8) {
+      ta("lim");
       limiter_optim_iter_full(kv);
       kv.team_barrier();
+      to("lim");
     }
+    ta("spher");
     apply_spheremp(kv);
+    to("spher");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -589,7 +604,91 @@ private:
     const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
 
+#if 0
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
+#else
+#define fork for (int k = 0; k < NP2; ++k)
+    const int NP2 = NP * NP;
+    for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev) {
+      const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
+
+      Real x[NP2], c[NP2];
+#pragma ivdep
+#pragma simd
+      fork {
+        const int i = k / NP, j = k % NP;
+        const auto& dpm = dpmass(i,j,vpi)[vsi];
+        c[k] = sphweights(i,j)*dpm;
+        x[k] = ptens(i,j,vpi)[vsi]/dpm;
+      }
+
+      Real sumc = 0;
+      fork { sumc += c[k]; }
+      if (sumc <= 0) continue;
+      Real mass = 0;
+      fork { mass += x[k]*c[k]; }
+
+      Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
+
+      if (minp < 0)
+        minp = qlim(0,vpi)[vsi] = 0;
+
+      if (mass < minp*sumc)
+        minp = qlim(0,vpi)[vsi] = mass/sumc;
+      if (mass > maxp*sumc)
+        maxp = qlim(1,vpi)[vsi] = mass/sumc;
+
+      for (int iter = 0; iter < 15; ++iter) {
+        Real addmass = 0;
+        fork {
+          if (x[k] > maxp) {
+            addmass += (x[k] - maxp)*c[k];
+            x[k] = maxp;
+          } else if (x[k] < minp) {
+            addmass += (x[k] - minp)*c[k];
+            x[k] = minp;
+          }
+        }
+
+        if (std::abs(addmass) <= 5e-14*std::abs(mass))
+          break;
+
+        Real weightssum = 0;
+        if (addmass > 0) {
+          fork {
+            if (x[k] < maxp)
+              weightssum += c[k];
+          }
+          const auto adw = addmass/weightssum;
+#pragma ivdep
+#pragma simd
+          fork {
+            if (x[k] < maxp)
+              x[k] += adw;
+          }
+        } else {
+          fork {
+            if (x[k] > minp)
+              weightssum += c[k];
+          }
+          const auto adw = addmass/weightssum;
+#pragma ivdep
+#pragma simd
+          fork {
+            if (x[k] > minp)
+              x[k] += adw;
+          }
+        }
+      }
+
+#pragma ivdep
+#pragma simd
+      fork {
+        const int i = k / NP, j = k % NP;
+        ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
+      }
+    }
+#endif
   }
 
   //! apply mass matrix, overwrite np1 with solution:
