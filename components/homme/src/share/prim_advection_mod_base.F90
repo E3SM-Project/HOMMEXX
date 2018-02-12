@@ -1781,7 +1781,6 @@ end subroutine ALE_parametric_coords
     call t_stopf("advance_qdp")
     call t_startf('eus_bexchV')
     call bndry_exchangeV( hybrid , edgeAdvp1 )
-    call t_stopf('eus_bexchV')
 
     do ie = nets , nete
        if ( DSSopt == DSSeta         ) DSSvar => elem(ie)%derived%eta_dot_dpdn(:,:,:)
@@ -1809,6 +1808,7 @@ end subroutine ALE_parametric_coords
     !$OMP BARRIER
 #endif
 #endif
+    call t_stopf('eus_bexchV')
 
     call t_stopf('eus_2d_advec')
 
