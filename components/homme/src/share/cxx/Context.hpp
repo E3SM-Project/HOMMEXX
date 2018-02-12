@@ -8,7 +8,6 @@
 namespace Homme {
 
 class Comm;
-class Control;
 class Elements;
 class Derivative;
 class Connectivity;
@@ -22,7 +21,7 @@ class HybridVCoord;
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
  * the program. Second, a context need not be a singleton, and each Context
- * object can have different Elements, Control, Derivative, etc., objects. (That
+ * object can have different Elements, Derivative, etc., objects. (That
  * probably isn't needed, but Context immediately supports it.)
  *
  * Finally, Context has two singleton functions: singleton(), which returns
@@ -37,7 +36,6 @@ public:
 private:
   // Note: using uniqe_ptr disables copy construction
   std::unique_ptr<Comm>               comm_;
-  std::unique_ptr<Control>            control_;
   std::unique_ptr<Elements>           elements_;
   std::unique_ptr<Derivative>         derivative_;
   std::unique_ptr<HybridVCoord>            hvcoord_;
@@ -57,7 +55,6 @@ public:
 
   // Getters for each managed object.
   Comm& get_comm();
-  Control& get_control();
   Elements& get_elements();
   Derivative& get_derivative();
   HybridVCoord& get_hvcoord();

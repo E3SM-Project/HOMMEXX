@@ -9,13 +9,6 @@ namespace Homme
 /*
  * A struct to hold simulation parameters.
  *
- * This differs from the 'Control' structure, in that these parameter do not generally
- * need to be fwd-ed to the device, but rather they are used to do setup and to decide
- * which kernel have to be dispatched. Some *may* also be needed inside kernels, so they
- * will appear also inside Control (such as rsplit and qsplit); you can think of this
- * struct as the 'parameters needed on host', and Control as the 'parameter needed
- * on device' (or inside kernels, in general).
- * TODO: comments for each option!!!!
  */
 struct SimulationParams
 {

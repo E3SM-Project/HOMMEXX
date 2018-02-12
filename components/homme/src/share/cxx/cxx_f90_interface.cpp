@@ -1,6 +1,5 @@
 #include "Derivative.hpp"
 #include "Elements.hpp"
-#include "Control.hpp"
 #include "Context.hpp"
 #include "HybridVCoord.hpp"
 #include "SimulationParams.hpp"
@@ -72,18 +71,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Now this structure can be used safely
   params.params_set = true;
-
-  // Set some parameters in the Control structure already
-  Control& data = Context::singleton().get_control();
-  data.limiter_option = params.limiter_option;
-  data.rsplit = params.rsplit;
-  data.nu     = params.nu;
-  data.nu_s   = params.nu_s;
-  data.nu_p   = params.nu_p;
-  data.nu_q   = params.nu_q;
-  data.nu_top = params.nu_top;
-  data.hypervis_scaling = params.hypervis_scaling;
-  data.qsize  = params.qsize;
 }
 
 void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
@@ -148,10 +135,6 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
-
-  // We also set num_elems in the Control
-  Control& control = Context::singleton().get_control ();
-  control.num_elems = num_elems;
 }
 
 void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_temp_ptr, CF90Ptr& elem_state_dp3d_ptr,

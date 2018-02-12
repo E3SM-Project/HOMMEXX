@@ -1,7 +1,6 @@
 #include "Context.hpp"
 
 #include "Comm.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "BuffersManager.hpp"
@@ -19,18 +18,11 @@ Context::Context() {}
 Context::~Context() {}
 
 Comm& Context::get_comm() {
-  //if ( ! control_) control_ = std::make_shared<Control>();
   if ( ! comm_) {
     comm_.reset(new Comm());
     comm_->init();
   }
   return *comm_;
-}
-
-Control& Context::get_control() {
-  //if ( ! control_) control_ = std::make_shared<Control>();
-  if ( ! control_) control_.reset(new Control());
-  return *control_;
 }
 
 Elements& Context::get_elements() {
@@ -100,7 +92,6 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
 
 void Context::clear() {
   comm_ = nullptr;
-  control_ = nullptr;
   elements_ = nullptr;
   derivative_ = nullptr;
   hvcoord_ = nullptr;
