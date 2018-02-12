@@ -532,6 +532,19 @@ void BoundaryExchange
                 += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
           }
         });
+      if (rspheremp) {
+        const auto r = *rspheremp;
+        Kokkos::parallel_for(
+          Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NP*NP*NUM_LEV),
+          KOKKOS_LAMBDA(const int it) {
+            const int ie = nets + it / (num_3d_fields*NUM_LEV*NP*NP);
+            const int ifield = (it / (NP*NP*NUM_LEV)) % num_3d_fields;
+            const int i = (it / (NP*NUM_LEV)) % NP;
+            const int j = (it / NUM_LEV) % NP;
+            const int ilev = it % NUM_LEV;
+            fields_3d(ie, ifield)(i, j, ilev) *= r(ie, i, j);
+          });
+      }
     } else {
       const auto num_parallel_iterations = (nete - nets)*m_num_3d_fields;
       Kokkos::parallel_for(
