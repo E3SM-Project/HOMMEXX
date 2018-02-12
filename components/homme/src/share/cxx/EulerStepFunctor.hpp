@@ -176,6 +176,7 @@ public:
               m_data.num_elems * m_data.qsize),
           *this);
       ExecSpace::fence();
+      m_kernel_will_run_limiters = false;
       GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
