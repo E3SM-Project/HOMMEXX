@@ -606,7 +606,7 @@ endif
     integer :: is,ie,in,iw
 
     !call t_adj_detailf(+2)
-    call t_startf('edgeVpack')
+    !call t_startf('edgeVpack')
 
     is = edge%putmap(south,ielem)
     ie = edge%putmap(east,ielem)
@@ -715,7 +715,7 @@ endif
         end if
     end do
 
-    call t_stopf('edgeVpack')
+    !call t_stopf('edgeVpack')
     !call t_adj_detailf(-2)
 
   end subroutine edgeVpack
@@ -951,7 +951,7 @@ endif
     integer :: getmapL
 
     !call t_adj_detailf(+2)
-    call t_startf('edgeVunpack')
+    !call t_startf('edgeVunpack')
 
     is=edge%getmap(south,ielem)
     ie=edge%getmap(east,ielem)
@@ -1013,7 +1013,7 @@ endif
         endif
     end do
 
-    call t_stopf('edgeVunpack')
+    !call t_stopf('edgeVunpack')
     !call t_adj_detailf(-2)
 
   end subroutine edgeVunpack
