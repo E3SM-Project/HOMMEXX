@@ -18,24 +18,32 @@ class EulerStepFunctor {
   Control          m_data;
   const Elements   m_elements;
   const Derivative m_deriv;
+  bool             m_kernel_will_run_limiters;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
 public:
 
-  static size_t team_shmem_size (const int team_size) {
-    return Memory<ExecSpace>::on_gpu ? team_size * m_mem_per_team : 0;
-  }
-
   EulerStepFunctor (const Control& data)
    : m_data    (data)
    , m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
+   , m_kernel_will_run_limiters(false)
   {
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
     }
+  }
+
+  static size_t limiter_team_shmem_size (const int team_size) {
+    return Memory<ExecSpace>::on_gpu ?
+      (team_size * m_mem_per_team) :
+      0;
+  }
+
+  size_t team_shmem_size (const int team_size) const {
+    return m_kernel_will_run_limiters ? limiter_team_shmem_size(team_size) : 0;
   }
 
   struct BIHPre {};
@@ -162,6 +170,7 @@ public:
       ExecSpace::fence();
       GPTLstop("esf-aal-noq run");
       GPTLstart("esf-aal-q run");
+      m_kernel_will_run_limiters = true;
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
               m_data.num_elems * m_data.qsize),
