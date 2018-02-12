@@ -238,6 +238,7 @@ private:
   void free_requests();
   // Only the impl knows about the raw pointer.
   void exchange(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
+public: // This is semantically private but must be public for nvcc.
   void recv_and_unpack(const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp, int nets, int nete);
 };
 
