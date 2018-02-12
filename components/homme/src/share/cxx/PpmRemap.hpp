@@ -25,18 +25,19 @@ using Kokkos::Impl::MEMORY_ALIGNMENT;
 // If sizeof(Real) doesn't divide the memory alignment value for the
 // architecture, we're in trouble regardless
 static constexpr int Real_Alignment =
-    Kokkos::Impl::MEMORY_ALIGNMENT / sizeof(Real);
+	max(int(Kokkos::Impl::MEMORY_ALIGNMENT / sizeof(Real)), 1);
+static constexpr int Vector_Alignment = max(Real_Alignment / VECTOR_SIZE, 1);
 
-static constexpr int _gs = 2;
+static constexpr int gs = 2;
 
 // Padding to improve memory access alignment
 static constexpr int INITIAL_PADDING =
-    lcm(int(_gs), int(VECTOR_SIZE), Real_Alignment);
+    lcm(int(gs), int(VECTOR_SIZE), Real_Alignment);
 static constexpr int VECTOR_PADDING = INITIAL_PADDING / VECTOR_SIZE;
 
 // ghost cells, length 2, on both boundaries
 static constexpr int DPO_PHYSICAL_LEV =
-    NUM_PHYSICAL_LEV + INITIAL_PADDING + _gs;
+    NUM_PHYSICAL_LEV + INITIAL_PADDING + gs;
 static constexpr int DPO_LEV = DPO_PHYSICAL_LEV / VECTOR_SIZE;
 
 // cumulative integral of source, 0 start, with extra level as absolute maximum
@@ -51,7 +52,7 @@ static constexpr int PPMDX_PHYSICAL_LEV = NUM_PHYSICAL_LEV + 2;
 static constexpr int PPMDX_LEV = PPMDX_PHYSICAL_LEV / VECTOR_SIZE;
 
 // ghost cells, length 2, on both boundaries
-static constexpr int AO_PHYSICAL_LEV = NUM_PHYSICAL_LEV + INITIAL_PADDING + _gs;
+static constexpr int AO_PHYSICAL_LEV = NUM_PHYSICAL_LEV + INITIAL_PADDING + gs;
 static constexpr int AO_LEV = AO_PHYSICAL_LEV / VECTOR_SIZE;
 
 static constexpr int MASS_O_PHYSICAL_LEV = NUM_PHYSICAL_LEV + 1;
@@ -138,7 +139,7 @@ struct PpmFixed : public PpmBoundaryConditions {
       ExecViewUnmanaged<const Real[_ppm_consts::AO_PHYSICAL_LEV]> cell_means,
       ExecViewUnmanaged<Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs) {
     const auto INITIAL_PADDING = _ppm_consts::INITIAL_PADDING;
-    const auto gs = _ppm_consts::_gs;
+    const auto gs = _ppm_consts::gs;
     parabola_coeffs(0, 0) = cell_means(INITIAL_PADDING);
     parabola_coeffs(0, 1) = cell_means(INITIAL_PADDING + 1);
 
@@ -168,7 +169,7 @@ struct PpmVertRemap : public VertRemapAlg {
                 "PpmVertRemap requires a valid PPM "
                 "boundary condition");
   static constexpr auto remap_dim = _remap_dim;
-  const int gs = _ppm_consts::_gs;
+  const int gs = _ppm_consts::gs;
 
   explicit PpmVertRemap(const int num_elems)
       : dpo(ExecViewManaged<Real * [NP][NP][_ppm_consts::DPO_PHYSICAL_LEV]>(
@@ -264,11 +265,11 @@ struct PpmVertRemap : public VertRemapAlg {
 
                 ao[remap_idx](kv.ie, igp, jgp,
                               NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING -
-                                  _ppm_consts::_gs + k_0 + 1 + 1) =
+                                  _ppm_consts::gs + k_0 + 1 + 1) =
                     ao[remap_idx](kv.ie, igp, jgp,
                                   NUM_PHYSICAL_LEV +
                                       _ppm_consts::INITIAL_PADDING -
-                                      _ppm_consts::_gs + 1 - k_0 - 1 + 1);
+                                      _ppm_consts::gs + 1 - k_0 - 1 + 1);
               }); // end ghost cell loop
 
           // Computes a monotonic and conservative PPM reconstruction
@@ -415,7 +416,7 @@ struct PpmVertRemap : public VertRemapAlg {
       // result view
       ExecViewUnmanaged<Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs) const {
     const auto INITIAL_PADDING = _ppm_consts::INITIAL_PADDING;
-    const auto gs = _ppm_consts::_gs;
+    const auto gs = _ppm_consts::gs;
     {
       auto bounds = boundaries::ppm_indices_1();
       Kokkos::parallel_for(
