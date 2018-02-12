@@ -1,9 +1,9 @@
 #ifndef HOMMEXX_HYPERVISCOSITY_FUNCTOR_HPP
 #define HOMMEXX_HYPERVISCOSITY_FUNCTOR_HPP
 
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
+#include "SimulationParams.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
 
@@ -12,6 +12,21 @@ namespace Homme
 
 class HyperviscosityFunctor
 {
+  struct HyperviscosityData {
+    int     np1;
+    Real    dt;
+
+    int     hypervis_subcycle;
+
+    Real    nu_ratio;
+    Real    nu_top;
+    Real    nu;
+    Real    nu_s;
+    Real    nu_p;
+
+    Real    eta_ave_w;
+  };
+
 public:
 
   struct TagFirstLaplace {};
@@ -20,9 +35,9 @@ public:
   struct TagApplyInvMass {};
   struct TagHyperPreExchange {};
 
-  HyperviscosityFunctor (const Control& data, const Elements& elements, const Derivative& deriv);
+  HyperviscosityFunctor (const SimulationParams& params, const Elements& elements, const Derivative& deriv);
 
-  void run (const int hypervis_subcycle);
+  void run (const int np1, const Real dt, const Real eta_ave_w);
 
   void biharmonic_wk_dp3d () const;
 
@@ -135,10 +150,10 @@ public:
         m_elements.m_derived_dpdiss_ave(kv.ie, igp, jgp, lev) +=
             m_data.eta_ave_w *
             m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, lev) /
-            m_hypervis_subcycle;
+            m_data.hypervis_subcycle;
         m_elements.m_derived_dpdiss_biharmonic(kv.ie, igp, jgp, lev) +=
             m_data.eta_ave_w * m_elements.buffers.dptens(kv.ie, igp, jgp, lev) /
-            m_hypervis_subcycle;
+            m_data.hypervis_subcycle;
       });
     });
     kv.team_barrier();
@@ -237,10 +252,9 @@ public:
     });
   }
 
-  int m_hypervis_subcycle;
-  Control       m_data;
-  Elements      m_elements;
-  Derivative    m_deriv;
+  HyperviscosityData  m_data;
+  Elements            m_elements;
+  Derivative          m_deriv;
 
   ExecViewManaged<Scalar[NUM_LEV]> m_nu_scale_top;
 };
