@@ -102,8 +102,8 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   // Create the functor
   CaarFunctor functor(Context::singleton().get_elements(),
                       Context::singleton().get_derivative(),
-                      Context::singleton().get_hvcoord());
-  functor.set_rsplit(Context::singleton().get_simulation_params().rsplit);
+                      Context::singleton().get_hvcoord(),
+                      Context::singleton().get_simulation_params().rsplit);
   functor.set_n0_qdp(n0_qdp);
 
   // Setup the boundary exchange

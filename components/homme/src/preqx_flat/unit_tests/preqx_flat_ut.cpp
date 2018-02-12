@@ -97,9 +97,9 @@ void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
  */
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
-  compute_subfunctor_test(Elements &elements)
+  compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
       : functor(elements, Context::singleton().get_derivative(),
-        Context::singleton().get_hvcoord()),
+        Context::singleton().get_hvcoord(),rsplit_in),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -112,7 +112,8 @@ public:
         metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), dvv("dvv"),
-        rsplit(0) {
+        rsplit(rsplit_in)
+        {
 
 //make these random
     Real hybrid_am[NUM_PHYSICAL_LEV] = { 0 };
@@ -121,7 +122,6 @@ public:
     Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
 
     functor.set_n0_qdp(n0_qdp);
-    functor.set_rsplit(rsplit);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
 //is this one random?
@@ -192,16 +192,6 @@ public:
 
 private:
   int rsplit;
-
-public:
-  int return_rsplit(){
-    return rsplit;
-  }
-
-  void set_rsplit(int _rsplit){
-    assert(_rsplit >= 0);
-    rsplit = _rsplit;
-  };
 };
 
 class compute_energy_grad_test {
@@ -644,7 +634,6 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   TestType test_functor(elements);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
-  test_functor.functor.set_rsplit(0);
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                    TestType::dt, TestType::eta_ave_w, false);
 
@@ -971,11 +960,6 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
-//  test_functor.functor.m_data.init(1, num_elems, num_elems, TestType::nm1,
-//       TestType::n0, TestType::np1, TestType::n0_qdp, TestType::dt, TestType::ps0, false,
-//       TestType::eta_ave_w, test_functor.return_rsplit(),
-//       hybrid_am_mirror.data(), hybrid_ai_mirror.data(),
-//       hybrid_bm_mirror.data(), hybrid_bi_mirror.data());
   // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
   HybridVCoord& hvc = Context::singleton().get_hvcoord();
   hvc.init(TestType::ps0,
@@ -984,10 +968,10 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bm_mirror.data(),
            hybrid_bi_mirror.data());
 
-  TestType test_functor(elements);
+  constexpr int rsplit = 0;
+  TestType test_functor(elements,rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
-  test_functor.functor.set_rsplit(test_functor.return_rsplit());
 
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
@@ -1076,13 +1060,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bm_mirror.data(),
            hybrid_bi_mirror.data());
 
-  TestType test_functor(elements);
-  const int rsplit = 0;
-  test_functor.set_rsplit(rsplit);
-
+  constexpr int rsplit = 0;
+  TestType test_functor(elements,rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
-  test_functor.functor.set_rsplit(test_functor.return_rsplit());
 
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                          TestType::dt, TestType::eta_ave_w, false);

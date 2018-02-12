@@ -745,7 +745,8 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
                 "RemapFunctor not given a remap algorithm to use");
 
   struct RemapData {
-    int         qsize;
+    RemapData(const int qsize_in) : qsize(qsize_in) {}
+    const int   qsize;
     int         np1;
     int         n0_qdp;
     Real        dt;
@@ -764,14 +765,14 @@ struct RemapFunctor : public Remapper, public _RemapFunctorRSplit<nonzero_rsplit
 
   explicit RemapFunctor(const int qsize, const Elements &elements, const HybridVCoord& hvcoord)
       : _RemapFunctorRSplit<nonzero_rsplit>(elements.num_elems()),
-        m_elements(elements), m_hvcoord(hvcoord),
+        m_data(qsize), m_elements(elements), m_hvcoord(hvcoord),
         m_tgt_layer_thickness("Target Layer Thickness", elements.num_elems()),
         valid_layer_thickness(
             "Check for whether the surface thicknesses are positive",
             elements.num_elems()),
         host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
         m_remap(elements.num_elems()) {
-    m_data.qsize = qsize;
+    // Nothing to be done here
   }
 
   void input_valid_assert() {

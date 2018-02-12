@@ -19,13 +19,18 @@ namespace Homme {
 class EulerStepFunctor {
 
   struct EulerStepData {
-    int         qsize;
-    int         limiter_option;
+    EulerStepData (const int qsize_in, const int limiter_option_in,
+                   const Real nu_p_in, const Real nu_q_in) :
+                   qsize(qsize_in), limiter_option(limiter_option_in),
+                   nu_p(nu_p_in), nu_q(nu_q_in) {}
+
+    const int   qsize;
+    const int   limiter_option;
     Real        rhs_viss;
     Real        rhs_multiplier;
 
-    Real        nu_p;
-    Real        nu_q;
+    const Real  nu_p;
+    const Real  nu_q;
 
     Real        dt;
     int         np1_qdp;
@@ -34,10 +39,10 @@ class EulerStepFunctor {
     DSSOption   DSSopt;
   };
 
-  EulerStepData       m_data;
   const Elements      m_elements;
   const Derivative    m_deriv;
   const HybridVCoord  m_hvcoord;
+  EulerStepData       m_data;
 
   bool                m_kernel_will_run_limiters;
 
@@ -49,12 +54,9 @@ public:
    : m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
    , m_hvcoord (Context::singleton().get_hvcoord())
+   , m_data (params.qsize,params.limiter_option,params.nu_p,params.nu_q)
   {
-    m_data.limiter_option = params.limiter_option;
-    m_data.qsize = params.qsize;
     m_data.rhs_viss = 0.0;
-    m_data.nu_p = params.nu_p;
-    m_data.nu_q = params.nu_q;
 
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",

@@ -13,18 +13,24 @@ namespace Homme
 class HyperviscosityFunctor
 {
   struct HyperviscosityData {
-    int     np1;
-    Real    dt;
+    HyperviscosityData(const int hypervis_subcycle_in, const Real nu_ratio_in, const Real nu_top_in,
+                       const Real nu_in, const Real nu_p_in, const Real nu_s_in)
+                      : hypervis_subcycle(hypervis_subcycle_in), nu_ratio(nu_ratio_in)
+                      , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in) {}
 
-    int     hypervis_subcycle;
 
-    Real    nu_ratio;
-    Real    nu_top;
-    Real    nu;
-    Real    nu_s;
-    Real    nu_p;
+    const int   hypervis_subcycle;
 
-    Real    eta_ave_w;
+    const Real  nu_ratio;
+    const Real  nu_top;
+    const Real  nu;
+    const Real  nu_p;
+    const Real  nu_s;
+
+    int         np1;
+    Real        dt;
+
+    Real        eta_ave_w;
   };
 
 public:
@@ -252,9 +258,9 @@ public:
     });
   }
 
-  HyperviscosityData  m_data;
   Elements            m_elements;
   Derivative          m_deriv;
+  HyperviscosityData  m_data;
 
   ExecViewManaged<Scalar[NUM_LEV]> m_nu_scale_top;
 };
