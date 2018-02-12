@@ -70,9 +70,9 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   assert (be.is_registration_completed());
 
   // Exchange
-  GPTLstart("biwksc_bexchV");
+  GPTLstart("biwkdp3d_bexchV");
   be.exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
-  GPTLstop("biwksc_bexchV");
+  GPTLstop("biwkdp3d_bexchV");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
