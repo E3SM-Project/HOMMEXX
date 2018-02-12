@@ -2,7 +2,6 @@
 
 #include "BuffersManager.hpp"
 #include "Context.hpp"
-#include "Control.hpp"
 #include "KernelVariables.hpp"
 #include "profiling.hpp"
 

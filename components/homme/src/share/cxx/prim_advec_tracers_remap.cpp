@@ -1,11 +1,6 @@
 #include "Context.hpp"
-#include "Control.hpp"
-#include "Derivative.hpp"
-#include "Elements.hpp"
 #include "EulerStepFunctor.hpp"
-#include "KernelVariables.hpp"
 #include "SimulationParams.hpp"
-#include "SphereOperators.hpp"
 #include "TimeLevel.hpp"
 
 namespace Homme

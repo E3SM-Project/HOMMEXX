@@ -4,7 +4,6 @@
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
-#include "mpi/BuffersManager.hpp"
 
 namespace Homme
 {
@@ -114,18 +113,8 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
     ss << "caar tl " << tl;
     be[tl] = Context::singleton().get_boundary_exchange(ss.str());
 
-    // If it was not yet created, create it and set it up
-    if (!be[tl]->is_registration_completed()) {
-      std::shared_ptr<BuffersManager> buffers_manager = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-      be[tl]->set_buffers_manager(buffers_manager);
-
-      // Set the views of this time level into this time level's boundary exchange
-      be[tl]->set_num_fields(0,0,4);
-      be[tl]->register_field(elements.m_v,tl,2,0);
-      be[tl]->register_field(elements.m_t,1,tl);
-      be[tl]->register_field(elements.m_dp3d,1,tl);
-      be[tl]->registration_completed();
-    }
+    // Sanity check
+    assert (be[tl]->is_registration_completed());
   }
 
   // ===================== RK STAGES ===================== //
