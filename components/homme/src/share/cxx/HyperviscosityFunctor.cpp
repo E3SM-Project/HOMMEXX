@@ -34,9 +34,10 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
   auto policy_pre_exchange =
       Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
           m_data.num_elems);
-  if ( ! m_be) {
-    m_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor");
-    assert (be.is_registration_completed());    
+  static BoundaryExchange* s_be;
+  if ( ! s_be) {
+    s_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor").get();
+    assert (s_be->is_registration_completed());    
   }
   for (int icycle = 0; icycle < hypervis_subcycle; ++icycle) {
     biharmonic_wk_dp3d ();
@@ -46,7 +47,7 @@ void HyperviscosityFunctor::run (const int hypervis_subcycle)
 
     // Exchange
     GPTLstart("ahdp_bexchV2");
-    m_be->exchange(m_data.nets, m_data.nete);
+    s_be->exchange(m_data.nets, m_data.nete);
     GPTLstop("ahdp_bexchV2");
 
     // Update states
@@ -64,14 +65,15 @@ void HyperviscosityFunctor::biharmonic_wk_dp3d() const
   Kokkos::fence();
 
   // Get be structure
-  if ( ! m_be) {
-    m_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor");
-    assert (be.is_registration_completed());    
+  static BoundaryExchange* s_be;
+  if ( ! s_be) {
+    s_be = Context::singleton().get_boundary_exchange("HyperviscosityFunctor").get();
+    assert (s_be->is_registration_completed());    
   }
 
   // Exchange
   GPTLstart("biwkdp3d_bexchV");
-  m_be->exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
+  s_be->exchange(m_elements.m_rspheremp, m_data.nets, m_data.nete);
   GPTLstop("biwkdp3d_bexchV");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu

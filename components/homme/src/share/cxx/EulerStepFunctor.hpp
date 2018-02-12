@@ -365,9 +365,9 @@ public:
 
   void neighbor_minmax() {
     GPTLstart("nmm_bexchS");
-    static std::shared_ptr<BoundaryExchange> s_nmm_bexch; //TODO Rm when functor is created just once.
+    static BoundaryExchange* s_nmm_bexch; //TODO Rm when functor is created just once.
     if ( ! s_nmm_bexch)
-      s_nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler");
+      s_nmm_bexch = Context::singleton().get_boundary_exchange("min max Euler").get();
     assert(s_nmm_bexch->is_registration_completed());
     s_nmm_bexch->exchange_min_max(m_data.nets, m_data.nete);
     GPTLstop("nmm_bexchS");
@@ -383,7 +383,7 @@ public:
     // stack frame up of euler_step in F90, making it set the common parameters
     // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
     const int idx = 3*(static_cast<int>(m_data.DSSopt) - 1) + m_data.np1_qdp;
-    static std::shared_ptr<BoundaryExchange> s_eus_bexchs[9]; //TODO Rm when functor is created just once.
+    static BoundaryExchange* s_eus_bexchs[9]; //TODO Rm when functor is created just once.
     if ( ! s_eus_bexchs[idx]) {
       std::stringstream ss;
       ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
@@ -393,7 +393,7 @@ public:
                                           : "div_vdp_ave") << " " << m_data.np1_qdp;
       const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
           Context::singleton().get_boundary_exchange(ss.str());
-      s_eus_bexchs[idx] = be_qdp_dss_var;
+      s_eus_bexchs[idx] = be_qdp_dss_var.get();
     }
     s_eus_bexchs[idx]->exchange(m_elements.m_rspheremp);
     GPTLstop("eus_bexchV");
@@ -604,7 +604,7 @@ private:
     const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
 
-#if 0
+#if 1
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
 #else
 #define fork for (int k = 0; k < NP2; ++k)
@@ -717,7 +717,7 @@ private:
   // x), where the limiter possibly alters x to place it in the constraint set
   //    {x: (i) minp <= x_k <= maxp and (ii) c'x = mass }.
   template <typename Limit, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
-  KOKKOS_INLINE_FUNCTION static void
+  KOKKOS_FORCEINLINE_FUNCTION static void
   with_limiter_shell (const TeamMember& team, const Limit& limit,
                       const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
                       const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
@@ -790,7 +790,7 @@ public: // Expose for unit testing.
                            const ArrayGll& sphweights, const ArrayGllLvl& dpmass,
                            const Array2Lvl& qlim, const ArrayGllLvl& ptens) {
     struct Limit {
-      KOKKOS_INLINE_FUNCTION void
+      KOKKOS_FORCEINLINE_FUNCTION void
       operator() (const TeamMember& team, const Real& mass,
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
@@ -802,6 +802,7 @@ public: // Expose for unit testing.
         const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
         using Kokkos::parallel_for;
 
+#if 0
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
           Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
@@ -840,7 +841,52 @@ public: // Expose for unit testing.
               });
           }
         }
+#else
+#define fork for (int k = 0; k < NP2; ++k)
+        for (int iter = 0; iter < 15; ++iter) {
+          Real addmass = 0;
+          fork {
+            if (x[k] > maxp) {
+              addmass += (x[k] - maxp)*c[k];
+              x[k] = maxp;
+            } else if (x[k] < minp) {
+              addmass += (x[k] - minp)*c[k];
+              x[k] = minp;
+            }
+          }
+
+          if (std::abs(addmass) <= 5e-14*std::abs(mass))
+            break;
+
+          Real weightssum = 0;
+          if (addmass > 0) {
+            fork {
+              if (x[k] < maxp)
+                weightssum += c[k];
+            }
+            const auto adw = addmass/weightssum;
+#pragma ivdep
+#pragma simd
+            fork {
+              if (x[k] < maxp)
+                x[k] += adw;
+            }
+          } else {
+            fork {
+              if (x[k] > minp)
+                weightssum += c[k];
+            }
+            const auto adw = addmass/weightssum;
+#pragma ivdep
+#pragma simd
+            fork {
+              if (x[k] > minp)
+                x[k] += adw;
+            }
+          }
+        }
       }
+#endif
     };
 
     with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
