@@ -6,7 +6,7 @@
 
 #undef NDEBUG
 
-#include "CaarFunctor.hpp"
+#include "CaarFunctorImpl.hpp"
 #include "EulerStepFunctorImpl.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
