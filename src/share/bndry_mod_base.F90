@@ -137,7 +137,6 @@ contains
         buffer%receive(iptr:iptr+length-1) = buffer%buf(iptr:iptr+length-1)
     endif
 !pw call t_stopf('bndry_copy')
-
   end subroutine bndry_exchangeV_core
 
   subroutine bndry_exchangeS_core(par,ithr,buffer)

@@ -36,6 +36,12 @@ using Hommexx_Serial = Kokkos::Serial;
 using Hommexx_Serial = void;
 #endif
 
+#ifdef KOKKOS_HAVE_CUDA
+# define HOMMEXX_STATIC
+#else
+# define HOMMEXX_STATIC static
+#endif
+
 // Selecting the execution space. If no specific request, use Kokkos default
 // exec space
 #if defined(HOMMEXX_CUDA_SPACE)
