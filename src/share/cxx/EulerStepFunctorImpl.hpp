@@ -45,6 +45,7 @@ class EulerStepFunctorImpl {
 
   bool                m_kernel_will_run_limiters;
 
+  std::shared_ptr<BoundaryExchange> m_mm_be;
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, 3*Q_NUM_TIME_LEVELS> m_bes;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
@@ -73,9 +74,17 @@ public:
   void init_boundary_exchanges () {
     assert(m_data.qsize >= 0); // after reset() called
 
-    auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-    auto bm_exchange_minmax = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
+    {
+      auto bm_exchange_minmax = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
+      m_mm_be = std::make_shared<BoundaryExchange>();
+      BoundaryExchange& be = *m_mm_be;
+      be.set_buffers_manager(bm_exchange_minmax);
+      be.set_num_fields(m_data.qsize, 0, 0);
+      be.register_min_max_fields(m_elements.buffers.qlim, m_data.qsize, 0);
+      be.registration_completed(); 
+    }
 
+    auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
     for (int np1_qdp = 0, k = 0; np1_qdp < Q_NUM_TIME_LEVELS; ++np1_qdp) {
       for (int dssi = 0; dssi < 3; ++dssi, ++k) {
         m_bes[k] = std::make_shared<BoundaryExchange>();
@@ -113,8 +122,6 @@ public:
    */
   void compute_biharmonic_pre() {
     profiling_resume();
-    GPTLstart("esf-bih-pre run");
-
     assert(m_data.rhs_multiplier == 2.0);
     m_data.rhs_viss = 3.0;
 
@@ -123,14 +130,11 @@ public:
                          *this);
 
     ExecSpace::fence();
-    GPTLstop("esf-bih-pre run");
     profiling_pause();
   }
 
   void compute_biharmonic_post() {
     profiling_resume();
-    GPTLstart("esf-bih-post run");
-
     assert(m_data.rhs_multiplier == 2.0);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
@@ -138,7 +142,6 @@ public:
                          *this);
 
     ExecSpace::fence();
-    GPTLstop("esf-bih-post run");
     profiling_pause();
   }
 
@@ -211,16 +214,12 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    GPTLstart("esf-aal-tot run");
     if (OnGpu<ExecSpace>::value) {
-      GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
               m_elements.num_elems()),
           *this);
       ExecSpace::fence();
-      GPTLstop("esf-aal-noq run");
-      GPTLstart("esf-aal-q run");
       m_kernel_will_run_limiters = true;
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
@@ -228,7 +227,6 @@ public:
           *this);
       ExecSpace::fence();
       m_kernel_will_run_limiters = false;
-      GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(
@@ -236,7 +234,6 @@ public:
           *this);
     }
     ExecSpace::fence();
-    GPTLstop("esf-aal-tot run");
     profiling_pause();
   }
 
@@ -266,9 +263,7 @@ public:
 
   void precompute_divdp() {
     assert(m_data.qsize >= 0); // reset() already called
-
     profiling_resume();
-    GPTLstart("esf-precompute_divdp run");
 
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
@@ -276,7 +271,6 @@ public:
         *this);
 
     ExecSpace::fence();
-    GPTLstop("esf-precompute_divdp run");
     profiling_pause();
   }
 
@@ -388,15 +382,12 @@ public:
   }
 
   void neighbor_minmax_start() {
-    BoundaryExchange &be =
-        *Context::singleton().get_boundary_exchange("min max Euler");
-    be.pack_and_send_min_max();
+    assert(m_mm_be->is_registration_completed());
+    m_mm_be->pack_and_send_min_max();
   }
 
   void neighbor_minmax_finish() {
-    BoundaryExchange &be =
-        *Context::singleton().get_boundary_exchange("min max Euler");
-    be.recv_and_unpack_min_max();
+    m_mm_be->recv_and_unpack_min_max();
   }
 
   void minmax_and_biharmonic() {
@@ -417,10 +408,8 @@ public:
   }
 
   void neighbor_minmax() {
-    BoundaryExchange &be =
-        *Context::singleton().get_boundary_exchange("min max Euler");
-    assert(be.is_registration_completed());
-    be.exchange_min_max();
+    assert(m_mm_be->is_registration_completed());
+    m_mm_be->exchange_min_max();
   }
 
   void exchange_qdp_dss_var () {
@@ -464,29 +453,17 @@ public:
       //        for nu_p=nu_q>0, we need to apply dissipation to Q *diffusion_dp
 
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
-      GPTLstart("bihmix_qminmax");
 
       compute_qmin_qmax();
 
       if (m_data.rhs_multiplier == 0.0) {
-        GPTLstart("eus_neighbor_minmax1");
         neighbor_minmax();
-        GPTLstop("eus_neighbor_minmax1");
       } else if (m_data.rhs_multiplier == 2.0) {
         minmax_and_biharmonic();
       }
-      GPTLstop("bihmix_qminmax");
     }
-    GPTLstart("eus_2d_advec");
-    GPTLstart("advance_qdp");
-
     advect_and_limit();
-
-    GPTLstop("advance_qdp");
-
     exchange_qdp_dss_var();
-
-    GPTLstop("eus_2d_advec");
   }
 
 private:
