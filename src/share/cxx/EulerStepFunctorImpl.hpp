@@ -19,22 +19,21 @@ namespace Homme {
 
 class EulerStepFunctorImpl {
   struct EulerStepData {
-    EulerStepData (const int qsize_in, const int limiter_option_in,
-                   const Real nu_p_in, const Real nu_q_in) :
-                   qsize(qsize_in), limiter_option(limiter_option_in),
-                   nu_p(nu_p_in), nu_q(nu_q_in) {}
+    EulerStepData ()
+      : qsize(-1), limiter_option(0), nu_p(0), nu_q(0)
+    {}
 
-    const int   qsize;
-    const int   limiter_option;
-    Real        rhs_viss;
-    Real        rhs_multiplier;
+    int   qsize;
+    int   limiter_option;
+    Real  rhs_viss;
+    Real  rhs_multiplier;
 
-    const Real  nu_p;
-    const Real  nu_q;
+    Real  nu_p;
+    Real  nu_q;
 
-    Real        dt;
-    int         np1_qdp;
-    int         n0_qdp;
+    Real  dt;
+    int   np1_qdp;
+    int   n0_qdp;
 
     DSSOption   DSSopt;
   };
@@ -50,13 +49,18 @@ class EulerStepFunctorImpl {
 
 public:
 
-  EulerStepFunctorImpl (const SimulationParams& params)
+  EulerStepFunctorImpl ()
    : m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
    , m_hvcoord (Context::singleton().get_hvcoord())
-   , m_data (params.qsize,params.limiter_option,params.nu_p,params.nu_q)
-  {
+  {}
+
+  void reset (const SimulationParams& params) {
     m_data.rhs_viss = 0.0;
+    m_data.qsize = params.qsize;
+    m_data.limiter_option = params.limiter_option;
+    m_data.nu_p = params.nu_p;
+    m_data.nu_q = params.nu_q;
 
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
@@ -248,6 +252,8 @@ public:
   struct PrecomputeDivDp {};
 
   void precompute_divdp() {
+    assert(m_data.qsize >= 0);
+
     profiling_resume();
     GPTLstart("esf-precompute_divdp run");
 

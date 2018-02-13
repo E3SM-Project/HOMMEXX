@@ -33,8 +33,9 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   TimeLevel& tl = Context::singleton().get_time_level();
   tl.update_tracers_levels(params.qsplit);
 
-  // Create the ESF
-  EulerStepFunctor esf(params);
+  // Get the ESF
+  EulerStepFunctor& esf = Context::singleton().get_euler_step_functor();
+  esf.reset(params);
 
   // Precompute divdp
   GPTLstart("tl-at precompute_divdp");
