@@ -6,6 +6,8 @@
 #include "SimulationParams.hpp"
 #include "Types.hpp"
 
+#include <memory>
+
 namespace Homme
 {
 
