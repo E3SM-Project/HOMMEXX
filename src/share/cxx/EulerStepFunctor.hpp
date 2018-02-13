@@ -4,7 +4,9 @@
 #include "Context.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
-#include "Control.hpp"
+#include "HybridVCoord.hpp"
+#include "HommexxEnums.hpp"
+#include "SimulationParams.hpp"
 #include "SphereOperators.hpp"
 #include "utilities/SubviewUtils.hpp"
 #include "utilities/VectorUtils.hpp"
@@ -15,27 +17,61 @@
 namespace Homme {
 
 class EulerStepFunctor {
-  Control          m_data;
-  const Elements   m_elements;
-  const Derivative m_deriv;
+
+  struct EulerStepData {
+    EulerStepData (const int qsize_in, const int limiter_option_in,
+                   const Real nu_p_in, const Real nu_q_in) :
+                   qsize(qsize_in), limiter_option(limiter_option_in),
+                   nu_p(nu_p_in), nu_q(nu_q_in) {}
+
+    const int   qsize;
+    const int   limiter_option;
+    Real        rhs_viss;
+    Real        rhs_multiplier;
+
+    const Real  nu_p;
+    const Real  nu_q;
+
+    Real        dt;
+    int         np1_qdp;
+    int         n0_qdp;
+
+    DSSOption   DSSopt;
+  };
+
+  const Elements      m_elements;
+  const Derivative    m_deriv;
+  const HybridVCoord  m_hvcoord;
+  EulerStepData       m_data;
+
+  bool                m_kernel_will_run_limiters;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
 public:
 
-  static size_t team_shmem_size (const int team_size) {
-    return Memory<ExecSpace>::on_gpu ? team_size * m_mem_per_team : 0;
-  }
-
-  EulerStepFunctor (const Control& data)
-   : m_data    (data)
-   , m_elements(Context::singleton().get_elements())
+  EulerStepFunctor (const SimulationParams& params)
+   : m_elements(Context::singleton().get_elements())
    , m_deriv   (Context::singleton().get_derivative())
+   , m_hvcoord (Context::singleton().get_hvcoord())
+   , m_data (params.qsize,params.limiter_option,params.nu_p,params.nu_q)
   {
+    m_data.rhs_viss = 0.0;
+
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
     }
+  }
+
+  static size_t limiter_team_shmem_size (const int team_size) {
+    return Memory<ExecSpace>::on_gpu ?
+      (team_size * m_mem_per_team) :
+      0;
+  }
+
+  size_t team_shmem_size (const int team_size) const {
+    return m_kernel_will_run_limiters ? limiter_team_shmem_size(team_size) : 0;
   }
 
   struct BIHPre {};
@@ -56,7 +92,7 @@ public:
     m_data.rhs_viss = 3.0;
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
-                             m_data.num_elems * m_data.qsize),
+                             m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
@@ -71,7 +107,7 @@ public:
     assert(m_data.rhs_multiplier == 2.0);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
-                             m_data.num_elems * m_data.qsize),
+                             m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
@@ -82,28 +118,31 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
     start_timer("esf-bih-pre compute");
-    KernelVariables kv(team, m_data.qsize);
+    const int ie = team.league_rank() / m_data.qsize;
+    const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
     if (m_data.nu_p > 0) {
-      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
+      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, ie);
       Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
           const int i = loop_idx / NP;
           const int j = loop_idx % NP;
           Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_data.dp0(k);
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_hvcoord.dp0(k);
             });
         });
-      kv.team_barrier();
+      team.team_barrier();
     }
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
-                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+    laplace_simple(team, m_deriv.get_dvv(),
+                   Homme::subview(e.m_dinv,ie),
+                   Homme::subview(e.m_spheremp,ie),
+                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
                    qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
     stop_timer("esf-bih-pre compute");
   }
@@ -111,42 +150,31 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
     start_timer("esf-bih-post compute");
-    KernelVariables kv(team, m_data.qsize);
+    const int ie = team.league_rank() / m_data.qsize;
+    const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
-    {
-      const auto rspheremp = Homme::subview(e.m_rspheremp, kv.ie);
-      Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
-        [&] (const int loop_idx) {
-          const int i = loop_idx / NP;
-          const int j = loop_idx % NP;
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-            [&] (const int& k) {
-              qtens_biharmonic(i,j,k) *= rspheremp(i,j);
-            });
-        });
-    }
-    kv.team_barrier();
-    laplace_simple(kv, e.m_dinv, e.m_spheremp, m_deriv.get_dvv(),
-                   Homme::subview(e.buffers.vstar_qdp, kv.ie, kv.iq),
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
+    team.team_barrier();
+    laplace_simple(team, m_deriv.get_dvv(),
+                   Homme::subview(e.m_dinv,ie),
+                   Homme::subview(e.m_spheremp,ie),
+                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
                    qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, kv.ie, kv.iq),
+                   Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
-      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+      const auto spheremp = Homme::subview(e.m_spheremp, ie);
       Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(kv.team, NP*NP),
+        Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
           const int i = loop_idx / NP;
           const int j = loop_idx % NP;
           Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
               qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
-                                         m_data.dp0(k) * qtens_biharmonic(i,j,k) /
+                                         m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
         });
@@ -165,21 +193,23 @@ public:
       GPTLstart("esf-aal-noq run");
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
-              m_data.num_elems),
+              m_elements.num_elems()),
           *this);
       ExecSpace::fence();
       GPTLstop("esf-aal-noq run");
       GPTLstart("esf-aal-q run");
+      m_kernel_will_run_limiters = true;
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
-              m_data.num_elems * m_data.qsize),
+              m_elements.num_elems() * m_data.qsize),
           *this);
       ExecSpace::fence();
+      m_kernel_will_run_limiters = false;
       GPTLstop("esf-aal-q run");
     } else {
       Kokkos::parallel_for(
           Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(
-              m_data.num_elems),
+              m_elements.num_elems()),
           *this);
     }
     ExecSpace::fence();
@@ -223,7 +253,7 @@ public:
 
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
-            m_data.num_elems),
+            m_elements.num_elems()),
         *this);
 
     ExecSpace::fence();
@@ -234,64 +264,25 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
     start_timer("esf-precompute_divdp compute");
-    KernelVariables kv(team);
-    divergence_sphere(kv, m_elements.m_dinv, m_elements.m_metdet,
-                      m_deriv.get_dvv(),
-                      Homme::subview(m_elements.m_derived_vn0, kv.ie),
-                      m_elements.buffers.div_buf,
-                      Homme::subview(m_elements.m_derived_divdp, kv.ie));
+    const int ie = team.league_rank();
+    divergence_sphere(team, m_deriv.get_dvv(),
+                      Homme::subview(m_elements.m_dinv,ie),
+                      Homme::subview(m_elements.m_metdet,ie),
+                      Homme::subview(m_elements.m_derived_vn0, ie),
+                      Homme::subview(m_elements.buffers.div_buf,ie),
+                      Homme::subview(m_elements.m_derived_divdp, ie));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
                            [&](const int ilev) {
-        m_elements.m_derived_divdp_proj(kv.ie, igp, jgp, ilev) =
-            m_elements.m_derived_divdp(kv.ie, igp, jgp, ilev);
+        m_elements.m_derived_divdp_proj(ie, igp, jgp, ilev) =
+            m_elements.m_derived_divdp(ie, igp, jgp, ilev);
       });
     });
 
     stop_timer("esf-precompute_divdp compute");
-  }
-
-  void apply_rspheremp() {
-    profiling_resume();
-    GPTLstart("esf-rspheremp run");
-
-    const auto f_dss = (m_data.DSSopt == Control::DSSOption::eta ?
-                        m_elements.m_eta_dot_dpdn :
-                        m_data.DSSopt == Control::DSSOption::omega ?
-                        m_elements.m_omega_p :
-                        m_elements.m_derived_divdp_proj);
-
-    const auto qdp = m_elements.m_qdp;
-    const auto rspheremp = m_elements.m_rspheremp;
-    const int qsize = m_data.qsize;
-    const int np1_qdp = m_data.np1_qdp;
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = it / (qsize*NP*NP*NUM_LEV);
-        const int q = (it / (NP*NP*NUM_LEV)) % qsize;
-        const int igp = (it / (NP*NUM_LEV)) % NP;
-        const int jgp = (it / NUM_LEV) % NP;
-        const int ilev = it % NUM_LEV;
-        qdp(ie,np1_qdp,q,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
-    });
-
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_data.num_elems*NP*NP*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = it / (NP*NP*NUM_LEV);
-        const int igp = (it / (NP*NUM_LEV)) % NP;
-        const int jgp = (it / NUM_LEV) % NP;
-        const int ilev = it % NUM_LEV;
-        f_dss(ie,igp,jgp,ilev) *= rspheremp(ie,igp,jgp);
-    });
-
-    ExecSpace::fence();
-    GPTLstop("esf-rspheremp run");
-    profiling_pause();
   }
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
@@ -299,7 +290,7 @@ public:
     const int qsize   = m_data.qsize;
 
     const Real rkstage = 3.0;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_data.num_elems*m_data.qsize*NP*NP*NUM_LEV),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_elements.num_elems()*m_data.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
       const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
@@ -324,7 +315,7 @@ public:
     const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
-    Kokkos::RangePolicy<ExecSpace> policy1(0, m_data.num_elems * m_data.qsize *
+    Kokkos::RangePolicy<ExecSpace> policy1(0, m_elements.num_elems() * m_data.qsize *
                                                   NP * NP * NUM_LEV);
     Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
       const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / qsize;
@@ -342,7 +333,7 @@ public:
     });
     ExecSpace::fence();
 
-    Kokkos::RangePolicy<ExecSpace> policy2(0, m_data.num_elems * m_data.qsize *
+    Kokkos::RangePolicy<ExecSpace> policy2(0, m_elements.num_elems() * m_data.qsize *
                                                   NUM_LEV);
     if (m_data.rhs_multiplier == 1.0) {
       Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
@@ -383,13 +374,13 @@ public:
   void neighbor_minmax_start() {
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
-    be.pack_and_send_min_max(m_data.nets, m_data.nete);
+    be.pack_and_send_min_max();
   }
 
   void neighbor_minmax_finish() {
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
-    be.recv_and_unpack_min_max(m_data.nets, m_data.nete);
+    be.recv_and_unpack_min_max();
   }
 
   void minmax_and_biharmonic() {
@@ -404,7 +395,7 @@ public:
     }
     neighbor_minmax_start();
     compute_biharmonic_pre();
-    be->exchange();
+    be->exchange(m_elements.m_rspheremp);
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
@@ -413,7 +404,7 @@ public:
     BoundaryExchange &be =
         *Context::singleton().get_boundary_exchange("min max Euler");
     assert(be.is_registration_completed());
-    be.exchange_min_max(m_data.nets, m_data.nete);
+    be.exchange_min_max();
   }
 
   void exchange_qdp_dss_var () {
@@ -421,25 +412,22 @@ public:
     // They differ only in the last field registered.
     // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
     // rather than one for qdp and one for the last DSS variable.
-    // TODO: move this setup in init_control_euler and move that function one
-    // stack frame up of euler_step in F90, making it set the common parameters
-    // to all euler_steps calls (nets, nete, dt, nu_p, nu_q)
 
     std::stringstream ss;
-    ss << "exchange qdp " << (m_data.DSSopt == Control::DSSOption::eta
+    ss << "exchange qdp " << (m_data.DSSopt == DSSOption::ETA
                                   ? "eta"
-                                  : m_data.DSSopt == Control::DSSOption::omega
+                                  : m_data.DSSopt == DSSOption::OMEGA
                                         ? "omega"
                                         : "div_vdp_ave") << " " << m_data.np1_qdp;
 
     const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
         Context::singleton().get_boundary_exchange(ss.str());
 
-    be_qdp_dss_var->exchange();
+    be_qdp_dss_var->exchange(m_elements.m_rspheremp);
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
-                  const Real rhs_multiplier, const Control::DSSOption::Enum DSSopt) {
+                  const Real rhs_multiplier, const DSSOption DSSopt) {
 
     m_data.n0_qdp         = n0_qdp;
     m_data.np1_qdp        = np1_qdp;
@@ -496,8 +484,6 @@ public:
 
     exchange_qdp_dss_var();
 
-    apply_rspheremp();
-
     GPTLstop("eus_2d_advec");
   }
 
@@ -531,9 +517,9 @@ private:
     const bool lim8 = c.limiter_option == 8;
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0.0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
-    const auto& f_dss = (c.DSSopt == Control::DSSOption::eta ?
+    const auto& f_dss = (c.DSSopt == DSSOption::ETA ?
                          e.m_eta_dot_dpdn :
-                         c.DSSopt == Control::DSSOption::omega ?
+                         c.DSSopt == DSSOption::OMEGA ?
                          e.m_omega_p :
                          e.m_derived_divdp_proj);
     Kokkos::parallel_for (
@@ -606,7 +592,7 @@ private:
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     divergence_sphere_update(
-      kv, -m_data.dt, 1.0, dinv, metdet, dvv,
+      kv.team, -m_data.dt, 1.0, dvv, dinv, metdet,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qwrk, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));

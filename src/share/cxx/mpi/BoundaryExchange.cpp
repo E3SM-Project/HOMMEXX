@@ -2,10 +2,13 @@
 
 #include "BuffersManager.hpp"
 #include "Context.hpp"
-#include "Control.hpp"
+#include "KernelVariables.hpp"
 #include "profiling.hpp"
 
 #include "utilities/VectorUtils.hpp"
+
+#define tstart(x)
+#define tstop(x)
 
 namespace Homme
 {
@@ -20,6 +23,8 @@ BoundaryExchange::BoundaryExchange()
 
   m_connectivity    = std::shared_ptr<Connectivity>();
   m_buffers_manager = std::shared_ptr<BuffersManager>();
+
+  m_num_elems = -1;
 
   // Prohibit registration until the number of fields has been set
   m_registration_started   = false;
@@ -70,6 +75,7 @@ void BoundaryExchange::set_connectivity (std::shared_ptr<Connectivity> connectiv
 
   // Set the connectivity
   m_connectivity = connectivity;
+  m_num_elems = connectivity->get_num_local_elements();
 }
 
 void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buffers_manager)
@@ -95,7 +101,7 @@ void BoundaryExchange::set_buffers_manager (std::shared_ptr<BuffersManager> buff
 
   // If I don't store a connectivity, take it from the buffers manager (if it has one)
   if (m_buffers_manager->is_connectivity_set() && !m_connectivity) {
-    m_connectivity = m_buffers_manager->get_connectivity();
+    set_connectivity(m_buffers_manager->get_connectivity());
   }
 
   // Add myself as a customer of the BM
@@ -123,9 +129,9 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   //       we will check that they match the 2nd dimension of m_1d_fields, m_2d_fields and m_3d_fields.
 
   // Create the fields views
-  m_1d_fields = decltype(m_1d_fields)("1d fields", m_connectivity->get_num_local_elements(), num_1d_fields);
-  m_2d_fields = decltype(m_2d_fields)("2d fields", m_connectivity->get_num_local_elements(), num_2d_fields);
-  m_3d_fields = decltype(m_3d_fields)("3d fields", m_connectivity->get_num_local_elements(), num_3d_fields);
+  m_1d_fields = decltype(m_1d_fields)("1d fields", m_num_elems, num_1d_fields);
+  m_2d_fields = decltype(m_2d_fields)("2d fields", m_num_elems, num_2d_fields);
+  m_3d_fields = decltype(m_3d_fields)("3d fields", m_num_elems, num_3d_fields);
 
   // Now we can start register fields
   m_registration_started   = true;
@@ -193,7 +199,15 @@ void BoundaryExchange::registration_completed()
   m_registration_completed = true;
 }
 
-void BoundaryExchange::exchange (int nets, int nete)
+void BoundaryExchange::exchange () {
+  exchange(nullptr);
+}
+
+void BoundaryExchange::exchange (ExecViewUnmanaged<const Real * [NP][NP]> rspheremp) {
+  exchange(&rspheremp);
+}
+
+void BoundaryExchange::exchange (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -219,13 +233,13 @@ void BoundaryExchange::exchange (int nets, int nete)
   m_recv_pending = true;
 
   // ---- Pack and send ---- //
-  pack_and_send (nets, nete);
+  pack_and_send ();
 
   // --- Recv and unpack --- //
-  recv_and_unpack (nets, nete);
+  recv_and_unpack (rspheremp);
 }
 
-void BoundaryExchange::exchange_min_max (int nets, int nete)
+void BoundaryExchange::exchange_min_max ()
 {
   // Check that the registration has completed first
   assert (m_registration_completed);
@@ -257,7 +271,7 @@ void BoundaryExchange::exchange_min_max (int nets, int nete)
   recv_and_unpack_min_max ();
 }
 
-void BoundaryExchange::pack_and_send (int nets, int nete)
+void BoundaryExchange::pack_and_send ()
 {
   GPTLstart("be pack_and_send");
   // The registration MUST be completed by now
@@ -280,34 +294,20 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
-    GPTLstart("be build_buffer_views_and_requests");
+    tstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
-    GPTLstop("be build_buffer_views_and_requests");
+    tstop("be build_buffer_views_and_requests");
   }
-
-  // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
-  //       capturing the this pointer correctly on the device.
-  auto connections = m_connectivity->get_connections<ExecMemSpace>();
-  auto fields_2d = m_2d_fields;
-  auto fields_3d = m_3d_fields;
-  auto send_2d_buffers = m_send_2d_buffers;
-  auto send_3d_buffers = m_send_3d_buffers;
-
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
 
   // ---- Pack ---- //
   // First, pack 2d fields (if any)...
-  GPTLstart("be pack");
-  const ConnectionHelpers helpers;
+  tstart("be pack");
+  auto connections = m_connectivity->get_connections<ExecMemSpace>();
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({nets, 0, 0}, {nete, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
+    auto fields_2d = m_2d_fields;
+    auto send_2d_buffers = m_send_2d_buffers;
+    const ConnectionHelpers helpers;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({0, 0, 0}, {m_num_elems, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
       const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
@@ -325,49 +325,103 @@ void BoundaryExchange::pack_and_send (int nets, int nete)
   }
   // ...then pack 3d fields (if any).
   if (m_num_3d_fields>0) {
+    auto fields_3d = m_3d_fields;
+    auto send_3d_buffers = m_send_3d_buffers;
     const auto num_3d_fields = m_num_3d_fields;
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = nets + it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
-        const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
-        const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
-        const int ilev = it % NUM_LEV;
-        const ConnectionInfo& info = connections(ie, iconn);
-        const LidGidPos& field_lidpos  = info.local;
-        // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
-        // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
-        // for local connections we need to manually copy on the remote element lid. We can do it here
-        const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+    if (OnGpu<ExecSpace>::value) {
+      const ConnectionHelpers helpers;
+      Kokkos::parallel_for(
+        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+        KOKKOS_LAMBDA(const int it) {
+          const int ie = it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
+          const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
+          const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
+          const int ilev = it % NUM_LEV;
+          const ConnectionInfo& info = connections(ie, iconn);
+          const LidGidPos& field_lidpos = info.local;
+          // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
+          // mpi call will take care of "copying" data to the remote recv buffer in the correct remote element lid,
+          // for local connections we need to manually copy on the remote element lid. We can do it here
+          const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-        // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
-        const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
-        for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
-          send_3d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(k, ilev) = fields_3d(field_lidpos.lid, ifield)(pts[k].ip, pts[k].jp, ilev);
-        }
-      });
+          // Note: if it is an edge and the remote edge is in the reverse order, we read the field_lidpos points backwards
+          const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+          const auto& sb = send_3d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
+          const auto& f3 = fields_3d(field_lidpos.lid, ifield);
+          for (int k=0; k<helpers.CONNECTION_SIZE[info.kind]; ++k) {
+            sb(k, ilev) = f3(pts[k].ip, pts[k].jp, ilev);
+          }
+        });
+    } else {
+      const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
+      ThreadPreferences tp;
+      tp.max_threads_usable = NUM_CONNECTIONS;
+      tp.max_vectors_usable = NUM_LEV;
+      const auto threads_vectors =
+        DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+          num_parallel_iterations, tp);
+      const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+        num_parallel_iterations, threads_vectors.first, threads_vectors.second);
+      HOMMEXX_STATIC const ConnectionHelpers helpers;
+      Kokkos::parallel_for(
+        policy,
+        KOKKOS_LAMBDA(const TeamMember& team) {
+          Homme::KernelVariables kv(team, num_3d_fields);
+          const int ie = kv.ie;
+          const int ifield = kv.iq;
+          for (int iconn = 0; iconn < 8; ++iconn) {
+            const ConnectionInfo& info = connections(ie, iconn);
+            if (info.kind == etoi(ConnectionSharing::MISSING)) continue;
+            const LidGidPos& field_lidpos = info.local;
+            const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
+                                              info.remote :
+                                              info.local);
+            const auto& pts = helpers.CONNECTION_PTS[info.direction][field_lidpos.pos];
+            const auto& sb = send_3d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
+            const auto& f3 = fields_3d(field_lidpos.lid, ifield);
+            Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(kv.team, helpers.CONNECTION_SIZE[info.kind]),
+              [&] (const int& k) {
+                const auto& ip = pts[k].ip;
+                const auto& jp = pts[k].jp;
+                auto* const sbp = &sb(k, 0);
+                const auto* const f3p = &f3(ip, jp, 0);
+                Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                  [&] (const int& ilev) {
+                    sbp[ilev] = f3p[ilev];
+                  });
+              });
+          }
+        });
+    }
   }
   ExecSpace::fence();
-  GPTLstop("be pack");
+  tstop("be pack");
 
   // ---- Send ---- //
-  GPTLstart("be sync_send_buffer");
+  tstart("be sync_send_buffer");
   m_buffers_manager->sync_send_buffer(this); // Deep copy send_buffer into mpi_send_buffer (no op if MPI is on device)
-  GPTLstop("be sync_send_buffer");
-  GPTLstart("be send");
+  tstop("be sync_send_buffer");
+  tstart("be send");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  GPTLstop("be send");
+  tstop("be send");
 
   // Notify a send is ongoing
   m_send_pending = true;
   GPTLstop("be pack_and_send");
 }
 
-void BoundaryExchange::recv_and_unpack (int nets, int nete)
+void BoundaryExchange::recv_and_unpack () {
+  recv_and_unpack(nullptr);
+}
+
+void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
   GPTLstart("be recv_and_unpack");
+  tstart("be recv_and_unpack book");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -394,42 +448,29 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
                               m_connectivity->get_comm().m_mpi_comm);
     m_recv_pending = true;
   }
+  tstop("be recv_and_unpack book");
 
   // ---- Recv ---- //
-  GPTLstart("be recv waitall");
+  tstart("be recv waitall");
   if ( ! m_recv_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size(), m_recv_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
   m_recv_pending = false;
-  GPTLstop("be recv waitall");
+  tstop("be recv waitall");
 
-  GPTLstart("be recv sync_recv_buffer");
+  tstart("be recv_and_unpack book");
   m_buffers_manager->sync_recv_buffer(this);
-  GPTLstop("be recv sync_recv_buffer");
 
-  // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
-  //       capturing the this pointer correctly on the device.
-  auto connections = m_connectivity->get_connections<ExecMemSpace>();
-  auto fields_2d = m_2d_fields;
-  auto fields_3d = m_3d_fields;
-  auto recv_2d_buffers = m_recv_2d_buffers;
-  auto recv_3d_buffers = m_recv_3d_buffers;
+  tstop("be recv_and_unpack book");
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
-  GPTLstart("be unpack");
+  tstart("be unpack");
   // --- Unpack --- //
   // First, unpack 2d fields (if any)...
-  const ConnectionHelpers helpers;
   if (m_num_2d_fields>0) {
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({nets, 0}, {nete, m_num_2d_fields}, {1, 1}),
+    auto fields_2d = m_2d_fields;
+    auto recv_2d_buffers = m_recv_2d_buffers;
+    const ConnectionHelpers helpers;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_num_elems, m_num_2d_fields}, {1, 1}),
                          KOKKOS_LAMBDA(const int ie, const int ifield) {
       for (int k=0; k<NP; ++k) {
         for (int iedge : helpers.UNPACK_EDGES_ORDER) {
@@ -449,48 +490,128 @@ void BoundaryExchange::recv_and_unpack (int nets, int nete)
   }
   // ...then unpack 3d fields.
   if (m_num_3d_fields>0) {
+    auto fields_3d = m_3d_fields;
+    auto recv_3d_buffers = m_recv_3d_buffers;
     const auto num_3d_fields = m_num_3d_fields;
-    Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_3d_fields*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
-        const int ie = nets + it / (num_3d_fields*NUM_LEV);
-        const int ifield = (it / NUM_LEV) % num_3d_fields;
-        const int ilev = it % NUM_LEV;
-        for (int k=0; k<NP; ++k) {
-          for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-            fields_3d(ie, ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
-                                  helpers.CONNECTION_PTS_FWD[iedge][k].jp, ilev)
-              += recv_3d_buffers(ie, ifield, iedge)(k, ilev);
+    if (OnGpu<ExecSpace>::value) {
+      const ConnectionHelpers helpers;
+      Kokkos::parallel_for(
+        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_LEV),
+        KOKKOS_LAMBDA(const int it) {
+          const int ie = it / (num_3d_fields*NUM_LEV);
+          const int ifield = (it / NUM_LEV) % num_3d_fields;
+          const int ilev = it % NUM_LEV;
+          const auto& f3 = fields_3d(ie, ifield);
+          for (int k=0; k<NP; ++k) {
+            for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+              f3(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
+                 helpers.CONNECTION_PTS_FWD[iedge][k].jp, ilev)
+                += recv_3d_buffers(ie, ifield, iedge)(k, ilev);
+            }
           }
-        }
-        for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-          if (recv_3d_buffers(ie, ifield, icorner).size() > 0)
-            fields_3d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
-                                  helpers.CONNECTION_PTS_FWD[icorner][0].jp, ilev)
-              += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
-        }
-      });
+          for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+            if (recv_3d_buffers(ie, ifield, icorner).size() > 0)
+              f3(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
+                 helpers.CONNECTION_PTS_FWD[icorner][0].jp, ilev)
+                += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
+          }
+        });
+      if (rspheremp) {
+        const auto r = *rspheremp;
+        Kokkos::parallel_for(
+          Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NP*NP*NUM_LEV),
+          KOKKOS_LAMBDA(const int it) {
+            const int ie = it / (num_3d_fields*NUM_LEV*NP*NP);
+            const int ifield = (it / (NP*NP*NUM_LEV)) % num_3d_fields;
+            const int i = (it / (NP*NUM_LEV)) % NP;
+            const int j = (it / NUM_LEV) % NP;
+            const int ilev = it % NUM_LEV;
+            fields_3d(ie, ifield)(i, j, ilev) *= r(ie, i, j);
+          });
+      }
+    } else {
+      const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
+      Kokkos::parallel_for(
+        Kokkos::TeamPolicy<ExecSpace>(num_parallel_iterations, 1, NUM_LEV),
+        KOKKOS_LAMBDA(const TeamMember& team) {
+          Homme::KernelVariables kv(team, num_3d_fields);
+          const int ie = kv.ie;
+          const int ifield = kv.iq;
+          const auto& f3 = fields_3d(ie, ifield);
+          const auto ef = [&] (const int& iedge, const int& k, const int& ip, const int& jp) {
+            const auto& r3 = recv_3d_buffers(ie, ifield, iedge);
+            // Using pointers here is a little bit of speedup that
+            // can't be ignored in a kernel as important as un/pack.
+            auto* const f3p = &f3(ip, jp, 0);
+            const auto* const r3p = &r3(k, 0);
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+                f3p[ilev] += r3p[ilev];
+              });
+          };
+          for (int k=0; k<NP; ++k) {
+            ef(0, k, 0,    k);
+            ef(1, k, NP-1, k);
+            ef(2, k, k,    0);
+            ef(3, k, k,    NP-1);
+          }
+          const auto cf = [&] (const int& icorner, const int& ip, const int& jp) {
+            const auto& r3 = recv_3d_buffers(ie, ifield, icorner);
+            if (r3.size() == 0)
+              return;
+            auto* const f3p = &f3(ip, jp, 0);
+            const auto* const r3p = &r3(0, 0);
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+                f3p[ilev] += r3p[ilev];
+              });
+          };
+          cf(4, 0,    0);
+          cf(5, 0,    NP-1);
+          cf(6, NP-1, 0);
+          cf(7, NP-1, NP-1);
+          if (rspheremp) {
+            for (int i = 0; i < NP; ++i)
+              for (int j = 0; j < NP; ++j) {
+                auto* const f3p = &f3(i, j, 0);
+                const auto& rsmp = (*rspheremp)(ie, i, j);
+                Kokkos::parallel_for(
+                  Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+                  [&] (const int& ilev) {
+                    f3p[ilev] *= rsmp;
+                  });
+              }
+          }
+        });
+    }
   }
   ExecSpace::fence();
-  GPTLstop("be unpack");
+  tstop("be unpack");
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
+
+  tstart("be waitall 2");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size(), m_send_requests.data(),
                                         MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
+  tstop("be waitall 2");
 
+  tstart("be recv_and_unpack book");
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
   m_send_pending = false;
   m_recv_pending = false;
+  tstop("be recv_and_unpack book");
   GPTLstop("be recv_and_unpack");
 }
 
-void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
+void BoundaryExchange::pack_and_send_min_max ()
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -516,9 +637,9 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   // since the last time this method was called, AND we are calling this method manually, without relying
   // on the exchange_min_max method to call it, then we need to rebuild all our internal buffer views
   if (!m_buffer_views_and_requests_built) {
-    GPTLstart("be build_buffer_views_and_requests");
+    tstart("be build_buffer_views_and_requests");
     build_buffer_views_and_requests();
-    GPTLstop("be build_buffer_views_and_requests");
+    tstop("be build_buffer_views_and_requests");
   }
 
   // NOTE: all of these temporary copies are necessary because of the issue of lambda function not
@@ -527,22 +648,13 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
   auto fields_1d   = m_1d_fields;
   auto send_1d_buffers = m_send_1d_buffers;
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
   // ---- Pack ---- //
-  GPTLstart("be pack minmax");
+  tstart("be mm pack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
-      const int ie = nets + it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
+      const int ie = it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
       const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
       const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
       const int ilev = it % NUM_LEV;
@@ -561,21 +673,21 @@ void BoundaryExchange::pack_and_send_min_max (int nets, int nete)
         fields_1d(field_lidpos.lid, ifield, MIN_ID)[ilev];
     });
   ExecSpace::fence();
-  GPTLstop("be pack minmax");
+  tstop("be mm pack");
 
   // ---- Send ---- //
-  GPTLstart("be send");
+  tstart("be mm send");
   m_buffers_manager->sync_send_buffer(this);
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  GPTLstop("be send");
+  tstop("be mm send");
 
   // Mark send buffer as busy
   m_send_pending = true;
 }
 
-void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
+void BoundaryExchange::recv_and_unpack_min_max ()
 {
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -604,11 +716,11 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   }
 
   // ---- Recv ---- //
-  GPTLstart("be recv waitall");
+  tstart("be mm recv waitall");
   if ( ! m_recv_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size(), m_recv_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be recv waitall");
+  tstop("be mm recv waitall");
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
@@ -618,22 +730,13 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
   auto fields_1d = m_1d_fields;
   auto recv_1d_buffers = m_recv_1d_buffers;
 
-  // If the user did not specify upper limit, process till the end of all elements
-  if (nete == -1) {
-    nete = m_connectivity->get_num_local_elements();
-  }
-
-  // Sanity check
-  assert (nete>nets);
-  assert (nets>=0);
-
   // --- Unpack --- //
-  GPTLstart("be unpack minmax");
+  tstart("be mm unpack");
   const auto num_1d_fields = m_num_1d_fields;
   Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, (nete - nets)*m_num_1d_fields*NUM_LEV),
+    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
     KOKKOS_LAMBDA(const int it) {
-      const int ie = nets + it / (num_1d_fields*NUM_LEV);
+      const int ie = it / (num_1d_fields*NUM_LEV);
       const int ifield = (it / NUM_LEV) % num_1d_fields;
       const int ilev = it % NUM_LEV;
       for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
@@ -651,17 +754,17 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
       }
     });
   ExecSpace::fence();
-  GPTLstop("be unpack minmax");
+  tstop("be mm unpack");
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
   // buffers. Therefore, we must ensure that, upon return, all buffers are
   // reusable.
-  GPTLstart("be recv waitall 2");
+  tstart("be mm recv waitall 2");
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_send_requests.size(), m_send_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  GPTLstop("be recv waitall 2");
+  tstop("be mm recv waitall 2");
 
   // Release the send/recv buffers
   m_buffers_manager->unlock_buffers();
@@ -671,8 +774,6 @@ void BoundaryExchange::recv_and_unpack_min_max (int nets, int nete)
 
 void BoundaryExchange::build_buffer_views_and_requests()
 {
-  const auto nle = m_connectivity->get_num_local_elements();
-
   // If we already set the buffers before, then nothing to be done here
   if (m_buffer_views_and_requests_built) {
     return;
@@ -733,12 +834,12 @@ void BoundaryExchange::build_buffer_views_and_requests()
   h_all_recv_buffers[etoi(ConnectionSharing::MISSING)] = buffers_manager->get_blackhole_recv_buffer().data();
 
   // Create buffer views
-  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer", nle, m_num_1d_fields);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer", nle, m_num_1d_fields);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer", nle, m_num_2d_fields);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer", nle, m_num_2d_fields);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", nle, m_num_3d_fields);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", nle, m_num_3d_fields);
+  m_send_1d_buffers = decltype(m_send_1d_buffers)("1d send buffer", m_num_elems, m_num_1d_fields);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("1d recv buffer", m_num_elems, m_num_1d_fields);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("2d send buffer", m_num_elems, m_num_2d_fields);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("2d recv buffer", m_num_elems, m_num_2d_fields);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("3d send buffer", m_num_elems, m_num_3d_fields);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("3d recv buffer", m_num_elems, m_num_3d_fields);
 
   std::vector<int> slot_idx_to_elem_conn_pair, pids, pid_offsets;
   init_slot_idx_to_elem_conn_pair(slot_idx_to_elem_conn_pair, pids, pid_offsets);
@@ -758,7 +859,7 @@ void BoundaryExchange::build_buffer_views_and_requests()
   auto h_send_3d_buffers = Kokkos::create_mirror_view(m_send_3d_buffers);
   auto h_recv_3d_buffers = Kokkos::create_mirror_view(m_recv_3d_buffers);
   auto h_connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+  for (int k = 0; k < m_num_elems*NUM_CONNECTIONS; ++k) {
     const int ie = slot_idx_to_elem_conn_pair[k] / NUM_CONNECTIONS;
     const int iconn = slot_idx_to_elem_conn_pair[k] % NUM_CONNECTIONS;
     {
@@ -875,8 +976,6 @@ void BoundaryExchange
   std::vector<int>& slot_idx_to_elem_conn_pair,
   std::vector<int>& pids, std::vector<int>& pid_offsets)
 {
-  const auto nle = m_connectivity->get_num_local_elements();
-
   struct IP {
     int i, ord, pid;
     bool operator< (const IP& o) const {
@@ -885,10 +984,10 @@ void BoundaryExchange
       return ord < o.ord;
     }
   };
-  std::vector<IP> i2remote(nle*NUM_CONNECTIONS);
+  std::vector<IP> i2remote(m_num_elems*NUM_CONNECTIONS);
 
   const auto& connections = m_connectivity->get_connections<HostMemSpace>();
-  for (int ie = 0; ie < nle; ++ie)
+  for (int ie = 0; ie < m_num_elems; ++ie)
     for (int iconn = 0; iconn < NUM_CONNECTIONS; ++iconn) {
       const auto& info = connections(ie, iconn);
       const int k = ie*NUM_CONNECTIONS + iconn;
@@ -916,11 +1015,11 @@ void BoundaryExchange
 
   // Collect the unique remote_pids and get the offsets of the contiguous blocks
   // of them.
-  slot_idx_to_elem_conn_pair.resize(nle*NUM_CONNECTIONS);
+  slot_idx_to_elem_conn_pair.resize(m_num_elems*NUM_CONNECTIONS);
   pids.clear();
   pid_offsets.clear();
   int prev_pid = -2;
-  for (int k = 0; k < nle*NUM_CONNECTIONS; ++k) {
+  for (int k = 0; k < m_num_elems*NUM_CONNECTIONS; ++k) {
     const auto& i2r = i2remote[k];
     if (i2r.pid > prev_pid && i2r.pid != -1) {
       pids.push_back(i2r.pid);
@@ -931,7 +1030,7 @@ void BoundaryExchange
     const int iconn = i2r.i % NUM_CONNECTIONS;
     slot_idx_to_elem_conn_pair[k] = ie*NUM_CONNECTIONS + iconn;
   }
-  pid_offsets.push_back(nle*NUM_CONNECTIONS);
+  pid_offsets.push_back(m_num_elems*NUM_CONNECTIONS);
 }
 
 void BoundaryExchange::clear_buffer_views_and_requests ()
