@@ -11,6 +11,10 @@ void EulerStepFunctor::reset (const SimulationParams& params) {
   p_->reset(params);
 }
 
+void EulerStepFunctor::init_boundary_exchanges () {
+  p_->init_boundary_exchanges();
+}
+
 void EulerStepFunctor::precompute_divdp () {
   p_->precompute_divdp();
 }

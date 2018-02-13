@@ -45,6 +45,8 @@ class EulerStepFunctorImpl {
 
   bool                m_kernel_will_run_limiters;
 
+  Kokkos::Array<std::shared_ptr<BoundaryExchange>, 3*Q_NUM_TIME_LEVELS> m_bes;
+
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
 
 public:
@@ -65,6 +67,27 @@ public:
     if (m_data.limiter_option == 4) {
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
+    }
+  }
+
+  void init_boundary_exchanges () {
+    assert(m_data.qsize >= 0); // after reset() called
+
+    auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+    auto bm_exchange_minmax = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
+
+    for (int np1_qdp = 0, k = 0; np1_qdp < Q_NUM_TIME_LEVELS; ++np1_qdp) {
+      for (int dssi = 0; dssi < 3; ++dssi, ++k) {
+        m_bes[k] = std::make_shared<BoundaryExchange>();
+        BoundaryExchange& be = *m_bes[k];
+        be.set_buffers_manager(bm_exchange);
+        be.set_num_fields(0, 0, m_data.qsize+1);
+        be.register_field(m_elements.m_qdp, np1_qdp, m_data.qsize, 0);
+        be.register_field(dssi == 0 ? m_elements.m_eta_dot_dpdn :
+                          dssi == 1 ? m_elements.m_omega_p :
+                          m_elements.m_derived_divdp_proj);
+        be.registration_completed();
+      }
     }
   }
 
@@ -252,7 +275,7 @@ public:
   struct PrecomputeDivDp {};
 
   void precompute_divdp() {
-    assert(m_data.qsize >= 0);
+    assert(m_data.qsize >= 0); // reset() already called
 
     profiling_resume();
     GPTLstart("esf-precompute_divdp run");
@@ -414,22 +437,8 @@ public:
   }
 
   void exchange_qdp_dss_var () {
-    // Note: we have three separate BE structures, all of which register qdp.
-    // They differ only in the last field registered.
-    // This allows us to have a SINGLE mpi call to exchange qsize+1 fields,
-    // rather than one for qdp and one for the last DSS variable.
-
-    std::stringstream ss;
-    ss << "exchange qdp " << (m_data.DSSopt == DSSOption::ETA
-                                  ? "eta"
-                                  : m_data.DSSopt == DSSOption::OMEGA
-                                        ? "omega"
-                                        : "div_vdp_ave") << " " << m_data.np1_qdp;
-
-    const std::shared_ptr<BoundaryExchange> be_qdp_dss_var =
-        Context::singleton().get_boundary_exchange(ss.str());
-
-    be_qdp_dss_var->exchange(m_elements.m_rspheremp);
+    const int idx = 3*m_data.np1_qdp + static_cast<int>(m_data.DSSopt);
+    m_bes[idx]->exchange(m_elements.m_rspheremp);
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
