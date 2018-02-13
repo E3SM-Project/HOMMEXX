@@ -114,6 +114,7 @@ void Context::clear() {
   elements_ = nullptr;
   derivative_ = nullptr;
   hvcoord_ = nullptr;
+  hyperviscosity_functor_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
