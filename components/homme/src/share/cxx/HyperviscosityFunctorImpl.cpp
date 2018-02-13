@@ -68,7 +68,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   Kokkos::fence();
 
   // Get be structure
-  std::string be_name = "HyperviscosityFunctorImpl";
+  std::string be_name = "HyperviscosityFunctor";
   BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
   assert (be.is_registration_completed());
 
