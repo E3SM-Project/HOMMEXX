@@ -2,12 +2,13 @@
 
 #include <limits>
 
-#include "CaarFunctor.hpp"
 #include "Elements.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
+#include "SphereOperators.hpp"
 #include "Types.hpp"
 #include "utilities/TestUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 #include <assert.h>
 #include <stdio.h>

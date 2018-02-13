@@ -15,12 +15,16 @@ class CaarFunctor {
 public:
 
   CaarFunctor();
-
   CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit);
+  CaarFunctor (const CaarFunctor&) = delete;
+
+  ~CaarFunctor();
+
+  CaarFunctor& operator= (const CaarFunctor&) = delete;
 
   void set_n0_qdp (const int n0_qdp);
 
-  void set_rk_stage_data (const int nm1, const int n0,   const int np1,
+  void set_rk_stage_data (const int nm1, const int n0, const int np1,
                           const Real dt, const Real eta_ave_w,
                           const bool compute_diagnostics);
 
@@ -31,11 +35,10 @@ public:
             const bool compute_diagnostics);
 private:
 
-  std::unique_ptr<CaarFunctorImpl>  m_caar_impl;
+  std::unique_ptr<CaarFunctorImpl>        m_caar_impl;
 
   // Setup the policies
-  Kokks::TeamPolicy<ExecSpace>      m_policy;
-
+  Kokkos::TeamPolicy<ExecSpace,void>      m_policy;
 };
 
 } // Namespace Homme
