@@ -6,7 +6,7 @@
 
 #undef NDEBUG
 
-#include "CaarFunctor.hpp"
+#include "CaarFunctorImpl.hpp"
 #include "EulerStepFunctor.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
@@ -158,7 +158,7 @@ public:
     ExecSpace::fence();
   }
 
-  CaarFunctor functor;
+  CaarFunctorImpl functor;
 
   // host
   // Arrays used to pass data to and from Fortran
@@ -197,7 +197,7 @@ private:
 class compute_energy_grad_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_energy_grad(kv);
   }
 };
@@ -286,7 +286,7 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
 class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.preq_omega_ps(kv);
   }
 };
@@ -352,7 +352,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
 class preq_hydrostatic_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.preq_hydrostatic(kv);
   }
 };
@@ -416,7 +416,7 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
 class dp3d_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_dp3d_np1(kv);
   }
 };
@@ -486,7 +486,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 class vdp_vn0_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_div_vdp(kv);
   }
 };
@@ -583,7 +583,7 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
 class pressure_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_pressure(kv);
   }
 };
@@ -621,7 +621,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   genRandArray(hybrid_bi_mirror, engine,
                std::uniform_real_distribution<Real>(0.0125, 10.0));
 
-  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctorImpl
   HybridVCoord& hvc = Context::singleton().get_hvcoord();
   hvc.init(TestType::ps0,
            hybrid_am_mirror.data(),
@@ -673,7 +673,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 class temperature_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_temperature_np1(kv);
   }
 };
@@ -749,7 +749,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
 class virtual_temperature_no_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_temperature_no_tracers_helper(kv);
   }
 };
@@ -804,7 +804,7 @@ TEST_CASE("virtual temperature no tracers",
 class virtual_temperature_with_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_temperature_tracers_helper(kv);
   }
 };
@@ -865,7 +865,7 @@ TEST_CASE("moist virtual temperature",
 class omega_p_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_omega_p(kv);
   }
 };
@@ -932,7 +932,7 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
 class accumulate_eta_dot_dpdn_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.accumulate_eta_dot_dpdn(kv);
   }
 };
@@ -960,7 +960,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_bm_mirror("hybrid_bm_host");
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_bi_mirror("hybrid_bi_host");
 
-  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctorImpl
   HybridVCoord& hvc = Context::singleton().get_hvcoord();
   hvc.init(TestType::ps0,
            hybrid_am_mirror.data(),
@@ -1007,7 +1007,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 class eta_dot_dpdn_vertadv_euler_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.compute_eta_dot_dpdn_vertadv_euler(kv);
   }
 };
@@ -1052,7 +1052,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(sdot_sum_f90, sdot_sum);
 
-  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctor
+  // Setup hvc BEFORE creating the test_functor, since hvcoord is const in CaarFunctorImpl
   HybridVCoord& hvc = Context::singleton().get_hvcoord();
   hvc.init(TestType::ps0,
            hybrid_am_mirror.data(),
@@ -1115,7 +1115,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 class preq_vertadv_test {
 public:
   KOKKOS_INLINE_FUNCTION
-  static void test_functor(const CaarFunctor &functor, KernelVariables &kv) {
+  static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
     functor.preq_vertadv(kv);
   }
 };
