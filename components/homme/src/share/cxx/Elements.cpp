@@ -347,28 +347,19 @@ void Elements::push_qdp(F90Ptr &state_qdp) const {
 }
 
 void Elements::d(Real *d_ptr, int ie) const {
-  ExecViewManaged<Real[2][2][NP][NP]> d_device = Kokkos::subview(
-      m_d, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror
-  d_host = Kokkos::create_mirror_view(d_device),
-  d_wrapper(d_ptr);
+  ExecViewUnmanaged<Real[2][2][NP][NP]> d_device = Homme::subview(m_d, ie);
+  decltype(d_device)::HostMirror d_host = Kokkos::create_mirror_view(d_device);
+  HostViewUnmanaged<Real[2][2][NP][NP]> d_wrapper(d_ptr);
   Kokkos::deep_copy(d_host, d_device);
-  for (int m = 0; m < 2; ++m) {
-    for (int n = 0; n < 2; ++n) {
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp) {
-          d_wrapper(m, n, jgp, igp) = d_host(n, m, igp, jgp);
-        }
-      }
-    }
-  }
+  Kokkos::deep_copy(d_wrapper,d_host);
 }
 
 void Elements::dinv(Real *dinv_ptr, int ie) const {
-  ExecViewManaged<Real[2][2][NP][NP]> dinv_device = Kokkos::subview(
-      m_dinv, ie, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  ExecViewManaged<Real[2][2][NP][NP]>::HostMirror dinv_host(dinv_ptr);
+  ExecViewUnmanaged<Real[2][2][NP][NP]> dinv_device = Homme::subview(m_dinv,ie);
+  decltype(dinv_device)::HostMirror dinv_host = Kokkos::create_mirror_view(dinv_device);
+  HostViewUnmanaged<Real[2][2][NP][NP]> dinv_wrapper(dinv_ptr);
   Kokkos::deep_copy(dinv_host, dinv_device);
+  Kokkos::deep_copy(dinv_wrapper,dinv_host);
 }
 
 void Elements::BufferViews::init(const int num_elems) {

@@ -1,11 +1,6 @@
 #include "Context.hpp"
-#include "Control.hpp"
-#include "Derivative.hpp"
-#include "Elements.hpp"
 #include "EulerStepFunctor.hpp"
-#include "KernelVariables.hpp"
 #include "SimulationParams.hpp"
-#include "SphereOperators.hpp"
 #include "TimeLevel.hpp"
 
 namespace Homme
@@ -30,7 +25,6 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
 {
   GPTLstart("tl-at prim_advec_tracers_remap_RK2");
   // Get control and simulation params
-  Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);
 
@@ -39,8 +33,7 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   tl.update_tracers_levels(params.qsplit);
 
   // Create the ESF
-  data.rhs_viss = 0;
-  EulerStepFunctor esf(data);
+  EulerStepFunctor esf(params);
 
   // Precompute divdp
   GPTLstart("tl-at precompute_divdp");
@@ -49,27 +42,27 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   GPTLstop("tl-at precompute_divdp");
 
   // Euler steps
-  Control::DSSOption::Enum DSSopt;
+  DSSOption DSSopt;
   Real rhs_multiplier;
 
   // Euler step 1
   GPTLstart("tl-at esf-0");
   rhs_multiplier = 0.0;
-  DSSopt = Control::DSSOption::div_vdp_ave;
+  DSSopt = DSSOption::DIV_VDP_AVE;
   esf.euler_step(tl.np1_qdp,tl.n0_qdp,dt/2.0,rhs_multiplier,DSSopt);
   GPTLstop("tl-at esf-0");
 
   // Euler step 2
   GPTLstart("tl-at esf-1");
   rhs_multiplier = 1.0;
-  DSSopt = Control::DSSOption::eta;
+  DSSopt = DSSOption::ETA;
   esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
   GPTLstop("tl-at esf-1");
 
   // Euler step 3
   GPTLstart("tl-at esf-2");
   rhs_multiplier = 2.0;
-  DSSopt = Control::DSSOption::omega;
+  DSSopt = DSSOption::OMEGA;
   esf.euler_step(tl.np1_qdp,tl.np1_qdp,dt/2.0,rhs_multiplier,DSSopt);
   GPTLstop("tl-at esf-2");
 

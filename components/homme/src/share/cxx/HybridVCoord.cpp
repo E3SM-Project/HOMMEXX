@@ -1,15 +1,16 @@
-#include "Control.hpp"
+#include "HybridVCoord.hpp"
 #include "utilities/TestUtils.hpp"
 
 #include <random>
 
-namespace Homme {
+namespace Homme
+{
 
-void Control::init_hvcoord(const Real ps0_in,
-                           CRCPtr hybrid_am_ptr,
-                           CRCPtr hybrid_ai_ptr,
-                           CRCPtr hybrid_bm_ptr,
-                           CRCPtr hybrid_bi_ptr)
+void HybridVCoord::init(const Real ps0_in,
+                   CRCPtr hybrid_am_ptr,
+                   CRCPtr hybrid_ai_ptr,
+                   CRCPtr hybrid_bm_ptr,
+                   CRCPtr hybrid_bi_ptr)
 {
   ps0 = ps0_in;
 
@@ -62,23 +63,13 @@ void Control::init_hvcoord(const Real ps0_in,
   }
 }
 
-void Control::init(const int nets_in, const int nete_in, const int num_elems_in,
-                   const int n0_qdp_in, const int rsplit_in) {
-  nets = nets_in;
-  nete = nete_in;
-  num_elems = num_elems_in;
-  n0_qdp = n0_qdp_in;
-  rsplit = rsplit_in;
-}
-
-void Control::random_init(int num_elems_in, int seed) {
+void HybridVCoord::random_init(int seed) {
   const int min_value = std::numeric_limits<Real>::epsilon();
   const int max_value = 1.0 - min_value;
   hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid a_interface coefs");
   hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
       "Hybrid b_interface coefs");
-  num_elems = num_elems_in;
 
   std::mt19937_64 engine(seed);
   ps0 = 1.0;
@@ -122,23 +113,6 @@ void Control::random_init(int num_elems_in, int seed) {
   genRandArray(hybrid_bi, engine,
                std::uniform_real_distribution<Real>(min_value, max_value),
                check_coords);
-}
-
-void Control::set_rk_stage_data(const int nm1_in, const int n0_in, const int np1_in,
-                                const Real dt_in, const Real eta_ave_w_in,
-                                const bool compute_diagonstics_in)
-{
-  n0 = n0_in;
-  nm1 = nm1_in;
-  np1 = np1_in;
-
-  dt = dt_in;
-  eta_ave_w = eta_ave_w_in;
-  compute_diagonstics = compute_diagonstics_in;
-}
-
-Control::DSSOption::Enum Control::DSSOption::from (int DSSopt) {
-  return static_cast<Enum>(DSSopt);
 }
 
 } // namespace Homme
