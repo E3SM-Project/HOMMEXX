@@ -10,8 +10,6 @@ namespace Homme
 
 void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0_qdp,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics);
-void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
-                       Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre);
 void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
 
 // -------------- IMPLEMENTATIONS -------------- //
@@ -96,9 +94,6 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   // Get elements structure
   Elements& elements = Context::singleton().get_elements();
 
-  // Setup the policies
-  auto policy_pre = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(elements.num_elems());
-
   // Create the functor
   CaarFunctor functor(Context::singleton().get_elements(),
                       Context::singleton().get_derivative(),
@@ -120,20 +115,28 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   // ===================== RK STAGES ===================== //
 
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
-  functor.set_rk_stage_data(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
-  caar_monolithic(elements,functor,*be[nm1],policy_pre);
+  functor.run(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
+  start_timer("caar_bexchV");
+  be[nm1]->exchange(Context::singleton().get_elements().m_rspheremp);
+  stop_timer("caar_bexchV");
 
   // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
-  functor.set_rk_stage_data(n0,nm1,np1,dt/5.0,0.0,false);
-  caar_monolithic(elements,functor,*be[np1],policy_pre);
+  functor.run(n0,nm1,np1,dt/5.0,0.0,false);
+  start_timer("caar_bexchV");
+  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
+  stop_timer("caar_bexchV");
 
   // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
-  functor.set_rk_stage_data(n0,np1,np1,dt/3.0,0.0,false);
-  caar_monolithic(elements,functor,*be[np1],policy_pre);
+  functor.run(n0,np1,np1,dt/3.0,0.0,false);
+  start_timer("caar_bexchV");
+  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
+  stop_timer("caar_bexchV");
 
   // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
-  functor.set_rk_stage_data(n0,np1,np1,2.0*dt/3.0,0.0,false);
-  caar_monolithic(elements,functor,*be[np1],policy_pre);
+  functor.run(n0,np1,np1,2.0*dt/3.0,0.0,false);
+  start_timer("caar_bexchV");
+  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
+  stop_timer("caar_bexchV");
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   {
@@ -156,24 +159,11 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   ExecSpace::fence();
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
-  functor.set_rk_stage_data(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
-  caar_monolithic(elements,functor,*be[np1],policy_pre);
-  GPTLstop("tl-ae U3-5stage_timestep");
-}
-
-void caar_monolithic(Elements& elements, CaarFunctor& functor, BoundaryExchange& be,
-                     Kokkos::TeamPolicy<ExecSpace,CaarFunctor::TagPreExchange>&  policy_pre)
-{
-  // --- Pre boundary exchange
-  profiling_resume();
-  Kokkos::parallel_for("caar loop pre-boundary exchange", policy_pre, functor);
-  ExecSpace::fence();
-  profiling_pause();
-
-  // Do the boundary exchange
+  functor.run(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
   start_timer("caar_bexchV");
-  be.exchange(Context::singleton().get_elements().m_rspheremp);
+  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
   stop_timer("caar_bexchV");
+  GPTLstop("tl-ae U3-5stage_timestep");
 }
 
 } // namespace Homme
