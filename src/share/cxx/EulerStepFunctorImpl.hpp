@@ -144,7 +144,6 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
-    start_timer("esf-bih-pre compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -171,12 +170,10 @@ public:
                    qtens_biharmonic,
                    Homme::subview(e.buffers.qwrk, ie, iq),
                    qtens_biharmonic);
-    stop_timer("esf-bih-pre compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
-    start_timer("esf-bih-post compute");
     const int ie = team.league_rank() / m_data.qsize;
     const int iq = team.league_rank() % m_data.qsize;
     const auto& e = m_elements;
@@ -206,7 +203,6 @@ public:
             });
         });
     }
-    stop_timer("esf-bih-post compute");
   }
 
   struct AALSetupPhase {};
@@ -246,30 +242,24 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALSetupPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-noq compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
-    stop_timer("esf-aal-noq compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALTracerPhase&, const TeamMember& team) const {
-    start_timer("esf-aal-q compute");
     KernelVariables kv(team, m_data.qsize);
     run_tracer_phase(kv);
-    stop_timer("esf-aal-q compute");
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const AALFusedPhases&, const TeamMember& team) const {
-    start_timer("esf-aal-fused compute");
     KernelVariables kv(team);
     run_setup_phase(kv);
     for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
     {
       run_tracer_phase(kv);
     }
-    stop_timer("esf-aal-fused compute");
   }
 
   struct PrecomputeDivDp {};
@@ -292,7 +282,6 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
-    start_timer("esf-precompute_divdp compute");
     const int ie = team.league_rank();
     divergence_sphere(team, m_deriv.get_dvv(),
                       Homme::subview(m_elements.m_dinv,ie),
@@ -310,8 +299,6 @@ public:
             m_elements.m_derived_divdp(ie, igp, jgp, ilev);
       });
     });
-
-    stop_timer("esf-precompute_divdp compute");
   }
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
