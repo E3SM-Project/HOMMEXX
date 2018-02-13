@@ -66,8 +66,10 @@ void CaarFunctor::run ()
 
   // Run functor
   profiling_resume();
+  GPTLstart("caar compute");
   Kokkos::parallel_for("caar loop pre-boundary exchange", m_policy, *m_caar_impl);
   ExecSpace::fence();
+  GPTLstop("caar compute");
   profiling_pause();
 }
 
@@ -83,8 +85,10 @@ void CaarFunctor::run (const int nm1, const int n0,   const int np1,
 
   // Run functor
   profiling_resume();
+  GPTLstart("caar compute");
   Kokkos::parallel_for("caar loop pre-boundary exchange", m_policy, *m_caar_impl);
   ExecSpace::fence();
+  GPTLstop("caar compute");
   profiling_pause();
 }
 

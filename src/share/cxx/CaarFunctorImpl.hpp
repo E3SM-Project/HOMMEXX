@@ -591,7 +591,6 @@ struct CaarFunctorImpl {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TeamMember& team) const {
-    start_timer("caar compute");
     KernelVariables kv(team);
 
     compute_temperature_div_vdp(kv);
@@ -601,7 +600,6 @@ struct CaarFunctorImpl {
     kv.team.team_barrier();
 
     compute_phase_3(kv);
-    stop_timer("caar compute");
   }
 
   KOKKOS_INLINE_FUNCTION
