@@ -152,21 +152,7 @@ void init_boundary_exchanges_c ()
   std::shared_ptr<BuffersManager> bm_exchange        = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
   std::shared_ptr<BuffersManager> bm_exchange_minmax = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
-  // Euler minmax BE's
-  {
-    // Get the BE
-    BoundaryExchange& be = *Context::singleton().get_boundary_exchange("min max Euler");
-
-    // Safety check (do not call this routine twice!)
-    assert (!be.is_registration_completed());
-
-    // Setup the BE
-    be.set_buffers_manager(bm_exchange_minmax);
-    be.set_num_fields(params.qsize,0,0);
-    be.register_min_max_fields(elements.buffers.qlim,params.qsize,0);
-    be.registration_completed();
-
-  }
+  // Euler BEs
   auto& esf = Context::singleton().get_euler_step_functor();
   esf.reset(params);
   esf.init_boundary_exchanges();
