@@ -1,5 +1,6 @@
 #include "CaarFunctor.hpp"
 #include "Context.hpp"
+#include "HyperviscosityFunctor.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
@@ -12,7 +13,6 @@ namespace Homme
 
 void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0_qdp,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics);
-void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
 
 // -------------- IMPLEMENTATIONS -------------- //
 
@@ -75,8 +75,10 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
+    // Get and run the HVF
+    HyperviscosityFunctor& functor = Context::singleton().get_hyperviscosity_functor();
     GPTLstart("tl-ae advance_hypervis_dp");
-    advance_hypervis_dp(np1,dt,eta_ave_w);
+    functor.run(np1,dt,eta_ave_w);
     GPTLstop("tl-ae advance_hypervis_dp");
   }
 
