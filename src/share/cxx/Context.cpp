@@ -1,5 +1,6 @@
 #include "Context.hpp"
 
+#include "CaarFunctor.hpp"
 #include "Comm.hpp"
 #include "Elements.hpp"
 #include "Derivative.hpp"
@@ -17,6 +18,13 @@ namespace Homme {
 Context::Context() {}
 
 Context::~Context() {}
+
+CaarFunctor& Context::get_caar_functor() {
+  if ( ! caar_functor_) {
+    caar_functor_.reset(new CaarFunctor());
+  }
+  return *caar_functor_;
+}
 
 Comm& Context::get_comm() {
   if ( ! comm_) {
