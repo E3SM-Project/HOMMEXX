@@ -14,7 +14,9 @@ class EulerStepFunctor {
   std::shared_ptr<EulerStepFunctorImpl> p_;
 
 public:
-  EulerStepFunctor(const SimulationParams& params);
+  EulerStepFunctor();
+
+  void reset(const SimulationParams& params);
 
   void precompute_divdp();
 

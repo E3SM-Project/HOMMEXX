@@ -17,6 +17,7 @@ class SimulationParams;
 class TimeLevel;
 class VerticalRemapManager;
 class HybridVCoord;
+class EulerStepFunctor;
 
 /* A Context manages resources previously treated as singletons. Context is
  * meant to have two roles. First, a Context singleton is the only singleton in
@@ -45,6 +46,7 @@ private:
   std::unique_ptr<SimulationParams>     simulation_params_;
   std::unique_ptr<TimeLevel>            time_level_;
   std::unique_ptr<VerticalRemapManager> vertical_remap_mgr_;
+  std::unique_ptr<EulerStepFunctor>     euler_step_functor_;
 
   // Clear the objects Context manages.
   void clear();
@@ -60,6 +62,7 @@ public:
   HybridVCoord& get_hvcoord();
   SimulationParams& get_simulation_params();
   TimeLevel& get_time_level();
+  EulerStepFunctor& get_euler_step_functor();
   VerticalRemapManager& get_vertical_remap_manager();
   std::shared_ptr<Connectivity> get_connectivity();
   BMMap& get_buffers_managers();

@@ -3,8 +3,12 @@
 namespace Homme {
 
 EulerStepFunctor
-::EulerStepFunctor (const SimulationParams& params) {
-  p_ = std::make_shared<EulerStepFunctorImpl>(params);
+::EulerStepFunctor () {
+  p_ = std::make_shared<EulerStepFunctorImpl>();
+}
+
+void EulerStepFunctor::reset (const SimulationParams& params) {
+  p_->reset(params);
 }
 
 void EulerStepFunctor::precompute_divdp () {
