@@ -7,7 +7,7 @@
 #undef NDEBUG
 
 #include "CaarFunctorImpl.hpp"
-#include "EulerStepFunctor.hpp"
+#include "EulerStepFunctorImpl.hpp"
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "Dimensions.hpp"
@@ -1336,18 +1336,18 @@ struct LimiterTester {
   }
 
   size_t team_shmem_size (const int team_size) const {
-    return Homme::EulerStepFunctor::limiter_team_shmem_size(team_size);
+    return Homme::EulerStepFunctorImpl::limiter_team_shmem_size(team_size);
   }
 
   struct Lim8 {};
   KOKKOS_INLINE_FUNCTION void operator() (const Lim8&, const Homme::TeamMember& team) const {
-    Homme::EulerStepFunctor
+    Homme::EulerStepFunctorImpl
       ::limiter_optim_iter_full(team, sphweights_d, dpmass_d, qlim_d, ptens_d);
   }
 
   struct CAAS {};
   KOKKOS_INLINE_FUNCTION void operator() (const CAAS&, const Homme::TeamMember& team) const {
-    Homme::EulerStepFunctor
+    Homme::EulerStepFunctorImpl
       ::limiter_clip_and_sum(team, sphweights_d, dpmass_d, qlim_d, ptens_d);
   }
 
