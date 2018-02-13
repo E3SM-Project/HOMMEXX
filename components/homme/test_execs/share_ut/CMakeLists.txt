@@ -9,6 +9,7 @@ SET(UTILS_TIMING_DIR ${HOMME_SOURCE_DIR}/utils/timing)
 SET (INFRASTRUCTURE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/ErrorDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
@@ -39,6 +40,7 @@ cxx_unit_test (infrastructure_ut "${INFRASTRUCTURE_UT_F90_SRCS}" "${INFRASTRUCTU
 ### Random initialization unit stest
 
 SET (RANDOM_INIT_UT_CXX_SRCS
+  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/ErrorDefs.cpp
@@ -86,6 +88,7 @@ SET (SPHERE_OPERATORS_UT_F90_SRCS
   ${SHARE_UT_DIR}/sphere_operators_ut.F90
 )
 SET (SPHERE_OPERATORS_UT_CXX_SRCS
+  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
@@ -150,6 +153,7 @@ SET (BOUNDARY_EXCHANGE_UT_F90_SRCS
 SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
   ${SRC_SHARE_DIR}/cxx/ErrorDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
