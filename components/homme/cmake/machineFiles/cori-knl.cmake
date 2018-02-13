@@ -1,8 +1,9 @@
 ### Cori setup
 
-###modules
+###modules, get rid of haswell 
 #source /etc/profile.d/modules.sh
 #module load cmake cray-hdf5-parallel/1.10.0 cray-netcdf-hdf5parallel
+#module load PrgEnv-intel ; module unload craype-haswell ; module load craype-mic-knl
 
 ###build kokkos
 #../generate_makefile.bash --prefix=~/kokkos/build-omp-nodebug/ --with-options=aggressive_vectorization --with-options=disable_profiling --arch=KNL --with-openmp --compiler=icpc
@@ -24,10 +25,13 @@
 SET (HOMME_USE_MKL "TRUE" CACHE FILEPATH "") # for Intel
 SET(USE_TRILINOS ON CACHE BOOL "")
 
+
+set (ENABLE_INTEL_PHI TRUE CACHE BOOL "")
 SET (CMAKE_Fortran_COMPILER ftn CACHE FILEPATH "")
 SET (CMAKE_C_COMPILER cc CACHE FILEPATH "")
 SET (CMAKE_CXX_COMPILER CC CACHE FILEPATH "")
-
+SET (CMAKE_CXX_FLAGS "-craype-verbose" CACHE STRING "")
+SET (CMAKE_Fortran_FLAGS "-craype-verbose" CACHE STRING "")
 SET (NETCDF_DIR $ENV{NETCDF_DIR} CACHE FILEPATH "")
 #example with module cray-netcdf-hdf5parallel/4.3.3.1:
 # NETCDF_DIR=/opt/cray/netcdf-hdf5parallel/4.3.3.1/INTEL/14.0
