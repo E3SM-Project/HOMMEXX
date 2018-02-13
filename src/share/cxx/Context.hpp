@@ -7,17 +7,18 @@
 
 namespace Homme {
 
-class CaarFunctor;
-class Comm;
-class Elements;
-class Derivative;
-class Connectivity;
 class BoundaryExchange;
 class BuffersManager;
+class CaarFunctor;
+class Comm;
+class Connectivity;
+class Derivative;
+class Elements;
+class HybridVCoord;
+class HyperviscosityFunctor;
 class SimulationParams;
 class TimeLevel;
 class VerticalRemapManager;
-class HybridVCoord;
 class EulerStepFunctor;
 
 /* A Context manages resources previously treated as singletons. Context is
@@ -37,17 +38,18 @@ public:
 
 private:
   // Note: using uniqe_ptr disables copy construction
-  std::unique_ptr<CaarFunctor>          caar_functor_;
-  std::unique_ptr<Comm>                 comm_;
-  std::unique_ptr<Elements>             elements_;
-  std::unique_ptr<Derivative>           derivative_;
-  std::unique_ptr<HybridVCoord>         hvcoord_;
-  std::shared_ptr<Connectivity>         connectivity_;
-  std::shared_ptr<BMMap>                buffers_managers_;
-  std::unique_ptr<BEMap>                boundary_exchanges_;
-  std::unique_ptr<SimulationParams>     simulation_params_;
-  std::unique_ptr<TimeLevel>            time_level_;
-  std::unique_ptr<VerticalRemapManager> vertical_remap_mgr_;
+  std::unique_ptr<CaarFunctor>            caar_functor_;
+  std::unique_ptr<Comm>                   comm_;
+  std::unique_ptr<Elements>               elements_;
+  std::unique_ptr<Derivative>             derivative_;
+  std::unique_ptr<HybridVCoord>           hvcoord_;
+  std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
+  std::shared_ptr<Connectivity>           connectivity_;
+  std::shared_ptr<BMMap>                  buffers_managers_;
+  std::unique_ptr<BEMap>                  boundary_exchanges_;
+  std::unique_ptr<SimulationParams>       simulation_params_;
+  std::unique_ptr<TimeLevel>              time_level_;
+  std::unique_ptr<VerticalRemapManager>   vertical_remap_mgr_;
   std::unique_ptr<EulerStepFunctor>     euler_step_functor_;
 
   // Clear the objects Context manages.
@@ -63,6 +65,7 @@ public:
   Elements& get_elements();
   Derivative& get_derivative();
   HybridVCoord& get_hvcoord();
+  HyperviscosityFunctor& get_hyperviscosity_functor();
   SimulationParams& get_simulation_params();
   TimeLevel& get_time_level();
   EulerStepFunctor& get_euler_step_functor();

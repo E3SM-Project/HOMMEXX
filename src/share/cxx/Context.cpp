@@ -1,15 +1,16 @@
 #include "Context.hpp"
 
+#include "BoundaryExchange.hpp"
+#include "BuffersManager.hpp"
 #include "CaarFunctor.hpp"
 #include "Comm.hpp"
-#include "Elements.hpp"
-#include "Derivative.hpp"
-#include "BuffersManager.hpp"
 #include "Connectivity.hpp"
-#include "BoundaryExchange.hpp"
+#include "Derivative.hpp"
+#include "Elements.hpp"
+#include "HybridVCoord.hpp"
+#include "HyperviscosityFunctor.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
-#include "HybridVCoord.hpp"
 #include "VerticalRemapManager.hpp"
 #include "EulerStepFunctor.hpp"
 
@@ -43,6 +44,16 @@ Elements& Context::get_elements() {
 HybridVCoord& Context::get_hvcoord() {
   if ( ! hvcoord_) hvcoord_.reset(new HybridVCoord());
   return *hvcoord_;
+}
+
+HyperviscosityFunctor& Context::get_hyperviscosity_functor() {
+  if ( ! hyperviscosity_functor_) {
+    Elements& e = get_elements();
+    Derivative& d = get_derivative();
+    SimulationParams& p = get_simulation_params();
+    hyperviscosity_functor_.reset(new HyperviscosityFunctor(p,e,d));
+  }
+  return *hyperviscosity_functor_;
 }
 
 Derivative& Context::get_derivative() {
@@ -109,6 +120,7 @@ void Context::clear() {
   elements_ = nullptr;
   derivative_ = nullptr;
   hvcoord_ = nullptr;
+  hyperviscosity_functor_ = nullptr;
   connectivity_ = nullptr;
   boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
