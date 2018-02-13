@@ -2,8 +2,6 @@
 #include "config.h.c"
 #endif
 
-#ifdef USE_KOKKOS_KERNELS
-
 module prim_cxx_driver_mod
 
   use iso_c_binding, only: c_int
@@ -133,6 +131,3 @@ contains
   end subroutine init_c_connectivity
 
 end module prim_cxx_driver_mod
-
-! USE_KOKKOS_KERNELS
-#endif

@@ -666,15 +666,12 @@ private:
       [&] (const int ilev) {
         const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
 
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         Real* const data = team_data ?
           team_data + 2 * NP2 * team.team_rank() :
           nullptr;
         Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
-        parallel_for(tvr, [&] (const int& k) {
+        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             const auto& dpm = dpmass(i,j,vpi)[vsi];
             c[k] = sphweights(i,j)*dpm;
@@ -682,10 +679,14 @@ private:
           });
 
         Real sumc = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& isumc) { isumc += c[k]; }, sumc);
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& sumc) {
+            sumc += c[k];
+          }, sumc);
         if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
         Real mass = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& imass) { imass += x[k]*c[k]; }, mass);
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& mass) {
+            mass += x[k]*c[k];
+          }, mass);
 
         Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
 
@@ -708,7 +709,7 @@ private:
 
         limit(team, mass, minp, maxp, x.data(), c.data());
 
-        parallel_for(tvr, [&] (const int& k) {
+        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
             ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
           });
@@ -729,21 +730,17 @@ public: // Expose for unit testing.
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
                   Real const* KOKKOS_RESTRICT const c) const {
-        const int NP2 = NP * NP;
         const int maxiter = NP*NP - 1;
         const Real tol_limiter = 5e-14;
 
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
               if (x[k] > maxp) {
-                iaddmass += (x[k] - maxp)*c[k];
+                addmass += (x[k] - maxp)*c[k];
                 x[k] = maxp;
               } else if (x[k] < minp) {
-                iaddmass += (x[k] - minp)*c[k];
+                addmass += (x[k] - minp)*c[k];
                 x[k] = minp;
               }
             }, addmass);
@@ -751,26 +748,25 @@ public: // Expose for unit testing.
           if (std::abs(addmass) <= tol_limiter*std::abs(mass))
             break;
 
-          Real weightssum = 0;
           if (addmass > 0) {
-            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
+            Real weightssum = 0;
+            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& iweightssum) {
                 if (x[k] < maxp)
                   iweightssum += c[k];
               }, weightssum);
             const auto adw = addmass/weightssum;
-            parallel_for(tvr, [&] (const int& k) {
-                if (x[k] < maxp)
-                  x[k] += adw;
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += (x[k] < maxp) ? adw : 0;
               });
           } else {
-            Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iweightssum) {
+            Real weightssum = 0;
+            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& weightssum) {
                 if (x[k] > minp)
-                  iweightssum += c[k];
+                  weightssum += c[k];
               }, weightssum);
             const auto adw = addmass/weightssum;
-            parallel_for(tvr, [&] (const int& k) {
-                if (x[k] > minp)
-                  x[k] += adw;
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += (x[k] > minp) ? adw : 0;
               });
           }
         }
@@ -792,19 +788,14 @@ public: // Expose for unit testing.
                   const Real& minp, const Real& maxp,
                   Real* KOKKOS_RESTRICT const x,
                   Real const* KOKKOS_RESTRICT const c) const {
-        const int NP2 = NP * NP;
-
-        const auto tvr = Kokkos::ThreadVectorRange(team, NP2);
-        using Kokkos::parallel_for;
-
         // Clip.
         Real addmass = 0;
-        Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& iaddmass) {
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
             if (x[k] > maxp) {
-              iaddmass += (x[k] - maxp)*c[k];
+              addmass += (x[k] - maxp)*c[k];
               x[k] = maxp;
             } else if (x[k] < minp) {
-              iaddmass += (x[k] - minp)*c[k];
+              addmass += (x[k] - minp)*c[k];
               x[k] = minp;
             }
           }, addmass);
@@ -813,24 +804,29 @@ public: // Expose for unit testing.
         // 0, then return early.
         if (addmass == 0) return;
 
-        Real fac = 0;
         if (addmass > 0) {
+          Real fac = 0;
           // Get sum of weights. Don't store them; we don't want another array.
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
-              ifac += c[k]*(maxp - x[k]);
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& fac) {
+              fac += c[k]*(maxp - x[k]);
             }, fac);
           if (fac > 0) {
             // Update.
             fac = addmass/fac;
-            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(maxp - x[k]); });
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += fac*(maxp - x[k]);
+              });
           }
         } else {
-          Homme::parallel_reduce(team, tvr, [&] (const int& k, Real& ifac) {
-              ifac += c[k]*(x[k] - minp);
+          Real fac = 0;
+          Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& fac) {
+              fac += c[k]*(x[k] - minp);
             }, fac);
           if (fac > 0) {
             fac = addmass/fac;
-            parallel_for(tvr, [&] (const int& k) { x[k] += fac*(x[k] - minp); });
+            Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+                x[k] += fac*(x[k] - minp);
+              });
           }
         }
       }
