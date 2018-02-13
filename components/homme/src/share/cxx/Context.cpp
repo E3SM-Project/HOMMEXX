@@ -11,6 +11,7 @@
 #include "TimeLevel.hpp"
 #include "HybridVCoord.hpp"
 #include "VerticalRemapManager.hpp"
+#include "EulerStepFunctor.hpp"
 
 namespace Homme {
 
@@ -98,6 +99,11 @@ std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::stri
   return (*boundary_exchanges_)[name];
 }
 
+EulerStepFunctor& Context::get_euler_step_functor() {
+  if ( ! euler_step_functor_) euler_step_functor_.reset(new EulerStepFunctor());
+  return *euler_step_functor_;
+}
+
 void Context::clear() {
   comm_ = nullptr;
   elements_ = nullptr;
@@ -109,6 +115,8 @@ void Context::clear() {
   simulation_params_ = nullptr;
   time_level_ = nullptr;
   vertical_remap_mgr_ = nullptr;
+  caar_functor_ = nullptr;
+  euler_step_functor_ = nullptr;
 }
 
 Context& Context::singleton() {
