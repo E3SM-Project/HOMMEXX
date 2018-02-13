@@ -7,6 +7,7 @@
 
 namespace Homme {
 
+class CaarFunctor;
 class Comm;
 class Elements;
 class Derivative;
@@ -36,6 +37,7 @@ public:
 
 private:
   // Note: using uniqe_ptr disables copy construction
+  std::unique_ptr<CaarFunctor>          caar_functor_;
   std::unique_ptr<Comm>                 comm_;
   std::unique_ptr<Elements>             elements_;
   std::unique_ptr<Derivative>           derivative_;
@@ -56,6 +58,7 @@ public:
   virtual ~Context();
 
   // Getters for each managed object.
+  CaarFunctor& get_caar_functor();
   Comm& get_comm();
   Elements& get_elements();
   Derivative& get_derivative();
