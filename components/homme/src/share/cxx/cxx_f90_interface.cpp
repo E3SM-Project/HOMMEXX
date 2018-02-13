@@ -5,6 +5,7 @@
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "HommexxEnums.hpp"
+#include "EulerStepFunctor.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
 #include "ErrorDefs.hpp"
@@ -166,33 +167,9 @@ void init_boundary_exchanges_c ()
     be.registration_completed();
 
   }
-
-  // Euler qdp (and dss var) BE
-  {
-    std::map<std::string,decltype(elements.m_omega_p)> dss_var_map;
-    dss_var_map["eta"]         = elements.m_eta_dot_dpdn;
-    dss_var_map["omega"]       = elements.m_omega_p;
-    dss_var_map["div_vdp_ave"] = elements.m_derived_divdp_proj;
-    for (auto it : dss_var_map) {
-      for (int np1_qdp=0; np1_qdp<Q_NUM_TIME_LEVELS; ++np1_qdp) {
-        std::stringstream ss;
-        ss << "exchange qdp " << it.first << " " << np1_qdp;
-
-        // Get the BE
-        BoundaryExchange& be = *Context::singleton().get_boundary_exchange(ss.str());
-
-        // Safety check (do not call this routine twice!)
-        assert (!be.is_registration_completed());
-
-        // Setup the BE
-        be.set_buffers_manager(bm_exchange);
-        be.set_num_fields(0,0,params.qsize+1);
-        be.register_field(elements.m_qdp,np1_qdp,params.qsize,0);
-        be.register_field(it.second);
-        be.registration_completed();
-      }
-    }
-  }
+  auto& esf = Context::singleton().get_euler_step_functor();
+  esf.reset(params);
+  esf.init_boundary_exchanges();
 
   // RK stages BE's
   {

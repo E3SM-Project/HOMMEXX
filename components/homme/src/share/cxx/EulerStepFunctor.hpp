@@ -18,6 +18,8 @@ public:
 
   void reset(const SimulationParams& params);
 
+  void init_boundary_exchanges();
+
   void precompute_divdp();
 
   void qdp_time_avg(const int n0_qdp, const int np1_qdp);
