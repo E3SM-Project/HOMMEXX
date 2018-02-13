@@ -5,6 +5,8 @@
 #include "ErrorDefs.hpp"
 #include "mpi/BoundaryExchange.hpp"
 
+#include "profiling.hpp"
+
 namespace Homme
 {
 

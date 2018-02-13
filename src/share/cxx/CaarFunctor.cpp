@@ -1,5 +1,7 @@
 #include "CaarFunctor.hpp"
 #include "CaarFunctorImpl.hpp"
+#include "Context.hpp"
+#include "SimulationParams.hpp"
 
 #include "profiling.hpp"
 
@@ -10,26 +12,31 @@
 namespace Homme {
 
 CaarFunctor::CaarFunctor()
+ : m_policy (Homme::get_default_team_policy<ExecSpace>(Context::singleton().get_elements().num_elems()))
 {
-  Elements&     elements  = Context::singleton().get_elements();
-  Derivative&   derivtive = Context::singleton().get_derivative();
-  HybridVCoord& hvcoord   = Context::singleton().get_hvcoord();
+  Elements&     elements   = Context::singleton().get_elements();
+  Derivative&   derivative = Context::singleton().get_derivative();
+  HybridVCoord& hvcoord    = Context::singleton().get_hvcoord();
   const int rsplit = Context::singleton().get_simulation_params().rsplit;
 
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivtive,hvcoord,rsplit));
-
-  // Build policy once for all
-  m_policy = Homme::get_default_team_policy<ExecSpace,CaarFunctor::TagPreExchange>(e.num_elems());
+  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,rsplit));
 }
 
 CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+ : m_policy (Homme::get_default_team_policy<ExecSpace>(elements.num_elems()))
 {
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivtive,hvcoord,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,rsplit));
+}
 
-  // Build policy once for all
-  m_policy = Homme::get_default_team_policy<ExecSpace>(elements.num_elems());
+CaarFunctor::~CaarFunctor ()
+{
+  // This empty destructor (where CaarFunctorImpl type is completely known)
+  // is necessary for pimpl idiom to work with unique_ptr. The issue is the
+  // deleter, which needs to know the size of the stored type, and which
+  // would be called from the implicitly declared default destructor, which
+  // would be in the header file, where CaarFunctorImpl type is incomplete.
 }
 
 void CaarFunctor::set_n0_qdp (const int n0_qdp)
