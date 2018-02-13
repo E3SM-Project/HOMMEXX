@@ -2,8 +2,8 @@
 #define CAAR_FUNCTOR_HPP
 
 #include "Types.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
+#include "HybridVCoord.hpp"
 #include "Derivative.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
@@ -19,35 +19,50 @@
 namespace Homme {
 
 struct CaarFunctor {
-  Control           m_data;
-  const Elements    m_elements;
-  const Derivative  m_deriv;
+
+  struct CaarData {
+    CaarData (const int rsplit_in) : rsplit(rsplit_in) {}
+    int       nm1;
+    int       n0;
+    int       np1;
+    int       n0_qdp;
+
+    Real      dt;
+    Real      eta_ave_w;
+
+    const int rsplit;
+    bool      compute_diagnostics;
+  };
+
+  CaarData            m_data;
+  const HybridVCoord  m_hvcoord;
+  const Elements      m_elements;
+  const Derivative    m_deriv;
 
   // Tag for pre exchange loop
   struct TagPreExchange {};   // CAAR routine up to boundary exchange
-  struct TagPostExchange {};  // CAAR routine after boundary exchange
 
-  CaarFunctor(const Elements& elements, const Derivative& derivative)
-    : m_data(),
-      m_elements(elements),
-      m_deriv(derivative)
+  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+    : m_data(rsplit)
+    , m_hvcoord(hvcoord)
+    , m_elements(elements)
+    , m_deriv(derivative)
   {
     // Nothing to be done here
   }
 
-  CaarFunctor(const Control &data, const Elements& elements,
-              const Derivative& derivative)
-    : m_data(data),
-      m_elements(elements),
-      m_deriv(derivative)
-  {
-    // Nothing to be done here
-  }
+  void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }
 
   void set_rk_stage_data (const int nm1, const int n0,   const int np1,
                           const Real dt, const Real eta_ave_w,
-                          const bool compute_diagonstics) {
-    m_data.set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagonstics);
+                          const bool compute_diagnostics) {
+    m_data.nm1 = nm1;
+    m_data.n0  = n0;
+    m_data.np1 = np1;
+    m_data.dt  = dt;
+
+    m_data.eta_ave_w = eta_ave_w;
+    m_data.compute_diagnostics = compute_diagnostics;
   }
 
   // Depends on PHI (after preq_hydrostatic), PECND
@@ -85,9 +100,10 @@ struct CaarFunctor {
     kv.team_barrier();
 
     gradient_sphere_update(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.ephi, kv.ie),
-        m_elements.buffers.grad_buf,
+        Homme::subview(m_elements.buffers.grad_buf,kv.ie),
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
 
@@ -163,10 +179,12 @@ struct CaarFunctor {
     compute_energy_grad(kv);
 
     vorticity_sphere(
-        kv, m_elements.m_d, m_elements.m_metdet, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_d,kv.ie),
+        Homme::subview(m_elements.m_metdet,kv.ie),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
-        m_elements.buffers.curl_buf,
+        Homme::subview(m_elements.buffers.curl_buf,kv.ie),
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -272,7 +290,7 @@ struct CaarFunctor {
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
         m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] =
-           m_data.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
+           m_hvcoord.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
            m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
       m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
@@ -374,9 +392,11 @@ struct CaarFunctor {
     kv.team_barrier();
 
     divergence_sphere(
-        kv, m_elements.m_dinv, m_elements.m_metdet, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
+        Homme::subview(m_elements.m_metdet,kv.ie),
         Homme::subview(m_elements.buffers.vdp, kv.ie),
-        m_elements.buffers.div_buf,
+        Homme::subview(m_elements.buffers.div_buf,kv.ie),
         Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
 
@@ -415,7 +435,8 @@ struct CaarFunctor {
   void compute_temperature_np1(KernelVariables &kv) const {
 
     gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
@@ -587,19 +608,6 @@ struct CaarFunctor {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagPostExchange&, const int it) const {
-    const int ie = it / (NP*NP*NUM_LEV);
-    const int igp = (it / (NP*NUM_LEV)) % NP;
-    const int jgp = (it / NUM_LEV) % NP;
-    const int ilev = it % NUM_LEV;
-    // Rescaling tendencies by inverse mass matrix on sphere
-    m_elements.m_t(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_v(ie, m_data.np1, 0, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_v(ie, m_data.np1, 1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-    m_elements.m_dp3d(ie, m_data.np1, igp, jgp, ilev) *= m_elements.m_rspheremp(ie, igp, jgp);
-  }
-
-  KOKKOS_INLINE_FUNCTION
   size_t shmem_size(const int team_size) const {
     return KernelVariables::shmem_size(team_size);
   }
@@ -616,7 +624,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
+      Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
         const int vector_end = (ilev == NUM_LEV-1 ?
                                 ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
@@ -649,7 +657,7 @@ private:
       const int jgp = loop_idx % NP;
 
       Real dp_prev = 0;
-      Real p_prev = m_data.hybrid_ai0 * m_data.ps0;
+      Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
       for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;
@@ -745,8 +753,7 @@ private:
 
       // Precompy this to the integration array to minimize data access and ops
       // in the Kokkos::single-protected cumsum.
-      const auto integration = Kokkos::subview(m_elements.m_phi,
-                                               kv.ie, igp, jgp, Kokkos::ALL());
+      const auto integration = Homme::subview(m_elements.m_phi, kv.ie, igp, jgp);
       Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NUM_LEV-1), [&] (const int& ilev) {
           integration(ilev) = rgas_tv_dp_over_p(ilev+1);
@@ -781,7 +788,8 @@ private:
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
     gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
@@ -825,7 +833,8 @@ private:
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
     gradient_sphere(
-        kv, m_elements.m_dinv, m_deriv.get_dvv(),
+        kv.team, m_deriv.get_dvv(),
+        Homme::subview(m_elements.m_dinv,kv.ie),
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));

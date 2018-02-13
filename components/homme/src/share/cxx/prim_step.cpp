@@ -1,5 +1,4 @@
 #include "Context.hpp"
-#include "Control.hpp"
 #include "Elements.hpp"
 #include "TimeLevel.hpp"
 #include "SimulationParams.hpp"
@@ -16,7 +15,6 @@ void prim_step (const Real dt, const bool compute_diagnostics)
 {
   GPTLstart("tl-s prim_step");
   // Get control and simulation params
-  Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);
 
@@ -48,7 +46,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   {
     const auto derived_dp = elements.m_derived_dp;
     const auto dp3d = elements.m_dp3d;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,elements.num_elems()*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = ((idx / NUM_LEV) / NP) / NP;
       const int igp  = ((idx / NUM_LEV) / NP) % NP;

@@ -1,6 +1,6 @@
-#include "Control.hpp"
 #include "Context.hpp"
 #include "Elements.hpp"
+#include "HybridVCoord.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
@@ -21,7 +21,6 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
   // Get control and simulation params
-  Control&          data   = Context::singleton().get_control();
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);
 
@@ -59,7 +58,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   // Apply forcing
 #ifdef CAM
-  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
+HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
                         Errors::err_not_implemented);
   // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
 
@@ -93,14 +92,15 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // Initialize dp3d from ps
   GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
-  const auto hybrid_ai_delta = data.hybrid_ai_delta;
-  const auto hybrid_bi_delta = data.hybrid_bi_delta;
-  const auto ps0 = data.ps0;
+  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
+  const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
+  const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
+  const auto ps0 = hvcoord.ps0;
   const auto ps_v = elements.m_ps_v;
   {
     const auto dp3d = elements.m_dp3d;
     const auto n0 = tl.n0;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,data.num_elems*NP*NP*NUM_LEV),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,elements.num_elems()*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = ((idx / NUM_LEV) / NP) / NP;
       const int igp  = ((idx / NUM_LEV) / NP) % NP;
@@ -144,8 +144,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
     const auto qdp = elements.m_qdp;
     const auto np1_qdp = tl.np1_qdp;
     const auto np1 = tl.np1;
-    const auto qsize = data.qsize;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,data.num_elems*data.qsize*NP*NP*NUM_LEV),
+    const auto qsize = params.qsize;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()*params.qsize*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
       const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
       const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;

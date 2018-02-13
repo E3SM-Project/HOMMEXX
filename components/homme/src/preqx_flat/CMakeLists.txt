@@ -101,7 +101,6 @@ SET(PREQX_FLAT_DEPS_F90
   ${SRC_SHARE_DIR}/physical_constants.F90
   ${SRC_SHARE_DIR}/physics_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
-  ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_si_mod.F90
   ${SRC_SHARE_DIR}/prim_si_ref_mod.F90
@@ -141,6 +140,11 @@ IF (NOT ${USE_KOKKOS_KERNELS})
     ${SRC_SHARE_DIR}/prim_advance_hypervis_mod.F90
     ${SRC_SHARE_DIR}/prim_advance_mod.F90
   )
+ELSE()
+  SET (PREQX_FLAT_DEPS_F90
+    ${PREQX_FLAT_DEPS_F90}
+    ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
+  )
 ENDIF()
 
 SET(PREQX_FLAT_DEPS_C
@@ -156,9 +160,9 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/prim_driver.cpp
   ${SRC_SHARE_DIR}/cxx/prim_step.cpp
   ${SRC_SHARE_DIR}/cxx/vertical_remap.cpp
-  ${SRC_SHARE_DIR}/cxx/Control.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/HybridVCoord.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
