@@ -115,6 +115,8 @@ void Context::clear() {
   simulation_params_ = nullptr;
   time_level_ = nullptr;
   vertical_remap_mgr_ = nullptr;
+  caar_functor_ = nullptr;
+  euler_step_functor_ = nullptr;
 }
 
 Context& Context::singleton() {
