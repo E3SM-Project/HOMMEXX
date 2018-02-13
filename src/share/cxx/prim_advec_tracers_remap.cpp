@@ -2,6 +2,7 @@
 #include "EulerStepFunctor.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
+#include "profiling.hpp"
 
 namespace Homme
 {
