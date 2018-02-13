@@ -118,16 +118,6 @@ void init_time_level_c (const int& nm1, const int& n0, const int& np1,
   tl.nstep0 = nstep0;
 }
 
-void update_time_level_c (const int& update_type)
-{
-  Errors::runtime_check(update_type==0,"[update_time_level_c]",Errors::err_not_implemented);
-
-  TimeLevel& tl = Context::singleton().get_time_level();
-  if (update_type==0) {
-    tl.update_dynamics_levels(UpdateType::LEAPFROG);
-  }
-}
-
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
                          CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
