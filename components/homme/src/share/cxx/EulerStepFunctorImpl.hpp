@@ -45,7 +45,7 @@ class EulerStepFunctorImpl {
 
   bool                m_kernel_will_run_limiters;
 
-  std::shared_ptr<BoundaryExchange> m_mm_be;
+  std::shared_ptr<BoundaryExchange> m_mm_be, m_mmqb_be;
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, 3*Q_NUM_TIME_LEVELS> m_bes;
 
   enum { m_mem_per_team = 2 * NP * NP * sizeof(Real) };
@@ -82,6 +82,15 @@ public:
       be.set_num_fields(m_data.qsize, 0, 0);
       be.register_min_max_fields(m_elements.buffers.qlim, m_data.qsize, 0);
       be.registration_completed(); 
+    }
+
+    {
+      m_mmqb_be = std::make_shared<BoundaryExchange>();
+      m_mmqb_be->set_buffers_manager(
+          Context::singleton().get_buffers_manager(MPI_EXCHANGE));
+      m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
+      m_mmqb_be->register_field(m_elements.buffers.qtens_biharmonic, m_data.qsize, 0);
+      m_mmqb_be->registration_completed();
     }
 
     auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
@@ -391,18 +400,9 @@ public:
   }
 
   void minmax_and_biharmonic() {
-    const auto be = Context::singleton().get_boundary_exchange(
-        "Euler step: min/max & qtens_biharmonic");
-    if (!be->is_registration_completed()) {
-      be->set_buffers_manager(
-          Context::singleton().get_buffers_manager(MPI_EXCHANGE));
-      be->set_num_fields(0, 0, m_data.qsize);
-      be->register_field(m_elements.buffers.qtens_biharmonic, m_data.qsize, 0);
-      be->registration_completed();
-    }
     neighbor_minmax_start();
     compute_biharmonic_pre();
-    be->exchange(m_elements.m_rspheremp);
+    m_mmqb_be->exchange(m_elements.m_rspheremp);
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
