@@ -50,7 +50,7 @@ private:
   std::unique_ptr<SimulationParams>       simulation_params_;
   std::unique_ptr<TimeLevel>              time_level_;
   std::unique_ptr<VerticalRemapManager>   vertical_remap_mgr_;
-  std::unique_ptr<EulerStepFunctor>     euler_step_functor_;
+  std::unique_ptr<EulerStepFunctor>       euler_step_functor_;
 
   // Clear the objects Context manages.
   void clear();

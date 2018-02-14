@@ -462,7 +462,9 @@ public:
         minmax_and_biharmonic();
       }
     }
+    GPTLstart("advance_qdp");
     advect_and_limit();
+    GPTLstop("advance_qdp");
     exchange_qdp_dss_var();
   }
 

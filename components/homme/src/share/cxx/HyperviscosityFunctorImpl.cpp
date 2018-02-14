@@ -29,6 +29,18 @@ HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& pa
   }
 }
 
+void HyperviscosityFunctorImpl::init_boundary_exchanges () {
+  m_be = std::make_shared<BoundaryExchange>();
+  auto& be = *m_be;
+  auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+  be.set_buffers_manager(bm_exchange);
+  be.set_num_fields(0, 0, 4);
+  be.register_field(m_elements.buffers.vtens, 2, 0);
+  be.register_field(m_elements.buffers.ttens);
+  be.register_field(m_elements.buffers.dptens);
+  be.registration_completed();
+}
+
 void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real eta_ave_w)
 {
   m_data.np1 = np1;
@@ -45,13 +57,9 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     Kokkos::parallel_for(policy_pre_exchange, *this);
     Kokkos::fence();
 
-    // Boundary Echange
-    std::string be_name = "HyperviscosityFunctor";
-    BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
-    assert (be.is_registration_completed());
-
     // Exchange
-    be.exchange();
+    assert (m_be->registration_completed());
+    m_be->exchange();
 
     // Update states
     Kokkos::parallel_for(policy_update_states, *this);
@@ -67,13 +75,9 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   Kokkos::parallel_for(policy_first_laplace, *this);
   Kokkos::fence();
 
-  // Get be structure
-  std::string be_name = "HyperviscosityFunctor";
-  BoundaryExchange& be = *Context::singleton().get_boundary_exchange(be_name);
-  assert (be.is_registration_completed());
-
   // Exchange
-  be.exchange(m_elements.m_rspheremp);
+  assert (m_be->registration_completed());
+  m_be->exchange(m_elements.m_rspheremp);
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
