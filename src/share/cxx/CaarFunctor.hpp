@@ -4,6 +4,7 @@
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "HybridVCoord.hpp"
+#include "SphereOperators.hpp"
 #include "Types.hpp"
 #include <memory>
 
@@ -16,7 +17,9 @@ class CaarFunctor {
 public:
 
   CaarFunctor();
-  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit);
+  CaarFunctor(const Elements& elements, const Derivative& derivative,
+              const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
+              const int rsplit);
   CaarFunctor (const CaarFunctor&) = delete;
 
   ~CaarFunctor();

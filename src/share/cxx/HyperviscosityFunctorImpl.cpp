@@ -6,9 +6,10 @@ namespace Homme
 {
 
 HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& params, const Elements& elements, const Derivative& deriv)
- : m_elements (elements)
- , m_deriv    (deriv)
- , m_data     (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ : m_elements   (elements)
+ , m_deriv      (deriv)
+ , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ , m_sphere_ops (Context::singleton().get_sphere_operators())
 {
   // Sanity check
   assert(params.params_set);
@@ -58,7 +59,7 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     Kokkos::fence();
 
     // Exchange
-    assert (m_be->registration_completed());
+    assert (m_be->is_registration_completed());
     m_be->exchange();
 
     // Update states
@@ -76,7 +77,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   Kokkos::fence();
 
   // Exchange
-  assert (m_be->registration_completed());
+  assert (m_be->is_registration_completed());
   m_be->exchange(m_elements.m_rspheremp);
 
   // TODO: update m_data.nu_ratio if nu_div!=nu

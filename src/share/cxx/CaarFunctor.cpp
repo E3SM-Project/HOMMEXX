@@ -14,20 +14,23 @@ namespace Homme {
 CaarFunctor::CaarFunctor()
  : m_policy (Homme::get_default_team_policy<ExecSpace>(Context::singleton().get_elements().num_elems()))
 {
-  Elements&     elements   = Context::singleton().get_elements();
-  Derivative&   derivative = Context::singleton().get_derivative();
-  HybridVCoord& hvcoord    = Context::singleton().get_hvcoord();
-  const int rsplit = Context::singleton().get_simulation_params().rsplit;
+  Elements&        elements   = Context::singleton().get_elements();
+  Derivative&      derivative = Context::singleton().get_derivative();
+  HybridVCoord&    hvcoord    = Context::singleton().get_hvcoord();
+  SphereOperators& sphere_ops = Context::singleton().get_sphere_operators();
+  const int        rsplit     = Context::singleton().get_simulation_params().rsplit;
 
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
 }
 
-CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative,
+                         const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
+                         const int rsplit)
  : m_policy (Homme::get_default_team_policy<ExecSpace>(elements.num_elems()))
 {
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
 }
 
 CaarFunctor::~CaarFunctor ()

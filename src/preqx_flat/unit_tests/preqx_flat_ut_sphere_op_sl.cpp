@@ -45,31 +45,17 @@ class compute_sphere_operator_test {
       : _num_elems(num_elems),
         scalar_input_d("scalar input", num_elems),
         vector_input_d("vector input", num_elems),
-        d_d("d", num_elems),
-        dinv_d("dinv", num_elems),
-        metdet_d("metdet", num_elems),
-        spheremp_d("spheremp", num_elems),
-        dvv_d("dvv"),
         scalar_output_d("scalar output", num_elems),
         vector_output_d("vector output", num_elems),
-        temp1_d("temp1", num_elems),
-        temp2_d("temp2", num_elems),
-        temp3_d("temp3", num_elems),
-        sphere_buf("Spherical buffer", num_elems),
         scalar_input_host(
             Kokkos::create_mirror_view(scalar_input_d)),
         vector_input_host(
             Kokkos::create_mirror_view(vector_input_d)),
-        d_host(Kokkos::create_mirror_view(d_d)),
-        dinv_host(Kokkos::create_mirror_view(dinv_d)),
-        metdet_host(Kokkos::create_mirror_view(metdet_d)),
-        spheremp_host(
-            Kokkos::create_mirror_view(spheremp_d)),
-        dvv_host(Kokkos::create_mirror_view(dvv_d)),
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d))
+            Kokkos::create_mirror_view(vector_output_d)),
+        sphere_ops(num_elems)
   {
     // constructor's body
     // init randonly
@@ -90,30 +76,50 @@ class compute_sphere_operator_test {
                      -100.0, 100.0));
     Kokkos::deep_copy(vector_input_d, vector_input_host);
 
+    // D
+    ExecViewManaged<Real * [2][2][NP][NP]> d_d("",num_elems);
+    d_host = Kokkos::create_mirror_view(d_d);
     genRandArray(d_host, engine,
                  std::uniform_real_distribution<Real>(
                      0, 1.0));
     Kokkos::deep_copy(d_d, d_host);
 
+    // Dinv
+    ExecViewManaged<Real * [2][2][NP][NP]> dinv_d("",num_elems);
+    dinv_host = Kokkos::create_mirror_view(dinv_d);
     genRandArray(dinv_host, engine,
                  std::uniform_real_distribution<Real>(
                      0, 1.0));
     Kokkos::deep_copy(dinv_d, dinv_host);
 
+    // metdet
+    ExecViewManaged<Real * [NP][NP]> metdet_d("",num_elems);
+    metdet_host = Kokkos::create_mirror_view(metdet_d);
     genRandArray(metdet_host, engine,
                  std::uniform_real_distribution<Real>(
                      0, 1.0));
     Kokkos::deep_copy(metdet_d, metdet_host);
 
+    // spheremp
+    ExecViewManaged<Real * [NP][NP]> spheremp_d ("",num_elems);
+    spheremp_host = Kokkos::create_mirror_view(spheremp_d);
     genRandArray(spheremp_host, engine,
                  std::uniform_real_distribution<Real>(
                      0, 1.0));
     Kokkos::deep_copy(spheremp_d, spheremp_host);
 
+    // dvv
+    ExecViewManaged<Real[NP][NP]> dvv_d("");
+    dvv_host = Kokkos::create_mirror_view(dvv_d);
     genRandArray(dvv_host, engine,
                  std::uniform_real_distribution<Real>(
                      0, 1.0));
     Kokkos::deep_copy(dvv_d, dvv_host);
+
+    // Set device views in SphereOperators
+    ExecViewManaged<Real*      [NP][NP]> mp_d("",num_elems);  // Unused by this test, but needed by sphere_ops
+    ExecViewManaged<Real*[2][2][NP][NP]> metinv_d("",num_elems);  // Unused by this test, but needed by sphere_ops
+    sphere_ops.set_views(dvv_d,d_d,dinv_d,metinv_d,metdet_d,spheremp_d,mp_d);
   }
 
   const int _num_elems;  // league size, serves as ie index
@@ -121,16 +127,8 @@ class compute_sphere_operator_test {
   // device views
   ExecViewManaged<Real * [NP][NP]> scalar_input_d;
   ExecViewManaged<Real * [2][NP][NP]> vector_input_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> d_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
-  ExecViewManaged<Real * [NP][NP]> metdet_d;
-  ExecViewManaged<Real * [NP][NP]> spheremp_d;
-  ExecViewManaged<Real[NP][NP]> dvv_d;
   ExecViewManaged<Real * [NP][NP]> scalar_output_d;
   ExecViewManaged<Real * [2][NP][NP]> vector_output_d;
-  ExecViewManaged<Real * [2][NP][NP]> temp1_d, temp2_d,
-      temp3_d;
-  ExecViewManaged<Real* [2][NP][NP]> sphere_buf;
 
   // host views, one dim is num_elems. Spherical operators
   // do not take ie or nlev fields,  but to make it a more
@@ -163,6 +161,8 @@ class compute_sphere_operator_test {
   ExecViewManaged<Real * [2][NP][NP]>::HostMirror
       vector_output_host;
 
+  SphereOperators     sphere_ops;
+
   // tag for laplace_simple()
   struct TagSimpleLaplace {};
   // tag for gradient_sphere()
@@ -183,12 +183,8 @@ class compute_sphere_operator_test {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    laplace_wk_sl(team, dvv_d,
-                  Homme::subview(dinv_d,ie),
-                  Homme::subview(spheremp_d,ie),
-                  Homme::subview(temp1_d,ie),
+    sphere_ops.laplace_wk_sl(team,
                   Homme::subview(scalar_input_d,ie),
-                  Homme::subview(sphere_buf,ie),
                   Homme::subview(scalar_output_d,ie));
   };  // end of op() for laplace_simple
 
@@ -223,11 +219,8 @@ class compute_sphere_operator_test {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    divergence_sphere_wk_sl(team, dvv_d,
-                            Homme::subview(dinv_d,ie),
-                            Homme::subview(spheremp_d,ie),
+    sphere_ops.divergence_sphere_wk_sl(team,
                             Homme::subview(vector_input_d,ie),
-                            Homme::subview(sphere_buf,ie),
                             Homme::subview(scalar_output_d,ie));
   };  // end of op() for divergence_sphere_wk
 
@@ -236,10 +229,8 @@ class compute_sphere_operator_test {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    gradient_sphere_sl(team, dvv_d,
-                       Homme::subview(dinv_d,ie),
+    sphere_ops.gradient_sphere_sl(team,
                        Homme::subview(scalar_input_d,ie),
-                       Homme::subview(sphere_buf,ie),
                        Homme::subview(vector_output_d,ie));
   };
 

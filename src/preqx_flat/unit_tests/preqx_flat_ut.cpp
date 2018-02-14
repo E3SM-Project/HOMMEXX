@@ -99,7 +99,7 @@ template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
       : functor(elements, Context::singleton().get_derivative(),
-        Context::singleton().get_hvcoord(),rsplit_in),
+        Context::singleton().get_hvcoord(),Context::singleton().get_sphere_operators(),rsplit_in),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),

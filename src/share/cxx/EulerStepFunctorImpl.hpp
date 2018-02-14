@@ -42,6 +42,7 @@ class EulerStepFunctorImpl {
   const Derivative    m_deriv;
   const HybridVCoord  m_hvcoord;
   EulerStepData       m_data;
+  SphereOperators     m_sphere_ops;
 
   bool                m_kernel_will_run_limiters;
 
@@ -53,9 +54,10 @@ class EulerStepFunctorImpl {
 public:
 
   EulerStepFunctorImpl ()
-   : m_elements(Context::singleton().get_elements())
-   , m_deriv   (Context::singleton().get_derivative())
-   , m_hvcoord (Context::singleton().get_hvcoord())
+   : m_elements   (Context::singleton().get_elements())
+   , m_deriv      (Context::singleton().get_derivative())
+   , m_hvcoord    (Context::singleton().get_hvcoord())
+   , m_sphere_ops (Context::singleton().get_sphere_operators())
   {}
 
   void reset (const SimulationParams& params) {
@@ -81,7 +83,7 @@ public:
       be.set_buffers_manager(bm_exchange_minmax);
       be.set_num_fields(m_data.qsize, 0, 0);
       be.register_min_max_fields(m_elements.buffers.qlim, m_data.qsize, 0);
-      be.registration_completed(); 
+      be.registration_completed();
     }
 
     {
@@ -175,13 +177,7 @@ public:
         });
       team.team_barrier();
     }
-    laplace_simple(team, m_deriv.get_dvv(),
-                   Homme::subview(e.m_dinv,ie),
-                   Homme::subview(e.m_spheremp,ie),
-                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
-                   qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, ie, iq),
-                   qtens_biharmonic);
+    m_sphere_ops.laplace_simple(team, qtens_biharmonic, qtens_biharmonic);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -191,13 +187,7 @@ public:
     const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
     team.team_barrier();
-    laplace_simple(team, m_deriv.get_dvv(),
-                   Homme::subview(e.m_dinv,ie),
-                   Homme::subview(e.m_spheremp,ie),
-                   Homme::subview(e.buffers.vstar_qdp, ie, iq),
-                   qtens_biharmonic,
-                   Homme::subview(e.buffers.qwrk, ie, iq),
-                   qtens_biharmonic);
+    m_sphere_ops.laplace_simple(team, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
       const auto spheremp = Homme::subview(e.m_spheremp, ie);
@@ -286,11 +276,8 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
     const int ie = team.league_rank();
-    divergence_sphere(team, m_deriv.get_dvv(),
-                      Homme::subview(m_elements.m_dinv,ie),
-                      Homme::subview(m_elements.m_metdet,ie),
+    m_sphere_ops.divergence_sphere(team,
                       Homme::subview(m_elements.m_derived_vn0, ie),
-                      Homme::subview(m_elements.buffers.div_buf,ie),
                       Homme::subview(m_elements.m_derived_divdp, ie));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
@@ -572,10 +559,9 @@ private:
       metdet = Homme::subview(m_elements.m_metdet, kv.ie);
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
-    divergence_sphere_update(
-      kv.team, -m_data.dt, 1.0, dvv, dinv, metdet,
+    m_sphere_ops.divergence_sphere_update(
+      kv.team, -m_data.dt, 1.0,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
-      Homme::subview(m_elements.buffers.qwrk, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
   }
 

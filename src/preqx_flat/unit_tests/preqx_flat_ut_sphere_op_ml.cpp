@@ -108,45 +108,25 @@ class compute_sphere_operator_test_ml {
         scalar_input_d("scalar input", num_elems),
         scalar_input_COPY2_d("scalar input 2", num_elems),
         vector_input_d("vector input", num_elems),
-        d_d("d", num_elems),
-        dinv_d("dinv", num_elems),
-        metinv_d("metinv", num_elems),
-        spheremp_d("spheremp", num_elems),
-        mp_d("mp", num_elems),
-        metdet_d("metdet", num_elems),
-        dvv_d("dvv"),
         tensor_d("tensor", num_elems),
         vec_sph2cart_d("ver_sph2cart", num_elems),
         scalar_output_d("scalar output", num_elems),
         vector_output_d("vector output", num_elems),
-        temp1_d("temp1", num_elems),
-        temp2_d("temp2", num_elems),
-        temp3_d("temp3", num_elems),
-        temp4_d("temp4", num_elems),
-        temp5_d("temp5", num_elems),
-        temp6_d("temp6", num_elems),
-        sphere_buf("Spherical buffer", num_elems),
 
         // Make certain Kokkos doesn't use the same arrays
         // as used on the device when they are mutable
         scalar_input_host("scalar input host", num_elems),
         scalar_input_COPY2_host("scalar input host copy", num_elems),
         vector_input_host("vector input host", num_elems),
-        d_host(Kokkos::create_mirror_view(d_d)),
-        dinv_host(Kokkos::create_mirror_view(dinv_d)),
-        metinv_host(Kokkos::create_mirror_view(metinv_d)),
-        metdet_host(Kokkos::create_mirror_view(metdet_d)),
-        spheremp_host(
-            Kokkos::create_mirror_view(spheremp_d)),
-        mp_host(Kokkos::create_mirror_view(mp_d)),
-        dvv_host(Kokkos::create_mirror_view(dvv_d)),
         tensor_host(Kokkos::create_mirror_view(tensor_d)),
         vec_sph2cart_host(
             Kokkos::create_mirror_view(vec_sph2cart_d)),
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d)) {
+            Kokkos::create_mirror_view(vector_output_d)),
+        sphere_ops(num_elems)
+  {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(
@@ -163,38 +143,59 @@ class compute_sphere_operator_test_ml {
                                              1000.0));
     Kokkos::deep_copy(vector_input_d, vector_input_host);
 
+    // D
+    ExecViewManaged<Real * [2][2][NP][NP]> d_d("",num_elems);
+    d_host = Kokkos::create_mirror_view(d_d);
     genRandArray(d_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(d_d, d_host);
 
+    // Dinv
+    ExecViewManaged<Real * [2][2][NP][NP]> dinv_d("",num_elems);
+    dinv_host = Kokkos::create_mirror_view(dinv_d);
     genRandArray(dinv_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(dinv_d, dinv_host);
 
+    // metinv
+    ExecViewManaged<Real * [2][2][NP][NP]> metinv_d("",num_elems);
+    metinv_host = Kokkos::create_mirror_view(metinv_d);
     genRandArray(metinv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(metinv_d, metinv_host);
 
+    // metdet
+    ExecViewManaged<Real * [NP][NP]> metdet_d("",num_elems);
+    metdet_host = Kokkos::create_mirror_view(metdet_d);
     genRandArray(metdet_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(metdet_d, metdet_host);
 
+    // spheremp
+    ExecViewManaged<Real * [NP][NP]> spheremp_d("",num_elems);
+    spheremp_host = Kokkos::create_mirror_view(spheremp_d);
     genRandArray(spheremp_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(spheremp_d, spheremp_host);
 
+    // mp
+    ExecViewManaged<Real * [NP][NP]> mp_d("",num_elems);
+    mp_host = Kokkos::create_mirror_view(mp_d);
     genRandArray(mp_host,
                  engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
     Kokkos::deep_copy(mp_d, mp_host);
 
+    // dvv
+    ExecViewManaged<Real[NP][NP]> dvv_d("");
+    dvv_host = Kokkos::create_mirror_view(dvv_d);
     genRandArray(dvv_host, engine,
                  std::uniform_real_distribution<Real>(
                      -100.0, 100.0));
@@ -213,6 +214,8 @@ class compute_sphere_operator_test_ml {
     genRandArray(&nu_ratio, 1, engine,
                  std::uniform_real_distribution<Real>(
                      0.0001, 1000.0));
+
+    sphere_ops.set_views(dvv_d,d_d,dinv_d,metinv_d,metdet_d,spheremp_d,mp_d);
 // setting everything to 1 is good for debugging
 #if 0
     for(int i1=0; i1<_num_elems; i1++) {
@@ -258,29 +261,12 @@ class compute_sphere_operator_test_ml {
       scalar_input_COPY2_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
       vector_input_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> d_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> dinv_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> metinv_d;
-  ExecViewManaged<Real * [NP][NP]> spheremp_d;
-  ExecViewManaged<Real * [NP][NP]> mp_d;
-  ExecViewManaged<Real * [NP][NP]> metdet_d;
-  ExecViewManaged<Real[NP][NP]> dvv_d;
   ExecViewManaged<Real * [2][2][NP][NP]> tensor_d;
   ExecViewManaged<Real * [2][3][NP][NP]> vec_sph2cart_d;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
       scalar_output_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
       vector_output_d;
-  // making temp vars with leading dimension 'ie' to avoid
-  // thread sharing issues  in the ie loop
-  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> temp1_d,
-      temp2_d, temp3_d;
-
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> temp4_d,
-      temp5_d, temp6_d;
-
-  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> sphere_buf;
-
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
@@ -332,6 +318,8 @@ class compute_sphere_operator_test_ml {
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
       vector_output_host;
 
+  SphereOperators sphere_ops;
+
   Real nu_ratio;
 
   // tag for laplace_simple()
@@ -368,10 +356,8 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    gradient_sphere(team, dvv_d,
-                    Homme::subview(dinv_d,ie),
+    sphere_ops.gradient_sphere(team,
                     Homme::subview(scalar_input_d,ie),
-                    Homme::subview(sphere_buf, ie),
                     Homme::subview(vector_output_d,ie));
 
   }  // end of op() for grad_sphere_ml
@@ -381,11 +367,8 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    divergence_sphere_wk(team, dvv_d,
-                         Homme::subview(dinv_d,ie),
-                         Homme::subview(spheremp_d,ie),
+    sphere_ops.divergence_sphere_wk(team,
                          Homme::subview(vector_input_d,ie),
-                         Homme::subview(sphere_buf, ie),
                          Homme::subview(scalar_output_d,ie));
   }  // end of op() for divergence_sphere_wk_ml
 
@@ -394,12 +377,8 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    laplace_simple(team, dvv_d,
-                   Homme::subview(dinv_d,ie),
-                   Homme::subview(spheremp_d,ie),
-                   Homme::subview(temp1_d,ie),
+    sphere_ops.laplace_simple(team,
                    Homme::subview(scalar_input_d,ie),
-                   Homme::subview(sphere_buf, ie),
                    Homme::subview(scalar_output_d,ie));
   }  // end of op() for laplace_wk_ml
 
@@ -408,13 +387,9 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    laplace_tensor(team, dvv_d,
-                   Homme::subview(dinv_d,ie),
-                   Homme::subview(spheremp_d,ie),
+    sphere_ops.laplace_tensor(team,
                    Homme::subview(tensor_d,ie),
-                   Homme::subview(temp1_d,ie),
                    Homme::subview(scalar_input_d,ie),
-                   Homme::subview(sphere_buf,ie),
                    Homme::subview(scalar_output_d,ie));
   }  // end of op() for laplace_tensor multil
 
@@ -423,11 +398,8 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    curl_sphere_wk_testcov(team, dvv_d,
-                           Homme::subview(d_d,ie),
-                           Homme::subview(mp_d,ie),
+    sphere_ops.curl_sphere_wk_testcov(team,
                            Homme::subview(scalar_input_d,ie),
-                           Homme::subview(sphere_buf,ie),
                            Homme::subview(vector_output_d,ie));
   }  // end of op() for curl_sphere_wk_testcov
 
@@ -436,13 +408,8 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    grad_sphere_wk_testcov(team, dvv_d,
-                           Homme::subview(d_d,ie),
-                           Homme::subview(mp_d,ie),
-                           Homme::subview(metinv_d,ie),
-                           Homme::subview(metdet_d,ie),
+    sphere_ops.grad_sphere_wk_testcov(team,
                            Homme::subview(scalar_input_d,ie),
-                           Homme::subview(sphere_buf,ie),
                            Homme::subview(vector_output_d,ie));
   }  // end of op() for grad_sphere_wk_testcov
 
@@ -451,16 +418,9 @@ class compute_sphere_operator_test_ml {
                   TeamMember team) const {
     const int ie = team.league_rank();
 
-    vlaplace_sphere_wk_cartesian (team, dvv_d,
-                                  Homme::subview(dinv_d,ie),
-                                  Homme::subview(spheremp_d,ie),
+    sphere_ops.vlaplace_sphere_wk_cartesian (team,
                                   Homme::subview(tensor_d,ie),
                                   Homme::subview(vec_sph2cart_d,ie),
-                                  Homme::subview(temp1_d,ie),
-                                  Homme::subview(temp4_d,ie),
-                                  Homme::subview(temp5_d,ie),
-                                  Homme::subview(temp6_d,ie),
-                                  Homme::subview(sphere_buf,ie),
                                   Homme::subview(vector_input_d,ie),
                                   Homme::subview(vector_output_d,ie));
   }  // end of op() for laplace_tensor multil
@@ -471,16 +431,7 @@ class compute_sphere_operator_test_ml {
     const int ie = team.league_rank();
 
     // don't forget to introduce nu_ratio
-    vlaplace_sphere_wk_contra(team, nu_ratio, dvv_d,
-                              Homme::subview(d_d,ie),
-                              Homme::subview(dinv_d,ie),
-                              Homme::subview(mp_d,ie),
-                              Homme::subview(spheremp_d,ie),
-                              Homme::subview(metinv_d,ie),
-                              Homme::subview(metdet_d,ie),
-                              Homme::subview(temp5_d,ie),
-                              Homme::subview(temp1_d,ie),
-                              Homme::subview(sphere_buf,ie),
+    sphere_ops.vlaplace_sphere_wk_contra(team, nu_ratio,
                               Homme::subview(vector_input_d,ie),
                               Homme::subview(vector_output_d,ie));
   }  // end of op() for laplace_tensor multil
@@ -490,12 +441,9 @@ class compute_sphere_operator_test_ml {
   void operator()(const TagVorticityVectorML &,
                   TeamMember team) const {
     const int ie = team.league_rank();
-    vorticity_sphere_vector(team, dvv_d,
-                            Homme::subview(d_d,ie),
-                            Homme::subview(metdet_d,ie),
-                            Homme::subview(vector_input_d,ie),
-                            Homme::subview(sphere_buf,ie),
-                            Homme::subview(scalar_output_d,ie));
+    sphere_ops.vorticity_sphere (team,
+                      Homme::subview(vector_input_d,ie),
+                      Homme::subview(scalar_output_d,ie));
   }  // end of op() for vorticity_sphere_vector multilevel
 
 
