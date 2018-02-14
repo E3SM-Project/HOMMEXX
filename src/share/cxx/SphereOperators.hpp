@@ -361,12 +361,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        grad_s(0, igp, jgp, ilev) +=
-            D_inv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            D_inv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
-        grad_s(1, igp, jgp, ilev) +=
-            D_inv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            D_inv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+        const auto v_buf0 = v_buf(0, igp, jgp, ilev);
+        const auto v_buf1 = v_buf(1, igp, jgp, ilev);
+        grad_s(0,igp,jgp,ilev) += D_inv(0,0,igp,jgp) * v_buf0 + D_inv(0,1,igp,jgp) * v_buf1;
+        grad_s(1,igp,jgp,ilev) += D_inv(1,0,igp,jgp) * v_buf0 + D_inv(1,1,igp,jgp) * v_buf1;
       });
     });
     kv.team_barrier();
