@@ -470,10 +470,10 @@ vorticity_sphere_vector(const TeamMember &team,
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-      sphere_buf(0,igp,jgp,ilev) = d(0,0,igp,jgp) * v(0,igp,jgp,ilev)
-                                       + d(0,1,igp,jgp) * v(1,igp,jgp,ilev);
-      sphere_buf(1,igp,jgp,ilev) = d(1,0,igp,jgp) * v(0,igp,jgp,ilev)
-                                       + d(1,1,igp,jgp) * v(1,igp,jgp,ilev);
+      const auto& v0 = v(0,igp,jgp,ilev);
+      const auto& v1 = v(1,igp,jgp,ilev);
+      sphere_buf(0,igp,jgp,ilev) = d(0,0,igp,jgp) * v0 + d(0,1,igp,jgp) * v1;
+      sphere_buf(1,igp,jgp,ilev) = d(1,0,igp,jgp) * v0 + d(1,1,igp,jgp) * v1;
     });
   });
   team.team_barrier();
@@ -513,10 +513,12 @@ divergence_sphere_wk(const TeamMember &team,
     const int igp = loop_idx / NP;
     const int jgp = loop_idx % NP;
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-      sphere_buf(0,igp,jgp,ilev) = dinv(0, 0, igp, jgp) * v(0, igp, jgp, ilev)
-                                 + dinv(1, 0, igp, jgp) * v(1, igp, jgp, ilev);
-      sphere_buf(1,igp,jgp,ilev) = dinv(0, 1, igp, jgp) * v(0, igp, jgp, ilev)
-                                 + dinv(1, 1, igp, jgp) * v(1, igp, jgp, ilev);
+      const auto& v0 = v(0,igp,jgp,ilev);
+      const auto& v1 = v(1,igp,jgp,ilev);
+      sphere_buf(0,igp,jgp,ilev) = dinv(0, 0, igp, jgp) * v0
+                                 + dinv(1, 0, igp, jgp) * v1;
+      sphere_buf(1,igp,jgp,ilev) = dinv(0, 1, igp, jgp) * v0
+                                 + dinv(1, 1, igp, jgp) * v1;
     });
   });
   team.team_barrier();
@@ -682,13 +684,15 @@ curl_sphere_wk_testcov_update(const TeamMember &team, const Real alpha, const Re
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
+      const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
+      const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
       curls(0,igp,jgp,ilev) = beta*curls(0,igp,jgp,ilev) + alpha *
-                              (D(0,0,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                               + D(1,0,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
+                              (D(0,0,igp,jgp)*sb0
+                             + D(1,0,igp,jgp)*sb1)
                               * PhysicalConstants::rrearth;
       curls(1,igp,jgp,ilev) = beta*curls(1,igp,jgp,ilev) + alpha *
-                              (D(0,1,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                             + D(1,1,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
+                              (D(0,1,igp,jgp)*sb0
+                             + D(1,1,igp,jgp)*sb1)
                             * PhysicalConstants::rrearth;
     });
   });
@@ -717,31 +721,38 @@ grad_sphere_wk_testcov(const TeamMember &team,
     });
     for (int jgp = 0; jgp < NP; ++jgp) {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
+        const auto& mpnj = mp(ngp,jgp);
+        const auto& mpjm = mp(jgp,mgp);
+        const auto& md = metdet(ngp,mgp);
+        const auto& snj = scalar(ngp,jgp,ilev);
+        const auto& sjm = scalar(jgp,mgp,ilev);
+        const auto& djm = dvv(jgp,mgp);
+        const auto& djn = dvv(jgp,ngp);
         sphere_buf(0, ngp, mgp, ilev) -= (
-          mp(ngp,jgp)*
+          mpnj*
           metinv(0,0,ngp,mgp)*
-          metdet(ngp,mgp)*
-          scalar(ngp,jgp,ilev)*
-          dvv(jgp,mgp)
+          md*
+          snj*
+          djm
           +
-          mp(jgp,mgp)*
+          mpjm*
           metinv(0,1,ngp,mgp)*
-          metdet(ngp,mgp)*
-          scalar(jgp,mgp,ilev)*
-          dvv(jgp,ngp));
+          md*
+          sjm*
+          djn);
 
         sphere_buf(1, ngp, mgp, ilev) -= (
-          mp(ngp,jgp)*
+          mpnj*
           metinv(1,0,ngp,mgp)*
-          metdet(ngp,mgp)*
-          scalar(ngp,jgp,ilev)*
-          dvv(jgp,mgp)
+          md*
+          snj*
+          djm
           +
-          mp(jgp,mgp)*
+          mpjm*
           metinv(1,1,ngp,mgp)*
-          metdet(ngp,mgp)*
-          scalar(jgp,mgp,ilev)*
-          dvv(jgp,ngp));
+          md*
+          sjm*
+          djn);
       });
     }
   });
@@ -752,11 +763,13 @@ grad_sphere_wk_testcov(const TeamMember &team,
     const int igp = loop_idx / NP; //slowest
     const int jgp = loop_idx % NP; //fastest
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-      grads(0,igp,jgp,ilev) = (D(0,0,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                             + D(1,0,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
+      const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
+      const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
+      grads(0,igp,jgp,ilev) = (D(0,0,igp,jgp)*sb0
+                             + D(1,0,igp,jgp)*sb1)
                             * PhysicalConstants::rrearth;
-      grads(1,igp,jgp,ilev) = (D(0,1,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                             + D(1,1,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
+      grads(1,igp,jgp,ilev) = (D(0,1,igp,jgp)*sb0
+                             + D(1,1,igp,jgp)*sb1)
                             * PhysicalConstants::rrearth;
     });
   });
