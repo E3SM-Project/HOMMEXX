@@ -7,6 +7,7 @@
 #include "HommexxEnums.hpp"
 #include "EulerStepFunctor.hpp"
 #include "HyperviscosityFunctor.hpp"
+#include "CaarFunctor.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
 #include "ErrorDefs.hpp"
@@ -149,9 +150,6 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
 void init_boundary_exchanges_c ()
 {
   SimulationParams& params = Context::singleton().get_simulation_params();
-  Elements& elements = Context::singleton().get_elements();
-  std::shared_ptr<BuffersManager> bm_exchange        = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-  std::shared_ptr<BuffersManager> bm_exchange_minmax = Context::singleton().get_buffers_manager(MPI_EXCHANGE_MIN_MAX);
 
   // Euler BEs
   auto& esf = Context::singleton().get_euler_step_functor();
@@ -159,28 +157,8 @@ void init_boundary_exchanges_c ()
   esf.init_boundary_exchanges();
 
   // RK stages BE's
-  {
-    for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
-      std::stringstream ss;
-      ss << "caar tl " << tl;
-
-      // Get the BE
-      BoundaryExchange& be = *Context::singleton().get_boundary_exchange(ss.str());
-
-      // Safety check (do not call this routine twice!)
-      assert (!be.is_registration_completed());
-
-      // If it was not yet created, create it and set it up
-      be.set_buffers_manager(bm_exchange);
-
-      // Set the views of this time level into this time level's boundary exchange
-      be.set_num_fields(0,0,4);
-      be.register_field(elements.m_v,tl,2,0);
-      be.register_field(elements.m_t,1,tl);
-      be.register_field(elements.m_dp3d,1,tl);
-      be.registration_completed();
-    }
-  }
+  auto& cf = Context::singleton().get_caar_functor();
+  cf.init_boundary_exchanges(Context::singleton().get_buffers_manager(MPI_EXCHANGE));
 
   // HyperviscosityFunctor's BE's
   auto& hvf = Context::singleton().get_hyperviscosity_functor();

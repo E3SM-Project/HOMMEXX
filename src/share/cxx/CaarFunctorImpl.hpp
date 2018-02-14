@@ -7,6 +7,7 @@
 #include "Derivative.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
+#include "BoundaryExchange.hpp"
 
 #include "utilities/SubviewUtils.hpp"
 
@@ -39,6 +40,8 @@ struct CaarFunctorImpl {
   const Elements      m_elements;
   const Derivative    m_deriv;
 
+  Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
+
   CaarFunctorImpl(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
     : m_data(rsplit)
     , m_hvcoord(hvcoord)
@@ -46,6 +49,19 @@ struct CaarFunctorImpl {
     , m_deriv(derivative)
   {
     // Nothing to be done here
+  }
+
+  void init_boundary_exchanges (const std::shared_ptr<BuffersManager>& bm_exchange) {
+    for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
+      m_bes[tl] = std::make_shared<BoundaryExchange>();
+      auto& be = *m_bes[tl];
+      be.set_buffers_manager(bm_exchange);
+      be.set_num_fields(0,0,4);
+      be.register_field(m_elements.m_v,tl,2,0);
+      be.register_field(m_elements.m_t,1,tl);
+      be.register_field(m_elements.m_dp3d,1,tl);
+      be.registration_completed();
+    }
   }
 
   void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }

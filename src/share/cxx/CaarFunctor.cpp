@@ -39,6 +39,11 @@ CaarFunctor::~CaarFunctor ()
   // would be in the header file, where CaarFunctorImpl type is incomplete.
 }
 
+void CaarFunctor::init_boundary_exchanges (const std::shared_ptr<BuffersManager>& bm_exchange) {
+  assert (m_caar_impl);
+  m_caar_impl->init_boundary_exchanges(bm_exchange);
+}
+
 void CaarFunctor::set_n0_qdp (const int n0_qdp)
 {
   // Sanity check (should NEVER happen)
@@ -89,6 +94,9 @@ void CaarFunctor::run (const int nm1, const int n0,   const int np1,
   Kokkos::parallel_for("caar loop pre-boundary exchange", m_policy, *m_caar_impl);
   ExecSpace::fence();
   GPTLstop("caar compute");
+  start_timer("caar_bexchV");
+  m_caar_impl->m_bes[np1]->exchange(m_caar_impl->m_elements.m_rspheremp);
+  stop_timer("caar_bexchV");
   profiling_pause();
 }
 
