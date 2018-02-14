@@ -316,12 +316,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        grad_s(0, igp, jgp, ilev) =
-            D_inv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            D_inv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
-        grad_s(1, igp, jgp, ilev) =
-            D_inv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            D_inv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+        const auto& v_buf0 = v_buf(0, igp, jgp, ilev);
+        const auto& v_buf1 = v_buf(1, igp, jgp, ilev);
+        grad_s(0,igp,jgp,ilev) = D_inv(0,0,igp,jgp) * v_buf0 + D_inv(0,1,igp,jgp) * v_buf1;
+        grad_s(1,igp,jgp,ilev) = D_inv(1,0,igp,jgp) * v_buf0 + D_inv(1,1,igp,jgp) * v_buf1;
       });
     });
     team.team_barrier();
@@ -389,14 +387,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        gv_buf(0, igp, jgp, ilev) =
-            (D_inv(0, 0, igp, jgp) * v(0, igp, jgp, ilev) +
-             D_inv(1, 0, igp, jgp) * v(1, igp, jgp, ilev)) *
-            metdet(igp, jgp);
-        gv_buf(1, igp, jgp, ilev) =
-            (D_inv(0, 1, igp, jgp) * v(0, igp, jgp, ilev) +
-             D_inv(1, 1, igp, jgp) * v(1, igp, jgp, ilev)) *
-            metdet(igp, jgp);
+        const auto& v0 = v(0, igp, jgp, ilev);
+        const auto& v1 = v(1, igp, jgp, ilev);
+        gv_buf(0,igp,jgp,ilev) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
+        gv_buf(1,igp,jgp,ilev) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
       });
     });
     team.team_barrier();
@@ -440,10 +434,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        gv(0, igp, jgp, ilev) = (D_inv(0,0,igp,jgp)*v(0, igp, jgp, ilev) +
-                                 D_inv(1,0,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
-        gv(1, igp, jgp, ilev) = (D_inv(0,1,igp,jgp)*v(0, igp, jgp, ilev) +
-                                 D_inv(1,1,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
+        const auto& v0 = v(0, igp, jgp, ilev);
+        const auto& v1 = v(1, igp, jgp, ilev);
+        gv(0,igp,jgp,ilev) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
+        gv(1,igp,jgp,ilev) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
       });
     });
     team.team_barrier();
@@ -487,8 +481,8 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& u_ijk = u(igp, jgp, ilev);
         const auto& v_ijk = v(igp, jgp, ilev);
-        vcov_buf(0, jgp, igp, ilev) = D(0, 0, igp, jgp) * u_ijk + D(0, 1, igp, jgp) * v_ijk;
-        vcov_buf(1, jgp, igp, ilev) = D(1, 0, igp, jgp) * u_ijk + D(1, 1, igp, jgp) * v_ijk;
+        vcov_buf(0,jgp,igp,ilev) = D(0,0,igp,jgp) * u_ijk + D(0,1,igp,jgp) * v_ijk;
+        vcov_buf(1,jgp,igp,ilev) = D(1,0,igp,jgp) * u_ijk + D(1,1,igp,jgp) * v_ijk;
       });
     });
     team.team_barrier();
@@ -576,10 +570,8 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& v0 = v(0,igp,jgp,ilev);
         const auto& v1 = v(1,igp,jgp,ilev);
-        sphere_buf(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0
-                                   + D_inv(1, 0, igp, jgp) * v1;
-        sphere_buf(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0
-                                   + D_inv(1, 1, igp, jgp) * v1;
+        sphere_buf(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0 + D_inv(1, 0, igp, jgp) * v1;
+        sphere_buf(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0 + D_inv(1, 1, igp, jgp) * v1;
       });
     });
     team.team_barrier();
@@ -737,12 +729,10 @@ public:
         const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
         const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
         curls(0,igp,jgp,ilev) = beta*curls(0,igp,jgp,ilev) + alpha *
-                                (D(0,0,igp,jgp)*sb0
-                               + D(1,0,igp,jgp)*sb1)
+                                ( D(0,0,igp,jgp)*sb0 + D(1,0,igp,jgp)*sb1 )
                                 * PhysicalConstants::rrearth;
         curls(1,igp,jgp,ilev) = beta*curls(1,igp,jgp,ilev) + alpha *
-                                (D(0,1,igp,jgp)*sb0
-                               + D(1,1,igp,jgp)*sb1)
+                                ( D(0,1,igp,jgp)*sb0 + D(1,1,igp,jgp)*sb1 )
                               * PhysicalConstants::rrearth;
       });
     });
@@ -846,12 +836,11 @@ public:
       const int igp = loop_idx / NP; //slowest
       const int jgp = loop_idx % NP; //fastest
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        laplace0(igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,0,igp,jgp)*vector(1,igp,jgp,ilev) ;
-        laplace1(igp,jgp,ilev) = vec_sph2cart(0,1,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,1,igp,jgp)*vector(1,igp,jgp,ilev) ;
-        laplace2(igp,jgp,ilev) = vec_sph2cart(0,2,igp,jgp)*vector(0,igp,jgp,ilev)
-                               + vec_sph2cart(1,2,igp,jgp)*vector(1,igp,jgp,ilev) ;
+        const auto& v0 = vector(0,igp,jgp,ilev);
+        const auto& v1 = vector(1,igp,jgp,ilev);
+        laplace0(igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*v0 + vec_sph2cart(1,0,igp,jgp)*v1 ;
+        laplace1(igp,jgp,ilev) = vec_sph2cart(0,1,igp,jgp)*v0 + vec_sph2cart(1,1,igp,jgp)*v1 ;
+        laplace2(igp,jgp,ilev) = vec_sph2cart(0,2,igp,jgp)*v0 + vec_sph2cart(1,2,igp,jgp)*v1 ;
       });
     });
     team.team_barrier();
@@ -895,8 +884,8 @@ public:
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
   vlaplace_sphere_wk_contra (const TeamMember &team, const Real nu_ratio,
-                             const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
-                             const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) const
+                             const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> vector,
+                             const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> laplace) const
   {
     static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
 
@@ -957,16 +946,15 @@ private:
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>   vector_buf_2;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>   vector_buf_3;
 
-  ExecViewUnmanaged<const Real [NP][NP]>          dvv;
+  ExecViewManaged<const Real [NP][NP]>          dvv;
 
-  ExecViewUnmanaged<const Real * [NP][NP]>        m_mp;
-  ExecViewUnmanaged<const Real * [NP][NP]>        m_spheremp;
-  ExecViewUnmanaged<const Real * [NP][NP]>        m_rspheremp;
-  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_metinv;
-  ExecViewUnmanaged<const Real * [NP][NP]>        m_metdet;
-  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_d;
-  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_dinv;
-
+  ExecViewManaged<const Real * [NP][NP]>        m_mp;
+  ExecViewManaged<const Real * [NP][NP]>        m_spheremp;
+  ExecViewManaged<const Real * [NP][NP]>        m_rspheremp;
+  ExecViewManaged<const Real * [2][2][NP][NP]>  m_metinv;
+  ExecViewManaged<const Real * [NP][NP]>        m_metdet;
+  ExecViewManaged<const Real * [2][2][NP][NP]>  m_d;
+  ExecViewManaged<const Real * [2][2][NP][NP]>  m_dinv;
 };
 
 } // namespace Homme
