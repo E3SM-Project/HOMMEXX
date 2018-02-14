@@ -119,9 +119,26 @@ public:
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
                  std::uniform_real_distribution<Real>(0.125, 1000));
+    auto nan_boundaries =
+        [](HostViewUnmanaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]>
+               host) {
+          for (int ie = 0; ie < host.extent_int(0); ++ie) {
+            for (int igp = 0; igp < host.extent_int(1); ++igp) {
+              for (int jgp = 0; jgp < host.extent_int(2); ++jgp) {
+                for (int k = 0;
+                     k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs; ++k) {
+                  host(ie, igp, jgp, k) =
+                      std::numeric_limits<Real>::quiet_NaN();
+                }
+              }
+            }
+          }
+          return true;
+        };
     for (int i = 0; i < num_remap; ++i) {
       genRandArray(remap.ao[i], engine,
-                   std::uniform_real_distribution<Real>(0.125, 1000));
+                   std::uniform_real_distribution<Real>(0.125, 1000),
+                   nan_boundaries);
     }
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
@@ -146,6 +163,11 @@ public:
                               Homme::subview(remap.ao[var], ie, igp, jgp));
             sync_to_host(Homme::subview(remap.ppmdx, ie, igp, jgp),
                          f90_dx_input);
+            // Fix the Fortran input to be 0 offset
+            for (int i = 0; i < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++i) {
+              f90_cellmeans_input(i) = f90_cellmeans_input(
+                  i + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+            }
 
             auto tmp = Kokkos::create_mirror_view(remap.ppmdx);
             Kokkos::deep_copy(tmp, remap.ppmdx);
