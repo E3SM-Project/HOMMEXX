@@ -56,16 +56,16 @@ public:
   void operator() (const TagFirstLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    m_sphere_ops.laplace_simple(kv.team,
+    m_sphere_ops.laplace_simple(kv,
                    Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    m_sphere_ops.laplace_simple(kv.team,
+    m_sphere_ops.laplace_simple(kv,
                    Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_contra(kv.team, m_data.nu_ratio,
+    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
                               Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
@@ -74,16 +74,16 @@ public:
   void operator() (const TagLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
-    m_sphere_ops.laplace_simple(kv.team,
+    m_sphere_ops.laplace_simple(kv,
                    Homme::subview(m_elements.buffers.ttens,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
-    m_sphere_ops.laplace_simple(kv.team,
+    m_sphere_ops.laplace_simple(kv,
                    Homme::subview(m_elements.buffers.dptens,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_contra(kv.team, m_data.nu_ratio,
+    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
@@ -147,21 +147,21 @@ public:
 
       // TODO: Only run on the levels we need to 0-2
       m_sphere_ops.vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
-            kv.team, m_data.nu_ratio,
+            kv, m_data.nu_ratio,
             // input
             Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
             // output
             Homme::subview(laplace_v, kv.ie));
 
       m_sphere_ops.laplace_simple<NUM_BIHARMONIC_LEV>(
-            kv.team,
+            kv,
             // input
             Homme::subview(m_elements.m_t, kv.ie, m_data.np1),
             // output
             Homme::subview(laplace_t, kv.ie));
 
       m_sphere_ops.laplace_simple<NUM_BIHARMONIC_LEV>(
-            kv.team,
+            kv,
             // input
             Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
             // output

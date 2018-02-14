@@ -158,12 +158,11 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
-    const int ie = team.league_rank() / m_data.qsize;
-    const int iq = team.league_rank() % m_data.qsize;
+    KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
     if (m_data.nu_p > 0) {
-      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, ie);
+      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
@@ -177,20 +176,19 @@ public:
         });
       team.team_barrier();
     }
-    m_sphere_ops.laplace_simple(team, qtens_biharmonic, qtens_biharmonic);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
-    const int ie = team.league_rank() / m_data.qsize;
-    const int iq = team.league_rank() % m_data.qsize;
+    KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, ie, iq);
+    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
     team.team_barrier();
-    m_sphere_ops.laplace_simple(team, qtens_biharmonic, qtens_biharmonic);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
-      const auto spheremp = Homme::subview(e.m_spheremp, ie);
+      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
@@ -275,18 +273,18 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const PrecomputeDivDp &, const TeamMember &team) const {
-    const int ie = team.league_rank();
-    m_sphere_ops.divergence_sphere(team,
-                      Homme::subview(m_elements.m_derived_vn0, ie),
-                      Homme::subview(m_elements.m_derived_divdp, ie));
+    KernelVariables kv(team);
+    m_sphere_ops.divergence_sphere(kv,
+                      Homme::subview(m_elements.m_derived_vn0, kv.ie),
+                      Homme::subview(m_elements.m_derived_divdp, kv.ie));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV),
                            [&](const int ilev) {
-        m_elements.m_derived_divdp_proj(ie, igp, jgp, ilev) =
-            m_elements.m_derived_divdp(ie, igp, jgp, ilev);
+        m_elements.m_derived_divdp_proj(kv.ie, igp, jgp, ilev) =
+            m_elements.m_derived_divdp(kv.ie, igp, jgp, ilev);
       });
     });
   }
@@ -560,7 +558,7 @@ private:
     const ExecViewUnmanaged<const Real[2][2][NP][NP]>
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     m_sphere_ops.divergence_sphere_update(
-      kv.team, -m_data.dt, 1.0,
+      kv, -m_data.dt, 1.0,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
   }

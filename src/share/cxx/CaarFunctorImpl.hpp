@@ -116,7 +116,7 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    m_sphere_ops.gradient_sphere_update(kv.team,
+    m_sphere_ops.gradient_sphere_update(kv,
         Homme::subview(m_elements.buffers.ephi, kv.ie),
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
@@ -192,8 +192,7 @@ struct CaarFunctorImpl {
   void compute_velocity_np1(KernelVariables &kv) const {
     compute_energy_grad(kv);
 
-    m_sphere_ops.vorticity_sphere(
-        kv.team,
+    m_sphere_ops.vorticity_sphere(kv,
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
@@ -401,7 +400,7 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    m_sphere_ops.divergence_sphere(kv.team,
+    m_sphere_ops.divergence_sphere(kv,
         Homme::subview(m_elements.buffers.vdp, kv.ie),
         Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
@@ -440,7 +439,7 @@ struct CaarFunctorImpl {
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_np1(KernelVariables &kv) const {
 
-    m_sphere_ops.gradient_sphere(kv.team,
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
@@ -788,7 +787,7 @@ private:
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
-    m_sphere_ops.gradient_sphere(kv.team,
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
@@ -830,7 +829,7 @@ private:
   KOKKOS_INLINE_FUNCTION
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
-    m_sphere_ops.gradient_sphere(kv.team,
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
