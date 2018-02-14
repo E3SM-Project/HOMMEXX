@@ -6,6 +6,7 @@
 #include "TimeLevel.hpp"
 #include "HommexxEnums.hpp"
 #include "EulerStepFunctor.hpp"
+#include "HyperviscosityFunctor.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
 #include "ErrorDefs.hpp"
@@ -182,23 +183,8 @@ void init_boundary_exchanges_c ()
   }
 
   // HyperviscosityFunctor's BE's
-  {
-    // Get the BE
-    BoundaryExchange& be = *Context::singleton().get_boundary_exchange("HyperviscosityFunctor");
-
-    // Safety check (do not call this routine twice!)
-    assert (!be.is_registration_completed());
-
-    // If it was not yet created, create it and set it up
-    be.set_buffers_manager(bm_exchange);
-
-    // Set the views of this time level into this time level's boundary exchange
-    be.set_num_fields(0,0,4);
-    be.register_field(elements.buffers.vtens,2,0);
-    be.register_field(elements.buffers.ttens);
-    be.register_field(elements.buffers.dptens);
-    be.registration_completed();
-  }
+  auto& hvf = Context::singleton().get_hyperviscosity_functor();
+  hvf.init_boundary_exchanges();
 }
 
 } // extern "C"

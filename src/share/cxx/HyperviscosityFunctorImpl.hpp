@@ -6,6 +6,7 @@
 #include "SimulationParams.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
+#include "BoundaryExchange.hpp"
 
 namespace Homme
 {
@@ -33,6 +34,8 @@ class HyperviscosityFunctorImpl
     Real        eta_ave_w;
   };
 
+  std::shared_ptr<BoundaryExchange> m_be;
+
 public:
 
   struct TagFirstLaplace {};
@@ -42,6 +45,8 @@ public:
   struct TagHyperPreExchange {};
 
   HyperviscosityFunctorImpl (const SimulationParams& params, const Elements& elements, const Derivative& deriv);
+
+  void init_boundary_exchanges();
 
   void run (const int np1, const Real dt, const Real eta_ave_w);
 

@@ -18,6 +18,11 @@ HyperviscosityFunctor::~HyperviscosityFunctor ()
   // would be in the header file, where HyperviscosityFunctorImpl type is incomplete.
 }
 
+void HyperviscosityFunctor::init_boundary_exchanges () {
+  assert (m_hvf_impl);
+  m_hvf_impl->init_boundary_exchanges();
+}
+
 void HyperviscosityFunctor::run (const int np1, const Real dt, const Real eta_ave_w)
 {
   // Sanity check (this should NEVER happen by design)
