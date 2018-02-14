@@ -35,18 +35,22 @@ struct CaarFunctorImpl {
     bool      compute_diagnostics;
   };
 
-  CaarData            m_data;
-  const HybridVCoord  m_hvcoord;
-  const Elements      m_elements;
-  const Derivative    m_deriv;
+  CaarData              m_data;
+  const HybridVCoord    m_hvcoord;
+  const Elements        m_elements;
+  const Derivative      m_deriv;
+  const SphereOperators m_sphere_ops;
 
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
 
-  CaarFunctorImpl(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+  CaarFunctorImpl(const Elements& elements, const Derivative& derivative,
+                  const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
+                  const int rsplit)
     : m_data(rsplit)
     , m_hvcoord(hvcoord)
     , m_elements(elements)
     , m_deriv(derivative)
+    , m_sphere_ops(sphere_ops)
   {
     // Nothing to be done here
   }
@@ -112,11 +116,8 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    gradient_sphere_update(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere_update(kv.team,
         Homme::subview(m_elements.buffers.ephi, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf,kv.ie),
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
 
@@ -191,13 +192,9 @@ struct CaarFunctorImpl {
   void compute_velocity_np1(KernelVariables &kv) const {
     compute_energy_grad(kv);
 
-    vorticity_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_d,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
-        Homme::subview(m_elements.buffers.curl_buf,kv.ie),
+    m_sphere_ops.vorticity_sphere(
+        kv.team,
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -404,12 +401,8 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    divergence_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie),
+    m_sphere_ops.divergence_sphere(kv.team,
         Homme::subview(m_elements.buffers.vdp, kv.ie),
-        Homme::subview(m_elements.buffers.div_buf,kv.ie),
         Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
 
@@ -447,11 +440,8 @@ struct CaarFunctorImpl {
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_np1(KernelVariables &kv) const {
 
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv.team,
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -798,11 +788,8 @@ private:
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv.team,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -843,11 +830,8 @@ private:
   KOKKOS_INLINE_FUNCTION
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv.team,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),

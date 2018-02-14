@@ -13,11 +13,11 @@
 
 namespace Homme {
 
-class SphereOperatorsFunctor
+class SphereOperators
 {
 public:
 
-  SphereOperatorsFunctor (const Elements& elems, const Derivative& derivative)
+  SphereOperators (const Elements& elements, const Derivative& derivative)
   {
     const int num_elems = elements.num_elems();
 
@@ -31,7 +31,7 @@ public:
     vector_buf_2    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 2", num_elems);
 
     // Get dvv
-    dvv = derivative.get_d
+    dvv = derivative.get_dvv();
 
     // Get all needed 2d fields from elements
     m_d        = elements.m_d;
@@ -42,14 +42,44 @@ public:
     m_mp       = elements.m_mp;
   }
 
+  // This one is used in the unit tests
+  SphereOperators (const int num_elems) {
+    // Create the buffers
+    vector_buf_sl_1 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 1", num_elems);
+    vector_buf_sl_2 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 2", num_elems);
+    scalar_buf_1    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 1", num_elems);
+    scalar_buf_2    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 2", num_elems);
+    scalar_buf_3    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 3", num_elems);
+    vector_buf_1    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 1", num_elems);
+    vector_buf_2    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 2", num_elems);
+  }
+
+  // This one is used in the unit tests
+  void set_views (const ExecViewUnmanaged<const Real       [NP][NP]>  dvv_in,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  d,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  dinv,
+                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  metinv,
+                  const ExecViewUnmanaged<const Real *       [NP][NP]>  metdet,
+                  const ExecViewUnmanaged<const Real *       [NP][NP]>  spheremp,
+                  const ExecViewUnmanaged<const Real *       [NP][NP]>  mp)
+  {
+    dvv = dvv_in;
+    m_d = d;
+    m_dinv = dinv;
+    m_metinv = metinv;
+    m_metdet = metdet;
+    m_spheremp = spheremp;
+    m_mp = mp;
+  }
 
 // ================ SINGLE-LEVEL IMPLEMENTATION =========================== //
 
   KOKKOS_INLINE_FUNCTION void
-  gradient_sphere_sl(const TeamMember &team,
-                     const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
-                     const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) {
-    const auto& dinv = Homme::subview(m_dinv,team.league_rank());
+  gradient_sphere_sl (const TeamMember &team,
+                      const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
+                      const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
+  {
+    const auto& D_inv = Homme::subview(m_dinv,team.league_rank());
     const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,team.league_rank());
     constexpr int contra_iters = NP * NP;
     // TODO: Use scratch space for this
@@ -73,17 +103,19 @@ public:
       const int h = (loop_idx / NP) / NP;
       const int i = (loop_idx / NP) % NP;
       const int j = loop_idx % NP;
-      grad_s(h, j, i) = dinv(h, 0, j, i) * temp_v_buf(0, j, i) +
-                        dinv(h, 1, j, i) * temp_v_buf(1, j, i);
+      grad_s(h, j, i) = D_inv(h, 0, j, i) * temp_v_buf(0, j, i) +
+                        D_inv(h, 1, j, i) * temp_v_buf(1, j, i);
     });
     team.team_barrier();
   }
 
-  KOKKOS_INLINE_FUNCTION void gradient_sphere_update_sl(
-      const TeamMember &team,
-      const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
-      const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) {
+  KOKKOS_INLINE_FUNCTION void
+  gradient_sphere_update_sl (const TeamMember &team,
+                             const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
+                             const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
+  {
     constexpr int contra_iters = NP * NP;
+    const auto& D_inv = Homme::subview(m_dinv,team.league_rank());
     const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,team.league_rank());
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, contra_iters),
                          [&](const int loop_idx) {
@@ -105,18 +137,19 @@ public:
       const int h = (loop_idx / NP) / NP;
       const int i = (loop_idx / NP) % NP;
       const int j = loop_idx % NP;
-      grad_s(h, j, i) += dinv(h, 0, j, i) * temp_v_buf(0, j, i) +
-                         dinv(h, 1, j, i) * temp_v_buf(1, j, i);
+      grad_s(h, j, i) += D_inv(h, 0, j, i) * temp_v_buf(0, j, i) +
+                         D_inv(h, 1, j, i) * temp_v_buf(1, j, i);
     });
     team.team_barrier();
   }
 
   KOKKOS_INLINE_FUNCTION void
-  divergence_sphere_sl(const TeamMember &team,
-                       const ExecViewUnmanaged<const Real    [2][NP][NP]> v,
-                       const ExecViewUnmanaged<      Real       [NP][NP]> div_v) {
+  divergence_sphere_sl (const TeamMember &team,
+                        const ExecViewUnmanaged<const Real [2][NP][NP]> v,
+                        const ExecViewUnmanaged<      Real    [NP][NP]> div_v) const
+  {
     const auto& metdet = Homme::subview(m_metdet,team.league_rank());
-    const auto& dinv = Homme::subview(m_dinv,team.league_rank());
+    const auto& D_inv = Homme::subview(m_dinv,team.league_rank());
     const auto& gv_buf = Homme::subview(vector_buf_sl_1,team.league_rank());
     constexpr int contra_iters = NP * NP * 2;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, contra_iters),
@@ -124,8 +157,8 @@ public:
       const int hgp = (loop_idx / NP) / NP;
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
-      gv_buf(hgp, igp, jgp) = (dinv(0, hgp, igp, jgp) * v(0, igp, jgp) +
-                               dinv(1, hgp, igp, jgp) * v(1, igp, jgp)) *
+      gv_buf(hgp, igp, jgp) = (D_inv(0, hgp, igp, jgp) * v(0, igp, jgp) +
+                               D_inv(1, hgp, igp, jgp) * v(1, igp, jgp)) *
                               metdet(igp, jgp);
     });
     team.team_barrier();
@@ -146,12 +179,12 @@ public:
     team.team_barrier();
   }
 
-  KOKKOS_INLINE_FUNCTION void divergence_sphere_wk_sl(
-            const TeamMember &team,
-            const ExecViewUnmanaged<const Real [2][NP][NP]> v,
-            const ExecViewUnmanaged<      Real    [NP][NP]> div_v) {
-
-    const auto& dinv = Homme::subview(m_dinv,team.league_rank());
+  KOKKOS_INLINE_FUNCTION void
+  divergence_sphere_wk_sl (const TeamMember &team,
+                           const ExecViewUnmanaged<const Real [2][NP][NP]> v,
+                           const ExecViewUnmanaged<      Real    [NP][NP]> div_v) const
+  {
+    const auto& D_inv = Homme::subview(m_dinv,team.league_rank());
     const auto& spheremp = Homme::subview(m_spheremp,team.league_rank());
     const auto& gv_buf = Homme::subview(vector_buf_sl_1,team.league_rank());
 
@@ -163,8 +196,8 @@ public:
       const int hgp = (loop_idx / NP) / NP;
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
-      gv_buf(hgp, igp, jgp) = dinv(0, hgp, igp, jgp) * v(0, igp, jgp) +
-                              dinv(1, hgp, igp, jgp) * v(1, igp, jgp);
+      gv_buf(hgp, igp, jgp) = D_inv(0, hgp, igp, jgp) * v(0, igp, jgp) +
+                              D_inv(1, hgp, igp, jgp) * v(1, igp, jgp);
     });
     team.team_barrier();
 
@@ -195,11 +228,12 @@ public:
   // Note that divergence_sphere requires scratch space of 3 x NP x NP Reals
   // This must be called from the device space
   KOKKOS_INLINE_FUNCTION void
-  vorticity_sphere_sl(const TeamMember &team,
-                      const ExecViewUnmanaged<const Real [NP][NP]> u,
-                      const ExecViewUnmanaged<const Real [NP][NP]> v,
-                      const ExecViewUnmanaged<      Real [NP][NP]> vort) {
-    const auto& d = Homme::subview(m_d,team.league_rank());
+  vorticity_sphere_sl (const TeamMember &team,
+                       const ExecViewUnmanaged<const Real [NP][NP]> u,
+                       const ExecViewUnmanaged<const Real [NP][NP]> v,
+                       const ExecViewUnmanaged<      Real [NP][NP]> vort) const
+  {
+    const auto& D = Homme::subview(m_d,team.league_rank());
     const auto& metdet = Homme::subview(m_metdet,team.league_rank());
     const auto& vcov_buf = Homme::subview(vector_buf_sl_1,team.league_rank());
 
@@ -209,8 +243,8 @@ public:
       const int hgp = loop_idx / NP / NP;
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
-      vcov_buf(hgp, igp, jgp) = d(hgp, 0, igp, jgp) * u(igp, jgp) +
-                                d(hgp, 1, igp, jgp) * v(igp, jgp);
+      vcov_buf(hgp, igp, jgp) = D(hgp, 0, igp, jgp) * u(igp, jgp) +
+                                D(hgp, 1, igp, jgp) * v(igp, jgp);
     });
     team.team_barrier();
 
@@ -234,10 +268,12 @@ public:
 
   // analog of fortran's laplace_wk_sphere
   // Single level implementation
-  KOKKOS_INLINE_FUNCTION void laplace_wk_sl(
-            const TeamMember &team,
-            const ExecViewUnmanaged<const Real [NP][NP]> field,
-            const ExecViewUnmanaged<      Real [NP][NP]> laplace) {
+  KOKKOS_INLINE_FUNCTION void
+  laplace_wk_sl (const TeamMember &team,
+                 const ExecViewUnmanaged<const Real [NP][NP]> field,
+                 const ExecViewUnmanaged<      Real [NP][NP]> laplace) const
+  {
+    const auto& grad_s = Homme::subview(vector_buf_sl_2, team.league_rank());
     // let's ignore var coef and tensor hv
     gradient_sphere_sl(team, field, grad_s);
     divergence_sphere_wk_sl(team, grad_s, laplace);
@@ -247,11 +283,13 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  gradient_sphere(const TeamMember &team,
-                  const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
-                  const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s)
+  gradient_sphere (const TeamMember &team,
+                   const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
+                   const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& v_buf = Homme::subview(vector_buf_1,team.league_rank());
 
     constexpr int contra_iters = NP * NP;
@@ -279,23 +317,25 @@ public:
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         grad_s(0, igp, jgp, ilev) =
-            dinv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            dinv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+            D_inv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+            D_inv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
         grad_s(1, igp, jgp, ilev) =
-            dinv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            dinv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+            D_inv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+            D_inv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
       });
     });
     team.team_barrier();
   }
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
-  KOKKOS_INLINE_FUNCTION void gradient_sphere_update(
-            const TeamMember &team,
-            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
-            const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s)
+  KOKKOS_INLINE_FUNCTION void
+  gradient_sphere_update (const TeamMember &team,
+                          const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
+                          const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& v_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int contra_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, contra_iters),
@@ -322,11 +362,11 @@ public:
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         grad_s(0, igp, jgp, ilev) +=
-            dinv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            dinv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+            D_inv(0, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+            D_inv(0, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
         grad_s(1, igp, jgp, ilev) +=
-            dinv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
-            dinv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
+            D_inv(1, 0, igp, jgp) * v_buf(0, igp, jgp, ilev) +
+            D_inv(1, 1, igp, jgp) * v_buf(1, igp, jgp, ilev);
       });
     });
     team.team_barrier();
@@ -334,11 +374,13 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  divergence_sphere(const TeamMember &team,
-                    const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                    const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v)
+  divergence_sphere (const TeamMember &team,
+                     const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                     const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& metdet = Homme::subview(m_metdet, team.league_rank());
     const auto& gv_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int contra_iters = NP * NP;
@@ -348,12 +390,12 @@ public:
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         gv_buf(0, igp, jgp, ilev) =
-            (dinv(0, 0, igp, jgp) * v(0, igp, jgp, ilev) +
-             dinv(1, 0, igp, jgp) * v(1, igp, jgp, ilev)) *
+            (D_inv(0, 0, igp, jgp) * v(0, igp, jgp, ilev) +
+             D_inv(1, 0, igp, jgp) * v(1, igp, jgp, ilev)) *
             metdet(igp, jgp);
         gv_buf(1, igp, jgp, ilev) =
-            (dinv(0, 1, igp, jgp) * v(0, igp, jgp, ilev) +
-             dinv(1, 1, igp, jgp) * v(1, igp, jgp, ilev)) *
+            (D_inv(0, 1, igp, jgp) * v(0, igp, jgp, ilev) +
+             D_inv(1, 1, igp, jgp) * v(1, igp, jgp, ilev)) *
             metdet(igp, jgp);
       });
     });
@@ -382,12 +424,14 @@ public:
   //     div_v = beta*div_v + alpha*div(v)
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  divergence_sphere_update(const TeamMember &team,
-                           const Real alpha, const Real beta,
-                           const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                           const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v)
+  divergence_sphere_update (const TeamMember &team,
+                            const Real alpha, const Real beta,
+                            const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                            const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& metdet = Homme::subview(m_metdet, team.league_rank());
     const auto& gv = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int contra_iters = NP * NP;
@@ -396,10 +440,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        gv(0, igp, jgp, ilev) = (dinv(0,0,igp,jgp)*v(0, igp, jgp, ilev) +
-                                 dinv(1,0,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
-        gv(1, igp, jgp, ilev) = (dinv(0,1,igp,jgp)*v(0, igp, jgp, ilev) +
-                                 dinv(1,1,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
+        gv(0, igp, jgp, ilev) = (D_inv(0,0,igp,jgp)*v(0, igp, jgp, ilev) +
+                                 D_inv(1,0,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
+        gv(1, igp, jgp, ilev) = (D_inv(0,1,igp,jgp)*v(0, igp, jgp, ilev) +
+                                 D_inv(1,1,igp,jgp)*v(1,igp,jgp,ilev)) * metdet(igp,jgp);
       });
     });
     team.team_barrier();
@@ -425,12 +469,14 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  vorticity_sphere(const TeamMember &team,
-                   const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> u,
-                   const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> v,
-                   const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> vort)
+  vorticity_sphere (const TeamMember &team,
+                    const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> u,
+                    const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> v,
+                    const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> vort) const
   {
-    const auto& d = Homme::subview(m_d, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
     const auto& metdet = Homme::subview(m_metdet, team.league_rank());
     const auto& vcov_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int covar_iters = NP * NP;
@@ -439,12 +485,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        vcov_buf(0, jgp, igp, ilev) =
-            d(0, 0, jgp, igp) * u(jgp, igp, ilev) +
-            d(0, 1, jgp, igp) * v(jgp, igp, ilev);
-        vcov_buf(1, jgp, igp, ilev) =
-            d(1, 0, jgp, igp) * u(jgp, igp, ilev) +
-            d(1, 1, jgp, igp) * v(jgp, igp, ilev);
+        const auto& u_ijk = u(igp, jgp, ilev);
+        const auto& v_ijk = v(igp, jgp, ilev);
+        vcov_buf(0, jgp, igp, ilev) = D(0, 0, igp, jgp) * u_ijk + D(0, 1, igp, jgp) * v_ijk;
+        vcov_buf(1, jgp, igp, ilev) = D(1, 0, igp, jgp) * u_ijk + D(1, 1, igp, jgp) * v_ijk;
       });
     });
     team.team_barrier();
@@ -471,11 +515,13 @@ public:
   //rewriting this to take vector as the input.
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  vorticity_sphere_vector(const TeamMember &team,
-                          const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                          const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> vort)
+  vorticity_sphere (const TeamMember &team,
+                    const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                    const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> vort) const
   {
-    const auto& d = Homme::subview(m_d, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
     const auto& metdet = Homme::subview(m_metdet, team.league_rank());
     const auto& sphere_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int covar_iters = NP * NP;
@@ -486,8 +532,8 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& v0 = v(0,igp,jgp,ilev);
         const auto& v1 = v(1,igp,jgp,ilev);
-        sphere_buf(0,igp,jgp,ilev) = d(0,0,igp,jgp) * v0 + d(0,1,igp,jgp) * v1;
-        sphere_buf(1,igp,jgp,ilev) = d(1,0,igp,jgp) * v0 + d(1,1,igp,jgp) * v1;
+        sphere_buf(0,igp,jgp,ilev) = D(0,0,igp,jgp) * v0 + D(0,1,igp,jgp) * v1;
+        sphere_buf(1,igp,jgp,ilev) = D(1,0,igp,jgp) * v0 + D(1,1,igp,jgp) * v1;
       });
     });
     team.team_barrier();
@@ -513,11 +559,13 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  divergence_sphere_wk(const TeamMember &team,
-                       const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                       const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v)
+  divergence_sphere_wk (const TeamMember &team,
+                        const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                        const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
     const auto& sphere_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int contra_iters = NP * NP;
@@ -528,10 +576,10 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& v0 = v(0,igp,jgp,ilev);
         const auto& v1 = v(1,igp,jgp,ilev);
-        sphere_buf(0,igp,jgp,ilev) = dinv(0, 0, igp, jgp) * v0
-                                   + dinv(1, 0, igp, jgp) * v1;
-        sphere_buf(1,igp,jgp,ilev) = dinv(0, 1, igp, jgp) * v0
-                                   + dinv(1, 1, igp, jgp) * v1;
+        sphere_buf(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0
+                                   + D_inv(1, 0, igp, jgp) * v1;
+        sphere_buf(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0
+                                   + D_inv(1, 1, igp, jgp) * v1;
       });
     });
     team.team_barrier();
@@ -559,10 +607,13 @@ public:
   //analog of laplace_simple_c_callable
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  laplace_simple(const TeamMember &team,
-                 const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> field,
-                 const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> laplace)
+  laplace_simple (const TeamMember &team,
+                  const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> field,
+                  const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> laplace) const
   {
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& grad_s = Homme::subview(vector_buf_2, team.league_rank());
       // let's ignore var coef and tensor hv
     gradient_sphere<NUM_LEV_REQUEST>(team, field, grad_s);
     divergence_sphere_wk<NUM_LEV_REQUEST>(team, grad_s, laplace);
@@ -576,50 +627,45 @@ public:
   laplace_tensor(const TeamMember &team,
                  const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
                  const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> field,         // input
-                 const ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace)
+                 const ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace) const
   {
-    gradient_sphere<NUM_LEV_REQUEST>(team, dvv, DInv, field, sphere_buf, grad_s);
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& grad_s = Homme::subview(vector_buf_2, team.league_rank());
+    const auto& sphere_buf = Homme::subview(vector_buf_3, team.league_rank());
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
+    const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
+
+    gradient_sphere<NUM_LEV_REQUEST>(team, field, grad_s);
   //now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
   //but it requires a temp var to store a result. the result is then placed to grad_s,
   //or should it be an extra temp var instead of an extra loop?
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
-    const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
-    const auto& sphere_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int num_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_iters),
                        [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        sphere_buf(0,igp,jgp,ilev) = tensorVisc(0,0,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                           + tensorVisc(1,0,igp,jgp) * grad_s(1,igp,jgp,ilev);
-        sphere_buf(1,igp,jgp,ilev) = tensorVisc(0,1,igp,jgp) * grad_s(0,igp,jgp,ilev)
-                           + tensorVisc(1,1,igp,jgp) * grad_s(1,igp,jgp,ilev);
+        const auto& grad_s0 = grad_s(0,igp,jgp,ilev);
+        const auto& grad_s1 = grad_s(1,igp,jgp,ilev);
+        sphere_buf(0,igp,jgp,ilev) = tensorVisc(0,0,igp,jgp) * grad_s0 + tensorVisc(1,0,igp,jgp) * grad_s1;
+        sphere_buf(1,igp,jgp,ilev) = tensorVisc(0,1,igp,jgp) * grad_s0 + tensorVisc(1,1,igp,jgp) * grad_s1;
       });
     });
     team.team_barrier();
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_iters),
-                       [&](const int loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        grad_s(0,igp,jgp,ilev) = sphere_buf(0,igp,jgp,ilev);
-        grad_s(1,igp,jgp,ilev) = sphere_buf(1,igp,jgp,ilev);
-      });
-    });
-    team.team_barrier();
-
-    divergence_sphere_wk<NUM_LEV_REQUEST>(team, dvv, DInv, spheremp, grad_s, sphere_buf, laplace);
+    divergence_sphere_wk<NUM_LEV_REQUEST>(team, sphere_buf, laplace);
   }//end of laplace_tensor
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  curl_sphere_wk_testcov(const TeamMember &team,
-                         const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
-                         const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> curls)
+  curl_sphere_wk_testcov (const TeamMember &team,
+                          const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
+                          const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> curls) const
   {
-    const auto& d = Homme::subview(m_d, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
     const auto& mp = Homme::subview(m_mp, team.league_rank());
     const auto& sphere_buf = Homme::subview(vector_buf_1,team.league_rank());
     constexpr int np_squared = NP * NP;
@@ -627,15 +673,15 @@ public:
       const int ngp = loop_idx / NP;
       const int mgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        sphere_buf(0, ngp, mgp, ilev) = 0;
-        sphere_buf(1, ngp, mgp, ilev) = 0;
+        auto& sb0 = sphere_buf(0, ngp, mgp, ilev);
+        auto& sb1 = sphere_buf(1, ngp, mgp, ilev);
+        sb0 = 0;
+        sb1 = 0;
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          sb0 -= mp(jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
+          sb1 += mp(ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
+        }
       });
-      for (int jgp = 0; jgp < NP; ++jgp) {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-          sphere_buf(0, ngp, mgp, ilev) -= mp(jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
-          sphere_buf(1, ngp, mgp, ilev) += mp(ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
-        });
-      }
     });
     team.team_barrier();
 
@@ -644,12 +690,10 @@ public:
       const int igp = loop_idx / NP; //slowest
       const int jgp = loop_idx % NP; //fastest
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        curls(0,igp,jgp,ilev) = (D(0,0,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                               + D(1,0,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
-                              * PhysicalConstants::rrearth;
-        curls(1,igp,jgp,ilev) = (D(0,1,igp,jgp)*sphere_buf(0, igp, jgp, ilev)
-                               + D(1,1,igp,jgp)*sphere_buf(1, igp, jgp, ilev))
-                              * PhysicalConstants::rrearth;
+        const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
+        const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
+        curls(0,igp,jgp,ilev) = (D(0,0,igp,jgp) * sb0 + D(1,0,igp,jgp) * sb1) * PhysicalConstants::rrearth;
+        curls(1,igp,jgp,ilev) = (D(0,1,igp,jgp) * sb0 + D(1,1,igp,jgp) * sb1) * PhysicalConstants::rrearth;
       });
     });
     team.team_barrier();
@@ -659,27 +703,29 @@ public:
   // and curls is the output view
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  curl_sphere_wk_testcov_update(const TeamMember &team, const Real alpha, const Real beta,
-                                const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> scalar,
-                                const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> curls)
+  curl_sphere_wk_testcov_update (const TeamMember &team, const Real alpha, const Real beta,
+                                 const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> scalar,
+                                 const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> curls) const
   {
-    const auto& d = Homme::subview(m_d, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
     const auto& mp = Homme::subview(m_mp, team.league_rank());
-    const auto& sphere_buf = Homme::subview(vector_buf_1,team.league_rank());
+    const auto& sphere_buf = Homme::subview(vector_buf_2,team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
       const int mgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        sphere_buf(0, ngp, mgp, ilev) = 0;
-        sphere_buf(1, ngp, mgp, ilev) = 0;
+        auto& sb0 = sphere_buf(0, ngp, mgp, ilev);
+        auto& sb1 = sphere_buf(1, ngp, mgp, ilev);
+        sb0 = 0;
+        sb1 = 0;
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          sb0 -= mp(jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
+          sb1 += mp(ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
+        }
       });
-      for (int jgp = 0; jgp < NP; ++jgp) {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-          sphere_buf(0, ngp, mgp, ilev) -= mp(jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
-          sphere_buf(1, ngp, mgp, ilev) += mp(ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
-        });
-      }
     });
     team.team_barrier();
 
@@ -705,11 +751,13 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  grad_sphere_wk_testcov(const TeamMember &team,
-                         const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
-                         const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grads)
+  grad_sphere_wk_testcov (const TeamMember &team,
+                          const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
+                          const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grads) const
   {
-    const auto& d = Homme::subview(m_d, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
     const auto& mp = Homme::subview(m_mp, team.league_rank());
     const auto& metinv = Homme::subview(m_metinv, team.league_rank());
     const auto& metdet = Homme::subview(m_metdet, team.league_rank());
@@ -768,12 +816,8 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
         const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
-        grads(0,igp,jgp,ilev) = (D(0,0,igp,jgp)*sb0
-                               + D(1,0,igp,jgp)*sb1)
-                              * PhysicalConstants::rrearth;
-        grads(1,igp,jgp,ilev) = (D(0,1,igp,jgp)*sb0
-                               + D(1,1,igp,jgp)*sb1)
-                              * PhysicalConstants::rrearth;
+        grads(0,igp,jgp,ilev) = (D(0,0,igp,jgp) * sb0 + D(1,0,igp,jgp) * sb1) * PhysicalConstants::rrearth;
+        grads(1,igp,jgp,ilev) = (D(0,1,igp,jgp) * sb0 + D(1,1,igp,jgp) * sb1) * PhysicalConstants::rrearth;
       });
     });
     team.team_barrier();
@@ -781,13 +825,15 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  vlaplace_sphere_wk_cartesian(const TeamMember &team,
-                               const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
-                               const ExecViewUnmanaged<const Real   [2][3][NP][NP]>          vec_sph2cart,
-                               const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
-                               const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace)
+  vlaplace_sphere_wk_cartesian (const TeamMember &team,
+                                const ExecViewUnmanaged<const Real   [2][2][NP][NP]>          tensorVisc,
+                                const ExecViewUnmanaged<const Real   [2][3][NP][NP]>          vec_sph2cart,
+                                const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
+                                const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) const
   {
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D_inv = Homme::subview(m_dinv, team.league_rank());
     const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
     const auto& grads = Homme::subview(vector_buf_1,team.league_rank());
     const auto& laplace0 = Homme::subview(scalar_buf_1,team.league_rank());
@@ -811,9 +857,9 @@ public:
     team.team_barrier();
 
     // Use laplace* as input, and then overwrite it with the output (saves temporaries)
-    laplace_tensor<NUM_LEV_REQUEST>(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace0,sphere_buf,laplace0);
-    laplace_tensor<NUM_LEV_REQUEST>(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace1,sphere_buf,laplace1);
-    laplace_tensor<NUM_LEV_REQUEST>(team,dvv,Dinv,spheremp,tensorVisc,grads,laplace2,sphere_buf,laplace2);
+    laplace_tensor<NUM_LEV_REQUEST>(team,tensorVisc,laplace0,laplace0);
+    laplace_tensor<NUM_LEV_REQUEST>(team,tensorVisc,laplace1,laplace1);
+    laplace_tensor<NUM_LEV_REQUEST>(team,tensorVisc,laplace2,laplace2);
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
                          [&](const int loop_idx) {
@@ -848,39 +894,37 @@ public:
 
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
-  vlaplace_sphere_wk_contra(const TeamMember &team, const Real nu_ratio,
-                            const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
-                            const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) {
+  vlaplace_sphere_wk_contra (const TeamMember &team, const Real nu_ratio,
+                             const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
+                             const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) const
+  {
+    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+
+    const auto& D = Homme::subview(m_d, team.league_rank());
+    const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
+    const auto& div = Homme::subview(scalar_buf_2,team.league_rank());
+    const auto& vort = Homme::subview(scalar_buf_2,team.league_rank());
+    const auto& grad_curl_cov = Homme::subview(vector_buf_3,team.league_rank());
+    constexpr int np_squared = NP * NP;
 
     // grad(div(v))
-    divergence_sphere<NUM_LEV_REQUEST>(team,dvv,dinv,metdet,vector,sphere_buf,div_vort_temp);
-
-    const auto& d = Homme::subview(m_d, team.league_rank());
-    const auto& dinv = Homme::subview(m_dinv, team.league_rank());
-    const auto& mp = Homme::subview(m_mp, team.league_rank());
-    const auto& spheremp = Homme::subview(m_spheremp, team.league_rank());
-    const auto& metinv = Homme::subview(m_metinv, team.league_rank());
-    const auto& metdet = Homme::subview(m_metdet, team.league_rank());
-    const auto& div_vort_temp = Homme::subview(scalar_buf_1,team.league_rank());
-    const auto& grad_curl_cov = Homme::subview(vector_buf_1,team.league_rank());
-    const auto& sphere_buf = Homme::subview(vector_buf_2,team.league_rank());
-    constexpr int np_squared = NP * NP;
+    divergence_sphere<NUM_LEV_REQUEST>(team,vector,div);
     if (nu_ratio>0 && nu_ratio!=1.0) {
       Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
                           [&](const int loop_idx) {
         const int igp = loop_idx / NP; //slow
         const int jgp = loop_idx % NP; //fast
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-          div_vort_temp(igp,jgp,ilev) *= nu_ratio;
+          div(igp,jgp,ilev) *= nu_ratio;
         });
       });
       team.team_barrier();
     }
-    grad_sphere_wk_testcov<NUM_LEV_REQUEST>(team,dvv,d,mp,metinv,metdet,div_vort_temp,sphere_buf,grad_curl_cov);
+    grad_sphere_wk_testcov<NUM_LEV_REQUEST>(team,div,grad_curl_cov);
 
     // curl(curl(v))
-    vorticity_sphere_vector<NUM_LEV_REQUEST>(team,dvv,d,metdet,vector,sphere_buf,div_vort_temp);
-    curl_sphere_wk_testcov_update<NUM_LEV_REQUEST>(team,-1.0,1.0,dvv,d,mp,div_vort_temp,sphere_buf,grad_curl_cov);
+    vorticity_sphere<NUM_LEV_REQUEST>(team,vector,vort);
+    curl_sphere_wk_testcov_update<NUM_LEV_REQUEST>(team,-1.0,1.0,vort,grad_curl_cov);
 
     const auto re2 = PhysicalConstants::rrearth*PhysicalConstants::rrearth;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, np_squared),
@@ -911,16 +955,17 @@ private:
   ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>   scalar_buf_3;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>   vector_buf_1;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>   vector_buf_2;
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>   vector_buf_3;
 
-  ExecViewUnmanaged<Real [NP][NP]>          dvv;
+  ExecViewUnmanaged<const Real [NP][NP]>          dvv;
 
-  ExecViewUnmanaged<Real * [NP][NP]>        m_mp;
-  ExecViewUnmanaged<Real * [NP][NP]>        m_spheremp;
-  ExecViewUnmanaged<Real * [NP][NP]>        m_rspheremp;
-  ExecViewUnmanaged<Real * [2][2][NP][NP]>  m_metinv;
-  ExecViewUnmanaged<Real * [NP][NP]>        m_metdet;
-  ExecViewUnmanaged<Real * [2][2][NP][NP]>  m_d;
-  ExecViewUnmanaged<Real * [2][2][NP][NP]>  m_dinv;
+  ExecViewUnmanaged<const Real * [NP][NP]>        m_mp;
+  ExecViewUnmanaged<const Real * [NP][NP]>        m_spheremp;
+  ExecViewUnmanaged<const Real * [NP][NP]>        m_rspheremp;
+  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_metinv;
+  ExecViewUnmanaged<const Real * [NP][NP]>        m_metdet;
+  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_d;
+  ExecViewUnmanaged<const Real * [2][2][NP][NP]>  m_dinv;
 
 };
 
