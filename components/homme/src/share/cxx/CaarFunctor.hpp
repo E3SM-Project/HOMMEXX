@@ -9,6 +9,7 @@
 
 namespace Homme {
 
+struct BuffersManager;
 struct CaarFunctorImpl;
 
 class CaarFunctor {
@@ -21,6 +22,8 @@ public:
   ~CaarFunctor();
 
   CaarFunctor& operator= (const CaarFunctor&) = delete;
+
+  void init_boundary_exchanges(const std::shared_ptr<BuffersManager>& bm_exchange);
 
   void set_n0_qdp (const int n0_qdp);
 
