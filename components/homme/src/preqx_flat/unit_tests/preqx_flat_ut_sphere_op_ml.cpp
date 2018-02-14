@@ -354,96 +354,96 @@ class compute_sphere_operator_test_ml {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradientSphereML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.gradient_sphere(team,
-                    Homme::subview(scalar_input_d,ie),
-                    Homme::subview(vector_output_d,ie));
+                    Homme::subview(scalar_input_d, kv.ie),
+                    Homme::subview(vector_output_d,kv.ie));
 
   }  // end of op() for grad_sphere_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagDivergenceSphereWkML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.divergence_sphere_wk(team,
-                         Homme::subview(vector_input_d,ie),
-                         Homme::subview(scalar_output_d,ie));
+                         Homme::subview(vector_input_d, kv.ie),
+                         Homme::subview(scalar_output_d,kv.ie));
   }  // end of op() for divergence_sphere_wk_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagSimpleLaplaceML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.laplace_simple(team,
-                   Homme::subview(scalar_input_d,ie),
-                   Homme::subview(scalar_output_d,ie));
+                   Homme::subview(scalar_input_d, kv.ie),
+                   Homme::subview(scalar_output_d,kv.ie));
   }  // end of op() for laplace_wk_ml
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagTensorLaplaceML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.laplace_tensor(team,
-                   Homme::subview(tensor_d,ie),
-                   Homme::subview(scalar_input_d,ie),
-                   Homme::subview(scalar_output_d,ie));
+                   Homme::subview(tensor_d,kv.ie),
+                   Homme::subview(scalar_input_d, kv.ie),
+                   Homme::subview(scalar_output_d,kv.ie));
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagCurlSphereWkTestCovML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.curl_sphere_wk_testcov(team,
-                           Homme::subview(scalar_input_d,ie),
-                           Homme::subview(vector_output_d,ie));
+                           Homme::subview(scalar_input_d, kv.ie),
+                           Homme::subview(vector_output_d,kv.ie));
   }  // end of op() for curl_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradSphereWkTestCovML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.grad_sphere_wk_testcov(team,
-                           Homme::subview(scalar_input_d,ie),
-                           Homme::subview(vector_output_d,ie));
+                           Homme::subview(scalar_input_d, kv.ie),
+                           Homme::subview(vector_output_d,kv.ie));
   }  // end of op() for grad_sphere_wk_testcov
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagVLaplaceCartesianML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.vlaplace_sphere_wk_cartesian (team,
-                                  Homme::subview(tensor_d,ie),
-                                  Homme::subview(vec_sph2cart_d,ie),
-                                  Homme::subview(vector_input_d,ie),
-                                  Homme::subview(vector_output_d,ie));
+                                  Homme::subview(tensor_d,kv.ie),
+                                  Homme::subview(vec_sph2cart_d,kv.ie),
+                                  Homme::subview(vector_input_d,kv.ie),
+                                  Homme::subview(vector_output_d,kv.ie));
   }  // end of op() for laplace_tensor multil
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagVLaplaceContraML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     // don't forget to introduce nu_ratio
     sphere_ops.vlaplace_sphere_wk_contra(team, nu_ratio,
-                              Homme::subview(vector_input_d,ie),
-                              Homme::subview(vector_output_d,ie));
+                              Homme::subview(vector_input_d, kv.ie),
+                              Homme::subview(vector_output_d,kv.ie));
   }  // end of op() for laplace_tensor multil
 
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagVorticityVectorML &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
     sphere_ops.vorticity_sphere (team,
-                      Homme::subview(vector_input_d,ie),
-                      Homme::subview(scalar_output_d,ie));
+                      Homme::subview(vector_input_d, kv.ie),
+                      Homme::subview(scalar_output_d,kv.ie));
   }  // end of op() for vorticity_sphere_vector multilevel
 
 

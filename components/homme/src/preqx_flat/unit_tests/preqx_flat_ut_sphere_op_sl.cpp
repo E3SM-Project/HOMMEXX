@@ -181,11 +181,11 @@ class compute_sphere_operator_test {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagSimpleLaplace &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
-    sphere_ops.laplace_wk_sl(team,
-                  Homme::subview(scalar_input_d,ie),
-                  Homme::subview(scalar_output_d,ie));
+    sphere_ops.laplace_wk_sl(kv,
+                  Homme::subview(scalar_input_d,kv.ie),
+                  Homme::subview(scalar_output_d,kv.ie));
   };  // end of op() for laplace_simple
 
   /*
@@ -217,21 +217,21 @@ class compute_sphere_operator_test {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagDivergenceSphereWk &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.divergence_sphere_wk_sl(team,
-                            Homme::subview(vector_input_d,ie),
-                            Homme::subview(scalar_output_d,ie));
+                            Homme::subview(vector_input_d, kv.ie),
+                            Homme::subview(scalar_output_d,kv.ie));
   };  // end of op() for divergence_sphere_wk
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGradientSphere &,
                   TeamMember team) const {
-    const int ie = team.league_rank();
+    KernelVariables kv(team);
 
     sphere_ops.gradient_sphere_sl(team,
-                       Homme::subview(scalar_input_d,ie),
-                       Homme::subview(vector_output_d,ie));
+                       Homme::subview(scalar_input_d, kv.ie),
+                       Homme::subview(vector_output_d,kv.ie));
   };
 
   // this could be even nicer,
