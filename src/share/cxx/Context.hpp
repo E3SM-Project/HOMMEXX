@@ -33,7 +33,6 @@ class EulerStepFunctor;
  */
 class Context {
 public:
-  using BEMap = std::map<std::string,std::shared_ptr<BoundaryExchange>>;
   using BMMap = std::map<int,std::shared_ptr<BuffersManager>>;
 
 private:
@@ -46,7 +45,6 @@ private:
   std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
   std::shared_ptr<Connectivity>           connectivity_;
   std::shared_ptr<BMMap>                  buffers_managers_;
-  std::unique_ptr<BEMap>                  boundary_exchanges_;
   std::unique_ptr<SimulationParams>       simulation_params_;
   std::unique_ptr<TimeLevel>              time_level_;
   std::unique_ptr<VerticalRemapManager>   vertical_remap_mgr_;
@@ -73,8 +71,6 @@ public:
   std::shared_ptr<Connectivity> get_connectivity();
   BMMap& get_buffers_managers();
   std::shared_ptr<BuffersManager> get_buffers_manager(short int exchange_type);
-  BEMap& get_boundary_exchanges();
-  std::shared_ptr<BoundaryExchange> get_boundary_exchange(const std::string& name);
 
   // Exactly one singleton.
   static Context& singleton();

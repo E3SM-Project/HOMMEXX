@@ -93,23 +93,6 @@ std::shared_ptr<Connectivity> Context::get_connectivity() {
   return connectivity_;
 }
 
-Context::BEMap& Context::get_boundary_exchanges() {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  return *boundary_exchanges_;
-}
-
-std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::string& name) {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  // Todo: should we accept a bool param 'must_already_exist'
-  //       to make sure we are not creating a new BE?
-  if (!(*boundary_exchanges_)[name]) {
-    (*boundary_exchanges_)[name] = std::make_shared<BoundaryExchange>();
-  }
-  return (*boundary_exchanges_)[name];
-}
-
 EulerStepFunctor& Context::get_euler_step_functor() {
   if ( ! euler_step_functor_) euler_step_functor_.reset(new EulerStepFunctor());
   return *euler_step_functor_;
@@ -122,7 +105,6 @@ void Context::clear() {
   hvcoord_ = nullptr;
   hyperviscosity_functor_ = nullptr;
   connectivity_ = nullptr;
-  boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
   simulation_params_ = nullptr;
   time_level_ = nullptr;
