@@ -8,6 +8,8 @@
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "Context.hpp"
+#include "HybridVCoord.hpp"
 #include "PpmRemap.hpp"
 #include "RemapFunctor.hpp"
 #include "Types.hpp"
@@ -389,13 +391,21 @@ TEST_CASE("ppm_fixed", "vertical remap") {
 
 TEST_CASE("remap_interface", "vertical remap") {
   constexpr int num_elems = 4;
+  Context::singleton().get_hvcoord().random_init(std::random_device()());
   Elements elements;
   elements.random_init(num_elems);
 
   // TODO: make dt random
   constexpr int np1 = 0;
   constexpr int n0_qdp = 0;
-  constexpr Real dt = 0.0;
+  Real dt = 0;
+  std::random_device rd;
+  std::mt19937_64 engine(rd());
+  // Note: the bounds on the distribution for dt are strictly linked to how ps_v and eta_dot_dpdn
+  //       are (randomly) init-ed in Elements. In particular, this interval *should* ensure that
+  //       dp3d[k] + dt*(eta_dot_dpdn[k+1]-eta_dot_dpdn[k]) > 0, which is needed to pass the test
+  std::uniform_real_distribution<Real> random_dist(0.01, 10);
+  genRandArray(&dt,1,engine,random_dist);
 
   HybridVCoord hvcoord;
   hvcoord.random_init(std::random_device()());
