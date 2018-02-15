@@ -74,7 +74,7 @@ public:
                       const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
   {
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
-    const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.ie);
+    const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     // TODO: Use scratch space for this
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -110,7 +110,7 @@ public:
   {
     constexpr int np_squared = NP * NP;
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
-    const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.ie);
+    const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.team.league_rank());
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int j = loop_idx / NP;
@@ -145,7 +145,7 @@ public:
   {
     const auto& metdet = Homme::subview(m_metdet,kv.ie);
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
-    const auto& gv_buf = Homme::subview(vector_buf_sl_1,kv.ie);
+    const auto& gv_buf = Homme::subview(vector_buf_sl_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -181,7 +181,7 @@ public:
   {
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp,kv.ie);
-    const auto& gv_buf = Homme::subview(vector_buf_sl_1,kv.ie);
+    const auto& gv_buf = Homme::subview(vector_buf_sl_1,kv.team.league_rank());
 
     // copied from strong divergence as is but without metdet
     // conversion to contravariant
@@ -233,7 +233,7 @@ public:
   {
     const auto& D = Homme::subview(m_d,kv.ie);
     const auto& metdet = Homme::subview(m_metdet,kv.ie);
-    const auto& vcov_buf = Homme::subview(vector_buf_sl_1,kv.ie);
+    const auto& vcov_buf = Homme::subview(vector_buf_sl_1,kv.team.league_rank());
 
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -272,7 +272,7 @@ public:
                  const ExecViewUnmanaged<const Real [NP][NP]> field,
                  const ExecViewUnmanaged<      Real [NP][NP]> laplace) const
   {
-    const auto& grad_s = Homme::subview(vector_buf_sl_2, kv.ie);
+    const auto& grad_s = Homme::subview(vector_buf_sl_2, kv.team.league_rank());
     // let's ignore var coef and tensor hv
     gradient_sphere_sl(kv, field, grad_s);
     divergence_sphere_wk_sl(kv, grad_s, laplace);
@@ -289,7 +289,7 @@ public:
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& v_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& v_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
 
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -333,7 +333,7 @@ public:
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& v_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& v_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -377,7 +377,7 @@ public:
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& gv_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& gv_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -424,7 +424,7 @@ public:
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& gv = Homme::subview(vector_buf_1,kv.ie);
+    const auto& gv = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -469,7 +469,7 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& vcov_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& vcov_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -514,7 +514,7 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -558,7 +558,7 @@ public:
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -604,7 +604,7 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& grad_s = Homme::subview(vector_buf_2, kv.ie);
+    const auto& grad_s = Homme::subview(vector_buf_2, kv.team.league_rank());
       // let's ignore var coef and tensor hv
     gradient_sphere<NUM_LEV_REQUEST>(kv, field, grad_s);
     divergence_sphere_wk<NUM_LEV_REQUEST>(kv, grad_s, laplace);
@@ -622,8 +622,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& grad_s = Homme::subview(vector_buf_2, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_3, kv.ie);
+    const auto& grad_s = Homme::subview(vector_buf_2, kv.team.league_rank());
+    const auto& sphere_buf = Homme::subview(vector_buf_3, kv.team.league_rank());
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
 
@@ -658,7 +658,7 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
@@ -702,7 +702,7 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_2,kv.ie);
+    const auto& sphere_buf = Homme::subview(vector_buf_2,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
@@ -750,7 +750,7 @@ public:
     const auto& mp = Homme::subview(m_mp, kv.ie);
     const auto& metinv = Homme::subview(m_metinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
+    const auto& sphere_buf = Homme::subview(vector_buf_1,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
@@ -824,11 +824,11 @@ public:
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
-    const auto& grads = Homme::subview(vector_buf_1,kv.ie);
-    const auto& laplace0 = Homme::subview(scalar_buf_1,kv.ie);
-    const auto& laplace1 = Homme::subview(scalar_buf_2,kv.ie);
-    const auto& laplace2 = Homme::subview(scalar_buf_3,kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_2,kv.ie);
+    const auto& grads      = Homme::subview(vector_buf_1,kv.team.league_rank());
+    const auto& laplace0   = Homme::subview(scalar_buf_1,kv.team.league_rank());
+    const auto& laplace1   = Homme::subview(scalar_buf_2,kv.team.league_rank());
+    const auto& laplace2   = Homme::subview(scalar_buf_3,kv.team.league_rank());
+    const auto& sphere_buf = Homme::subview(vector_buf_2,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -890,9 +890,9 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
-    const auto& div = Homme::subview(scalar_buf_2,kv.ie);
-    const auto& vort = Homme::subview(scalar_buf_2,kv.ie);
-    const auto& grad_curl_cov = Homme::subview(vector_buf_3,kv.ie);
+    const auto& div           = Homme::subview(scalar_buf_2,kv.team.league_rank());
+    const auto& vort          = Homme::subview(scalar_buf_2,kv.team.league_rank());
+    const auto& grad_curl_cov = Homme::subview(vector_buf_3,kv.team.league_rank());
     constexpr int np_squared = NP * NP;
 
     // grad(div(v))
