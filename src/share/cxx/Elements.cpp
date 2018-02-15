@@ -2,6 +2,8 @@
 #include "utilities/SubviewUtils.hpp"
 #include "utilities/SyncUtils.hpp"
 #include "utilities/TestUtils.hpp"
+#include "HybridVCoord.hpp"
+#include "Context.hpp"
 
 #include <limits>
 #include <random>
@@ -50,8 +52,6 @@ void Elements::init(const int num_elems) {
           "qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
   m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
-  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn",
-                                                               m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
@@ -157,8 +157,12 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_v, engine, random_dist);
   genRandArray(m_t, engine, random_dist);
 
+  // Generate ps_v so that it is >> ps0.
+  // Note: make sure you init hvcoord before calling this method!
+  const auto& hvcoord = Context::singleton().get_hvcoord();
+  genRandArray(m_ps_v, engine, std::uniform_real_distribution<Real>(100*hvcoord.ps0,1000*hvcoord.ps0));
+
   genRandArray(m_qdp, engine, random_dist);
-  genRandArray(m_eta_dot_dpdn, engine, random_dist);
 
   // This ensures the pressure in a single column is monotonically increasing
   // and has fixed upper and lower values
@@ -234,7 +238,11 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
       Kokkos::create_mirror_view(m_d);
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
+  ExecViewManaged<Real *[NUM_TIME_LEVELS][NP][NP]>::HostMirror h_ps_v=
+      Kokkos::create_mirror_view(m_ps_v);
+  Kokkos::deep_copy(h_ps_v,m_ps_v);
 
+  Real dp3d_min = std::numeric_limits<Real>::max();
   for (int ie = 0; ie < m_num_elems; ++ie) {
     // Because this constraint is difficult to satisfy for all of the tensors,
     // incrementally generate the view
@@ -244,6 +252,13 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
           ExecViewUnmanaged<Scalar[NUM_LEV]> pt_dp3d =
               Homme::subview(m_dp3d, ie, tl, igp, jgp);
           genRandArray(pt_dp3d, engine, pressure_pdf, make_pressure_partition);
+          auto h_dp3d = Kokkos::create_mirror_view(pt_dp3d);
+          Kokkos::deep_copy(h_dp3d,pt_dp3d);
+          for (int ilev=0; ilev<NUM_LEV; ++ilev) {
+            for (int iv=0; iv<VECTOR_SIZE; ++iv) {
+              dp3d_min = std::min(dp3d_min,h_dp3d(ilev)[iv]);
+            }
+          }
         }
         genRandArray(h_matrix, engine, random_dist, constrain_det);
         for (int i = 0; i < 2; ++i) {
@@ -259,6 +274,9 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
       }
     }
   }
+
+  // Generate eta_dot_dpdn so that it is << dp3d
+  genRandArray(m_eta_dot_dpdn, engine, std::uniform_real_distribution<Real>(0.01*dp3d_min,0.1*dp3d_min));
 
   Kokkos::deep_copy(m_d, h_d);
   Kokkos::deep_copy(m_dinv, h_dinv);
