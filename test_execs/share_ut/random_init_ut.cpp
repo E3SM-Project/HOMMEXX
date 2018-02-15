@@ -3,8 +3,9 @@
 #include <iostream>
 
 #include "Elements.hpp"
-#include "Utility.hpp"
 #include "Types.hpp"
+#include "utilities/TestUtils.hpp"
+#include "utilities/SubviewUtils.hpp"
 
 using namespace Homme;
 
