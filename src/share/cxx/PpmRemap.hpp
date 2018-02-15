@@ -206,18 +206,14 @@ struct PpmVertRemap : public VertRemapAlg {
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness)
       const {
-    start_timer("remap ppm grids phase");
     compute_partitions(kv, src_layer_thickness, tgt_layer_thickness);
     compute_integral_bounds(kv);
-    stop_timer("remap ppm grids phase");
   }
 
   KOKKOS_INLINE_FUNCTION
   void compute_remap_phase(KernelVariables &kv, const int remap_idx,
                            ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> remap_var)
       const {
-    start_timer("remap ppm Q phase");
-
     // From here, we loop over tracers for only those portions which depend on
     // tracer data, which includes PPM limiting and mass accumulation
     // More parallelism than we need here, maybe break it up?
@@ -282,7 +278,6 @@ struct PpmVertRemap : public VertRemapAlg {
                     Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
     kv.team_barrier();
-    stop_timer("remap ppm Q phase");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -520,7 +515,6 @@ struct PpmVertRemap : public VertRemapAlg {
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness)
       const {
-    start_timer("remap compute_partitions");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -591,8 +585,6 @@ struct PpmVertRemap : public VertRemapAlg {
       });
     });
     kv.team_barrier();
-
-    stop_timer("remap compute_partitions");
   }
 
   KOKKOS_INLINE_FUNCTION
