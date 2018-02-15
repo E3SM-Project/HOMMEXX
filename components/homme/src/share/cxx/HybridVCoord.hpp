@@ -18,6 +18,7 @@ struct HybridVCoord
             CRCPtr hybrid_bi_ptr);
 
   void random_init(int seed);
+  void compute_deltas ();
 
   Real ps0;
   Real hybrid_ai0;
