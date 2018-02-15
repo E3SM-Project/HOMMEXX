@@ -64,18 +64,36 @@ public:
   struct TagPPMTest {};
   struct TagRemapTest {};
 
+  static bool nan_boundaries(
+      HostViewUnmanaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> host) {
+    for (int ie = 0; ie < host.extent_int(0); ++ie) {
+      for (int igp = 0; igp < host.extent_int(1); ++igp) {
+        for (int jgp = 0; jgp < host.extent_int(2); ++jgp) {
+          for (int k = 0; k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs;
+               ++k) {
+            host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   void test_grid() {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.dpo, engine,
-                 std::uniform_real_distribution<Real>(0.125, 1000));
+                 std::uniform_real_distribution<Real>(0.125, 1000),
+                 nan_boundaries);
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
     ExecSpace::fence();
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input("fortran dpo");
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_result("fortra ppmdx");
+    HostViewManaged<Real[_ppm_consts::DPO_PHYSICAL_LEV]> f90_input(
+        "fortran dpo");
+    HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_result(
+        "fortra ppmdx");
     for (int var = 0; var < num_remap; ++var) {
       auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
       Kokkos::deep_copy(kokkos_result, remap.ppmdx);
@@ -84,16 +102,24 @@ public:
           for (int jgp = 0; jgp < NP; ++jgp) {
             Kokkos::deep_copy(f90_input,
                               Homme::subview(remap.dpo, ie, igp, jgp));
+            for (int k = 0; k < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++k) {
+              f90_input(k) =
+                  f90_input(k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+            }
+            for (int k = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
+                 k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
+              f90_input(k) = std::numeric_limits<Real>::quiet_NaN();
+            }
             compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
                                          remap_alg);
             for (int k = 0; k < f90_result.extent_int(0); ++k) {
               for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
                    ++stencil_idx) {
-                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
-                REQUIRE(
-                    !std::isnan(kokkos_result(ie, igp, jgp, stencil_idx, k)));
-                REQUIRE(f90_result(k, stencil_idx) ==
-                        kokkos_result(ie, igp, jgp, stencil_idx, k));
+                const Real f90 = f90_result(k, stencil_idx);
+                const Real cxx = kokkos_result(ie, igp, jgp, stencil_idx, k);
+                REQUIRE(!std::isnan(f90));
+                REQUIRE(!std::isnan(cxx));
+                REQUIRE(f90 == cxx);
               }
             }
           }
@@ -105,13 +131,13 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagGridTest &, TeamMember team) const {
     KernelVariables kv(team);
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, NP * NP), [&](const int &loop_idx) {
-          const int igp = loop_idx / NP;
-          const int jgp = loop_idx % NP;
-          remap.compute_grids(kv, Homme::subview(remap.dpo, kv.ie, igp, jgp),
-                              Homme::subview(remap.ppmdx, kv.ie, igp, jgp));
-        });
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_grids(kv, Homme::subview(remap.dpo, kv.ie, igp, jgp),
+                          Homme::subview(remap.ppmdx, kv.ie, igp, jgp));
+    });
   }
 
   void test_ppm() {
@@ -119,22 +145,6 @@ public:
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
                  std::uniform_real_distribution<Real>(0.125, 1000));
-    auto nan_boundaries =
-        [](HostViewUnmanaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]>
-               host) {
-          for (int ie = 0; ie < host.extent_int(0); ++ie) {
-            for (int igp = 0; igp < host.extent_int(1); ++igp) {
-              for (int jgp = 0; jgp < host.extent_int(2); ++jgp) {
-                for (int k = 0;
-                     k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs; ++k) {
-                  host(ie, igp, jgp, k) =
-                      std::numeric_limits<Real>::quiet_NaN();
-                }
-              }
-            }
-          }
-          return true;
-        };
     for (int i = 0; i < num_remap; ++i) {
       genRandArray(remap.ao[i], engine,
                    std::uniform_real_distribution<Real>(0.125, 1000),
@@ -168,6 +178,10 @@ public:
               f90_cellmeans_input(i) = f90_cellmeans_input(
                   i + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
             }
+            for (int i = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
+                 i < _ppm_consts::DPO_PHYSICAL_LEV; ++i) {
+              f90_cellmeans_input(i) = std::numeric_limits<Real>::quiet_NaN();
+            }
 
             auto tmp = Kokkos::create_mirror_view(remap.ppmdx);
             Kokkos::deep_copy(tmp, remap.ppmdx);
@@ -181,7 +195,7 @@ public:
                    ++parabola_coeff) {
                 REQUIRE(!std::isnan(f90_result(k, parabola_coeff)));
                 REQUIRE(!std::isnan(
-                    kokkos_result(ie, igp, jgp, parabola_coeff, k)));
+                             kokkos_result(ie, igp, jgp, parabola_coeff, k)));
                 REQUIRE(f90_result(k, parabola_coeff) ==
                         kokkos_result(ie, igp, jgp, parabola_coeff, k));
               }
@@ -195,19 +209,18 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagPPMTest &, TeamMember team) const {
     KernelVariables kv(team);
-    Kokkos::parallel_for(
-        Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
-        [&](const int &loop_idx) {
-          const int var = loop_idx / NP / NP;
-          const int igp = (loop_idx / NP) % NP;
-          const int jgp = loop_idx % NP;
-          remap.compute_ppm(
-              kv, Homme::subview(remap.ao[var], kv.ie, igp, jgp),
-              Homme::subview(remap.ppmdx, kv.ie, igp, jgp),
-              Homme::subview(remap.dma[var], kv.ie, igp, jgp),
-              Homme::subview(remap.ai[var], kv.ie, igp, jgp),
-              Homme::subview(remap.parabola_coeffs[var], kv.ie, igp, jgp));
-        });
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
+                         [&](const int &loop_idx) {
+      const int var = loop_idx / NP / NP;
+      const int igp = (loop_idx / NP) % NP;
+      const int jgp = loop_idx % NP;
+      remap.compute_ppm(
+          kv, Homme::subview(remap.ao[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ppmdx, kv.ie, igp, jgp),
+          Homme::subview(remap.dma[var], kv.ie, igp, jgp),
+          Homme::subview(remap.ai[var], kv.ie, igp, jgp),
+          Homme::subview(remap.parabola_coeffs[var], kv.ie, igp, jgp));
+    });
   }
 
   // This ensures that the represented grid is not degenerate
@@ -289,12 +302,12 @@ public:
     const int qsize = num_remap;
 
     HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
-        f90_src_layer_thickness_input("fortran source layer thickness");
+    f90_src_layer_thickness_input("fortran source layer thickness");
     HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
-        f90_tgt_layer_thickness_input("fortran target layer thickness");
+    f90_tgt_layer_thickness_input("fortran target layer thickness");
 
     Kokkos::Array<HostViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
-        kokkos_remapped;
+    kokkos_remapped;
     for (int var = 0; var < num_remap; ++var) {
       kokkos_remapped[var] = Kokkos::create_mirror_view(remap_vals[var]);
       Kokkos::deep_copy(kokkos_remapped[var], remap_vals[var]);
@@ -321,15 +334,13 @@ public:
               //
               // The fortran returns NaN's, so make certain we only return NaN's
               // when the Fortran does
-              REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
-                      std::isnan(kokkos_remapped[var](ie, igp, jgp,
-                                                      vector_level)[vector]));
-              if (!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) &&
-                  !std::isnan(kokkos_remapped[var](ie, igp, jgp,
-                                                   vector_level)[vector])) {
-                REQUIRE(
-                    f90_remap_qdp(ie, var, k, igp, jgp) ==
-                    kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
+
+              const Real f90 = f90_remap_qdp(ie, var, k, igp, jgp);
+              const Real cxx =
+                  kokkos_remapped[var](ie, igp, jgp, vector_level)[vector];
+              REQUIRE(std::isnan(f90) == std::isnan(cxx));
+              if (!std::isnan(f90)) {
+                REQUIRE(f90 == cxx);
               }
             }
           }
@@ -355,7 +366,7 @@ public:
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> src_layer_thickness_kokkos;
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> tgt_layer_thickness_kokkos;
   Kokkos::Array<ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>, num_remap>
-      remap_vals;
+  remap_vals;
 };
 
 TEST_CASE("ppm_mirrored", "vertical remap") {
