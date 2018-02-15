@@ -58,7 +58,7 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     Kokkos::fence();
 
     // Exchange
-    assert (m_be->registration_completed());
+    assert (m_be->is_registration_completed());
     m_be->exchange();
 
     // Update states
@@ -76,7 +76,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   Kokkos::fence();
 
   // Exchange
-  assert (m_be->registration_completed());
+  assert (m_be->is_registration_completed());
   m_be->exchange(m_elements.m_rspheremp);
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
