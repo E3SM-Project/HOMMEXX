@@ -61,7 +61,6 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
       ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> eta_dot_dpdn,
       ExecViewUnmanaged<const Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d)
       const {
-    start_timer("remap compute_source_thickness");
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
         get_source_thickness(kv.ie, np1, dp3d);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -90,7 +89,6 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
       });
     });
     kv.team_barrier();
-    stop_timer("remap compute_source_thickness");
     return src_layer_thickness;
   }
 
@@ -399,7 +397,6 @@ private:
   void compute_ps_v(KernelVariables &kv,
                     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> dp3d,
                     ExecViewUnmanaged<Real[NP][NP]> ps_v) const {
-    start_timer("remap compute_ps_v");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -418,14 +415,12 @@ private:
       });
     });
     kv.team_barrier();
-    stop_timer("remap compute_ps_v");
   }
 
   KOKKOS_INLINE_FUNCTION void compute_extrinsic_state(
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> state_remap) const {
-    start_timer("remap rescale_states");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -435,7 +430,6 @@ private:
         state_remap(igp, jgp, ilev) *= src_layer_thickness(igp, jgp, ilev);
       });
     });
-    stop_timer("remap rescale_states");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -443,7 +437,6 @@ private:
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness,
       ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> state_remap) const {
-    start_timer("remap rescale_states");
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
       const int igp = loop_idx / NP;
@@ -453,12 +446,10 @@ private:
         state_remap(igp, jgp, ilev) /= tgt_layer_thickness(igp, jgp, ilev);
       });
     });
-    stop_timer("remap rescale_states");
   }
 
   KOKKOS_INLINE_FUNCTION ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
   compute_target_thickness(KernelVariables &kv) const {
-    start_timer("remap compute_target_thickness");
     auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &idx) {
@@ -485,7 +476,6 @@ private:
       });
     });
     kv.team_barrier();
-    stop_timer("remap compute_target_thickness");
     return tgt_layer_thickness;
   }
 
@@ -493,7 +483,6 @@ private:
       KernelVariables &kv,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness)
       const {
-    start_timer("remap check_source_thickness");
     // Kokkos parallel reduce doesn't support bool as a reduction type, so use
     // int instead
     // Reduce starts with false (0), making that the default state
@@ -511,7 +500,6 @@ private:
         },
         invalid);
     valid_layer_thickness(kv.ie) = !invalid;
-    stop_timer("remap check_source_thickness");
   }
 };
 
