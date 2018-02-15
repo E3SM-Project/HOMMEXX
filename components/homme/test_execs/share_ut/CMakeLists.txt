@@ -58,7 +58,7 @@ SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
-  ${SHARE_UT_DIR}/infrastructure_ut.cpp
+  ${SHARE_UT_DIR}/random_init_ut.cpp
 )
 SET (RANDOM_INIT_UT_F90_SRCS)
 
