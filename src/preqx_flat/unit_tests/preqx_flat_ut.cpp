@@ -115,16 +115,9 @@ public:
         rsplit(rsplit_in)
         {
 
-//make these random
-    Real hybrid_am[NUM_PHYSICAL_LEV] = { 0 };
-    Real hybrid_ai[NUM_INTERFACE_LEV] = { 0 };
-    Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
-    Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
-
     functor.set_n0_qdp(n0_qdp);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
-//is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
