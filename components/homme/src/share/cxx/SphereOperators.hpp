@@ -161,11 +161,8 @@ public:
     constexpr int div_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, div_iters),
                          [&](const int loop_idx) {
-      // Note: for this one time, it is better if i strides faster, due to
-      //       the way gv_buf is accessed, which, given the kgp loop, is
-      //       more important than making access to div_v & metdet faster.
       const int igp = loop_idx / NP;
-      const int jgp = loop_idx %NP;
+      const int jgp = loop_idx % NP;
       Real dudx = 0.0, dvdy = 0.0;
       for (int kgp = 0; kgp < NP; ++kgp) {
         dudx += dvv(jgp, kgp) * gv_buf(0, igp, kgp);
@@ -253,9 +250,6 @@ public:
     constexpr int vort_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, vort_iters),
                          [&](const int loop_idx) {
-      // Note: for this one time, it is better if i strides faster, due to
-      //       the way vcov_buf is accessed, which, given the kgp loop, is
-      //       more important than making access to vort & metdet faster.
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Real dudy = 0.0;
@@ -582,8 +576,10 @@ public:
     constexpr int div_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, div_iters),
                          [&](const int loop_idx) {
-      const int mgp = loop_idx / NP;
-      const int ngp = loop_idx % NP;
+      // Note: for this one time, it is better if m strides faster, due to
+      //       the way the views are accessed.
+      const int mgp = loop_idx % NP;
+      const int ngp = loop_idx / NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         Scalar dd;
         // TODO: move multiplication by rrearth outside the loop
