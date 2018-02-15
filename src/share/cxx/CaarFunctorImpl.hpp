@@ -121,23 +121,6 @@ struct CaarFunctorImpl {
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
 
-#ifdef NDEBUG
-  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {}
-#else
-  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
-                                                   NP * NP * NUM_PHYSICAL_LEV),
-                         [&](const int &idx) {
-      const int igp = (idx / NUM_PHYSICAL_LEV) / NP;
-      const int jgp = (idx / NUM_PHYSICAL_LEV) % NP;
-      const int ilev = (idx % NUM_PHYSICAL_LEV) / VECTOR_SIZE;
-      const int ivec = (idx % NUM_PHYSICAL_LEV) % VECTOR_SIZE;
-      assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[ivec] > 0.0);
-    });
-    kv.team_barrier();
-  }
-#endif
-
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
@@ -152,7 +135,6 @@ struct CaarFunctorImpl {
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
-    check_dp3d(kv);
   } // TRIVIAL
   //is it?
 
