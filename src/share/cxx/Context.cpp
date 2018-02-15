@@ -9,6 +9,7 @@
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "HyperviscosityFunctor.hpp"
+#include "SphereOperators.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "VerticalRemapManager.hpp"
@@ -93,6 +94,18 @@ std::shared_ptr<Connectivity> Context::get_connectivity() {
   return connectivity_;
 }
 
+SphereOperators& Context::get_sphere_operators(int qsize) {
+  if ( ! sphere_operators_) {
+    if (qsize<0) {
+      qsize = get_simulation_params().qsize;
+    }
+    Elements&   elements   = get_elements();
+    Derivative& derivative = get_derivative();
+    sphere_operators_.reset(new SphereOperators(elements,derivative,qsize));
+  }
+  return *sphere_operators_;
+}
+
 EulerStepFunctor& Context::get_euler_step_functor() {
   if ( ! euler_step_functor_) euler_step_functor_.reset(new EulerStepFunctor());
   return *euler_step_functor_;
@@ -107,6 +120,7 @@ void Context::clear() {
   connectivity_ = nullptr;
   buffers_managers_ = nullptr;
   simulation_params_ = nullptr;
+  sphere_operators_ = nullptr;
   time_level_ = nullptr;
   vertical_remap_mgr_ = nullptr;
   caar_functor_ = nullptr;

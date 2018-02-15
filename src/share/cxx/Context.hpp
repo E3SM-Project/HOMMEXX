@@ -17,6 +17,7 @@ class Elements;
 class HybridVCoord;
 class HyperviscosityFunctor;
 class SimulationParams;
+class SphereOperators;
 class TimeLevel;
 class VerticalRemapManager;
 class EulerStepFunctor;
@@ -48,6 +49,7 @@ private:
   std::unique_ptr<SimulationParams>       simulation_params_;
   std::unique_ptr<TimeLevel>              time_level_;
   std::unique_ptr<VerticalRemapManager>   vertical_remap_mgr_;
+  std::unique_ptr<SphereOperators>        sphere_operators_;
   std::unique_ptr<EulerStepFunctor>       euler_step_functor_;
 
   // Clear the objects Context manages.
@@ -65,6 +67,7 @@ public:
   HybridVCoord& get_hvcoord();
   HyperviscosityFunctor& get_hyperviscosity_functor();
   SimulationParams& get_simulation_params();
+  SphereOperators& get_sphere_operators(int qsize = -1);
   TimeLevel& get_time_level();
   EulerStepFunctor& get_euler_step_functor();
   VerticalRemapManager& get_vertical_remap_manager();
