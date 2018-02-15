@@ -400,24 +400,23 @@ TEST_CASE("remap_interface", "vertical remap") {
   HybridVCoord hvcoord;
   hvcoord.random_init(std::random_device()());
   SECTION("states_only") {
-    constexpr int rsplit = 1;
+    constexpr bool rsplit_non_zero = true;
     constexpr int qsize = 0;
-    using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
+    using _Remap = RemapFunctor<rsplit_non_zero, PpmVertRemap, PpmMirrored>;
     _Remap remap(qsize, elements, hvcoord);
     remap.run_remap(np1,n0_qdp,dt);
   }
   SECTION("tracers_only") {
-    constexpr int rsplit = 0;
+    constexpr bool rsplit_non_zero = false;
     constexpr int qsize = QSIZE_D;
-    using _Remap = RemapFunctor<rsplit, PpmVertRemap, PpmMirrored>;
+    using _Remap = RemapFunctor<rsplit_non_zero, PpmVertRemap, PpmMirrored>;
     _Remap remap(qsize, elements, hvcoord);
     remap.run_remap(np1,n0_qdp,dt);
   }
   SECTION("states_tracers") {
-    constexpr int remap_dim = 3 + QSIZE_D;
-    constexpr int rsplit = 1;
+    constexpr bool rsplit_non_zero = true;
     constexpr int qsize = QSIZE_D;
-    using _Remap = RemapFunctor<remap_dim, PpmVertRemap, PpmMirrored>;
+    using _Remap = RemapFunctor<rsplit_non_zero, PpmVertRemap, PpmMirrored>;
     _Remap remap(qsize, elements, hvcoord);
     remap.run_remap(np1,n0_qdp,dt);
   }

@@ -1,14 +1,16 @@
 #include "Context.hpp"
 #include "HyperviscosityFunctorImpl.hpp"
 #include "BoundaryExchange.hpp"
+#include "profiling.hpp"
 
 namespace Homme
 {
 
 HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& params, const Elements& elements, const Derivative& deriv)
- : m_elements (elements)
- , m_deriv    (deriv)
- , m_data     (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ : m_elements   (elements)
+ , m_deriv      (deriv)
+ , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ , m_sphere_ops (Context::singleton().get_sphere_operators())
 {
   // Sanity check
   assert(params.params_set);
@@ -52,14 +54,18 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
       Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
           m_elements.num_elems());
   for (int icycle = 0; icycle < m_data.hypervis_subcycle; ++icycle) {
+    GPTLstart("hvf-bhwk");
     biharmonic_wk_dp3d ();
+    GPTLstop("hvf-bhwk");
     // dispatch parallel_for for first kernel
     Kokkos::parallel_for(policy_pre_exchange, *this);
     Kokkos::fence();
 
     // Exchange
     assert (m_be->is_registration_completed());
+    GPTLstart("hvf-bexch");
     m_be->exchange();
+    GPTLstop("hvf-bexch");
 
     // Update states
     Kokkos::parallel_for(policy_update_states, *this);
@@ -77,7 +83,9 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
 
   // Exchange
   assert (m_be->is_registration_completed());
+  GPTLstart("hvf-bexch");
   m_be->exchange(m_elements.m_rspheremp);
+  GPTLstop("hvf-bexch");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian

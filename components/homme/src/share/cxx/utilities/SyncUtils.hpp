@@ -236,8 +236,6 @@ sync_to_host(Source_T source, Dest_T dest) {
   Kokkos::deep_copy(source_mirror, source);
   for (int i = 0; i < 10; ++i) {
     for (int level = 0; level < NUM_PHYSICAL_LEV + 2; ++level) {
-      const int ilev = level / VECTOR_SIZE;
-      const int ivec = level % VECTOR_SIZE;
       dest(level, i) = source_mirror(i, level);
     }
   }
