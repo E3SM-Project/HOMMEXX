@@ -211,25 +211,18 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    if (OnGpu<ExecSpace>::value) {
-      Kokkos::parallel_for(
-          Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
-              m_elements.num_elems()),
-          *this);
-      ExecSpace::fence();
-      m_kernel_will_run_limiters = true;
-      Kokkos::parallel_for(
-          Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
-              m_elements.num_elems() * m_data.qsize),
-          *this);
-      ExecSpace::fence();
-      m_kernel_will_run_limiters = false;
-    } else {
-      Kokkos::parallel_for(
-          Homme::get_default_team_policy<ExecSpace, AALFusedPhases>(
-              m_elements.num_elems()),
-          *this);
-    }
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
+        m_elements.num_elems()),
+      *this);
+    ExecSpace::fence();
+    m_kernel_will_run_limiters = true;
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
+        m_elements.num_elems() * m_data.qsize),
+      *this);
+    ExecSpace::fence();
+    m_kernel_will_run_limiters = false;
     ExecSpace::fence();
     profiling_pause();
   }

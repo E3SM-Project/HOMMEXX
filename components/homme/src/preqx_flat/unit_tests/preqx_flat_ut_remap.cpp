@@ -3,20 +3,24 @@
 #include "dimensions_remap_tests.hpp"
 
 #include "remap.hpp"
-#include "utilities/TestUtils.hpp"
 #include "utilities/SubviewUtils.hpp"
+#include "utilities/TestUtils.hpp"
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "PpmRemap.hpp"
 #include "RemapFunctor.hpp"
+#include "Types.hpp"
 
-#include <assert.h>
-#include <stdio.h>
 #include <algorithm>
+#include <assert.h>
 #include <limits>
 #include <random>
+#include <stdio.h>
 
 using namespace Homme;
+using namespace Remap;
+using namespace Ppm;
 
 using rngAlg = std::mt19937_64;
 
@@ -60,18 +64,36 @@ public:
   struct TagPPMTest {};
   struct TagRemapTest {};
 
+  static bool nan_boundaries(
+      HostViewUnmanaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> host) {
+    for (int ie = 0; ie < host.extent_int(0); ++ie) {
+      for (int igp = 0; igp < host.extent_int(1); ++igp) {
+        for (int jgp = 0; jgp < host.extent_int(2); ++jgp) {
+          for (int k = 0; k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs;
+               ++k) {
+            host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   void test_grid() {
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.dpo, engine,
-                 std::uniform_real_distribution<Real>(0.125, 1000));
+                 std::uniform_real_distribution<Real>(0.125, 1000),
+                 nan_boundaries);
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
     ExecSpace::fence();
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_input("fortran dpo");
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_result("fortra ppmdx");
+    HostViewManaged<Real[_ppm_consts::DPO_PHYSICAL_LEV]> f90_input(
+        "fortran dpo");
+    HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_result(
+        "fortra ppmdx");
     for (int var = 0; var < num_remap; ++var) {
       auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
       Kokkos::deep_copy(kokkos_result, remap.ppmdx);
@@ -80,16 +102,24 @@ public:
           for (int jgp = 0; jgp < NP; ++jgp) {
             Kokkos::deep_copy(f90_input,
                               Homme::subview(remap.dpo, ie, igp, jgp));
+            for (int k = 0; k < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++k) {
+              f90_input(k) =
+                  f90_input(k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+            }
+            for (int k = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
+                 k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
+              f90_input(k) = std::numeric_limits<Real>::quiet_NaN();
+            }
             compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
                                          remap_alg);
             for (int k = 0; k < f90_result.extent_int(0); ++k) {
               for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
                    ++stencil_idx) {
-                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
-                REQUIRE(
-                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
-                REQUIRE(f90_result(k, stencil_idx) ==
-                        kokkos_result(ie, igp, jgp, k, stencil_idx));
+                const Real f90 = f90_result(k, stencil_idx);
+                const Real cxx = kokkos_result(ie, igp, jgp, stencil_idx, k);
+                REQUIRE(!std::isnan(f90));
+                REQUIRE(!std::isnan(cxx));
+                REQUIRE(f90 == cxx);
               }
             }
           }
@@ -111,15 +141,14 @@ public:
   }
 
   void test_ppm() {
-    constexpr const Real rel_threshold =
-        std::numeric_limits<Real>::epsilon() * 128.0;
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
                  std::uniform_real_distribution<Real>(0.125, 1000));
     for (int i = 0; i < num_remap; ++i) {
       genRandArray(remap.ao[i], engine,
-                   std::uniform_real_distribution<Real>(0.125, 1000));
+                   std::uniform_real_distribution<Real>(0.125, 1000),
+                   nan_boundaries);
     }
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
@@ -127,9 +156,9 @@ public:
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
 
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 4]> f90_cellmeans_input(
+    HostViewManaged<Real[_ppm_consts::AO_PHYSICAL_LEV]> f90_cellmeans_input(
         "fortran cell means");
-    HostViewManaged<Real[NUM_PHYSICAL_LEV + 2][10]> f90_dx_input(
+    HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_dx_input(
         "fortran ppmdx");
     HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result");
     for (int var = 0; var < num_remap; ++var) {
@@ -142,28 +171,33 @@ public:
           for (int jgp = 0; jgp < NP; ++jgp) {
             Kokkos::deep_copy(f90_cellmeans_input,
                               Homme::subview(remap.ao[var], ie, igp, jgp));
-            Kokkos::deep_copy(f90_dx_input,
-                              Homme::subview(remap.ppmdx, ie, igp, jgp));
+            sync_to_host(Homme::subview(remap.ppmdx, ie, igp, jgp),
+                         f90_dx_input);
+            // Fix the Fortran input to be 0 offset
+            for (int i = 0; i < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++i) {
+              f90_cellmeans_input(i) = f90_cellmeans_input(
+                  i + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+            }
+            for (int i = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
+                 i < _ppm_consts::DPO_PHYSICAL_LEV; ++i) {
+              f90_cellmeans_input(i) = std::numeric_limits<Real>::quiet_NaN();
+            }
+
+            auto tmp = Kokkos::create_mirror_view(remap.ppmdx);
+            Kokkos::deep_copy(tmp, remap.ppmdx);
+
             compute_ppm_c_callable(f90_cellmeans_input.data(),
                                    f90_dx_input.data(), f90_result.data(),
                                    remap_alg);
             for (int k = 0; k < f90_result.extent_int(0); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
-                   ++stencil_idx) {
-                REQUIRE(!std::isnan(f90_result(k, stencil_idx)));
-                REQUIRE(
-                    !std::isnan(kokkos_result(ie, igp, jgp, k, stencil_idx)));
-                const Real rel_error = compare_answers(
-                    f90_result(k, stencil_idx),
-                    kokkos_result(ie, igp, jgp, k, stencil_idx));
-                if (rel_threshold < rel_error) {
-                  DEBUG_PRINT(
-                      "%s results ppm: %d %d %d %d %d %d -> % .17e vs % .17e\n",
-                      boundary_cond::name(), var, ie, igp, jgp, k, stencil_idx,
-                      f90_result(k, stencil_idx),
-                      kokkos_result(ie, igp, jgp, k, stencil_idx));
-                }
-                REQUIRE(rel_threshold >= rel_error);
+              for (int parabola_coeff = 0;
+                   parabola_coeff < f90_result.extent_int(1);
+                   ++parabola_coeff) {
+                REQUIRE(!std::isnan(f90_result(k, parabola_coeff)));
+                REQUIRE(!std::isnan(
+                             kokkos_result(ie, igp, jgp, parabola_coeff, k)));
+                REQUIRE(f90_result(k, parabola_coeff) ==
+                        kokkos_result(ie, igp, jgp, parabola_coeff, k));
               }
             }
           }
@@ -238,8 +272,6 @@ public:
   }
 
   void test_remap() {
-    constexpr const Real rel_threshold =
-        std::numeric_limits<Real>::epsilon() * 4096.0;
     std::random_device rd;
     rngAlg engine(rd());
     std::uniform_real_distribution<Real> dist(0.125, 1000.0);
@@ -302,22 +334,13 @@ public:
               //
               // The fortran returns NaN's, so make certain we only return NaN's
               // when the Fortran does
-              // REQUIRE(std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) ==
-              //         std::isnan(kokkos_remapped[var](ie, igp, jgp,
-              //                                         vector_level)[vector]));
-              if (!std::isnan(f90_remap_qdp(ie, var, k, igp, jgp)) &&
-                  !std::isnan(kokkos_remapped[var](ie, igp, jgp,
-                                                   vector_level)[vector])) {
-                Real rel_error = compare_answers(
-                    f90_remap_qdp(ie, var, k, igp, jgp),
-                    kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
-                if (rel_threshold < rel_error) {
-                  DEBUG_PRINT(
-                      "remap ppm %d %d %d: % .17e vs % .17e\n", igp, jgp, k,
-                      f90_remap_qdp(ie, var, k, igp, jgp),
-                      kokkos_remapped[var](ie, igp, jgp, vector_level)[vector]);
-                }
-                REQUIRE(rel_threshold >= rel_error);
+
+              const Real f90 = f90_remap_qdp(ie, var, k, igp, jgp);
+              const Real cxx =
+                  kokkos_remapped[var](ie, igp, jgp, vector_level)[vector];
+              REQUIRE(std::isnan(f90) == std::isnan(cxx));
+              if (!std::isnan(f90)) {
+                REQUIRE(f90 == cxx);
               }
             }
           }
