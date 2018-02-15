@@ -17,20 +17,9 @@ class SphereOperators
 {
 public:
 
-  SphereOperators (const Elements& elements, const Derivative& derivative)
+  SphereOperators (const Elements& elements, const Derivative& derivative, const int qsize = 1)
+    : SphereOperators(elements.num_elems(),qsize)
   {
-    const int num_elems = elements.num_elems();
-
-    // Create the buffers
-    vector_buf_sl_1 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 1", num_elems);
-    vector_buf_sl_2 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 2", num_elems);
-    scalar_buf_1    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 1", num_elems);
-    scalar_buf_2    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 2", num_elems);
-    scalar_buf_3    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 3", num_elems);
-    vector_buf_1    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 1", num_elems);
-    vector_buf_2    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 2", num_elems);
-    vector_buf_3    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 3", num_elems);
-
     // Get dvv
     dvv = derivative.get_dvv();
 
@@ -43,21 +32,24 @@ public:
     m_mp       = elements.m_mp;
   }
 
-  // This one is used in the unit tests
-  SphereOperators (const int num_elems) {
-    // Create the buffers
-    vector_buf_sl_1 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 1", num_elems);
-    vector_buf_sl_2 = ExecViewManaged<Real   * [2][NP][NP]         >("single-level vector buffer 2", num_elems);
-    scalar_buf_1    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 1", num_elems);
-    scalar_buf_2    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 2", num_elems);
-    scalar_buf_3    = ExecViewManaged<Scalar *    [NP][NP][NUM_LEV]>("scalar buffer 3", num_elems);
-    vector_buf_1    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 1", num_elems);
-    vector_buf_2    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 2", num_elems);
-    vector_buf_3    = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("vector buffer 3", num_elems);
+  // This one is used in the unit tests (other than by the other constructor)
+  SphereOperators (const int num_elems, const int qsize = 1)
+    : vector_buf_sl_1 ("single-level vector buffer 1", num_elems*qsize)
+    , vector_buf_sl_2 ("single-level vector buffer 2", num_elems*qsize)
+    , scalar_buf_1    ("scalar buffer 1", num_elems*qsize)
+    , scalar_buf_2    ("scalar buffer 2", num_elems*qsize)
+    , scalar_buf_3    ("scalar buffer 3", num_elems*qsize)
+    , vector_buf_1    ("vector buffer 1", num_elems*qsize)
+    , vector_buf_2    ("vector buffer 2", num_elems*qsize)
+    , vector_buf_3    ("vector buffer 3", num_elems*qsize)
+  {
+    // I think by now kokkos would have thrown already, but just in case..
+    assert (num_elems>0);
+    assert (qsize>0);
   }
 
   // This one is used in the unit tests
-  void set_views (const ExecViewUnmanaged<const Real       [NP][NP]>  dvv_in,
+  void set_views (const ExecViewUnmanaged<const Real       [NP][NP]>    dvv_in,
                   const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  d,
                   const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  dinv,
                   const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  metinv,
@@ -83,9 +75,9 @@ public:
   {
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
     const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.ie);
-    constexpr int contra_iters = NP * NP;
+    constexpr int np_squared = NP * NP;
     // TODO: Use scratch space for this
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int j = loop_idx / NP;
       const int l = loop_idx % NP;
@@ -116,10 +108,10 @@ public:
                              const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
                              const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
   {
-    constexpr int contra_iters = NP * NP;
+    constexpr int np_squared = NP * NP;
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
     const auto& temp_v_buf = Homme::subview(vector_buf_sl_1,kv.ie);
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int j = loop_idx / NP;
       const int l = loop_idx % NP;
@@ -133,14 +125,15 @@ public:
     });
     kv.team_barrier();
 
-    constexpr int grad_iters = 2 * NP * NP;
+    constexpr int grad_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, grad_iters),
                          [&](const int loop_idx) {
-      const int h = (loop_idx / NP) / NP;
-      const int i = (loop_idx / NP) % NP;
+      const int i = loop_idx / NP;
       const int j = loop_idx % NP;
-      grad_s(h, j, i) += D_inv(h, 0, j, i) * temp_v_buf(0, j, i) +
-                         D_inv(h, 1, j, i) * temp_v_buf(1, j, i);
+      const auto& tmp0 = temp_v_buf(0,i,j);
+      const auto& tmp1 = temp_v_buf(1,i,j);
+      grad_s(0,i,j) += D_inv(0,0,i,j) * tmp0 + D_inv(0,1,i,j) * tmp1;
+      grad_s(1,i,j) += D_inv(1,0,i,j) * tmp0 + D_inv(1,1,i,j) * tmp1;
     });
     kv.team_barrier();
   }
@@ -153,29 +146,32 @@ public:
     const auto& metdet = Homme::subview(m_metdet,kv.ie);
     const auto& D_inv = Homme::subview(m_dinv,kv.ie);
     const auto& gv_buf = Homme::subview(vector_buf_sl_1,kv.ie);
-    constexpr int contra_iters = NP * NP * 2;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
-      const int hgp = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
+      const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      gv_buf(hgp, igp, jgp) = (D_inv(0, hgp, igp, jgp) * v(0, igp, jgp) +
-                               D_inv(1, hgp, igp, jgp) * v(1, igp, jgp)) *
-                              metdet(igp, jgp);
+      const auto& v0 = v(0,igp,jgp);
+      const auto& v1 = v(1,igp,jgp);
+      gv_buf(0,igp,jgp) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
+      gv_buf(1,igp,jgp) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
     });
     kv.team_barrier();
 
     constexpr int div_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, div_iters),
                          [&](const int loop_idx) {
+      // Note: for this one time, it is better if i strides faster, due to
+      //       the way gv_buf is accessed, which, given the kgp loop, is
+      //       more important than making access to div_v & metdet faster.
       const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
+      const int jgp = loop_idx %NP;
       Real dudx = 0.0, dvdy = 0.0;
       for (int kgp = 0; kgp < NP; ++kgp) {
-        dudx += dvv(igp, kgp) * gv_buf(0, jgp, kgp);
-        dvdy += dvv(jgp, kgp) * gv_buf(1, kgp, igp);
+        dudx += dvv(jgp, kgp) * gv_buf(0, igp, kgp);
+        dvdy += dvv(igp, kgp) * gv_buf(1, kgp, jgp);
       }
-      div_v(jgp, igp) = (dudx + dvdy) * ((1.0 / metdet(jgp, igp)) *
+      div_v(igp,jgp) = (dudx + dvdy) * ((1.0 / metdet(igp,jgp)) *
                                          PhysicalConstants::rrearth);
     });
     kv.team_barrier();
@@ -192,14 +188,15 @@ public:
 
     // copied from strong divergence as is but without metdet
     // conversion to contravariant
-    constexpr int contra_iters = NP * NP * 2;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
-      const int hgp = (loop_idx / NP) / NP;
-      const int igp = (loop_idx / NP) % NP;
+      const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      gv_buf(hgp, igp, jgp) = D_inv(0, hgp, igp, jgp) * v(0, igp, jgp) +
-                              D_inv(1, hgp, igp, jgp) * v(1, igp, jgp);
+      const auto& v0 = v(0,igp,jgp);
+      const auto& v1 = v(1,igp,jgp);
+      gv_buf(0,igp,jgp) = D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1;
+      gv_buf(1,igp,jgp) = D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1;
     });
     kv.team_barrier();
 
@@ -213,8 +210,10 @@ public:
     // keeping indices' names as in F
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, div_iters),
                          [&](const int loop_idx) {
-      const int mgp = loop_idx / NP;
-      const int ngp = loop_idx % NP;
+      // Note: for this one time, it is better if m strides faster, due to
+      //       the way the views are accessed.
+      const int mgp = loop_idx % NP;
+      const int ngp = loop_idx / NP;
       Real dd = 0.0;
       for (int jgp = 0; jgp < NP; ++jgp) {
         dd -= (spheremp(ngp, jgp) * gv_buf(0, ngp, jgp) * dvv(jgp, mgp) +
@@ -239,30 +238,34 @@ public:
     const auto& metdet = Homme::subview(m_metdet,kv.ie);
     const auto& vcov_buf = Homme::subview(vector_buf_sl_1,kv.ie);
 
-    constexpr int covar_iters = 2 * NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, covar_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
-      const int hgp = loop_idx / NP / NP;
-      const int igp = (loop_idx / NP) % NP;
+      const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
-      vcov_buf(hgp, igp, jgp) = D(hgp, 0, igp, jgp) * u(igp, jgp) +
-                                D(hgp, 1, igp, jgp) * v(igp, jgp);
+      const auto& u_ij = u(igp,jgp);
+      const auto& v_ij = v(igp,jgp);
+      vcov_buf(0,igp,jgp) = D(0,0,igp,jgp) * u_ij + D(0,1,igp,jgp) * v_ij;
+      vcov_buf(1,igp,jgp) = D(1,0,igp,jgp) * u_ij + D(1,1,igp,jgp) * v_ij;
     });
     kv.team_barrier();
 
     constexpr int vort_iters = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, vort_iters),
                          [&](const int loop_idx) {
+      // Note: for this one time, it is better if i strides faster, due to
+      //       the way vcov_buf is accessed, which, given the kgp loop, is
+      //       more important than making access to vort & metdet faster.
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Real dudy = 0.0;
       Real dvdx = 0.0;
       for (int kgp = 0; kgp < NP; ++kgp) {
-        dvdx += dvv(igp, kgp) * vcov_buf(1, jgp, kgp);
-        dudy += dvv(jgp, kgp) * vcov_buf(0, kgp, igp);
+        dvdx += dvv(jgp, kgp) * vcov_buf(1, igp, kgp);
+        dudy += dvv(igp, kgp) * vcov_buf(0, kgp, jgp);
       }
 
-      vort(jgp, igp) = (dvdx - dudy) * ((1.0 / metdet(jgp, igp)) *
+      vort(igp, jgp) = (dvdx - dudy) * ((1.0 / metdet(igp, jgp)) *
                                         PhysicalConstants::rrearth);
     });
     kv.team_barrier();
@@ -289,13 +292,13 @@ public:
                    const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
                    const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& v_buf = Homme::subview(vector_buf_1,kv.ie);
 
-    constexpr int contra_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -303,10 +306,10 @@ public:
         Scalar dsdx, dsdy;
         for (int kgp = 0; kgp < NP; ++kgp) {
           dsdx += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
-          dsdy += dvv(jgp, kgp) * scalar(kgp, igp, ilev);
+          dsdy += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
         }
         v_buf(0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
-        v_buf(1, jgp, igp, ilev) = dsdy * PhysicalConstants::rrearth;
+        v_buf(1, igp, jgp, ilev) = dsdy * PhysicalConstants::rrearth;
       });
     });
     kv.team_barrier();
@@ -333,12 +336,12 @@ public:
                           const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
                           const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grad_s) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& v_buf = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int contra_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -346,10 +349,10 @@ public:
         Scalar dsdx, dsdy;
         for (int kgp = 0; kgp < NP; ++kgp) {
           dsdx += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
-          dsdy += dvv(jgp, kgp) * scalar(kgp, igp, ilev);
+          dsdy += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
         }
         v_buf(0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
-        v_buf(1, jgp, igp, ilev) = dsdy * PhysicalConstants::rrearth;
+        v_buf(1, igp, jgp, ilev) = dsdy * PhysicalConstants::rrearth;
       });
     });
     kv.team_barrier();
@@ -376,13 +379,13 @@ public:
                      const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
                      const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
     const auto& gv_buf = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int contra_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -423,13 +426,13 @@ public:
                             const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
                             const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
     const auto& gv = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int contra_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -468,21 +471,21 @@ public:
                     const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> v,
                     const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> vort) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
     const auto& vcov_buf = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int covar_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, covar_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
         const auto& u_ijk = u(igp, jgp, ilev);
         const auto& v_ijk = v(igp, jgp, ilev);
-        vcov_buf(0,jgp,igp,ilev) = D(0,0,igp,jgp) * u_ijk + D(0,1,igp,jgp) * v_ijk;
-        vcov_buf(1,jgp,igp,ilev) = D(1,0,igp,jgp) * u_ijk + D(1,1,igp,jgp) * v_ijk;
+        vcov_buf(0,igp,jgp,ilev) = D(0,0,igp,jgp) * u_ijk + D(0,1,igp,jgp) * v_ijk;
+        vcov_buf(1,igp,jgp,ilev) = D(1,0,igp,jgp) * u_ijk + D(1,1,igp,jgp) * v_ijk;
       });
     });
     kv.team_barrier();
@@ -513,13 +516,13 @@ public:
                     const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
                     const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> vort) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
     const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int covar_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, covar_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -557,13 +560,13 @@ public:
                         const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
                         const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
     const auto& sphere_buf = Homme::subview(vector_buf_1,kv.ie);
-    constexpr int contra_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, contra_iters),
+    constexpr int np_squared = NP * NP;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
@@ -603,7 +606,7 @@ public:
                   const ExecViewUnmanaged<const Scalar [NP][NP][NUM_LEV]> field,
                   const ExecViewUnmanaged<      Scalar [NP][NP][NUM_LEV]> laplace) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& grad_s = Homme::subview(vector_buf_2, kv.ie);
       // let's ignore var coef and tensor hv
@@ -621,7 +624,7 @@ public:
                  const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> field,         // input
                  const ExecViewUnmanaged<      Scalar       [NP][NP][NUM_LEV]> laplace) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& grad_s = Homme::subview(vector_buf_2, kv.ie);
     const auto& sphere_buf = Homme::subview(vector_buf_3, kv.ie);
@@ -655,7 +658,7 @@ public:
                           const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
                           const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> curls) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
@@ -699,7 +702,7 @@ public:
                                  const ExecViewUnmanaged<const Scalar       [NP][NP][NUM_LEV]> scalar,
                                  const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> curls) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
@@ -745,7 +748,7 @@ public:
                           const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> scalar,
                           const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> grads) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
@@ -821,7 +824,7 @@ public:
                                 const ExecViewUnmanaged<const Scalar    [2][NP][NP][NUM_LEV]> vector,
                                 const ExecViewUnmanaged<      Scalar    [2][NP][NP][NUM_LEV]> laplace) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
@@ -855,8 +858,8 @@ public:
       const int igp = loop_idx / NP; //slowest
       const int jgp = loop_idx % NP; //fastest
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-  #define UNDAMPRRCART
-  #ifdef UNDAMPRRCART
+#define UNDAMPRRCART
+#ifdef UNDAMPRRCART
         laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
                                 + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
                                 + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev)
@@ -868,14 +871,14 @@ public:
                                 + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev)
                                 + 2.0*spheremp(igp,jgp)*vector(1,igp,jgp,ilev)
                                         *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
-  #else
+#else
         laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
                                 + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
                                 + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev);
         laplace(1,igp,jgp,ilev) = vec_sph2cart(1,0,igp,jgp)*laplace0(igp,jgp,ilev)
                                 + vec_sph2cart(1,1,igp,jgp)*laplace1(igp,jgp,ilev)
                                 + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev);
-  #endif
+#endif
       });
     });
     kv.team_barrier();
@@ -887,7 +890,7 @@ public:
                              const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> vector,
                              const ExecViewUnmanaged<      Scalar [2][NP][NP][NUM_LEV]> laplace) const
   {
-    static_assert(NUM_LEV_REQUEST>=0, "Error! Can't ask for a negative number of levels.\n");
+    static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
@@ -921,12 +924,12 @@ public:
       const int igp = loop_idx / NP; //slow
       const int jgp = loop_idx % NP; //fast
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-  #define UNDAMPRRCART
-  #ifdef UNDAMPRRCART
+#define UNDAMPRRCART
+#ifdef UNDAMPRRCART
         const auto f = 2.0*spheremp(igp,jgp);
         laplace(0,igp,jgp,ilev) = f*vector(0,igp,jgp,ilev)*re2;
         laplace(1,igp,jgp,ilev) = f*vector(1,igp,jgp,ilev)*re2;
-  #endif
+#endif
         laplace(0,igp,jgp,ilev) += grad_curl_cov(0,igp,jgp,ilev);
         laplace(1,igp,jgp,ilev) += grad_curl_cov(1,igp,jgp,ilev);
       });
