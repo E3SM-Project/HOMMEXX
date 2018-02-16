@@ -128,6 +128,8 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+
+  Context::singleton().init_functors_buffers ();
 }
 
 void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_temp_ptr, CF90Ptr& elem_state_dp3d_ptr,

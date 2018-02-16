@@ -17,6 +17,7 @@ SET (INFRASTRUCTURE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
+  ${SRC_SHARE_DIR}/cxx/KernelsBuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
@@ -54,6 +55,7 @@ SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
+  ${SRC_SHARE_DIR}/cxx/KernelsBuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
@@ -120,6 +122,7 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
+  ${SRC_SHARE_DIR}/cxx/KernelsBuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
