@@ -15,6 +15,8 @@ SET (INFRASTRUCTURE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
@@ -50,11 +52,13 @@ SET (RANDOM_INIT_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
-  ${SHARE_UT_DIR}/infrastructure_ut.cpp
+  ${SHARE_UT_DIR}/random_init_ut.cpp
 )
 SET (RANDOM_INIT_UT_F90_SRCS)
 
@@ -71,54 +75,6 @@ SET (RANDOM_INIT_UT_INCLUDE_DIRS
 
 SET (NUM_CPUS 1)
 cxx_unit_test (random_init_ut "${RANDOM_INIT_UT_F90_SRCS}" "${RANDOM_INIT_UT_CXX_SRCS}" "${RANDOM_INIT_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
-
-### Sphere operators unit test ###
-
-SET (SPHERE_OPERATORS_UT_F90_SRCS
-  ${SRC_SHARE_DIR}/kinds.F90
-  ${SRC_SHARE_DIR}/control_mod.F90
-  ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
-  ${SRC_SHARE_DIR}/derivative_mod_base.F90
-  ${SRC_SHARE_DIR}/dimensions_mod.F90
-  ${SRC_SHARE_DIR}/edgetype_mod.F90
-  ${SRC_SHARE_DIR}/element_mod.F90
-  ${SRC_SHARE_DIR}/gridgraph_mod.F90
-  ${SRC_SHARE_DIR}/parallel_mod.F90
-  ${SRC_SHARE_DIR}/params_mod.F90
-  ${SRC_SHARE_DIR}/physical_constants.F90
-  ${SRC_SHARE_DIR}/quadrature_mod.F90
-  ${SHARE_UT_DIR}/sphere_operators_ut.F90
-)
-SET (SPHERE_OPERATORS_UT_CXX_SRCS
-  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
-  ${SRC_SHARE_DIR}/cxx/Elements.cpp
-  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
-  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
-  ${SRC_SHARE_DIR}/cxx/ErrorDefs.cpp
-  ${SRC_SHARE_DIR}/cxx/Context.cpp
-  ${SRC_SHARE_DIR}/cxx/EulerStepFunctor.cpp
-  ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
-  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
-  ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
-  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
-  ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
-  ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
-  ${SHARE_UT_DIR}/sphere_operators_ut.cpp
-)
-
-SET (CONFIG_DEFINES PIO_INTERP NC=4 NP=4 PLEV=8 QSIZE_D=4 _PRIM TIMING=1 _MPI=1 _PRESTART=1 _WK_GRAD=1 HOMME_QUAD_PREC=1)
-SET (SPHERE_OPERATORS_UT_INCLUDE_DIRS
-  ${CONFIG_DIR}
-  ${SRC_SHARE_DIR}
-  ${SRC_SHARE_DIR}/cxx
-  ${SRC_SHARE_DIR}/cxx/mpi
-  ${SHARE_UT_DIR}
-  ${UTILS_TIMING_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-SET (NUM_CPUS 1)
-cxx_unit_test (sphere_operators_ut "${SPHERE_OPERATORS_UT_F90_SRCS}" "${SPHERE_OPERATORS_UT_CXX_SRCS}" "${SPHERE_OPERATORS_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
 
 ### Boundary exchange unit test ###
 
@@ -162,6 +118,8 @@ SET (BOUNDARY_EXCHANGE_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp

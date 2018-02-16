@@ -8,12 +8,12 @@ namespace Homme {
 struct KernelVariables {
   KOKKOS_INLINE_FUNCTION
   KernelVariables(const TeamMember &team_in)
-      : team(team_in), ie(team.league_rank()), ilev(-1), iq(-1) {
+      : team(team_in), ie(team.league_rank()), iq(-1) {
   } //, igp(-1), jgp(-1) {}
 
   KOKKOS_INLINE_FUNCTION
   KernelVariables(const TeamMember &team_in, const int qsize)
-      : team(team_in), ie(team.league_rank() / qsize), ilev(-1), iq(team.league_rank() % qsize) {
+      : team(team_in), ie(team.league_rank() / qsize), iq(team.league_rank() % qsize) {
   } //, igp(-1), jgp(-1) {}
 
   template <typename Primitive, typename Data>
@@ -40,7 +40,7 @@ struct KernelVariables {
     team.team_barrier();
   }
 
-  int ie, ilev, iq;
+  int ie, iq;
 }; // KernelVariables
 
 } // Homme

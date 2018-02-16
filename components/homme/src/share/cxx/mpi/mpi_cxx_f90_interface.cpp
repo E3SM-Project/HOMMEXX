@@ -49,10 +49,6 @@ void finalize_connectivity ()
 
 void cleanup_mpi_structures ()
 {
-  std::map<std::string,std::shared_ptr<BoundaryExchange>>& be = Context::singleton().get_boundary_exchanges ();
-  for (auto& it : be) {
-    it.second.reset();
-  }
 }
 
 } // extern "C"

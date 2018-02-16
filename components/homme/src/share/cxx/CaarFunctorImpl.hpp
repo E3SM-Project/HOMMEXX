@@ -7,6 +7,7 @@
 #include "Derivative.hpp"
 #include "KernelVariables.hpp"
 #include "SphereOperators.hpp"
+#include "BoundaryExchange.hpp"
 
 #include "utilities/SubviewUtils.hpp"
 
@@ -34,18 +35,37 @@ struct CaarFunctorImpl {
     bool      compute_diagnostics;
   };
 
-  CaarData            m_data;
-  const HybridVCoord  m_hvcoord;
-  const Elements      m_elements;
-  const Derivative    m_deriv;
+  CaarData              m_data;
+  const HybridVCoord    m_hvcoord;
+  const Elements        m_elements;
+  const Derivative      m_deriv;
+  const SphereOperators m_sphere_ops;
 
-  CaarFunctorImpl(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit)
+  Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
+
+  CaarFunctorImpl(const Elements& elements, const Derivative& derivative,
+                  const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
+                  const int rsplit)
     : m_data(rsplit)
     , m_hvcoord(hvcoord)
     , m_elements(elements)
     , m_deriv(derivative)
+    , m_sphere_ops(sphere_ops)
   {
     // Nothing to be done here
+  }
+
+  void init_boundary_exchanges (const std::shared_ptr<BuffersManager>& bm_exchange) {
+    for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
+      m_bes[tl] = std::make_shared<BoundaryExchange>();
+      auto& be = *m_bes[tl];
+      be.set_buffers_manager(bm_exchange);
+      be.set_num_fields(0,0,4);
+      be.register_field(m_elements.m_v,tl,2,0);
+      be.register_field(m_elements.m_t,1,tl);
+      be.register_field(m_elements.m_dp3d,1,tl);
+      be.registration_completed();
+    }
   }
 
   void set_n0_qdp (const int n0_qdp) { m_data.n0_qdp = n0_qdp; }
@@ -96,30 +116,10 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    gradient_sphere_update(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere_update(kv,
         Homme::subview(m_elements.buffers.ephi, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf,kv.ie),
         Homme::subview(m_elements.buffers.energy_grad, kv.ie));
   } // TESTED 1
-
-#ifdef NDEBUG
-  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {}
-#else
-  KOKKOS_INLINE_FUNCTION void check_dp3d(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team,
-                                                   NP * NP * NUM_PHYSICAL_LEV),
-                         [&](const int &idx) {
-      const int igp = (idx / NUM_PHYSICAL_LEV) / NP;
-      const int jgp = (idx / NUM_PHYSICAL_LEV) % NP;
-      const int ilev = (idx % NUM_PHYSICAL_LEV) / VECTOR_SIZE;
-      const int ivec = (idx % NUM_PHYSICAL_LEV) % VECTOR_SIZE;
-      assert(m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev)[ivec] > 0.0);
-    });
-    kv.team_barrier();
-  }
-#endif
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
@@ -135,7 +135,6 @@ struct CaarFunctorImpl {
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
     compute_dp3d_np1(kv);
-    check_dp3d(kv);
   } // TRIVIAL
   //is it?
 
@@ -175,13 +174,8 @@ struct CaarFunctorImpl {
   void compute_velocity_np1(KernelVariables &kv) const {
     compute_energy_grad(kv);
 
-    vorticity_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_d,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 0),
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0, 1),
-        Homme::subview(m_elements.buffers.curl_buf,kv.ie),
+    m_sphere_ops.vorticity_sphere(kv,
+        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -388,12 +382,8 @@ struct CaarFunctorImpl {
     });
     kv.team_barrier();
 
-    divergence_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
-        Homme::subview(m_elements.m_metdet,kv.ie),
+    m_sphere_ops.divergence_sphere(kv,
         Homme::subview(m_elements.buffers.vdp, kv.ie),
-        Homme::subview(m_elements.buffers.div_buf,kv.ie),
         Homme::subview(m_elements.buffers.div_vdp, kv.ie));
   } // TESTED 8
 
@@ -431,11 +421,8 @@ struct CaarFunctorImpl {
   KOKKOS_INLINE_FUNCTION
   void compute_temperature_np1(KernelVariables &kv) const {
 
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -782,11 +769,8 @@ private:
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -827,11 +811,8 @@ private:
   KOKKOS_INLINE_FUNCTION
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
-    gradient_sphere(
-        kv.team, m_deriv.get_dvv(),
-        Homme::subview(m_elements.m_dinv,kv.ie),
+    m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.grad_buf, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),

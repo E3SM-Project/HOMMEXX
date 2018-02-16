@@ -1,15 +1,17 @@
 #include "Context.hpp"
 
+#include "BoundaryExchange.hpp"
+#include "BuffersManager.hpp"
 #include "CaarFunctor.hpp"
 #include "Comm.hpp"
-#include "Elements.hpp"
-#include "Derivative.hpp"
-#include "BuffersManager.hpp"
 #include "Connectivity.hpp"
-#include "BoundaryExchange.hpp"
+#include "Derivative.hpp"
+#include "Elements.hpp"
+#include "HybridVCoord.hpp"
+#include "HyperviscosityFunctor.hpp"
+#include "SphereOperators.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
-#include "HybridVCoord.hpp"
 #include "VerticalRemapManager.hpp"
 #include "EulerStepFunctor.hpp"
 
@@ -43,6 +45,16 @@ Elements& Context::get_elements() {
 HybridVCoord& Context::get_hvcoord() {
   if ( ! hvcoord_) hvcoord_.reset(new HybridVCoord());
   return *hvcoord_;
+}
+
+HyperviscosityFunctor& Context::get_hyperviscosity_functor() {
+  if ( ! hyperviscosity_functor_) {
+    Elements& e = get_elements();
+    Derivative& d = get_derivative();
+    SimulationParams& p = get_simulation_params();
+    hyperviscosity_functor_.reset(new HyperviscosityFunctor(p,e,d));
+  }
+  return *hyperviscosity_functor_;
 }
 
 Derivative& Context::get_derivative() {
@@ -82,21 +94,16 @@ std::shared_ptr<Connectivity> Context::get_connectivity() {
   return connectivity_;
 }
 
-Context::BEMap& Context::get_boundary_exchanges() {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  return *boundary_exchanges_;
-}
-
-std::shared_ptr<BoundaryExchange> Context::get_boundary_exchange(const std::string& name) {
-  if ( ! boundary_exchanges_) boundary_exchanges_.reset(new BEMap());
-
-  // Todo: should we accept a bool param 'must_already_exist'
-  //       to make sure we are not creating a new BE?
-  if (!(*boundary_exchanges_)[name]) {
-    (*boundary_exchanges_)[name] = std::make_shared<BoundaryExchange>();
+SphereOperators& Context::get_sphere_operators(int qsize) {
+  if ( ! sphere_operators_) {
+    if (qsize<0) {
+      qsize = get_simulation_params().qsize;
+    }
+    Elements&   elements   = get_elements();
+    Derivative& derivative = get_derivative();
+    sphere_operators_.reset(new SphereOperators(elements,derivative,qsize));
   }
-  return (*boundary_exchanges_)[name];
+  return *sphere_operators_;
 }
 
 EulerStepFunctor& Context::get_euler_step_functor() {
@@ -109,10 +116,11 @@ void Context::clear() {
   elements_ = nullptr;
   derivative_ = nullptr;
   hvcoord_ = nullptr;
+  hyperviscosity_functor_ = nullptr;
   connectivity_ = nullptr;
-  boundary_exchanges_ = nullptr;
   buffers_managers_ = nullptr;
   simulation_params_ = nullptr;
+  sphere_operators_ = nullptr;
   time_level_ = nullptr;
   vertical_remap_mgr_ = nullptr;
   caar_functor_ = nullptr;

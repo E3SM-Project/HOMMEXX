@@ -99,7 +99,7 @@ template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
       : functor(elements, Context::singleton().get_derivative(),
-        Context::singleton().get_hvcoord(),rsplit_in),
+        Context::singleton().get_hvcoord(),SphereOperators(elements,Context::singleton().get_derivative()),rsplit_in),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -115,16 +115,9 @@ public:
         rsplit(rsplit_in)
         {
 
-//make these random
-    Real hybrid_am[NUM_PHYSICAL_LEV] = { 0 };
-    Real hybrid_ai[NUM_INTERFACE_LEV] = { 0 };
-    Real hybrid_bm[NUM_PHYSICAL_LEV] = { 0 };
-    Real hybrid_bi[NUM_INTERFACE_LEV] = { 0 };
-
     functor.set_n0_qdp(n0_qdp);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
-//is this one random?
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
