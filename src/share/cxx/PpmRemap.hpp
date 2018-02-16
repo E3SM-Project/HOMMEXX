@@ -8,6 +8,7 @@
 #include "Elements.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "ExecSpaceDefs.hpp"
 #include "utilities/LoopsUtils.hpp"
 #include "utilities/MathUtils.hpp"
 #include "utilities/SubviewUtils.hpp"
@@ -280,7 +281,7 @@ struct PpmVertRemap : public VertRemapAlg {
     kv.team_barrier();
   }
 
-  KOKKOS_INLINE_FUNCTION
+  KOKKOS_FORCEINLINE_FUNCTION
   Real compute_mass(const Real sq_coeff, const Real lin_coeff,
                     const Real const_coeff, const Real prev_mass,
                     const Real prev_dp, const Real x2) const {
@@ -295,8 +296,10 @@ struct PpmVertRemap : public VertRemapAlg {
     return mass;
   }
 
-  KOKKOS_INLINE_FUNCTION
-  void compute_remap(
+  template <typename ExecSpaceType = ExecSpace>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<!Homme::OnGpu<ExecSpaceType>::value,
+                                                 void>::type
+  compute_remap(
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
@@ -308,41 +311,72 @@ struct PpmVertRemap : public VertRemapAlg {
     // Taking the difference between accumulation at successive interfaces
     // gives the mass inside each cell. Since Qdp is supposed to hold the full
     // mass this needs no normalization.
-    // This could be serialized on OpenMP to reduce the work by half,
-    // but the parallel gain on CUDA is >> 2
-    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                         [&](const int k) {
-      // Using an immediately invoked function expression (IIFE, another
-      // annoying C++ lingo acronym) lets us make mass_1 constant
-      // This also provides better scoping for the variables inside it
-      const Real mass_1 = [=]() {
-        if (k > 0) {
-          const Real x2_prev_lev = integral_bounds(k - 1);
-          const int kk_prev_lev = k_id(k - 1);
-          return compute_mass(
-              parabola_coeffs(2, kk_prev_lev), parabola_coeffs(1, kk_prev_lev),
-              parabola_coeffs(0, kk_prev_lev), prev_mass(kk_prev_lev),
-              prev_dp(kk_prev_lev + _ppm_consts::INITIAL_PADDING), x2_prev_lev);
-        } else {
-          return 0.0;
-        }
-      }();
+    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+      Real mass_1 = 0.0;
 
-      const Real x2_cur_lev = integral_bounds(k);
+      for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+        const Real x2_cur_lev = integral_bounds(k);
 
-      const int kk_cur_lev = k_id(k);
-      assert(kk_cur_lev >= 0);
-      assert(kk_cur_lev < parabola_coeffs.extent_int(1));
+        const int kk_cur_lev = k_id(k);
+        assert(kk_cur_lev >= 0);
+        assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
-      const Real mass_2 = compute_mass(
-          parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
-          prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
+        const Real mass_2 = compute_mass(
+            parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
+            parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
+            prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
 
-      const int ilevel = k / VECTOR_SIZE;
-      const int ivector = k % VECTOR_SIZE;
-      remap_var(ilevel)[ivector] = mass_2 - mass_1;
-    }); // k loop
+        const int ilevel = k / VECTOR_SIZE;
+        const int ivector = k % VECTOR_SIZE;
+        remap_var(ilevel)[ivector] = mass_2 - mass_1;
+        mass_1 = mass_2;
+      }
+    });
+  }
+
+  template <typename ExecSpaceType = ExecSpace>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<Homme::OnGpu<ExecSpaceType>::value,
+                                                 void>::type
+  compute_remap(
+      KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
+      ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
+      ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
+      ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
+      ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
+    // Compute tracer values on the new grid by integrating from the old cell
+    // bottom to the new cell interface to form a new grid mass accumulation.
+    // Taking the difference between accumulation at successive interfaces
+    // gives the mass inside each cell. Since Qdp is supposed to hold the full
+    // mass this needs no normalization.
+    // This duplicates work, but the parallel gain on CUDA is >> 2
+    Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV), [&](const int k) {
+          const Real mass_1 =
+              (k > 0)
+                  ? compute_mass(
+                        parabola_coeffs(2, k_id(k - 1)),
+                        parabola_coeffs(1, k_id(k - 1)),
+                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1)),
+                        prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
+                        integral_bounds(k - 1))
+                  : 0.0;
+
+          const Real x2_cur_lev = integral_bounds(k);
+
+          const int kk_cur_lev = k_id(k);
+          assert(kk_cur_lev >= 0);
+          assert(kk_cur_lev < parabola_coeffs.extent_int(1));
+
+          const Real mass_2 = compute_mass(
+              parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
+              parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
+              prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
+
+          const int ilevel = k / VECTOR_SIZE;
+          const int ivector = k % VECTOR_SIZE;
+          remap_var(ilevel)[ivector] = mass_2 - mass_1;
+        }); // k loop
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -517,20 +551,6 @@ struct PpmVertRemap : public VertRemapAlg {
       const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                           [&](const int &k) {
-        int ilevel = k / VECTOR_SIZE;
-        int ivector = k % VECTOR_SIZE;
-        dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
-            src_layer_thickness(igp, jgp, ilevel)[ivector];
-      });
-    });
-    kv.team_barrier();
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int &loop_idx) {
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
@@ -565,6 +585,19 @@ struct PpmVertRemap : public VertRemapAlg {
       });
     });
 
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                           [&](const int &k) {
+        int ilevel = k / VECTOR_SIZE;
+        int ivector = k % VECTOR_SIZE;
+        dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
+            src_layer_thickness(igp, jgp, ilevel)[ivector];
+      });
+    });
+    kv.team_barrier();
     // Fill in the ghost regions with mirrored values.
     // if vert_remap_q_alg is defined, this is of no
     // consequence.
@@ -656,7 +689,7 @@ struct PpmVertRemap : public VertRemapAlg {
     });
   }
 
-  KOKKOS_INLINE_FUNCTION Real
+  KOKKOS_FORCEINLINE_FUNCTION Real
   integrate_parabola(const Real sq_coeff, const Real lin_coeff,
                      const Real const_coeff, Real x1, Real x2) const {
     return (const_coeff * (x2 - x1) + lin_coeff * (x2 * x2 - x1 * x1) / 2.0) +
