@@ -163,6 +163,7 @@ SET(PREQX_FLAT_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/Elements.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/HybridVCoord.cpp
+  ${SRC_SHARE_DIR}/cxx/KernelsBuffersManager.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
