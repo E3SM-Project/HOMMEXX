@@ -126,7 +126,10 @@ SET (HOMMEXX_FPMODEL_UT "strict" CACHE STRING "Floating point model for HOMMEXX 
 INCLUDE(SetCompilerFlags)
 
 if (${CUDA_FOUND})
-  add_definitions(-DHOMMEXX_GPU_BFB_WITH_CPU)
+  string(TOLOWER "${HOMMEXX_FPMODEL}" fpmodel_string_lower)
+  if ("${fpmodel_string_lower}" STREQUAL "strict")
+    add_definitions(-DHOMMEXX_GPU_BFB_WITH_CPU)
+  endif ()
 endif ()
 
 # Print the compiler flags to be used

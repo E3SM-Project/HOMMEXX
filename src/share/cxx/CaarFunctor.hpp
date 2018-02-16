@@ -4,23 +4,29 @@
 #include "Elements.hpp"
 #include "Derivative.hpp"
 #include "HybridVCoord.hpp"
+#include "SphereOperators.hpp"
 #include "Types.hpp"
 #include <memory>
 
 namespace Homme {
 
+struct BuffersManager;
 struct CaarFunctorImpl;
 
 class CaarFunctor {
 public:
 
   CaarFunctor();
-  CaarFunctor(const Elements& elements, const Derivative& derivative, const HybridVCoord& hvcoord, const int rsplit);
+  CaarFunctor(const Elements& elements, const Derivative& derivative,
+              const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
+              const int rsplit);
   CaarFunctor (const CaarFunctor&) = delete;
 
   ~CaarFunctor();
 
   CaarFunctor& operator= (const CaarFunctor&) = delete;
+
+  void init_boundary_exchanges(const std::shared_ptr<BuffersManager>& bm_exchange);
 
   void set_n0_qdp (const int n0_qdp);
 

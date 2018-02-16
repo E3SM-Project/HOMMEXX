@@ -1,5 +1,6 @@
 #include "CaarFunctor.hpp"
 #include "Context.hpp"
+#include "HyperviscosityFunctor.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
@@ -12,7 +13,6 @@ namespace Homme
 
 void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0_qdp,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics);
-void advance_hypervis_dp (const int np1, const Real dt, const Real eta_ave_w);
 
 // -------------- IMPLEMENTATIONS -------------- //
 
@@ -75,8 +75,10 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {
+    // Get and run the HVF
+    HyperviscosityFunctor& functor = Context::singleton().get_hyperviscosity_functor();
     GPTLstart("tl-ae advance_hypervis_dp");
-    advance_hypervis_dp(np1,dt,eta_ave_w);
+    functor.run(np1,dt,eta_ave_w);
     GPTLstop("tl-ae advance_hypervis_dp");
   }
 
@@ -100,42 +102,19 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   CaarFunctor& functor = Context::singleton().get_caar_functor();
   functor.set_n0_qdp(n0_qdp);
 
-  // Setup the boundary exchange
-  std::shared_ptr<BoundaryExchange> be[NUM_TIME_LEVELS];
-  for (int tl=0; tl<NUM_TIME_LEVELS; ++tl) {
-    std::stringstream ss;
-    ss << "caar tl " << tl;
-    be[tl] = Context::singleton().get_boundary_exchange(ss.str());
-
-    // Sanity check
-    assert (be[tl]->is_registration_completed());
-  }
-
   // ===================== RK STAGES ===================== //
 
   // Stage 1: u1 = u0 + dt/5 RHS(u0),          t_rhs = t
   functor.run(n0,n0,nm1,dt/5.0,eta_ave_w/4.0,compute_diagnostics);
-  start_timer("caar_bexchV");
-  be[nm1]->exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
 
   // Stage 2: u2 = u0 + dt/5 RHS(u1),          t_rhs = t + dt/5
   functor.run(n0,nm1,np1,dt/5.0,0.0,false);
-  start_timer("caar_bexchV");
-  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
 
   // Stage 3: u3 = u0 + dt/3 RHS(u2),          t_rhs = t + dt/5 + dt/5
   functor.run(n0,np1,np1,dt/3.0,0.0,false);
-  start_timer("caar_bexchV");
-  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
 
   // Stage 4: u4 = u0 + 2dt/3 RHS(u3),         t_rhs = t + dt/5 + dt/5 + dt/3
   functor.run(n0,np1,np1,2.0*dt/3.0,0.0,false);
-  start_timer("caar_bexchV");
-  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   {
@@ -159,9 +138,6 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.run(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
-  start_timer("caar_bexchV");
-  be[np1]->exchange(Context::singleton().get_elements().m_rspheremp);
-  stop_timer("caar_bexchV");
   GPTLstop("tl-ae U3-5stage_timestep");
 }
 
