@@ -458,10 +458,6 @@ private:
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
-    if (m_data.rhs_viss != 0.0) {
-      add_hyperviscosity(kv);
-      kv.team_barrier();
-    }
     if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
       kv.team_barrier();
@@ -541,32 +537,11 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void compute_qtens (const KernelVariables& kv) const {
-    const auto dvv = m_deriv.get_dvv();
-    const ExecViewUnmanaged<const Real[NP][NP]>
-      metdet = Homme::subview(m_elements.m_metdet, kv.ie);
-    const ExecViewUnmanaged<const Real[2][2][NP][NP]>
-      dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     m_sphere_ops.divergence_sphere_update(
-      kv, -m_data.dt, 1.0,
+      kv, -m_data.dt, m_data.rhs_viss != 0.0,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
+      Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void add_hyperviscosity (const KernelVariables& kv) const {
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
-    Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team, NP * NP),
-      [&] (const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Kokkos::parallel_for(
-          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-          [&] (const int& ilev) {
-            qtens(igp, jgp, ilev) += qtens_biharmonic(igp, jgp, ilev);
-          });
-      });
   }
 
   KOKKOS_INLINE_FUNCTION
