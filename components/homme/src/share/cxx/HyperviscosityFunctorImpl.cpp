@@ -50,7 +50,7 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
   m_data.eta_ave_w = eta_ave_w;
 
   Kokkos::RangePolicy<ExecSpace,TagUpdateStates> policy_update_states(0, m_elements.num_elems()*NP*NP*NUM_LEV);
-  auto policy_pre_exchange =
+  const auto policy_pre_exchange =
       Homme::get_default_team_policy<ExecSpace, TagHyperPreExchange>(
           m_elements.num_elems());
   for (int icycle = 0; icycle < m_data.hypervis_subcycle; ++icycle) {
