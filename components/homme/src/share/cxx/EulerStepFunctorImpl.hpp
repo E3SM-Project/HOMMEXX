@@ -15,14 +15,6 @@
 #include "BoundaryExchange.hpp"
 #include "profiling.hpp"
 
-#if 0
-# define ta(x) GPTLstart("esf " # x)
-# define to(x) GPTLstop("esf " # x)
-#else
-# define ta(x)
-# define to(x)
-#endif
-
 namespace Kokkos {
 struct Real2 {
   Homme::Real v[2];
@@ -235,14 +227,11 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
-    ta(setup);
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
         m_elements.num_elems()),
       *this);
     ExecSpace::fence();
-    to(setup);
-    ta(q);
     m_kernel_will_run_limiters = true;
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
@@ -250,7 +239,6 @@ public:
       *this);
     ExecSpace::fence();
     m_kernel_will_run_limiters = false;
-    to(q);
     profiling_pause();
   }
 
@@ -477,10 +465,8 @@ public:
   }
 
   void exchange_qdp_dss_var () {
-    ta(bexchV);
     const int idx = 3*m_data.np1_qdp + static_cast<int>(m_data.DSSopt);
     m_bes[idx]->exchange(m_elements.m_rspheremp);
-    to(bexchV);
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
@@ -528,9 +514,7 @@ public:
         minmax_and_biharmonic();
       }
     }
-    ta(advance_qdp);
     advect_and_limit();
-    to(advance_qdp);
     exchange_qdp_dss_var();
   }
 
