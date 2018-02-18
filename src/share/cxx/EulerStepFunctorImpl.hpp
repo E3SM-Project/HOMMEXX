@@ -318,7 +318,7 @@ public:
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
-    const Real dt = m_data.dt;
+    const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_elements.m_qdp;
     const auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
     const auto qlim = m_elements.buffers.qlim;
@@ -349,7 +349,7 @@ public:
                 Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                 [&] (const int& k) {
                   const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhs_multiplier * dt * divdp_proj_t(i,j,k));
+                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
                   qtens_biharmonic_t(i,j,k) = v;
                   qlim_t(0,k) = v;
                   qlim_t(1,k) = v;
@@ -359,7 +359,7 @@ public:
                 Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                 [&] (const int& k) {
                   const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhs_multiplier * dt * divdp_proj_t(i,j,k));
+                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
                   qtens_biharmonic_t(i,j,k) = v;
                   qlim_t(0,k) = min(qlim_t(0,k), v);
                   qlim_t(1,k) = max(qlim_t(1,k), v);
@@ -369,7 +369,7 @@ public:
       });
     ExecSpace::fence();
   }
-  
+
   void neighbor_minmax_start() {
     assert(m_mm_be->is_registration_completed());
     m_mm_be->pack_and_send_min_max();
