@@ -291,20 +291,6 @@ public:
     const int qsize = m_data.qsize;
     const auto qdp = m_elements.m_qdp;
     const Real rkstage = 3.0;
-#if 0
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_elements.num_elems()*m_data.qsize*NP*NP*NUM_LEV),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
-      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-      const int jgp  =   (idx / NUM_LEV) % NP;
-      const int ilev =    idx % NUM_LEV;
-
-      qdp(ie,np1_qdp,iq,igp,jgp,ilev) =
-            (qdp(ie,n0_qdp,iq,igp,jgp,ilev) +
-             (rkstage-1)*qdp(ie,np1_qdp,iq,igp,jgp,ilev)) / rkstage;
-    });
-#else
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()*m_data.qsize),
       KOKKOS_LAMBDA(const TeamMember& team) {
@@ -325,7 +311,6 @@ public:
             });
           });
       });
-#endif
   }
 
   void compute_qmin_qmax() {
@@ -339,62 +324,6 @@ public:
     const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
-#if 0
-    Kokkos::RangePolicy<ExecSpace> policy1(0, m_elements.num_elems() * m_data.qsize *
-                                                  NP * NP * NUM_LEV);
-    Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
-      const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / qsize;
-      const int q = (((loop_idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-      const int jgp = (loop_idx / NUM_LEV) % NP;
-      const int lev = loop_idx % NUM_LEV;
-
-      const Scalar dp = derived_dp(ie, igp, jgp, lev) -
-                  rhs_multiplier * dt *
-                      derived_divdp_proj(ie, igp, jgp, lev);
-
-      qtens_biharmonic(ie, q, igp, jgp, lev) =
-        qdp(ie, n0_qdp, q, igp, jgp, lev) / dp;
-    });
-    ExecSpace::fence();
-
-    Kokkos::RangePolicy<ExecSpace> policy2(0, m_elements.num_elems() * m_data.qsize *
-                                                  NUM_LEV);
-    if (m_data.rhs_multiplier == 1.0) {
-      Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / qsize;
-        const int q = (loop_idx / NUM_LEV) % qsize;
-        const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
-        Scalar max_biharmonic = min_biharmonic;
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-          }
-        }
-        qlim(ie, q, 0, lev) = min(qlim(ie, q, 0, lev), min_biharmonic);
-        qlim(ie, q, 1, lev) = max(qlim(ie, q, 1, lev), max_biharmonic);
-      });
-    } else {
-      Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / qsize;
-        const int q = (loop_idx / NUM_LEV) % qsize;
-        const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
-        Scalar max_biharmonic = min_biharmonic;
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-          }
-        }
-        qlim(ie, q, 0, lev) = min_biharmonic;
-        qlim(ie, q, 1, lev) = max_biharmonic;
-      });
-    }
-    ExecSpace::fence();
-#else
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
     ThreadPreferences tp;
     tp.max_threads_usable = NUM_LEV;
@@ -439,7 +368,6 @@ public:
           }
       });
     ExecSpace::fence();
-#endif
   }
   
   void neighbor_minmax_start() {
@@ -648,100 +576,7 @@ private:
     const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
 
-#if 1
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
-#else
-#define fork for (int k = 0; k < NP2; ++k)
-    const int NP2 = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NUM_PHYSICAL_LEV), [&] (const int ilev) {
-      const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
-
-      Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
-      if (minp < 0)
-        minp = qlim(0,vpi)[vsi] = 0;
-
-      Real x[NP2], c[NP2];
-      bool done = true;
-#pragma ivdep
-#pragma simd
-      fork {
-        const int i = k / NP, j = k % NP;
-        const auto& dpm = dpmass(i,j,vpi)[vsi];
-        c[k] = sphweights(i,j)*dpm;
-        x[k] = ptens(i,j,vpi)[vsi]/dpm;
-        if (x[k] < minp || x[k] > maxp)
-          done = false;
-      }
-      if (done) return;
-
-      Real sumc = 0, mass = 0;
-#pragma ivdep
-#pragma simd
-      fork { sumc += c[k]; mass += c[k]*x[k]; }
-      if (sumc <= 0) return;
-
-      if (mass < minp*sumc)
-        minp = qlim(0,vpi)[vsi] = mass/sumc;
-      if (mass > maxp*sumc)
-        maxp = qlim(1,vpi)[vsi] = mass/sumc;
-
-      for (int iter = 0; iter < 15; ++iter) {
-        Real addmass = 0;
-        fork {
-          Real delta = 0;
-          if (x[k] > maxp) {
-            delta = x[k] - maxp;
-            x[k] = maxp;
-          } else if (x[k] < minp) {
-            delta = x[k] - minp;
-            x[k] = minp;
-          }
-          addmass += delta*c[k];
-        }
-
-        if (std::abs(addmass) <= 5e-14*std::abs(mass))
-          break;
-
-        Real weightssum = 0;
-        if (addmass > 0) {
-#pragma ivdep
-#pragma simd
-          fork {
-            if (x[k] < maxp)
-              weightssum += c[k];
-          }
-          const auto adw = addmass/weightssum;
-#pragma ivdep
-#pragma simd
-          fork {
-            if (x[k] < maxp)
-              x[k] += adw;
-          }
-        } else {
-#pragma ivdep
-#pragma simd
-          fork {
-            if (x[k] > minp)
-              weightssum += c[k];
-          }
-          const auto adw = addmass/weightssum;
-#pragma ivdep
-#pragma simd
-          fork {
-            if (x[k] > minp)
-              x[k] += adw;
-          }
-        }
-      }
-
-#pragma ivdep
-#pragma simd
-      fork {
-        const int i = k / NP, j = k % NP;
-        ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
-      }
-    });
-#endif
   }
 
   //! apply mass matrix, overwrite np1 with solution:
