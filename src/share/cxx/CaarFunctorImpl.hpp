@@ -20,7 +20,32 @@
 namespace Homme {
 
 struct CaarFunctorImpl {
+private:
 
+  using RealViewUnmanaged   = ExecViewUnmanaged<Real   *   [NP][NP]>;
+  using ScalarViewUnmanaged = ExecViewUnmanaged<Scalar *   [NP][NP][NUM_LEV]>;
+  using VectorViewUnmanaged = ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>;
+
+  struct CaarBuffers {
+    RealViewUnmanaged       sdot_sum;
+
+    ScalarViewUnmanaged     temperature_virt;
+    ScalarViewUnmanaged     ephi;
+    ScalarViewUnmanaged     vorticity;
+    ScalarViewUnmanaged     div_vdp;
+    ScalarViewUnmanaged     pressure;
+    ScalarViewUnmanaged     omega_p;
+    ScalarViewUnmanaged     t_vadv_buf;
+    ScalarViewUnmanaged     eta_dot_dpdn_buf;
+
+    VectorViewUnmanaged     vdp;
+    VectorViewUnmanaged     temperature_grad;
+    VectorViewUnmanaged     energy_grad;
+    VectorViewUnmanaged     pressure_grad;
+    VectorViewUnmanaged     v_vadv_buf;
+  };
+
+public:
   struct CaarData {
     CaarData (const int rsplit_in) : rsplit(rsplit_in) {}
     int       nm1;
@@ -35,11 +60,12 @@ struct CaarFunctorImpl {
     bool      compute_diagnostics;
   };
 
-  CaarData              m_data;
-  const HybridVCoord    m_hvcoord;
-  const Elements        m_elements;
-  const Derivative      m_deriv;
-  const SphereOperators m_sphere_ops;
+  CaarData                m_data;
+  const HybridVCoord      m_hvcoord;
+  const Elements          m_elements;
+  const Derivative        m_deriv;
+  const SphereOperators   m_sphere_ops;
+  CaarBuffers             m_buffers;
 
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
 
@@ -53,6 +79,83 @@ struct CaarFunctorImpl {
     , m_sphere_ops(sphere_ops)
   {
     // Nothing to be done here
+  }
+
+  size_t buffers_size () const {
+    const int num_scalar_buffers = 5;
+    const int num_interf_buffers = 1;
+    const int num_vector_buffers = 3;
+
+    const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int interf_view_size = m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
+
+    const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
+
+    const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
+    const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
+    const int interf_view_padding = (mem_alignment - (interf_view_size % mem_alignment) ) % mem_alignment;
+
+    const int scalar_buffer_size = scalar_view_padding + m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_buffer_size = vector_view_padding + m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int interf_buffer_size = interf_view_padding + m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
+
+    return  num_scalar_buffers*scalar_buffer_size +
+            num_interf_buffers*interf_buffer_size +
+            num_vector_buffers*vector_buffer_size;
+  }
+
+  void init_buffers (Real* raw_buffer, const size_t buffer_size) {
+    const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int interf_view_size = m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
+
+    const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
+
+    const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
+    const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
+    const int interf_view_padding = (mem_alignment - (interf_view_size % mem_alignment) ) % mem_alignment;
+
+    const int scalar_buffer_size = scalar_view_padding + scalar_view_size;
+    const int vector_buffer_size = vector_view_padding + vector_view_size;
+    const int interf_buffer_size = interf_view_padding + interf_view_size;
+
+    const int ne = m_elements.num_elems();
+
+    Real* start = raw_buffer;
+
+    auto ptr = [](Real* raw_buffer) { return reinterpret_cast<Scalar*>(raw_buffer); };
+
+    // TODO: rearrange views order to maximize caching
+    m_buffers.temperature_virt  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    m_buffers.ephi              = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    m_buffers.vorticity         = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+    m_buffers.div_vdp           = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+    m_buffers.pressure          = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+    m_buffers.omega_p           = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+    m_buffers.sdot_sum          = RealViewUnmanaged(raw_buffer,ne);
+    m_buffers.t_vadv_buf        = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+    m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += interf_buffer_size;
+
+    m_buffers.vdp               = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    m_buffers.temperature_grad  = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    m_buffers.energy_grad       = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += vector_buffer_size;
+    m_buffers.pressure_grad     = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += vector_buffer_size;
+    m_buffers.v_vadv_buf        = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += vector_buffer_size;
+
+    // Sanity check
+    size_t used_size = static_cast<size_t>(std::distance(start,raw_buffer));
+    assert(used_size <= buffer_size);
+    (void)buffer_size;  // Suppresses a warning in debug build
   }
 
   void init_boundary_exchanges (const std::shared_ptr<BuffersManager>& bm_exchange) {
@@ -126,15 +229,14 @@ struct CaarFunctorImpl {
   KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
     if (m_data.rsplit == 0) {
       // vertical Eulerian
-      assign_zero_to_sdot_sum(kv);
       compute_eta_dot_dpdn_vertadv_euler(kv);
       preq_vertadv(kv);
       accumulate_eta_dot_dpdn(kv);
     }
     compute_omega_p(kv);
+    compute_dp3d_np1(kv);
     compute_temperature_np1(kv);
     compute_velocity_np1(kv);
-    compute_dp3d_np1(kv);
   } // TRIVIAL
   //is it?
 
@@ -239,23 +341,14 @@ struct CaarFunctorImpl {
 
 
   KOKKOS_INLINE_FUNCTION
-  void assign_zero_to_sdot_sum(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0;
-    });
-    kv.team_barrier();
-  } // TRIVIAL
-
-  KOKKOS_INLINE_FUNCTION
   void compute_eta_dot_dpdn_vertadv_euler(KernelVariables &kv) const {
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
       const int jgp = idx % NP;
+
+      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0.0;
 
       for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){
         const int ilev = k / VECTOR_SIZE;
