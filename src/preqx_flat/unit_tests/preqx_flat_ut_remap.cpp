@@ -117,8 +117,7 @@ public:
         "fortran dpo");
     HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_result(
         "fortra ppmdx");
-    ExecViewManaged<Real *[NP][NP][_ppm_consts::PPMDX_PHYSICAL_LEV][10]>
-    kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
+    auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
     Kokkos::deep_copy(kokkos_result, remap.ppmdx);
     for (int ie = 0; ie < ne; ++ie) {
       for (int igp = 0; igp < NP; ++igp) {
