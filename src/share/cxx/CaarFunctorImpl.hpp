@@ -82,8 +82,8 @@ public:
   }
 
   size_t buffers_size () const {
-    const int num_scalar_buffers = 6;
-    const int num_vector_buffers = 3;
+    const int num_scalar_buffers = m_data.rsplit==0 ? 6 : 4;
+    const int num_vector_buffers = m_data.rsplit==0 ? 3 : 2;
 
     const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
     const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
@@ -113,11 +113,13 @@ public:
     raw_buffer += scalar_buffer_size;
     m_buffers.omega_p           = ScalarViewUnmanaged(ptr(raw_buffer),ne);
     raw_buffer += scalar_buffer_size;
-    m_buffers.sdot_sum          = RealViewUnmanaged(raw_buffer,ne);
-    m_buffers.t_vadv_buf        = ScalarViewUnmanaged(ptr(raw_buffer),ne);
-    raw_buffer += scalar_buffer_size;
-    m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
-    raw_buffer += scalar_buffer_size;
+    if (m_data.rsplit==0) {
+      m_buffers.sdot_sum          = RealViewUnmanaged(raw_buffer,ne);
+      m_buffers.t_vadv_buf        = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+      raw_buffer += scalar_buffer_size;
+      m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+      raw_buffer += scalar_buffer_size;
+    }
 
     m_buffers.vdp               = VectorViewUnmanaged(ptr(raw_buffer),ne);
     m_buffers.temperature_grad  = VectorViewUnmanaged(ptr(raw_buffer),ne);
@@ -125,12 +127,15 @@ public:
     raw_buffer += vector_buffer_size;
     m_buffers.pressure_grad     = VectorViewUnmanaged(ptr(raw_buffer),ne);
     raw_buffer += vector_buffer_size;
-    m_buffers.v_vadv_buf        = VectorViewUnmanaged(ptr(raw_buffer),ne);
-    raw_buffer += vector_buffer_size;
+    if (m_data.rsplit==0) {
+      m_buffers.v_vadv_buf        = VectorViewUnmanaged(ptr(raw_buffer),ne);
+      raw_buffer += vector_buffer_size;
+    }
 
     // Sanity check
     size_t used_size = static_cast<size_t>(std::distance(start,raw_buffer));
     assert(used_size <= buffer_size);
+    (void)used_size;    // Suppresses a warning in debug build
     (void)buffer_size;  // Suppresses a warning in debug build
   }
 
