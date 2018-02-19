@@ -234,15 +234,23 @@ public:
     HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
     genRandArray(grid, engine,
                  std::uniform_real_distribution<Real>(0.0625, top));
+    constexpr int last_vector = (NUM_PHYSICAL_LEV-1) % VECTOR_SIZE;
     for (int ie = 0; ie < ne; ++ie) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           auto grid_slice = Homme::subview(grid, ie, igp, jgp);
           auto start = reinterpret_cast<Real *>(grid_slice.data());
-          auto end = start + grid_slice.size();
+          auto end = start + NUM_PHYSICAL_LEV;
           std::sort(start, end);
-          grid_slice(0)[0] = 0.0;
-          grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
+          grid_slice(NUM_LEV - 1)[last_vector] = top;
+
+          // Changing grid[i] from absolute value to incremental value
+          // compared to grid[i-1]. Note: there should be NPL+1 abs
+          // values and NPL incremental values. We only generated NPL
+          // abs values. We implicitly assume that there is an extra
+          // grid value of 0 below the 1st generated one, so that
+          // grid_slice(0)[0] ends up being the increment between the
+          // first (the 0 which we never generated) and second level
           for (int k = NUM_PHYSICAL_LEV - 1; k > 0; --k) {
             const int vector_level = k / VECTOR_SIZE;
             const int vector = k % VECTOR_SIZE;
