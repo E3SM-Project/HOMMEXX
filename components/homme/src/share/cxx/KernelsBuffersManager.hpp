@@ -15,7 +15,9 @@ public:
   KernelsBuffersManager ();
 
   void request_size (const size_t size);
-  ExecViewUnmanaged<Real*> get_buffer () const;
+  Real* get_raw_buffer () const;
+
+  size_t buffer_size () const { return m_buffer_size; }
 
   void allocate_buffer ();
 private:
@@ -27,12 +29,12 @@ private:
   ExecViewManaged<Real*>  m_raw_buffer;
 };
 
-inline ExecViewUnmanaged<Real*> KernelsBuffersManager::get_buffer () const
+inline Real* KernelsBuffersManager::get_raw_buffer () const
 {
   // Sanity check
   assert (m_buffer_allocated);
 
-  return m_raw_buffer;
+  return m_raw_buffer.data();
 }
 
 } // namespace Homme
