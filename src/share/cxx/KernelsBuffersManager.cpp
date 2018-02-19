@@ -24,10 +24,14 @@ void KernelsBuffersManager::request_size (const size_t size)
 
 void KernelsBuffersManager::allocate_buffer ()
 {
+  // Unit test may repeatedly call this method, through the singleton.
+  // Therefore, we allow to call this multiple times, though
   // Sanity check: do not call this method twice!
   assert (!m_buffer_allocated);
 
   m_raw_buffer = ExecViewManaged<Real*>("the buffer",m_buffer_size);
+
+  m_buffer_allocated = true;
 }
 
 } // namespace Homme
