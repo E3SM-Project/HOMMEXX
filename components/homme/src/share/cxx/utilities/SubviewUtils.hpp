@@ -147,7 +147,6 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
       &v_in.implementation_map().reference(ie, tl, igp, jgp, 0));
 }
 
-
 template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
@@ -227,6 +226,21 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4][DIM5], MemSpace,
 
 template <typename ScalarType, int DIM1, int DIM2, int DIM3,
           typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3], MemSpace>
+subview(ViewType<ScalarType ** [DIM1][DIM2][DIM3], MemSpace,
+                 Properties...> v_in,
+        int ie, int remap_idx) {
+  assert(v_in.data() != nullptr);
+  assert(ie < v_in.extent_int(0));
+  assert(ie >= 0);
+  assert(remap_idx < v_in.extent_int(1));
+  assert(remap_idx >= 0);
+  return ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3], MemSpace>(
+    &v_in.implementation_map().reference(ie, remap_idx, 0, 0, 0));
+}
+
+template <typename ScalarType, int DIM1, int DIM2, int DIM3,
+          typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM3], MemSpace>
 subview(ViewType<ScalarType ** [DIM1][DIM2][DIM3], MemSpace,
                  Properties...> v_in,
@@ -234,9 +248,12 @@ subview(ViewType<ScalarType ** [DIM1][DIM2][DIM3], MemSpace,
   assert(v_in.data() != nullptr);
   assert(ie < v_in.extent_int(0));
   assert(ie >= 0);
-  assert(idim1 < v_in.extent_int(1));
+  assert(remap_idx < v_in.extent_int(1));
+  assert(remap_idx >= 0);
+  assert(idim1 < v_in.extent_int(2));
   assert(idim1 >= 0);
-  assert(idim2 < v_in.extent_int(2));
+  assert(idim2 < v_in.extent_int(3));
+  assert(idim2 >= 0);
   return ViewUnmanaged<ScalarType[DIM3], MemSpace>(
     &v_in.implementation_map().reference(ie, remap_idx, idim1, idim2, 0));
 }
@@ -250,9 +267,12 @@ subview(ViewType<ScalarType ** [DIM1][DIM2][DIM3][DIM4], MemSpace,
   assert(v_in.data() != nullptr);
   assert(ie < v_in.extent_int(0));
   assert(ie >= 0);
-  assert(idim1 < v_in.extent_int(1));
+  assert(remap_idx < v_in.extent_int(1));
+  assert(remap_idx >= 0);
+  assert(idim1 < v_in.extent_int(2));
   assert(idim1 >= 0);
-  assert(idim2 < v_in.extent_int(2));
+  assert(idim2 < v_in.extent_int(3));
+  assert(idim2 >= 0);
   return ViewUnmanaged<ScalarType[DIM3][DIM4], MemSpace>(
     &v_in.implementation_map().reference(ie, remap_idx, idim1, idim2, 0, 0));
 }

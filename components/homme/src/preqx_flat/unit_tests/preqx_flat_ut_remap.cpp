@@ -53,7 +53,8 @@ public:
   ppm_remap_functor_test(const int num_elems, const int num_remap)
       : ne(num_elems), num_remap(num_remap), remap(num_elems, num_remap),
         src_layer_thickness_kokkos("source layer thickness", num_elems),
-        tgt_layer_thickness_kokkos("target layer thickness", num_elems) {}
+        tgt_layer_thickness_kokkos("target layer thickness", num_elems),
+        remap_vals("values to remap", num_elems, num_remap) {}
 
   struct TagGridTest {};
   struct TagPPMTest {};
@@ -116,33 +117,32 @@ public:
         "fortran dpo");
     HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_result(
         "fortra ppmdx");
-    for (int var = 0; var < num_remap; ++var) {
-      auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
-      Kokkos::deep_copy(kokkos_result, remap.ppmdx);
-      for (int ie = 0; ie < ne; ++ie) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            Kokkos::deep_copy(f90_input,
-                              Homme::subview(remap.dpo, ie, igp, jgp));
-            for (int k = 0; k < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++k) {
-              f90_input(k) =
-                  f90_input(k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
-            }
-            for (int k = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
-                 k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
-              f90_input(k) = std::numeric_limits<Real>::quiet_NaN();
-            }
-            compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
-                                         remap_alg);
-            for (int k = 0; k < f90_result.extent_int(0); ++k) {
-              for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
-                   ++stencil_idx) {
-                const Real f90 = f90_result(k, stencil_idx);
-                const Real cxx = kokkos_result(ie, igp, jgp, stencil_idx, k);
-                REQUIRE(!std::isnan(f90));
-                REQUIRE(!std::isnan(cxx));
-                REQUIRE(f90 == cxx);
-              }
+    ExecViewManaged<Real *[NP][NP][_ppm_consts::PPMDX_PHYSICAL_LEV][10]>
+    kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
+    Kokkos::deep_copy(kokkos_result, remap.ppmdx);
+    for (int ie = 0; ie < ne; ++ie) {
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          Kokkos::deep_copy(f90_input, Homme::subview(remap.dpo, ie, igp, jgp));
+          // These arrays must be 0 offset.
+          for (int k = 0; k < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++k) {
+            f90_input(k) =
+                f90_input(k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+          }
+          for (int k = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
+               k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
+            f90_input(k) = std::numeric_limits<Real>::quiet_NaN();
+          }
+          compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
+                                       remap_alg);
+          for (int k = 0; k < f90_result.extent_int(0); ++k) {
+            for (int stencil_idx = 0; stencil_idx < f90_result.extent_int(1);
+                 ++stencil_idx) {
+              const Real f90 = f90_result(k, stencil_idx);
+              const Real cxx = kokkos_result(ie, igp, jgp, stencil_idx, k);
+              REQUIRE(!std::isnan(f90));
+              REQUIRE(!std::isnan(cxx));
+              REQUIRE(f90 == cxx);
             }
           }
         }
@@ -252,7 +252,7 @@ public:
     HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
     genRandArray(grid, engine,
                  std::uniform_real_distribution<Real>(0.0625, top));
-    constexpr int last_vector = (NUM_PHYSICAL_LEV-1) % VECTOR_SIZE;
+    constexpr int last_vector = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
     for (int ie = 0; ie < ne; ++ie) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -308,6 +308,15 @@ public:
     // This must be initialize before remap_vals is updated
     HostViewManaged<Real * * [NUM_PHYSICAL_LEV][NP][NP]> f90_remap_qdp(
         "fortran qdp", ne, num_remap);
+    REQUIRE(remap_vals.extent_int(0) == ne);
+    REQUIRE(remap_vals.extent_int(1) == num_remap);
+    REQUIRE(remap_vals.extent_int(2) == NP);
+    REQUIRE(remap_vals.extent_int(3) == NP);
+    REQUIRE(remap_vals.extent_int(4) == NUM_LEV);
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tmp = Homme::subview(remap_vals, 0, 0);
+    REQUIRE(tmp.extent_int(0) == NP);
+    REQUIRE(tmp.extent_int(1) == NP);
+    REQUIRE(tmp.extent_int(2) == NUM_LEV);
     for (int ie = 0; ie < ne; ++ie) {
       for (int var = 0; var < num_remap; ++var) {
         sync_to_host(Homme::subview(remap_vals, ie, var),
@@ -323,15 +332,14 @@ public:
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
     const int np = NP;
-    const int qsize = num_remap;
 
     HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
     f90_src_layer_thickness_input("fortran source layer thickness");
     HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]>
     f90_tgt_layer_thickness_input("fortran target layer thickness");
 
-    HostViewManaged<Scalar * * [NP][NP][NUM_LEV]> kokkos_remapped;
-    kokkos_remapped = Kokkos::create_mirror_view(remap_vals);
+    HostViewManaged<Scalar * * [NP][NP][NUM_LEV]> kokkos_remapped(
+        "kokkos_remapped", ne, num_remap);
     Kokkos::deep_copy(kokkos_remapped, remap_vals);
 
     for (int ie = 0; ie < ne; ++ie) {
@@ -341,7 +349,7 @@ public:
                    f90_tgt_layer_thickness_input);
 
       remap_q_ppm_c_callable(Homme::subview(f90_remap_qdp, ie).data(), np,
-                             qsize, f90_src_layer_thickness_input.data(),
+                             num_remap, f90_src_layer_thickness_input.data(),
                              f90_tgt_layer_thickness_input.data(), remap_alg);
 
       for (int var = 0; var < num_remap; ++var) {
@@ -350,12 +358,8 @@ public:
             for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
               const int vector_level = k / VECTOR_SIZE;
               const int vector = k % VECTOR_SIZE;
-              // TODO: Fix so that neither are returning NaN's or always do so
-              // in the same place
-              //
               // The fortran returns NaN's, so make certain we only return NaN's
               // when the Fortran does
-
               const Real f90 = f90_remap_qdp(ie, var, k, igp, jgp);
               const Real cxx =
                   kokkos_remapped(ie, var, igp, jgp, vector_level)[vector];
@@ -399,7 +403,7 @@ TEST_CASE("ppm_mirrored", "vertical remap") {
 }
 
 TEST_CASE("ppm_fixed", "vertical remap") {
-  constexpr int num_elems = 4;
+  constexpr int num_elems = 2;
   constexpr int num_remap = 3;
   ppm_remap_functor_test<PpmFixed> remap_test_fixed(num_elems, num_remap);
   SECTION("grid test") { remap_test_fixed.test_grid(); }
@@ -416,14 +420,16 @@ TEST_CASE("remap_interface", "vertical remap") {
   // TODO: make dt random
   constexpr int np1 = 0;
   constexpr int n0_qdp = 0;
-  Real dt = 0;
   std::random_device rd;
   std::mt19937_64 engine(rd());
-  // Note: the bounds on the distribution for dt are strictly linked to how ps_v and eta_dot_dpdn
-  //       are (randomly) init-ed in Elements. In particular, this interval *should* ensure that
-  //       dp3d[k] + dt*(eta_dot_dpdn[k+1]-eta_dot_dpdn[k]) > 0, which is needed to pass the test
+  // Note: the bounds on the distribution for dt are strictly linked to how ps_v
+  // and eta_dot_dpdn
+  //       are (randomly) init-ed in Elements. In particular, this interval
+  // *should* ensure that
+  //       dp3d[k] + dt*(eta_dot_dpdn[k+1]-eta_dot_dpdn[k]) > 0, which is needed
+  // to pass the test
   std::uniform_real_distribution<Real> random_dist(0.01, 10);
-  genRandArray(&dt,1,engine,random_dist);
+  const Real dt = random_dist(engine);
 
   HybridVCoord hvcoord;
   hvcoord.random_init(std::random_device()());
