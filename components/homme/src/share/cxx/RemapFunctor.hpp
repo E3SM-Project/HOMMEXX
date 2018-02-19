@@ -38,7 +38,6 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
                                          "been removed.");
 
   static constexpr int num_states_remap = 0;
-  static constexpr int remap_dim = num_states_remap + QSIZE_D;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_src_layer_thickness;
   explicit _RemapFunctorRSplit(const int &num_elems)
@@ -94,8 +93,8 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
 
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-  get_state (const KernelVariables &kv, const Elements &elements, int np1,
-             int var) const {
+  get_state(const KernelVariables &kv, const Elements &elements, int np1,
+            int var) const {
     return ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>();
   }
 };
@@ -104,7 +103,6 @@ template <> struct _RemapFunctorRSplit<true> {
   explicit _RemapFunctorRSplit(const int &num_elems) {}
 
   static constexpr int num_states_remap = 3;
-  static constexpr int remap_dim = num_states_remap + QSIZE_D;
 
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> get_source_thickness(
@@ -126,11 +124,13 @@ template <> struct _RemapFunctorRSplit<true> {
 
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-  get_state (const KernelVariables &kv, const Elements &elements, int np1,
-             int var) const {
+  get_state(const KernelVariables &kv, const Elements &elements, int np1,
+            int var) const {
     switch (var) {
-    case 0: return Homme::subview(elements.m_v, kv.ie, np1, 0);
-    case 1: return Homme::subview(elements.m_v, kv.ie, np1, 1);
+    case 0:
+      return Homme::subview(elements.m_v, kv.ie, np1, 0);
+    case 1:
+      return Homme::subview(elements.m_v, kv.ie, np1, 1);
     default:
       assert(var == 2);
       return Homme::subview(elements.m_t, kv.ie, np1);
@@ -143,24 +143,22 @@ struct Remapper {
   virtual void run_remap(int np1, int n0_qdp, double dt) = 0;
 };
 
-template <bool nonzero_rsplit, template <int, typename...> class _RemapType,
+template <bool nonzero_rsplit, template <typename...> class _RemapType,
           typename... RemapOptions>
 struct RemapFunctor : public Remapper,
                       public _RemapFunctorRSplit<nonzero_rsplit> {
-  static constexpr int remap_dim =
-      _RemapFunctorRSplit<nonzero_rsplit>::remap_dim;
 
-  using RemapType = _RemapType<remap_dim, RemapOptions...>;
+  using RemapType = _RemapType<RemapOptions...>;
 
   static_assert(std::is_base_of<VertRemapAlg, RemapType>::value,
                 "RemapFunctor not given a remap algorithm to use");
 
   struct RemapData {
     RemapData(const int qsize_in) : qsize(qsize_in) {}
-    const int   qsize;
-    int         np1;
-    int         n0_qdp;
-    Real        dt;
+    const int qsize;
+    int np1;
+    int n0_qdp;
+    Real dt;
   };
 
   RemapData m_data;
@@ -174,7 +172,8 @@ struct RemapFunctor : public Remapper,
 
   RemapType m_remap;
 
-  explicit RemapFunctor(const int qsize, const Elements &elements, const HybridVCoord& hvcoord)
+  explicit RemapFunctor(const int qsize, const Elements &elements,
+                        const HybridVCoord &hvcoord)
       : _RemapFunctorRSplit<nonzero_rsplit>(elements.num_elems()),
         m_data(qsize), m_elements(elements), m_hvcoord(hvcoord),
         m_tgt_layer_thickness("Target Layer Thickness", elements.num_elems()),
@@ -182,7 +181,7 @@ struct RemapFunctor : public Remapper,
             "Check for whether the surface thicknesses are positive",
             elements.num_elems()),
         host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
-        m_remap(elements.num_elems()) {
+        m_remap(elements.num_elems(), qsize) {
     // Nothing to be done here
   }
 
@@ -199,10 +198,10 @@ struct RemapFunctor : public Remapper,
   KOKKOS_INLINE_FUNCTION
   int num_to_remap() const { return this->num_states_remap + m_data.qsize; }
 
-  KOKKOS_INLINE_FUNCTION 
+  KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-  get_remap_val (const KernelVariables& kv, int var) const {
-    if ( ! nonzero_rsplit || var >= this->num_states_remap) {
+  get_remap_val(const KernelVariables &kv, int var) const {
+    if (!nonzero_rsplit || var >= this->num_states_remap) {
       if (var >= this->num_states_remap)
         var -= this->num_states_remap;
       return Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, var);
@@ -338,7 +337,8 @@ struct RemapFunctor : public Remapper,
       run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
                                    this->m_elements.num_elems());
       run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                   this->m_elements.num_elems() * num_to_remap());
+                                   this->m_elements.num_elems() *
+                                       num_to_remap());
       if (nonzero_rsplit) {
         run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
                                           m_elements.num_elems() *
