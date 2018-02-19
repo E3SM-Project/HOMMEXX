@@ -42,6 +42,17 @@ CaarFunctor::~CaarFunctor ()
   // would be in the header file, where CaarFunctorImpl type is incomplete.
 }
 
+size_t CaarFunctor::buffers_size () const
+{
+  assert (m_caar_impl);
+  return m_caar_impl->buffers_size();
+}
+
+void CaarFunctor::init_buffers (Real* raw_buffer, const size_t buffer_size) {
+  assert (m_caar_impl);
+  m_caar_impl->init_buffers(raw_buffer, buffer_size);
+}
+
 void CaarFunctor::init_boundary_exchanges (const std::shared_ptr<BuffersManager>& bm_exchange) {
   assert (m_caar_impl);
   m_caar_impl->init_boundary_exchanges(bm_exchange);

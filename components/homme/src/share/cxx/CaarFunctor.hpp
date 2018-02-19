@@ -26,6 +26,9 @@ public:
 
   CaarFunctor& operator= (const CaarFunctor&) = delete;
 
+  size_t buffers_size () const;
+  void init_buffers (Real* raw_buffer, const size_t buffer_size);
+
   void init_boundary_exchanges(const std::shared_ptr<BuffersManager>& bm_exchange);
 
   void set_n0_qdp (const int n0_qdp);
