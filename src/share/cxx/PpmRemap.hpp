@@ -170,30 +170,12 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   const int gs = _ppm_consts::gs;
 
   explicit PpmVertRemap(const int num_elems, const int num_remap)
-      : dpo(ExecViewManaged<Real * [NP][NP][_ppm_consts::DPO_PHYSICAL_LEV]>(
-            "dpo", num_elems)),
-        pio(ExecViewManaged<Real * [NP][NP][_ppm_consts::PIO_PHYSICAL_LEV]>(
-            "pio", num_elems)),
-        pin(ExecViewManaged<Real * [NP][NP][_ppm_consts::PIN_PHYSICAL_LEV]>(
-            "pin", num_elems)),
-        ppmdx(ExecViewManaged<
-            Real * [NP][NP][10][_ppm_consts::PPMDX_PHYSICAL_LEV]>("ppmdx",
-                                                                  num_elems)),
-        z2(ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]>("z2", num_elems)),
-        kid(ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]>("kid",
-                                                              num_elems)),
-        ao(ExecViewManaged<Real * * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]>(
-            "a0", num_elems, num_remap)),
-        mass_o(ExecViewManaged<
-            Real * * [NP][NP][_ppm_consts::MASS_O_PHYSICAL_LEV]>(
-            "mass_o", num_elems, num_remap)),
-        dma(ExecViewManaged<Real * * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]>(
-            "dma", num_elems, num_remap)),
-        ai(ExecViewManaged<Real * * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]>(
-            "ai", num_elems, num_remap)),
-        parabola_coeffs(ExecViewManaged<Real * * [NP][NP][3][NUM_PHYSICAL_LEV]>(
-            "Coefficients for the interpolating parabola", num_elems,
-            num_remap)) {}
+      : dpo("dpo", num_elems), pio("pio", num_elems), pin("pin", num_elems),
+        ppmdx("ppmdx", num_elems), z2("z2", num_elems), kid("kid", num_elems),
+        ao("a0", num_elems, num_remap), mass_o("mass_o", num_elems, num_remap),
+        dma("dma", num_elems, num_remap), ai("ai", num_elems, num_remap),
+        parabola_coeffs("Coefficients for the interpolating parabola",
+                        num_elems, num_remap) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
@@ -689,7 +671,6 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
            sq_coeff * (x2 * x2 * x2 - x1 * x1 * x1) / 3.0;
   }
 
-  ExecViewManaged<Real * * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> ao;
   ExecViewManaged<Real * [NP][NP][_ppm_consts::DPO_PHYSICAL_LEV]> dpo;
   // pio corresponds to the points in each layer of the source layer thickness
   ExecViewManaged<Real * [NP][NP][_ppm_consts::PIO_PHYSICAL_LEV]> pio;
@@ -699,6 +680,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z2;
   ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]> kid;
 
+  ExecViewManaged<Real * * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> ao;
   ExecViewManaged<Real * * [NP][NP][_ppm_consts::MASS_O_PHYSICAL_LEV]> mass_o;
   ExecViewManaged<Real * * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]> dma;
   ExecViewManaged<Real * * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]> ai;
