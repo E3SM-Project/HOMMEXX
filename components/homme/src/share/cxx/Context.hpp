@@ -9,6 +9,7 @@ namespace Homme {
 
 class BoundaryExchange;
 class BuffersManager;
+class KernelsBuffersManager;
 class CaarFunctor;
 class Comm;
 class Connectivity;
@@ -45,6 +46,7 @@ private:
   std::unique_ptr<HybridVCoord>           hvcoord_;
   std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
   std::shared_ptr<Connectivity>           connectivity_;
+  std::shared_ptr<KernelsBuffersManager>  kernels_buffers_manager_;
   std::shared_ptr<BMMap>                  buffers_managers_;
   std::unique_ptr<SimulationParams>       simulation_params_;
   std::unique_ptr<TimeLevel>              time_level_;
@@ -65,6 +67,7 @@ public:
   Elements& get_elements();
   Derivative& get_derivative();
   HybridVCoord& get_hvcoord();
+  std::shared_ptr<KernelsBuffersManager> get_kernels_buffers_manager();
   HyperviscosityFunctor& get_hyperviscosity_functor();
   SimulationParams& get_simulation_params();
   SphereOperators& get_sphere_operators(int qsize = -1);
@@ -74,6 +77,8 @@ public:
   std::shared_ptr<Connectivity> get_connectivity();
   BMMap& get_buffers_managers();
   std::shared_ptr<BuffersManager> get_buffers_manager(short int exchange_type);
+
+  void init_functors_buffers ();
 
   // Exactly one singleton.
   static Context& singleton();

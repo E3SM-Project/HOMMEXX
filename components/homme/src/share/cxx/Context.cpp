@@ -9,6 +9,7 @@
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "HyperviscosityFunctor.hpp"
+#include "KernelsBuffersManager.hpp"
 #include "SphereOperators.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
@@ -55,6 +56,11 @@ HyperviscosityFunctor& Context::get_hyperviscosity_functor() {
     hyperviscosity_functor_.reset(new HyperviscosityFunctor(p,e,d));
   }
   return *hyperviscosity_functor_;
+}
+
+std::shared_ptr<KernelsBuffersManager> Context::get_kernels_buffers_manager() {
+  if ( ! kernels_buffers_manager_) kernels_buffers_manager_.reset(new KernelsBuffersManager());
+  return kernels_buffers_manager_;
 }
 
 Derivative& Context::get_derivative() {
@@ -117,6 +123,7 @@ void Context::clear() {
   derivative_ = nullptr;
   hvcoord_ = nullptr;
   hyperviscosity_functor_ = nullptr;
+  kernels_buffers_manager_ = nullptr;
   connectivity_ = nullptr;
   buffers_managers_ = nullptr;
   simulation_params_ = nullptr;
@@ -125,6 +132,32 @@ void Context::clear() {
   vertical_remap_mgr_ = nullptr;
   caar_functor_ = nullptr;
   euler_step_functor_ = nullptr;
+}
+
+void Context::init_functors_buffers () {
+  // Get all functors
+  CaarFunctor& caar = get_caar_functor();
+  EulerStepFunctor& esf = get_euler_step_functor();
+  HyperviscosityFunctor& hvf = get_hyperviscosity_functor();
+  VerticalRemapManager& vrm = get_vertical_remap_manager();
+
+  // Get the KBM
+  std::shared_ptr<KernelsBuffersManager> kbm = get_kernels_buffers_manager();
+
+  // Get the buffers requests from all functors
+  //kbm->request_size(caar.buffers_size());
+  //kbm->request_size(esf.buffers_size());
+  //kbm->request_size(hvf.buffers_size());
+  //kbm->request_size(vrm.buffers_size());
+
+  // Allocate buffer
+  kbm->allocate_buffer();
+
+  // Tell all functors to carve their buffers from the raw buffer in KBM
+  //caar.init_buffers();
+  //esf.init_buffers();
+  //hvf.init_buffers();
+  //vrm.init_buffers();
 }
 
 Context& Context::singleton() {
