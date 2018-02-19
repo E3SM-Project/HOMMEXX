@@ -8,6 +8,8 @@
 
 #include "KernelVariables.hpp"
 #include "Types.hpp"
+#include "Context.hpp"
+#include "HybridVCoord.hpp"
 #include "PpmRemap.hpp"
 #include "RemapFunctor.hpp"
 #include "Types.hpp"
@@ -232,15 +234,23 @@ public:
     HostViewManaged<Scalar * [NP][NP][NUM_LEV]> grid("grid", ne);
     genRandArray(grid, engine,
                  std::uniform_real_distribution<Real>(0.0625, top));
+    constexpr int last_vector = (NUM_PHYSICAL_LEV-1) % VECTOR_SIZE;
     for (int ie = 0; ie < ne; ++ie) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
           auto grid_slice = Homme::subview(grid, ie, igp, jgp);
           auto start = reinterpret_cast<Real *>(grid_slice.data());
-          auto end = start + grid_slice.size();
+          auto end = start + NUM_PHYSICAL_LEV;
           std::sort(start, end);
-          grid_slice(0)[0] = 0.0;
-          grid_slice(NUM_LEV - 1)[VECTOR_SIZE - 1] = top;
+          grid_slice(NUM_LEV - 1)[last_vector] = top;
+
+          // Changing grid[i] from absolute value to incremental value
+          // compared to grid[i-1]. Note: there should be NPL+1 abs
+          // values and NPL incremental values. We only generated NPL
+          // abs values. We implicitly assume that there is an extra
+          // grid value of 0 below the 1st generated one, so that
+          // grid_slice(0)[0] ends up being the increment between the
+          // first (the 0 which we never generated) and second level
           for (int k = NUM_PHYSICAL_LEV - 1; k > 0; --k) {
             const int vector_level = k / VECTOR_SIZE;
             const int vector = k % VECTOR_SIZE;
@@ -389,13 +399,21 @@ TEST_CASE("ppm_fixed", "vertical remap") {
 
 TEST_CASE("remap_interface", "vertical remap") {
   constexpr int num_elems = 4;
+  Context::singleton().get_hvcoord().random_init(std::random_device()());
   Elements elements;
   elements.random_init(num_elems);
 
   // TODO: make dt random
   constexpr int np1 = 0;
   constexpr int n0_qdp = 0;
-  constexpr Real dt = 0.0;
+  Real dt = 0;
+  std::random_device rd;
+  std::mt19937_64 engine(rd());
+  // Note: the bounds on the distribution for dt are strictly linked to how ps_v and eta_dot_dpdn
+  //       are (randomly) init-ed in Elements. In particular, this interval *should* ensure that
+  //       dp3d[k] + dt*(eta_dot_dpdn[k+1]-eta_dot_dpdn[k]) > 0, which is needed to pass the test
+  std::uniform_real_distribution<Real> random_dist(0.01, 10);
+  genRandArray(&dt,1,engine,random_dist);
 
   HybridVCoord hvcoord;
   hvcoord.random_init(std::random_device()());

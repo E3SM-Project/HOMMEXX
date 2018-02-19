@@ -23,10 +23,6 @@ void HybridVCoord::init(const Real ps0_in,
   // hybrid_bm = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
   //    "Hybrid coordinates; coefficient B_midpoints");
 
-  hybrid_ai_delta = ExecViewManaged<Scalar[NUM_LEV]>(
-      "Difference in Hybrid a coordinates between consecutive interfaces");
-  hybrid_bi_delta = ExecViewManaged<Scalar[NUM_LEV]>(
-      "Difference in Hybrid b coordinates between consecutive interfaces");
   // HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]>
   // host_hybrid_am(hybrid_am_ptr);
   // HostViewUnmanaged<const Real[NUM_PHYSICAL_LEV]>
@@ -47,31 +43,7 @@ void HybridVCoord::init(const Real ps0_in,
   //  assert(hybrid_ai_ptr != nullptr);
   //  assert(hybrid_bi_ptr != nullptr);
 
-  decltype(hybrid_ai_delta)::HostMirror host_hybrid_ai_delta =
-      Kokkos::create_mirror_view(hybrid_ai_delta);
-  decltype(hybrid_bi_delta)::HostMirror host_hybrid_bi_delta =
-      Kokkos::create_mirror_view(hybrid_bi_delta);
-  for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
-    const int ilev = level / VECTOR_SIZE;
-    const int ivec = level % VECTOR_SIZE;
-
-    host_hybrid_ai_delta(ilev)[ivec] =
-        host_hybrid_ai(level + 1) - host_hybrid_ai(level);
-    host_hybrid_bi_delta(ilev)[ivec] =
-        host_hybrid_bi(level + 1) - host_hybrid_bi(level);
-  }
-  Kokkos::deep_copy(hybrid_ai_delta, host_hybrid_ai_delta);
-  Kokkos::deep_copy(hybrid_bi_delta, host_hybrid_bi_delta);
-  {
-    dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
-    const auto hdp0 = Kokkos::create_mirror_view(dp0);
-    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-      // BFB way of writing it.
-      hdp0(ilev) =
-          host_hybrid_ai_delta[ilev] * ps0 + host_hybrid_bi_delta[ilev] * ps0;
-    }
-    Kokkos::deep_copy(dp0, hdp0);
-  }
+  compute_deltas();
 }
 
 void HybridVCoord::random_init(int seed) {
@@ -108,23 +80,64 @@ void HybridVCoord::random_init(int seed) {
     // Put them in order
     std::sort(coords.data(), coords.data() + coords.size());
     Real p_prev = hybrid_ai0 + coords(0);
-    // Make certain they're all distinct
     for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
+      // Make certain they're all distinct
       if (coords(i) <=
           coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
         return false;
       }
+      // Make certain p = a + b is increasing
       Real p_cur = coords(i) + host_hybrid_ai(i);
       if (p_cur <= p_prev) {
         return false;
       }
       p_prev = p_cur;
     }
+    // All good!
     return true;
   };
   genRandArray(hybrid_bi, engine,
                std::uniform_real_distribution<Real>(min_value, max_value),
                check_coords);
+
+  compute_deltas();
+}
+
+void HybridVCoord::compute_deltas ()
+{
+  const auto host_hybrid_ai = Kokkos::create_mirror_view(hybrid_ai);
+  const auto host_hybrid_bi = Kokkos::create_mirror_view(hybrid_bi);
+
+  hybrid_ai_delta = ExecViewManaged<Scalar[NUM_LEV]>(
+      "Difference in Hybrid a coordinates between consecutive interfaces");
+  hybrid_bi_delta = ExecViewManaged<Scalar[NUM_LEV]>(
+      "Difference in Hybrid b coordinates between consecutive interfaces");
+
+  decltype(hybrid_ai_delta)::HostMirror host_hybrid_ai_delta =
+      Kokkos::create_mirror_view(hybrid_ai_delta);
+  decltype(hybrid_bi_delta)::HostMirror host_hybrid_bi_delta =
+      Kokkos::create_mirror_view(hybrid_bi_delta);
+  for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+    const int ilev = level / VECTOR_SIZE;
+    const int ivec = level % VECTOR_SIZE;
+
+    host_hybrid_ai_delta(ilev)[ivec] =
+        host_hybrid_ai(level + 1) - host_hybrid_ai(level);
+    host_hybrid_bi_delta(ilev)[ivec] =
+        host_hybrid_bi(level + 1) - host_hybrid_bi(level);
+  }
+  Kokkos::deep_copy(hybrid_ai_delta, host_hybrid_ai_delta);
+  Kokkos::deep_copy(hybrid_bi_delta, host_hybrid_bi_delta);
+  {
+    dp0 = ExecViewManaged<Scalar[NUM_LEV]>("dp0");
+    const auto hdp0 = Kokkos::create_mirror_view(dp0);
+    for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+      // BFB way of writing it.
+      hdp0(ilev) =
+          host_hybrid_ai_delta[ilev] * ps0 + host_hybrid_bi_delta[ilev] * ps0;
+    }
+    Kokkos::deep_copy(dp0, hdp0);
+  }
 }
 
 } // namespace Homme
