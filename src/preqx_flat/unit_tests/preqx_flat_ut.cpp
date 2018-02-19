@@ -11,6 +11,7 @@
 #include "Elements.hpp"
 #include "HybridVCoord.hpp"
 #include "Dimensions.hpp"
+#include "KernelsBuffersManager.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
 #include "utilities/SyncUtils.hpp"
@@ -115,6 +116,10 @@ public:
         rsplit(rsplit_in)
         {
 
+    kbm.request_size(functor.buffers_size());
+    kbm.allocate_buffer();
+    functor.init_buffers(kbm.get_raw_buffer(),kbm.buffer_size());
+
     functor.set_n0_qdp(n0_qdp);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
@@ -151,6 +156,7 @@ public:
     ExecSpace::fence();
   }
 
+  KernelsBuffersManager kbm;
   CaarFunctorImpl functor;
 
   // host
@@ -209,66 +215,63 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   elements.random_init(num_elems);
   Context::singleton().get_derivative().random_init();
 
-  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
-  HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_in("pressure input", num_elems);
-  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> pressure_grad_in("pressure_grad input", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_in("temperature_virt input", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure_in("pressure input", num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> pressure_grad_in("pressure_grad input", num_elems);
 
   genRandArray(temperature_virt_in, engine, std::uniform_real_distribution<Real>(0.1, 100.0));
   genRandArray(pressure_in,         engine, std::uniform_real_distribution<Real>(0.1, 100.0));
   genRandArray(pressure_grad_in,    engine, std::uniform_real_distribution<Real>(0.1, 100.0));
 
-  Kokkos::deep_copy(elements.buffers.temperature_virt, temperature_virt_in);
-  Kokkos::deep_copy(elements.buffers.pressure, pressure_in);
-  Kokkos::deep_copy(elements.buffers.pressure_grad, pressure_grad_in);
-
   compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
+  sync_to_device(temperature_virt_in, test_functor.functor.m_buffers.temperature_virt);
+  sync_to_device(pressure_in,         test_functor.functor.m_buffers.pressure        );
+  sync_to_device(pressure_grad_in,    test_functor.functor.m_buffers.pressure_grad   );
+
   test_functor.run_functor();
 
-  HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> energy_grad_out(
       "energy_grad output", num_elems);
-  Kokkos::deep_copy(energy_grad_out, elements.buffers.energy_grad);
+  sync_to_host(test_functor.functor.m_buffers.energy_grad, energy_grad_out);
 
   HostViewManaged<Real[2][NP][NP]> vtemp("vtemp");
   HostViewManaged<Real[NP][NP]> tvirt("tvirt");
   HostViewManaged<Real[NP][NP]> press("press");
   HostViewManaged<Real[2][NP][NP]> press_grad("press_grad");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int level = 0; level < NUM_LEV; ++level) {
-      for (int v = 0; v < VECTOR_SIZE; ++v) {
-        for (int i = 0; i < NP; i++) {
-          for (int j = 0; j < NP; j++) {
-            press_grad(0, i, j) = pressure_grad_in(ie, 0, i, j, level)[v];
-            press_grad(1, i, j) = pressure_grad_in(ie, 1, i, j, level)[v];
-            press(i, j) = pressure_in(ie, i, j, level)[v];
-            tvirt(i, j) = temperature_virt_in(ie, i, j, level)[v];
-            vtemp(0, i, j) = 0;
-            vtemp(1, i, j) = 0;
-          }
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      for (int i = 0; i < NP; i++) {
+        for (int j = 0; j < NP; j++) {
+          press_grad(0, i, j) = pressure_grad_in(ie, level, 0, i, j);
+          press_grad(1, i, j) = pressure_grad_in(ie, level, 1, i, j);
+          press(i, j) = pressure_in(ie, level, i, j);
+          tvirt(i, j) = temperature_virt_in(ie, level, i, j);
+          vtemp(0, i, j) = 0;
+          vtemp(1, i, j) = 0;
         }
-        caar_compute_energy_grad_c_int(
-            test_functor.dvv.data(),
-                Homme::subview(test_functor.dinv, ie).data(),
-                Homme::subview(test_functor.phi, ie, level * VECTOR_SIZE + v).data(),
-                Homme::subview(test_functor.velocity, ie, test_functor.n0,
-                                level * VECTOR_SIZE + v).data(),
-                tvirt.data(),
-                press.data(),
-                press_grad.data(),
-                vtemp.data());
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            const Real correct[2] = { vtemp(0, igp, jgp), vtemp(1, igp, jgp) };
-            const Real computed[2] = {
-              energy_grad_out(ie, 0, igp, jgp, level)[v],
-              energy_grad_out(ie, 1, igp, jgp, level)[v]
-            };
-            for (int dim = 0; dim < 2; ++dim) {
-              Real rel_error = compare_answers(correct[dim], computed[dim]);
-              REQUIRE(!std::isnan(correct[dim]));
-              REQUIRE(!std::isnan(computed[dim]));
+      }
+      caar_compute_energy_grad_c_int(
+          test_functor.dvv.data(),
+              Homme::subview(test_functor.dinv, ie).data(),
+              Homme::subview(test_functor.phi, ie, level).data(),
+              Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
+              tvirt.data(),
+              press.data(),
+              press_grad.data(),
+              vtemp.data());
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          const Real correct[2] = { vtemp(0, igp, jgp), vtemp(1, igp, jgp) };
+          const Real computed[2] = {
+            energy_grad_out(ie, level, 0, igp, jgp),
+            energy_grad_out(ie, level, 1, igp, jgp)
+          };
+          for (int dim = 0; dim < 2; ++dim) {
+            Real rel_error = compare_answers(correct[dim], computed[dim]);
+            REQUIRE(!std::isnan(correct[dim]));
+            REQUIRE(!std::isnan(computed[dim]));
 
-              REQUIRE(rel_threshold >= rel_error);
-            }
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
@@ -302,18 +305,19 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
                                                               num_elems);
   genRandArray(pressure, engine,
                std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(pressure, elements.buffers.pressure);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
 
   compute_subfunctor_test<preq_omega_ps_test> test_functor(elements);
+  sync_to_device(pressure, test_functor.functor.m_buffers.pressure);
+  sync_to_device(div_vdp,  test_functor.functor.m_buffers.div_vdp);
+
   test_functor.run_functor();
   // Results of the computation
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
-  Kokkos::deep_copy(omega_p, elements.buffers.omega_p);
+  Kokkos::deep_copy(omega_p, test_functor.functor.m_buffers.omega_p);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(
       "Fortran omega_p");
@@ -369,14 +373,15 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
       "host virtual temperature", num_elems);
   genRandArray(temperature_virt, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
   genRandArray(pressure, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(pressure, elements.buffers.pressure);
 
   TestType test_functor(elements);
+  sync_to_device(temperature_virt, test_functor.functor.m_buffers.temperature_virt);
+  sync_to_device(pressure, test_functor.functor.m_buffers.pressure);
+
   Kokkos::deep_copy(test_functor.phis, elements.m_phis);
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
   test_functor.run_functor();
@@ -435,10 +440,9 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
 
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-
   compute_subfunctor_test<dp3d_test> test_functor(elements);
+  sync_to_device(div_vdp, test_functor.functor.m_buffers.div_vdp);
+  sync_to_device_i2p(eta_dot, test_functor.functor.m_buffers.eta_dot_dpdn_buf);
 
   // To ensure the Fortran doesn't pass without doing anything,
   // copy the initial state before running any of the test
@@ -503,14 +507,15 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   sync_to_host(elements.m_derived_vn0, vn0_f90);
 
   compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
+
   test_functor.run_functor();
 
   sync_to_host(elements.m_derived_vn0, test_functor.derived_v);
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp("vdp results", num_elems);
-  Kokkos::deep_copy(vdp, elements.buffers.vdp);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp("div_vdp results",
                                                       num_elems);
-  Kokkos::deep_copy(div_vdp, elements.buffers.div_vdp);
+  Kokkos::deep_copy(vdp, test_functor.functor.m_buffers.vdp);
+  Kokkos::deep_copy(div_vdp, test_functor.functor.m_buffers.div_vdp);
 
   HostViewManaged<Real[2][NP][NP]> vdp_f90("vdp f90 results");
   HostViewManaged<Real[NP][NP]> div_vdp_f90("div_vdp f90 results");
@@ -622,8 +627,6 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
            hybrid_bm_mirror.data(),
            hybrid_bi_mirror.data());
 
-//OG does init use any of hybrid coefficients? do they need to be generated?
-//init makes device copies
   TestType test_functor(elements);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
@@ -634,7 +637,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx",
                                                            num_elems);
-  Kokkos::deep_copy(pressure_cxx, elements.buffers.pressure);
+  Kokkos::deep_copy(pressure_cxx, test_functor.functor.m_buffers.pressure);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
 
@@ -690,18 +693,19 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
   genRandArray(temperature_virt, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     omega_p("Omega P test", num_elems);
   genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(omega_p, elements.buffers.omega_p);
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror t_vadv_f90("t_vadv", num_elems);
   genRandArray(t_vadv_f90, engine, std::uniform_real_distribution<Real>(-100, 100));
-  sync_to_device(t_vadv_f90, elements.buffers.t_vadv_buf);
 
   TestType test_functor(elements);
+  sync_to_device(temperature_virt, test_functor.functor.m_buffers.temperature_virt);
+  sync_to_device(omega_p, test_functor.functor.m_buffers.omega_p);
+  sync_to_device(t_vadv_f90, test_functor.functor.m_buffers.t_vadv_buf);
+
   test_functor.run_functor();
 
   sync_to_host(elements.m_t, test_functor.temperature);
@@ -764,13 +768,14 @@ TEST_CASE("virtual temperature no tracers",
   elements.random_init(num_elems);
 
   TestType test_functor(elements);
+
   sync_to_host(elements.m_t, test_functor.temperature);
   test_functor.run_functor();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
 
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
+  sync_to_host(test_functor.functor.m_buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -821,6 +826,7 @@ TEST_CASE("moist virtual temperature",
   elements.random_init(num_elems);
 
   TestType test_functor(elements);
+
   sync_to_host(elements.m_qdp, test_functor.qdp);
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
   sync_to_host(elements.m_t, test_functor.temperature);
@@ -829,7 +835,7 @@ TEST_CASE("moist virtual temperature",
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
 
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
+  sync_to_host(test_functor.functor.m_buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -884,12 +890,13 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
       "source omega p", num_elems);
   genRandArray(source_omega_p, engine,
                std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(source_omega_p, elements.buffers.omega_p);
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90("omega p f90",
                                                                  num_elems);
 
   TestType test_functor(elements);
+  sync_to_device(source_omega_p, test_functor.functor.m_buffers.omega_p);
+
   sync_to_host(elements.m_omega_p, omega_p_f90);
   test_functor.run_functor();
   sync_to_host(elements.m_omega_p, test_functor.omega_p);
@@ -897,7 +904,7 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
 
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
+  sync_to_host(test_functor.functor.m_buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -969,7 +976,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
 
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  sync_to_device_i2p(eta_dot, test_functor.functor.m_buffers.eta_dot_dpdn_buf);
   sync_to_host_p2i(elements.m_eta_dot_dpdn, eta_dot_total_f90);
   //will run on device
   test_functor.run_functor();
@@ -1022,13 +1029,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
+
   //random init host views
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
-  genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_device(sdot_sum, elements.buffers.sdot_sum);
 //only hybi is used, should the rest be quiet_nans? yes
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
@@ -1055,18 +1059,20 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
 
   constexpr int rsplit = 0;
   TestType test_functor(elements,rsplit);
+  sync_to_device(div_vdp, test_functor.functor.m_buffers.div_vdp);
+  sync_to_device_i2p(eta_dot, test_functor.functor.m_buffers.eta_dot_dpdn_buf);
+  sync_to_device(sdot_sum, test_functor.functor.m_buffers.sdot_sum);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
 
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                          TestType::dt, TestType::eta_ave_w, false);
 
-
   //will run on device
   test_functor.run_functor();
 
-  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
-  sync_to_host(elements.buffers.sdot_sum, sdot_sum);
+  sync_to_host_p2i(test_functor.functor.m_buffers.eta_dot_dpdn_buf, eta_dot);
+  sync_to_host(test_functor.functor.m_buffers.sdot_sum, sdot_sum);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
@@ -1141,10 +1147,6 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
 
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
-  sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
-
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
@@ -1155,14 +1157,18 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   deep_copy(v_vadv_f90, v_vadv);
 
   TestType test_functor(elements);
+  sync_to_device_i2p(eta_dot, test_functor.functor.m_buffers.eta_dot_dpdn_buf);
+  sync_to_device(t_vadv,  test_functor.functor.m_buffers.t_vadv_buf);
+  sync_to_device(v_vadv,  test_functor.functor.m_buffers.v_vadv_buf);
+
   test_functor.run_functor();
 
   const int n0 = test_functor.n0;
 
   //now copy buffer vals back to test values
-  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
-  sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
-  sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
+  sync_to_host_p2i(test_functor.functor.m_buffers.eta_dot_dpdn_buf, eta_dot);
+  sync_to_host(test_functor.functor.m_buffers.t_vadv_buf, t_vadv);
+  sync_to_host(test_functor.functor.m_buffers.v_vadv_buf, v_vadv);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
