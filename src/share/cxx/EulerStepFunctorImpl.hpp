@@ -15,6 +15,23 @@
 #include "BoundaryExchange.hpp"
 #include "profiling.hpp"
 
+namespace Kokkos {
+struct Real2 {
+  Homme::Real v[2];
+  KOKKOS_FORCEINLINE_FUNCTION Real2 () { v[0] = v[1] = 0; }
+  KOKKOS_FORCEINLINE_FUNCTION Real2 operator+= (const Real2& o) const {
+    Real2 r;
+    r.v[0] = v[0] + o.v[0];
+    r.v[1] = v[1] + o.v[1];
+    return r;
+  }
+};
+
+template<> struct reduction_identity<Real2> {
+  KOKKOS_FORCEINLINE_FUNCTION static Real2 sum() { return Real2(); }
+};
+}
+
 namespace Homme {
 
 class EulerStepFunctorImpl {
@@ -207,7 +224,6 @@ public:
 
   struct AALSetupPhase {};
   struct AALTracerPhase {};
-  struct AALFusedPhases {};
 
   void advect_and_limit() {
     profiling_resume();
@@ -223,7 +239,6 @@ public:
       *this);
     ExecSpace::fence();
     m_kernel_will_run_limiters = false;
-    ExecSpace::fence();
     profiling_pause();
   }
 
@@ -237,16 +252,6 @@ public:
   void operator() (const AALTracerPhase&, const TeamMember& team) const {
     KernelVariables kv(team, m_data.qsize);
     run_tracer_phase(kv);
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const AALFusedPhases&, const TeamMember& team) const {
-    KernelVariables kv(team);
-    run_setup_phase(kv);
-    for (kv.iq = 0; kv.iq < m_data.qsize; ++kv.iq)
-    {
-      run_tracer_phase(kv);
-    }
   }
 
   struct PrecomputeDivDp {};
@@ -283,22 +288,29 @@ public:
   }
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
-    const auto qdp    = m_elements.m_qdp;
-    const int qsize   = m_data.qsize;
-
+    const int qsize = m_data.qsize;
+    const auto qdp = m_elements.m_qdp;
     const Real rkstage = 3.0;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,m_elements.num_elems()*m_data.qsize*NP*NP*NUM_LEV),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
-      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-      const int jgp  =   (idx / NUM_LEV) % NP;
-      const int ilev =    idx % NUM_LEV;
-
-      qdp(ie,np1_qdp,iq,igp,jgp,ilev) =
-            (qdp(ie,n0_qdp,iq,igp,jgp,ilev) +
-             (rkstage-1)*qdp(ie,np1_qdp,iq,igp,jgp,ilev)) / rkstage;
-    });
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()*m_data.qsize),
+      KOKKOS_LAMBDA(const TeamMember& team) {
+        KernelVariables kv(team, qsize);
+        const auto qdp_n0 = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
+        const auto qdp_np1 = Homme::subview(qdp, kv.ie, np1_qdp, kv.iq);
+        Kokkos::parallel_for(
+          Kokkos::TeamThreadRange(kv.team, NP*NP),
+          [&] (const int& idx) {
+            const int i = idx / NP;
+            const int j = idx % NP;
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+               qdp_np1(i,j,ilev) =
+                 (qdp_n0(i,j,ilev) + (rkstage-1)*qdp_np1(i,j,ilev)) /
+                 rkstage;
+            });
+          });
+      });
   }
 
   void compute_qmin_qmax() {
@@ -306,65 +318,55 @@ public:
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
-    const Real dt = m_data.dt;
+    const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_elements.m_qdp;
     const auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
     const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
-    Kokkos::RangePolicy<ExecSpace> policy1(0, m_elements.num_elems() * m_data.qsize *
-                                                  NP * NP * NUM_LEV);
-    Kokkos::parallel_for(policy1, KOKKOS_LAMBDA(const int &loop_idx) {
-      const int ie = (((loop_idx / NUM_LEV) / NP) / NP) / qsize;
-      const int q = (((loop_idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp = ((loop_idx / NUM_LEV) / NP) % NP;
-      const int jgp = (loop_idx / NUM_LEV) % NP;
-      const int lev = loop_idx % NUM_LEV;
-
-      Scalar dp = derived_dp(ie, igp, jgp, lev) -
-                  rhs_multiplier * dt *
-                      derived_divdp_proj(ie, igp, jgp, lev);
-
-      Scalar tmp = qdp(ie, n0_qdp, q, igp, jgp, lev) / dp;
-      qtens_biharmonic(ie, q, igp, jgp, lev) = tmp;
-    });
-    ExecSpace::fence();
-
-    Kokkos::RangePolicy<ExecSpace> policy2(0, m_elements.num_elems() * m_data.qsize *
-                                                  NUM_LEV);
-    if (m_data.rhs_multiplier == 1.0) {
-      Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / qsize;
-        const int q = (loop_idx / NUM_LEV) % qsize;
-        const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
-        Scalar max_biharmonic = min_biharmonic;
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
+    const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
+    ThreadPreferences tp;
+    tp.max_threads_usable = NUM_LEV;
+    tp.max_vectors_usable = 1;
+    const auto tv =
+      DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+        num_parallel_iterations, tp);
+    Kokkos::TeamPolicy<ExecSpace> policy(num_parallel_iterations,
+                                         tv.first, tv.second);
+    Kokkos::parallel_for(
+      policy,
+      KOKKOS_LAMBDA (const TeamMember& team) {
+        KernelVariables kv(team, qsize);
+        const auto dp_t = Homme::subview(derived_dp, kv.ie);
+        const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
+        const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
+        const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
+        const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
+        for (int i = 0; i < NP; ++i)
+          for (int j = 0; j < NP; ++j) {
+            if (rhs_multiplier != 1.0 && i == 0 && j == 0) {
+              Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                [&] (const int& k) {
+                  const auto v = qdp_t(i,j,k) /
+                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
+                  qtens_biharmonic_t(i,j,k) = v;
+                  qlim_t(0,k) = v;
+                  qlim_t(1,k) = v;
+                });
+            } else {
+              Kokkos::parallel_for(
+                Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+                [&] (const int& k) {
+                  const auto v = qdp_t(i,j,k) /
+                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
+                  qtens_biharmonic_t(i,j,k) = v;
+                  qlim_t(0,k) = min(qlim_t(0,k), v);
+                  qlim_t(1,k) = max(qlim_t(1,k), v);
+                });
+            }
           }
-        }
-        qlim(ie, q, 0, lev) = min(qlim(ie, q, 0, lev), min_biharmonic);
-        qlim(ie, q, 1, lev) = max(qlim(ie, q, 1, lev), max_biharmonic);
       });
-    } else {
-      Kokkos::parallel_for(policy2, KOKKOS_LAMBDA(const int &loop_idx) {
-        const int ie = (loop_idx / NUM_LEV) / qsize;
-        const int q = (loop_idx / NUM_LEV) % qsize;
-        const int lev = loop_idx % NUM_LEV;
-        Scalar min_biharmonic = qtens_biharmonic(ie, q, 0, 0, lev);
-        Scalar max_biharmonic = min_biharmonic;
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            min_biharmonic = min(min_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-            max_biharmonic = max(max_biharmonic, qtens_biharmonic(ie, q, igp, jgp, lev));
-          }
-        }
-        qlim(ie, q, 0, lev) = min_biharmonic;
-        qlim(ie, q, 1, lev) = max_biharmonic;
-      });
-    }
     ExecSpace::fence();
   }
 
@@ -440,9 +442,7 @@ public:
         minmax_and_biharmonic();
       }
     }
-    GPTLstart("advance_qdp");
     advect_and_limit();
-    GPTLstop("advance_qdp");
     exchange_qdp_dss_var();
   }
 
@@ -458,10 +458,6 @@ private:
     compute_vstar_qdp(kv);
     compute_qtens(kv);
     kv.team_barrier();
-    if (m_data.rhs_viss != 0.0) {
-      add_hyperviscosity(kv);
-      kv.team_barrier();
-    }
     if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
       kv.team_barrier();
@@ -519,24 +515,20 @@ private:
   KOKKOS_INLINE_FUNCTION
   void compute_vstar_qdp (const KernelVariables& kv) const {
     const auto NP2 = NP * NP;
+    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
+    const auto q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
+    const auto vstar = Homme::subview(m_elements.buffers.vstar, kv.ie);
+
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP2),
       [&] (const int loop_idx) {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
 
-        const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
-          qdp   = Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
-        const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-          q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-        const ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>
-          v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
-
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-          v_buf(0,igp,jgp,ilev) = (m_elements.buffers.vstar(kv.ie, 0, igp, jgp, ilev) *
-                                   qdp(igp, jgp, ilev));
-          v_buf(1,igp,jgp,ilev) = (m_elements.buffers.vstar(kv.ie, 1, igp, jgp, ilev) *
-                                   qdp(igp, jgp, ilev));
+          v_buf(0,igp,jgp,ilev) = vstar(0, igp, jgp, ilev) * qdp(igp, jgp, ilev);
+          v_buf(1,igp,jgp,ilev) = vstar(1, igp, jgp, ilev) * qdp(igp, jgp, ilev);
           q_buf(igp,jgp,ilev) = qdp(igp,jgp,ilev);
         });
       }
@@ -545,32 +537,11 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void compute_qtens (const KernelVariables& kv) const {
-    const auto dvv = m_deriv.get_dvv();
-    const ExecViewUnmanaged<const Real[NP][NP]>
-      metdet = Homme::subview(m_elements.m_metdet, kv.ie);
-    const ExecViewUnmanaged<const Real[2][2][NP][NP]>
-      dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     m_sphere_ops.divergence_sphere_update(
-      kv, -m_data.dt, 1.0,
+      kv, -m_data.dt, m_data.rhs_viss != 0.0,
       Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
+      Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void add_hyperviscosity (const KernelVariables& kv) const {
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
-    Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(kv.team, NP * NP),
-      [&] (const int loop_idx) {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        Kokkos::parallel_for(
-          Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-          [&] (const int& ilev) {
-            qtens(igp, jgp, ilev) += qtens_biharmonic(igp, jgp, ilev);
-          });
-      });
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -636,18 +607,14 @@ private:
             x[k] = ptens(i,j,vpi)[vsi]/dpm;
           });
 
-        Real sumc = 0;
-        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& sumc) {
-            sumc += c[k];
-          }, sumc);
-        if (sumc <= 0) return; //! this should never happen, but if it does, dont limit
-        Real mass = 0;
-        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& mass) {
-            mass += x[k]*c[k];
-          }, mass);
+        Kokkos::Real2 sums;
+        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Kokkos::Real2& sums) {
+            sums.v[0] += x[k]*c[k];
+            sums.v[1] += c[k];
+          }, sums);
+        if (sums.v[1] <= 0) return; //! this should never happen, but if it does, dont limit
 
         Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
-
         // This is a slightly different spot than where this comment came from,
         // but it's logically equivalent to do it here.
         //! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
@@ -660,12 +627,12 @@ private:
         //! due to roundoff errors
         // This is technically a write race condition, but the same value is
         // being written, so it doesn't matter.
-        if (mass < minp*sumc)
-          minp = qlim(0,vpi)[vsi] = mass/sumc;
-        if (mass > maxp*sumc)
-          maxp = qlim(1,vpi)[vsi] = mass/sumc;
+        if (sums.v[0] < minp*sums.v[1])
+          minp = qlim(0,vpi)[vsi] = sums.v[0]/sums.v[1];
+        if (sums.v[0] > maxp*sums.v[1])
+          maxp = qlim(1,vpi)[vsi] = sums.v[0]/sums.v[1];
 
-        limit(team, mass, minp, maxp, x.data(), c.data());
+        limit(team, sums.v[0], minp, maxp, x.data(), c.data());
 
         Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
             const int i = k / NP, j = k % NP;
@@ -694,13 +661,15 @@ public: // Expose for unit testing.
         for (int iter = 0; iter < maxiter; ++iter) {
           Real addmass = 0;
           Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
+              Real delta = 0;
               if (x[k] > maxp) {
-                addmass += (x[k] - maxp)*c[k];
+                delta = x[k] - maxp;
                 x[k] = maxp;
               } else if (x[k] < minp) {
-                addmass += (x[k] - minp)*c[k];
+                delta = x[k] - minp;
                 x[k] = minp;
               }
+              addmass += delta*c[k];
             }, addmass);
 
           if (std::abs(addmass) <= tol_limiter*std::abs(mass))
@@ -749,13 +718,15 @@ public: // Expose for unit testing.
         // Clip.
         Real addmass = 0;
         Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& addmass) {
+            Real delta = 0;
             if (x[k] > maxp) {
-              addmass += (x[k] - maxp)*c[k];
+              delta = x[k] - maxp;
               x[k] = maxp;
             } else if (x[k] < minp) {
-              addmass += (x[k] - minp)*c[k];
+              delta = x[k] - minp;
               x[k] = minp;
             }
+            addmass += delta*c[k];
           }, addmass);
 
         // No need for a tol: this isn't iterative. If it happens to be exactly

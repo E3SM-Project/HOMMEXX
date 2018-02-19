@@ -416,8 +416,9 @@ public:
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
   divergence_sphere_update (const KernelVariables &kv,
-                            const Real alpha, const Real beta,
+                            const Real alpha, const bool add_hyperviscosity,
                             const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qtens_biharmonic,
                             const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
@@ -451,8 +452,9 @@ public:
           dvdy += dvv(igp, kgp) * gv(1, kgp, jgp, ilev);
         }
 
-        div_v(igp,jgp,ilev) *= beta;
         div_v(igp,jgp,ilev) += alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth));
+        if (add_hyperviscosity)
+          div_v(igp,jgp,ilev) += qtens_biharmonic(igp,jgp,ilev);
       });
     });
     kv.team_barrier();
