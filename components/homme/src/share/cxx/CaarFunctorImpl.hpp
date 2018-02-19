@@ -85,32 +85,16 @@ public:
     const int num_scalar_buffers = 6;
     const int num_vector_buffers = 3;
 
-    const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
-
-    const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
-
-    const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
-    const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
-
-    const int scalar_buffer_size = scalar_view_padding + m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int vector_buffer_size = vector_view_padding + m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
 
     return  num_scalar_buffers*scalar_buffer_size +
             num_vector_buffers*vector_buffer_size;
   }
 
   void init_buffers (Real* raw_buffer, const size_t buffer_size) {
-    const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
-
-    const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
-
-    const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
-    const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
-
-    const int scalar_buffer_size = scalar_view_padding + scalar_view_size;
-    const int vector_buffer_size = vector_view_padding + vector_view_size;
+    const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
 
     const int ne = m_elements.num_elems();
 
