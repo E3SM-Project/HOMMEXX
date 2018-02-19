@@ -82,43 +82,35 @@ public:
   }
 
   size_t buffers_size () const {
-    const int num_scalar_buffers = 5;
-    const int num_interf_buffers = 1;
+    const int num_scalar_buffers = 6;
     const int num_vector_buffers = 3;
 
     const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
     const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int interf_view_size = m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
 
     const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
 
     const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
     const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
-    const int interf_view_padding = (mem_alignment - (interf_view_size % mem_alignment) ) % mem_alignment;
 
     const int scalar_buffer_size = scalar_view_padding + m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
     const int vector_buffer_size = vector_view_padding + m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int interf_buffer_size = interf_view_padding + m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
 
     return  num_scalar_buffers*scalar_buffer_size +
-            num_interf_buffers*interf_buffer_size +
             num_vector_buffers*vector_buffer_size;
   }
 
   void init_buffers (Real* raw_buffer, const size_t buffer_size) {
     const int scalar_view_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
     const int vector_view_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
-    const int interf_view_size = m_elements.num_elems()*NP*NP*NUM_LEV_P*VECTOR_SIZE;
 
     const int mem_alignment = Kokkos::Impl::MEMORY_ALIGNMENT;
 
     const int scalar_view_padding = (mem_alignment - (scalar_view_size % mem_alignment) ) % mem_alignment;
     const int vector_view_padding = (mem_alignment - (vector_view_size % mem_alignment) ) % mem_alignment;
-    const int interf_view_padding = (mem_alignment - (interf_view_size % mem_alignment) ) % mem_alignment;
 
     const int scalar_buffer_size = scalar_view_padding + scalar_view_size;
     const int vector_buffer_size = vector_view_padding + vector_view_size;
-    const int interf_buffer_size = interf_view_padding + interf_view_size;
 
     const int ne = m_elements.num_elems();
 
@@ -141,7 +133,7 @@ public:
     m_buffers.t_vadv_buf        = ScalarViewUnmanaged(ptr(raw_buffer),ne);
     raw_buffer += scalar_buffer_size;
     m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
-    raw_buffer += interf_buffer_size;
+    raw_buffer += scalar_buffer_size;
 
     m_buffers.vdp               = VectorViewUnmanaged(ptr(raw_buffer),ne);
     m_buffers.temperature_grad  = VectorViewUnmanaged(ptr(raw_buffer),ne);
@@ -195,17 +187,17 @@ public:
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         // pre-fill energy_grad with the pressure(_grad)-temperature part
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) =
+        m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) =
             PhysicalConstants::Rgas *
-            (m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) /
-             m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)) *
-            m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev);
+            (m_buffers.temperature_virt(kv.ie, igp, jgp, ilev) /
+             m_buffers.pressure(kv.ie, igp, jgp, ilev)) *
+            m_buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev);
 
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) =
+        m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) =
             PhysicalConstants::Rgas *
-            (m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) /
-             m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)) *
-            m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+            (m_buffers.temperature_virt(kv.ie, igp, jgp, ilev) /
+             m_buffers.pressure(kv.ie, igp, jgp, ilev)) *
+            m_buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
 
         // Kinetic energy + PHI (geopotential energy) +
         Scalar k_energy =
@@ -213,15 +205,15 @@ public:
                        m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) +
                    m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
                        m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev));
-        m_elements.buffers.ephi(kv.ie, igp, jgp, ilev) =
+        m_buffers.ephi(kv.ie, igp, jgp, ilev) =
             k_energy + m_elements.m_phi(kv.ie, igp, jgp, ilev);
       });
     });
     kv.team_barrier();
 
     m_sphere_ops.gradient_sphere_update(kv,
-        Homme::subview(m_elements.buffers.ephi, kv.ie),
-        Homme::subview(m_elements.buffers.energy_grad, kv.ie));
+        Homme::subview(m_buffers.ephi, kv.ie),
+        Homme::subview(m_buffers.energy_grad, kv.ie));
   } // TESTED 1
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
@@ -278,7 +270,7 @@ public:
 
     m_sphere_ops.vorticity_sphere(kv,
         Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.vorticity, kv.ie));
+        Homme::subview(m_buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -287,37 +279,37 @@ public:
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         // Recycle vort to contain (fcor+vort)
-        m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev) +=
+        m_buffers.vorticity(kv.ie, igp, jgp, ilev) +=
             m_elements.m_fcor(kv.ie, igp, jgp);
 
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
+        m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
+        m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+            (rsplit_gt0 ? 0 : - m_buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+            m_buffers.vorticity(kv.ie, igp, jgp, ilev);
 
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
+        m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
+        m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+            (rsplit_gt0 ? 0 : - m_buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-            m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
+            m_buffers.vorticity(kv.ie, igp, jgp, ilev);
 
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
-        m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
+        m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
+        m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             m_elements.m_v(kv.ie, m_data.nm1, 0, igp, jgp, ilev);
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= m_data.dt;
-        m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
+        m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= m_data.dt;
+        m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             m_elements.m_v(kv.ie, m_data.nm1, 1, igp, jgp, ilev);
 
         // Velocity at np1 = spheremp * buffer
         m_elements.m_v(kv.ie, m_data.np1, 0, igp, jgp, ilev) =
             m_elements.m_spheremp(kv.ie, igp, jgp) *
-            m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev);
+            m_buffers.energy_grad(kv.ie, 0, igp, jgp, ilev);
         m_elements.m_v(kv.ie, m_data.np1, 1, igp, jgp, ilev) =
             m_elements.m_spheremp(kv.ie, igp, jgp) *
-            m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev);
+            m_buffers.energy_grad(kv.ie, 1, igp, jgp, ilev);
       });
     });
     kv.team_barrier();
@@ -333,7 +325,7 @@ public:
       const int jgp = idx % NP;
       for(int k = 0; k < NUM_LEV; ++k){
         m_elements.m_eta_dot_dpdn(kv.ie, igp, jgp, k) +=
-           m_data.eta_ave_w * m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k);
+           m_data.eta_ave_w * m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, k);
       }//k loop
     });
     kv.team_barrier();
@@ -348,7 +340,7 @@ public:
       const int igp = idx / NP;
       const int jgp = idx % NP;
 
-      m_elements.buffers.sdot_sum(kv.ie, igp, jgp) = 0.0;
+      m_buffers.sdot_sum(kv.ie, igp, jgp) = 0.0;
 
       for(int k = 0; k < NUM_PHYSICAL_LEV-1; ++k){
         const int ilev = k / VECTOR_SIZE;
@@ -356,28 +348,28 @@ public:
         const int kp1 = k+1;
         const int ilevp1 = kp1 / VECTOR_SIZE;
         const int ivecp1 = kp1 % VECTOR_SIZE;
-        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) +=
-           m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
-        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
-           m_elements.buffers.sdot_sum(kv.ie, igp, jgp);
+        m_buffers.sdot_sum(kv.ie, igp, jgp) +=
+           m_buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+        m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilevp1)[ivecp1] =
+           m_buffers.sdot_sum(kv.ie, igp, jgp);
       }//k loop
       //one more entry for sdot, separately, cause eta_dot_ is not of size LEV+1
       {
         const int ilev = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
         const int ivec = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
-        m_elements.buffers.sdot_sum(kv.ie, igp, jgp) +=
-           m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
+        m_buffers.sdot_sum(kv.ie, igp, jgp) +=
+           m_buffers.div_vdp(kv.ie, igp, jgp, ilev)[ivec];
       }
 
       //note that index starts from 1
       for(int k = 1; k < NUM_PHYSICAL_LEV; ++k){
         const int ilev = k / VECTOR_SIZE;
         const int ivec = k % VECTOR_SIZE;
-        m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] =
-           m_hvcoord.hybrid_bi(k)*m_elements.buffers.sdot_sum(kv.ie, igp, jgp) -
-           m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
+        m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec] =
+           m_hvcoord.hybrid_bi(k)*m_buffers.sdot_sum(kv.ie, igp, jgp) -
+           m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev)[ivec];
       }//k loop
-      m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
+      m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, 0)[0] = 0.0;
     });//NP*NP loop
     kv.team_barrier();
   }//TESTED against compute_eta_dot_dpdn_vertadv_euler_c_int
@@ -419,7 +411,7 @@ public:
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
+        m_buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
             m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev);
       });
     });
@@ -440,7 +432,7 @@ public:
                     m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
         Qt *= (PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0);
         Qt += 1.0;
-        m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
+        m_buffers.temperature_virt(kv.ie, igp, jgp, ilev) =
             m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev) * Qt;
       });
     });
@@ -458,26 +450,26 @@ public:
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        m_elements.buffers.vdp(kv.ie, 0, igp, jgp, ilev) =
+        m_buffers.vdp(kv.ie, 0, igp, jgp, ilev) =
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
-        m_elements.buffers.vdp(kv.ie, 1, igp, jgp, ilev) =
+        m_buffers.vdp(kv.ie, 1, igp, jgp, ilev) =
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
             m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         m_elements.m_derived_vn0(kv.ie, 0, igp, jgp, ilev) +=
-            m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 0, igp, jgp, ilev);
+            m_data.eta_ave_w * m_buffers.vdp(kv.ie, 0, igp, jgp, ilev);
 
         m_elements.m_derived_vn0(kv.ie, 1, igp, jgp, ilev) +=
-            m_data.eta_ave_w * m_elements.buffers.vdp(kv.ie, 1, igp, jgp, ilev);
+            m_data.eta_ave_w * m_buffers.vdp(kv.ie, 1, igp, jgp, ilev);
       });
     });
     kv.team_barrier();
 
     m_sphere_ops.divergence_sphere(kv,
-        Homme::subview(m_elements.buffers.vdp, kv.ie),
-        Homme::subview(m_elements.buffers.div_vdp, kv.ie));
+        Homme::subview(m_buffers.vdp, kv.ie),
+        Homme::subview(m_buffers.div_vdp, kv.ie));
   } // TESTED 8
 
   // Depends on T_current, DERIVE_UN0, DERIVED_VN0, METDET,
@@ -501,7 +493,7 @@ public:
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         m_elements.m_omega_p(kv.ie, igp, jgp, ilev) +=
-            m_data.eta_ave_w * m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+            m_data.eta_ave_w * m_buffers.omega_p(kv.ie, igp, jgp, ilev);
       });
     });
     kv.team_barrier();
@@ -516,7 +508,7 @@ public:
 
     m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
-        Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
+        Homme::subview(m_buffers.temperature_grad, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -527,16 +519,16 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         const Scalar vgrad_t =
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-                m_elements.buffers.temperature_grad(kv.ie, 0, igp, jgp, ilev) +
+                m_buffers.temperature_grad(kv.ie, 0, igp, jgp, ilev) +
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-                m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
+                m_buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         const Scalar ttens =
-              (rsplit_gt0 ? 0 : - m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
+              (rsplit_gt0 ? 0 : - m_buffers.t_vadv_buf(kv.ie, igp, jgp, ilev))
                   - vgrad_t
                   + PhysicalConstants::kappa *
-                    m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
-                    m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
+                    m_buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
+                    m_buffers.omega_p(kv.ie, igp, jgp, ilev);
         Scalar temp_np1 = ttens * m_data.dt +
                           m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
         temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
@@ -555,16 +547,16 @@ public:
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        Scalar tmp = m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
+        Scalar tmp = m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
         tmp.shift_left(1);
         tmp[VECTOR_SIZE - 1] =
           (ilev + 1 < NUM_LEV) ?
-          m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
+          m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
           0;
         // Add div_vdp before subtracting the previous value to eta_dot_dpdn
         // This will hopefully reduce numeric error
-        tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
-        tmp -= m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
+        tmp += m_buffers.div_vdp(kv.ie, igp, jgp, ilev);
+        tmp -= m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
         tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
               tmp * m_data.dt;
 
@@ -594,15 +586,15 @@ public:
 
       //lets do this 1/dp thing to make it bfb with F and follow F for extra (), not clear why
       Real facp = (0.5 * 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                       * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
+                       * m_buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
       Real facm;
-      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
+      m_buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                   facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]       );
-      m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+      m_buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
                   facp * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec]       );
-      m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+      m_buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
                   facp * (m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilevp1)[ivecp1] -
                           m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev)[ivec]       );
 
@@ -617,25 +609,25 @@ public:
         const int ivecp1 = kp1 % VECTOR_SIZE;
 
         facp = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                   * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
+                   * m_buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilevp1)[ivecp1];
         facm = 0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
-                   * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
+                   * m_buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
 
-        m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
+        m_buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevp1)[ivecp1] -
                            m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] )
                    +
                    facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
                            m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
 
-        m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+        m_buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevp1)[ivecp1] -
                            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec] )
                    +
                    facm * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec] -
                            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevm1)[ivecm1] );
 
-        m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+        m_buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
                    facp * (m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilevp1)[ivecp1] -
                            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev)[ivec] )
                    +
@@ -651,17 +643,17 @@ public:
       const int ivecm1 = km1 % VECTOR_SIZE;
       //note the (), just to comply with F
       facm = (0.5 * ( 1 / m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec]) )
-           * m_elements.buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
+           * m_buffers.eta_dot_dpdn_buf(kv.ie , igp, jgp, ilev)[ivec];
 
-      m_elements.buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
+      m_buffers.t_vadv_buf(kv.ie, igp, jgp, ilev)[ivec] =
                   facm * (m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilev)[ivec] -
                           m_elements.m_t(kv.ie, m_data.n0, igp, jgp, ilevm1)[ivecm1] );
 
-      m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
+      m_buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)[ivec] =
                   facm * (m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev)[ivec] -
                           m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilevm1)[ivecm1] );
 
-      m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
+      m_buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)[ivec] =
                   facm * (m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev)[ivec] -
                           m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilevm1)[ivecm1] );
 
@@ -705,7 +697,7 @@ private:
                                 ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE) :
                                 VECTOR_SIZE-1);
 
-        auto p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        auto p = m_buffers.pressure(kv.ie, igp, jgp, ilev);
         const auto& dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
 
         for (int iv=0; iv<=vector_end; ++iv) {
@@ -715,7 +707,7 @@ private:
           p_prev = p[iv];
           dp_prev = dp[iv];
         }
-        m_elements.buffers.pressure(kv.ie, igp, jgp, ilev) = p;
+        m_buffers.pressure(kv.ie, igp, jgp, ilev) = p;
       };
     });
     kv.team_barrier();
@@ -737,7 +729,7 @@ private:
         const int ilev = level / VECTOR_SIZE;
         const int ivec = level % VECTOR_SIZE;
 
-        Real& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev)[ivec];
+        Real& p = m_buffers.pressure(kv.ie, igp, jgp, ilev)[ivec];
         const Real dp = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec];
 
         // p[k] = p[k-1] + 0.5*(dp[k-1] + dp[k])
@@ -772,9 +764,9 @@ private:
 
         const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
         auto& phi = m_elements.m_phi(kv.ie, igp, jgp, ilev);
-        const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
+        const auto& t_v  = m_buffers.temperature_virt(kv.ie, igp, jgp, ilev);
         const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
-        const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+        const auto& p    = m_buffers.pressure(kv.ie, igp, jgp, ilev);
 
         // Precompute this product as a SIMD operation
         const auto rgas_tv_dp_over_p = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
@@ -814,14 +806,14 @@ private:
       const int jgp = loop_idx % NP;
 
       // Use a currently unused buffer to store one column of data.
-      const auto rgas_tv_dp_over_p = Homme::subview(m_elements.buffers.vstar, kv.ie, 0, igp, jgp);
+      const auto rgas_tv_dp_over_p = Homme::subview(m_buffers.t_vadv_buf, kv.ie, igp, jgp);
 
       // Precompute this product as a SIMD-like operation.
       Kokkos::parallel_for(
         Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-          const auto& t_v  = m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev);
+          const auto& t_v  = m_buffers.temperature_virt(kv.ie, igp, jgp, ilev);
           const auto& dp3d = m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
-          const auto& p    = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
+          const auto& p    = m_buffers.pressure(kv.ie, igp, jgp, ilev);
 
           rgas_tv_dp_over_p(ilev) = PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
         });
@@ -859,12 +851,10 @@ private:
   typename std::enable_if<std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
     assert_vector_size_1();
-    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
-      m_elements.buffers.kernel_start_times(kv.ie) = clock();
-    });
+
     m_sphere_ops.gradient_sphere(kv,
-        Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
+        Homme::subview(m_buffers.pressure, kv.ie),
+        Homme::subview(m_buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -872,11 +862,11 @@ private:
       const int jgp = loop_idx % NP;
 
       Kokkos::single(Kokkos::PerThread(kv.team), [&] () {
-        m_elements.buffers.omega_p(kv.ie, igp, jgp, 0) = 0;
+        m_buffers.omega_p(kv.ie, igp, jgp, 0) = 0;
         for (int ilev = 1; ilev < NUM_LEV; ++ilev) {
-          m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
-            m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev - 1) +
-            m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev - 1);
+          m_buffers.omega_p(kv.ie, igp, jgp, ilev) =
+            m_buffers.omega_p(kv.ie, igp, jgp, ilev - 1) +
+            m_buffers.div_vdp(kv.ie, igp, jgp, ilev - 1);
         }
       });
 
@@ -884,18 +874,15 @@ private:
                            [&](const int ilev) {
           const Scalar vgrad_p =
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-            m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
+            m_buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-            m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+            m_buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
 
-          const auto& p = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-          m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) =
-            (vgrad_p - (m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev) +
-                        0.5 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev))) / p;
+          const auto& p = m_buffers.pressure(kv.ie, igp, jgp, ilev);
+          m_buffers.omega_p(kv.ie, igp, jgp, ilev) =
+            (vgrad_p - (m_buffers.omega_p(kv.ie, igp, jgp, ilev) +
+                        0.5 * m_buffers.div_vdp(kv.ie, igp, jgp, ilev))) / p;
       });
-    });
-    Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
-      m_elements.buffers.kernel_end_times(kv.ie) = clock();
     });
   }
 
@@ -905,8 +892,8 @@ private:
   typename std::enable_if<!std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
     m_sphere_ops.gradient_sphere(kv,
-        Homme::subview(m_elements.buffers.pressure, kv.ie),
-        Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
+        Homme::subview(m_buffers.pressure, kv.ie),
+        Homme::subview(m_buffers.pressure_grad, kv.ie));
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -922,12 +909,12 @@ private:
 
           const Scalar vgrad_p =
             m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-            m_elements.buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
+            m_buffers.pressure_grad(kv.ie, 0, igp, jgp, ilev) +
             m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-            m_elements.buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
-          auto& omega_p = m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
-          const auto& p       = m_elements.buffers.pressure(kv.ie, igp, jgp, ilev);
-          const auto& div_vdp = m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
+            m_buffers.pressure_grad(kv.ie, 1, igp, jgp, ilev);
+          auto& omega_p = m_buffers.omega_p(kv.ie, igp, jgp, ilev);
+          const auto& p       = m_buffers.pressure(kv.ie, igp, jgp, ilev);
+          const auto& div_vdp = m_buffers.div_vdp(kv.ie, igp, jgp, ilev);
 
           Scalar integration_ij;
           integration_ij[0] = integration;
