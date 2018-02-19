@@ -46,7 +46,7 @@ private:
   std::unique_ptr<HybridVCoord>           hvcoord_;
   std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
   std::shared_ptr<Connectivity>           connectivity_;
-  std::shared_ptr<KernelsBuffersManager>  kernels_buffers_manager_;
+  std::unique_ptr<KernelsBuffersManager>  kernels_buffers_manager_;
   std::shared_ptr<BMMap>                  buffers_managers_;
   std::unique_ptr<SimulationParams>       simulation_params_;
   std::unique_ptr<TimeLevel>              time_level_;
@@ -67,7 +67,7 @@ public:
   Elements& get_elements();
   Derivative& get_derivative();
   HybridVCoord& get_hvcoord();
-  std::shared_ptr<KernelsBuffersManager> get_kernels_buffers_manager();
+  KernelsBuffersManager& get_kernels_buffers_manager();
   HyperviscosityFunctor& get_hyperviscosity_functor();
   SimulationParams& get_simulation_params();
   SphereOperators& get_sphere_operators(int qsize = -1);
