@@ -181,7 +181,7 @@ struct RemapFunctor : public Remapper,
             "Check for whether the surface thicknesses are positive",
             elements.num_elems()),
         host_valid_input(Kokkos::create_mirror_view(valid_layer_thickness)),
-        m_remap(elements.num_elems(), qsize) {
+        m_remap(elements.num_elems(), this->num_to_remap()) {
     // Nothing to be done here
   }
 
@@ -223,12 +223,6 @@ struct RemapFunctor : public Remapper,
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeThicknessTag, const TeamMember &team) const {
     KernelVariables kv(team);
-#ifdef DEBUG_TRACE
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { TRACE_PRINT("computing thickness\n"); });
-    }
-#endif
     compute_ps_v(kv, Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
                  Homme::subview(m_elements.m_ps_v, kv.ie, m_data.np1));
 
@@ -265,12 +259,6 @@ struct RemapFunctor : public Remapper,
   void operator()(ComputeGridsTag, const TeamMember &team) const {
     if (num_to_remap() > 0) {
       KernelVariables kv(team);
-#ifdef DEBUG_TRACE
-      if (kv.ie == 0) {
-        Kokkos::single(Kokkos::PerTeam(kv.team),
-                       []() { TRACE_PRINT("computing grids\n"); });
-      }
-#endif
       m_remap.compute_grids_phase(
           kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
           Homme::subview(m_tgt_layer_thickness, kv.ie));
@@ -281,12 +269,6 @@ struct RemapFunctor : public Remapper,
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeRemapTag, const TeamMember &team) const {
     KernelVariables kv(team);
-#ifdef DEBUG_TRACE
-    if (kv.ie == 0) {
-      Kokkos::single(Kokkos::PerTeam(kv.team),
-                     []() { TRACE_PRINT("computing remap<true>\n"); });
-    }
-#endif
     assert(num_to_remap() != 0);
     const int var = kv.ie % num_to_remap();
     kv.ie /= num_to_remap();
@@ -325,7 +307,7 @@ struct RemapFunctor : public Remapper,
     // This runs the remap algorithm after determining it needs to
     // It also verifies the state of the simulation is valid
     // If there's nothing to remap, it will only perform the verification
-    run_functor<ComputeThicknessTag>("Remap Compute Grids Functor",
+    run_functor<ComputeThicknessTag>("Remap Thickness Functor",
                                      this->m_elements.num_elems());
     if (num_to_remap() > 0) {
       // We don't want the latency of launching an empty kernel
