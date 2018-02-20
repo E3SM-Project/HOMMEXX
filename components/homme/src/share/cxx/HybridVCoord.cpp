@@ -107,6 +107,8 @@ void HybridVCoord::compute_deltas ()
 {
   const auto host_hybrid_ai = Kokkos::create_mirror_view(hybrid_ai);
   const auto host_hybrid_bi = Kokkos::create_mirror_view(hybrid_bi);
+  Kokkos::deep_copy(host_hybrid_ai, hybrid_ai);
+  Kokkos::deep_copy(host_hybrid_bi, hybrid_bi);
 
   hybrid_ai_delta = ExecViewManaged<Scalar[NUM_LEV]>(
       "Difference in Hybrid a coordinates between consecutive interfaces");
@@ -134,7 +136,7 @@ void HybridVCoord::compute_deltas ()
     for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
       // BFB way of writing it.
       hdp0(ilev) =
-          host_hybrid_ai_delta[ilev] * ps0 + host_hybrid_bi_delta[ilev] * ps0;
+          host_hybrid_ai_delta(ilev) * ps0 + host_hybrid_bi_delta(ilev) * ps0;
     }
     Kokkos::deep_copy(dp0, hdp0);
   }
