@@ -529,18 +529,24 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
         const int igp = loop_idx / NP;
         const int jgp = loop_idx % NP;
-        pio(kv.ie, igp, jgp, 0) = 0.0;
-        pin(kv.ie, igp, jgp, 0) = 0.0;
+        ExecViewUnmanaged<Real[_ppm_consts::PIO_PHYSICAL_LEV]> pt_pio =
+            Homme::subview(pio, kv.ie, igp, jgp);
+        ExecViewUnmanaged<Real[_ppm_consts::PIN_PHYSICAL_LEV]> pt_pin =
+            Homme::subview(pin, kv.ie, igp, jgp);
+        pt_pio(0) = 0.0;
+        pt_pin(0) = 0.0;
+        ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_src_thickness =
+            Homme::subview(src_layer_thickness, igp, jgp);
+        ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_tgt_thickness =
+            Homme::subview(tgt_layer_thickness, igp, jgp);
         // scan region
-        for (int k = 1; k <= NUM_PHYSICAL_LEV; k++) {
-          const int layer_vlevel = (k - 1) / VECTOR_SIZE;
-          const int layer_vector = (k - 1) % VECTOR_SIZE;
-          pio(kv.ie, igp, jgp, k) =
-              pio(kv.ie, igp, jgp, k - 1) +
-              src_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
-          pin(kv.ie, igp, jgp, k) =
-              pin(kv.ie, igp, jgp, k - 1) +
-              tgt_layer_thickness(igp, jgp, layer_vlevel)[layer_vector];
+        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
+          const int layer_vlevel = k / VECTOR_SIZE;
+          const int layer_vector = k % VECTOR_SIZE;
+          pt_pio(k + 1) =
+              pt_pio(k) + pt_src_thickness(layer_vlevel)[layer_vector];
+          pt_pin(k + 1) =
+              pt_pin(k) + pt_tgt_thickness(layer_vlevel)[layer_vector];
         } // k loop
 
         // This is here to allow an entire block of k
@@ -549,14 +555,13 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // domain that is larger.
         assert(fabs(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) -
                     pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV)) < 1.0);
-        pio(kv.ie, igp, jgp, _ppm_consts::PIO_PHYSICAL_LEV - 1) =
-            pio(kv.ie, igp, jgp, _ppm_consts::PIO_PHYSICAL_LEV - 2) + 1.0;
+        pt_pio(_ppm_consts::PIO_PHYSICAL_LEV - 1) =
+            pt_pio(_ppm_consts::PIO_PHYSICAL_LEV - 2) + 1.0;
 
         // The total mass in a column does not change.
         // Therefore, the pressure of that mass cannot
         // either.
-        pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) =
-            pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV);
+        pt_pin(NUM_PHYSICAL_LEV) = pt_pio(NUM_PHYSICAL_LEV);
       });
     });
 

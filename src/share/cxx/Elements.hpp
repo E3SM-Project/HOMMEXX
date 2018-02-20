@@ -121,6 +121,7 @@ public:
 
   void random_init(int num_elems, Real max_pressure = 1.0);
 
+  KOKKOS_INLINE_FUNCTION
   int num_elems() const { return m_num_elems; }
 
   // Fill the exec space views with data coming from F90 pointers

@@ -78,13 +78,6 @@ template <bool nonzero_rsplit> struct _RemapFunctorRSplit {
             eta_dot_dpdn_next - eta_dot_dpdn(kv.ie, igp, jgp, ilev)[vlev];
         src_layer_thickness(igp, jgp, ilev)[vlev] =
             tgt_layer_thickness(igp, jgp, ilev)[vlev] + dt * delta_dpdn;
-#ifdef DEBUG_TRACE
-        if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          TRACE_PRINT("src/tgt %d (%d %d): % .17e vs % .17e\n", level, ilev,
-                      vlev, src_layer_thickness(igp, jgp, ilev)[vlev],
-                      tgt_layer_thickness(igp, jgp, ilev)[vlev]);
-        }
-#endif
       });
     });
     kv.team_barrier();
@@ -257,12 +250,10 @@ struct RemapFunctor : public Remapper,
   // so it needs to be separated from the others to reduce latency on the GPU
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeGridsTag, const TeamMember &team) const {
-    if (num_to_remap() > 0) {
-      KernelVariables kv(team);
-      m_remap.compute_grids_phase(
-          kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
-          Homme::subview(m_tgt_layer_thickness, kv.ie));
-    }
+    KernelVariables kv(team);
+    m_remap.compute_grids_phase(
+        kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
+        Homme::subview(m_tgt_layer_thickness, kv.ie));
   }
 
   // This asserts if num_to_remap() == 0
@@ -411,16 +402,6 @@ private:
                            [&](const int &ilevel) {
         const int ilev = ilevel / VECTOR_SIZE;
         const int vec_lev = ilevel % VECTOR_SIZE;
-#ifdef DEBUG_TRACE
-        if (kv.ie == 0 && igp == 0 && jgp == 0) {
-          TRACE_PRINT(
-              "%d (%d, %d) ps0: % .17e, ps_v: % .17e, hybrid ai: % .17e, "
-              "hybrid bi: % .17e\n",
-              ilevel, ilev, vec_lev, m_hvcoord.ps0,
-              m_elements.m_ps_v(kv.ie, m_data.np1, igp, jgp),
-              m_hvcoord.hybrid_ai(ilevel), m_hvcoord.hybrid_bi(ilevel));
-        }
-#endif
         tgt_layer_thickness(igp, jgp, ilev)[vec_lev] =
             (m_hvcoord.hybrid_ai(ilevel + 1) - m_hvcoord.hybrid_ai(ilevel)) *
                 m_hvcoord.ps0 +
