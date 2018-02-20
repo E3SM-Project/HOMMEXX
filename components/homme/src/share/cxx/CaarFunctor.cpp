@@ -22,6 +22,7 @@ CaarFunctor::CaarFunctor()
 
   // Build functor impl
   m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
+  m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 
 CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative,
@@ -31,6 +32,7 @@ CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative,
 {
   // Build functor impl
   m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
+  m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 
 CaarFunctor::~CaarFunctor ()

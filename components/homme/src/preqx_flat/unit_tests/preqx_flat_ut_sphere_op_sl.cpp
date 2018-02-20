@@ -54,8 +54,7 @@ class compute_sphere_operator_test {
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d)),
-        sphere_ops(num_elems)
+            Kokkos::create_mirror_view(vector_output_d))
   {
     // constructor's body
     // init randonly
@@ -237,30 +236,33 @@ class compute_sphere_operator_test {
   // this could be even nicer,
   // put in a param in run_functor(param) to only branch
   // policy type
-  void run_functor_simple_laplace() const {
+  void run_functor_simple_laplace() {
     // league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagSimpleLaplace> policy(
         _num_elems, 16);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     // TO FROM
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_gradient_sphere() const {
+  void run_functor_gradient_sphere() {
     // league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagGradientSphere> policy(
         _num_elems, 16);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     // TO FROM
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_div_wk() const {
+  void run_functor_div_wk() {
     // league, team, vector_length_request=1
     Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWk>
         policy(_num_elems, 16);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     // TO FROM

@@ -124,8 +124,7 @@ class compute_sphere_operator_test_ml {
         scalar_output_host(
             Kokkos::create_mirror_view(scalar_output_d)),
         vector_output_host(
-            Kokkos::create_mirror_view(vector_output_d)),
-        sphere_ops(num_elems)
+            Kokkos::create_mirror_view(vector_output_d))
   {
     std::random_device rd;
     rngAlg engine(rd());
@@ -448,66 +447,75 @@ class compute_sphere_operator_test_ml {
 
 
 
-  void run_functor_gradient_sphere() const {
+  void run_functor_gradient_sphere() {
     // league, team, vector_length_request=1
     auto policy = Homme::get_default_team_policy<ExecSpace, TagGradientSphereML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     // TO FROM
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_divergence_sphere_wk() const {
+  void run_functor_divergence_sphere_wk() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagDivergenceSphereWkML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_laplace_wk() const {
+  void run_functor_laplace_wk() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagSimpleLaplaceML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_tensor_laplace() const {
+  void run_functor_tensor_laplace() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagTensorLaplaceML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);
   };
 
-  void run_functor_curl_sphere_wk_testcov() const {
+  void run_functor_curl_sphere_wk_testcov() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagCurlSphereWkTestCovML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_grad_sphere_wk_testcov() const {
+  void run_functor_grad_sphere_wk_testcov() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagGradSphereWkTestCovML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_vlaplace_cartesian_reduced() const {
+  void run_functor_vlaplace_cartesian_reduced() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceCartesianML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_vlaplace_contra() const {
+  void run_functor_vlaplace_contra() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagVLaplaceContraML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(vector_output_host, vector_output_d);
   };
 
-  void run_functor_vorticity_sphere_vector() const {
+  void run_functor_vorticity_sphere_vector() {
     auto policy = Homme::get_default_team_policy<ExecSpace, TagVorticityVectorML>(_num_elems);
+    sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
     Kokkos::deep_copy(scalar_output_host, scalar_output_d);

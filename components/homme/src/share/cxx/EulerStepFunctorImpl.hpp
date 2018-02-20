@@ -75,7 +75,8 @@ public:
    , m_deriv      (Context::singleton().get_derivative())
    , m_hvcoord    (Context::singleton().get_hvcoord())
    , m_sphere_ops (Context::singleton().get_sphere_operators())
-  {}
+  {
+  }
 
   void reset (const SimulationParams& params) {
     m_data.rhs_viss = 0.0;
@@ -88,6 +89,9 @@ public:
       Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
                             Errors::err_not_implemented);
     }
+
+    // This will fit the needs of all calls to sphere operators.
+    m_sphere_ops.allocate_buffers(Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()*m_data.qsize));
   }
 
   void init_boundary_exchanges () {
