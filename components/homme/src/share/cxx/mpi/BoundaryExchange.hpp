@@ -135,6 +135,8 @@ public:
 
   template<typename... Properties>
   void register_min_max_fields (ExecView<Scalar**[2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
+  template<typename... Properties>
+  void register_min_max_fields (const int ie, const int iq, ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max);
 
   // Size the buffers, and initialize the MPI types
   void registration_completed();
@@ -431,6 +433,27 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar**[2][NUM_LEV], P
   }
 
   m_num_1d_fields += num_dims;
+}
+
+template<typename... Properties>
+void BoundaryExchange::register_min_max_fields (const int ie, const int iq, ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
+  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
+
+  {
+    auto l_1d_fields     = m_1d_fields;
+    Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& idx) {
+        l_1d_fields(ie, iq, MAX_ID) = Kokkos::subview(field_min_max, etoi(MAX_ID), ALL);
+        l_1d_fields(ie, iq, MIN_ID) = Kokkos::subview(field_min_max, etoi(MIN_ID), ALL);
+      });
+  }
+
+  m_num_1d_fields = iq; // kludge
 }
 
 } // namespace Homme

@@ -101,7 +101,9 @@ public:
       BoundaryExchange& be = *m_mm_be;
       be.set_buffers_manager(bm_exchange_minmax);
       be.set_num_fields(m_data.qsize, 0, 0);
-      be.register_min_max_fields(m_t.qlim, m_data.qsize, 0);
+      for (int ie = 0; ie < m_t.d.extent_int(0); ++ie)
+        for (int q = 0; q < m_t.d.extent_int(1); ++q)
+          be.register_min_max_fields(ie, q, m_t.d(ie,q).qlim);
       be.registration_completed();
     }
 
@@ -323,7 +325,7 @@ public:
     const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_t.m_qdp;
     const auto qtens_biharmonic = m_t.qtens_biharmonic;
-    const auto qlim = m_t.qlim;
+    const auto d = m_t.d;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
@@ -343,7 +345,7 @@ public:
         const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
-        const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
+        const auto qlim_t = d(kv.ie, kv.iq).qlim;
         for (int i = 0; i < NP; ++i)
           for (int j = 0; j < NP; ++j) {
             if (rhs_multiplier != 1.0 && i == 0 && j == 0) {
@@ -549,7 +551,7 @@ private:
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
-    const auto qlim = Homme::subview(m_t.qlim, kv.ie, kv.iq);
+    const auto qlim = m_t.d(kv.ie, kv.iq).qlim;
     const auto ptens = m_t.d(kv.ie, kv.iq).qtens;
 
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);

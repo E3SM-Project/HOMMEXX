@@ -145,17 +145,17 @@ struct Tracers {
   struct Tracer {
     ExecViewUnmanaged<Scalar   [NP][NP][NUM_LEV]> qtens;
     ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> vstar_qdp;
+    ExecViewUnmanaged<Scalar[2]        [NUM_LEV]> qlim;
   };
   ExecViewManaged<Scalar*> buf;
+  ExecViewManaged<Tracer**> d; // (ie, iq)
 
   //TODO Get these into Tracer.
   // q is tracer ratio, qdp is tracer mass
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> m_Q;
   ExecViewManaged<Scalar*[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;  
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> qtens_biharmonic;
-  ExecViewManaged<Scalar**[2][NUM_LEV]> qlim; // qmin, qmax
 
-  ExecViewManaged<Tracer**> d; // (ie, iq)
   void init(int nelem, int qsize);
   void pull_qdp(CF90Ptr& state_qdp);
   void push_qdp(F90Ptr& state_qdp) const;

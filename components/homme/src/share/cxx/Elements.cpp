@@ -397,19 +397,20 @@ void Tracers::init (int nelem, int qsize) {
   m_Q = decltype(m_Q)("Q", nelem);
   m_qdp = decltype(m_qdp)("qdp", nelem);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", nelem);
-  qlim = decltype(qlim)("qlim", nelem, qsize);
 
-  buf = ExecViewManaged<Scalar*>("buf", (nelem*qsize)*(1 + 2)*(NP*NP*NUM_LEV));
+  buf = ExecViewManaged<Scalar*>("buf", (nelem*qsize)*( (1 + 2)*(NP*NP*NUM_LEV) + 2*NUM_LEV ));
   // TODO Handle runtime qsize.
-  d = ExecViewManaged<Tracer**>("tracers", nelem, QSIZE_D);
+  d = ExecViewManaged<Tracer**>("tracers", nelem, qsize);
   // TODO do this on device
   size_t os = 0;
   for (int ie = 0; ie < nelem; ++ie)
-    for (int iq = 0; iq < QSIZE_D; ++iq) {
+    for (int iq = 0; iq < qsize; ++iq) {
       d(ie,iq).qtens = decltype(d(ie,iq).qtens)(buf.data() + os);
       os += NP*NP*NUM_LEV;
       d(ie,iq).vstar_qdp = decltype(d(ie,iq).vstar_qdp)(buf.data() + os);
       os += 2*NP*NP*NUM_LEV;
+      d(ie,iq).qlim = decltype(d(ie,iq).qlim)(buf.data() + os);
+      os += 2*NUM_LEV;
     }
 }
 
