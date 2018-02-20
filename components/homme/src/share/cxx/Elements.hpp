@@ -62,33 +62,10 @@ public:
 
     BufferViews() = default;
     void init(const int num_elems);
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> temperature_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ttens;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> dptens;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vtens;
 
-    // Buffers for EulerStepFunctor
-    ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
-    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
-    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens_biharmonic;
-    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
-    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
-    ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
-    ExecViewManaged<Scalar* [QSIZE_D][2]        [NUM_LEV]>  qlim; // qmin, qmax
-
-    ExecViewManaged<Real* [NP][NP]> preq_buf;
-    // sdot_sum is used in case rsplit=0 and in energy diagnostics
-    // (not yet coded).
-    ExecViewManaged<Real* [NP][NP]> sdot_sum;
     // Buffers for spherical operators
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
