@@ -137,7 +137,7 @@ void Context::clear() {
 void Context::init_functors_buffers () {
   // Get all functors
   CaarFunctor& caar = get_caar_functor();
-  //EulerStepFunctor& esf = get_euler_step_functor();
+  EulerStepFunctor& esf = get_euler_step_functor();
   //HyperviscosityFunctor& hvf = get_hyperviscosity_functor();
   //VerticalRemapManager& vrm = get_vertical_remap_manager();
   //SphereOperators& sph = get_sphere_operators();
@@ -147,7 +147,7 @@ void Context::init_functors_buffers () {
 
   // Get the buffers requests from all functors
   kbm.request_size(caar.buffers_size());
-  //kbm.request_size(esf.buffers_size());
+  kbm.request_size(esf.buffers_size());
   //kbm.request_size(hvf.buffers_size());
   //kbm.request_size(vrm.buffers_size());
   //kbm.request_size(sph.buffers_size());
@@ -157,10 +157,10 @@ void Context::init_functors_buffers () {
 
   // Tell all functors to carve their buffers from the raw buffer in KBM
   caar.init_buffers (kbm.get_raw_buffer(),kbm.buffer_size());
-  //esf.init_buffers(kbm.get_raw_buffer());
-  //hvf.init_buffers(kbm.get_raw_buffer());
-  //vrm.init_buffers(kbm.get_raw_buffer());
-  //sph.init_buffers(kbm.get_raw_buffer());
+  esf.init_buffers(kbm.get_raw_buffer(),kbm.buffer_size());
+  //hvf.init_buffers(kbm.get_raw_buffer(),kbm.buffer_size());
+  //vrm.init_buffers(kbm.get_raw_buffer(),kbm.buffer_size());
+  //sph.init_buffers(kbm.get_raw_buffer(),kbm.buffer_size());
 
 }
 
