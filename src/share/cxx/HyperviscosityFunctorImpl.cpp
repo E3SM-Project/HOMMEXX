@@ -31,15 +31,59 @@ HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& pa
   }
 }
 
+size_t HyperviscosityFunctorImpl::buffers_size () const {
+  const int num_scalar_buffers = 4;
+  const int num_vector_buffers = 2;
+
+  const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+  const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+
+  return  num_scalar_buffers*scalar_buffer_size +
+          num_vector_buffers*vector_buffer_size;
+}
+
+void HyperviscosityFunctorImpl::init_buffers (Real* raw_buffer, const size_t buffer_size)
+{
+  const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+  const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+
+  const int ne = m_elements.num_elems();
+
+  Real* start = raw_buffer;
+
+  auto ptr = [](Real* raw_buffer) { return reinterpret_cast<Scalar*>(raw_buffer); };
+
+  // TODO: rearrange views order to maximize caching
+  m_buffers.dptens = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += scalar_buffer_size;
+  m_buffers.ttens = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += scalar_buffer_size;
+  m_buffers.vtens = VectorViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += vector_buffer_size;
+
+  m_buffers.laplace_dp = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += scalar_buffer_size;
+  m_buffers.laplace_t = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += scalar_buffer_size;
+  m_buffers.laplace_v = VectorViewUnmanaged(ptr(raw_buffer),ne);
+  raw_buffer += vector_buffer_size;
+
+  // Sanity check
+  size_t used_size = static_cast<size_t>(std::distance(start,raw_buffer));
+  assert(used_size <= buffer_size);
+  (void)used_size;    // Suppresses a warning in debug build
+  (void)buffer_size;  // Suppresses a warning in debug build
+}
+
 void HyperviscosityFunctorImpl::init_boundary_exchanges () {
   m_be = std::make_shared<BoundaryExchange>();
   auto& be = *m_be;
   auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
   be.set_buffers_manager(bm_exchange);
   be.set_num_fields(0, 0, 4);
-  be.register_field(m_elements.buffers.vtens, 2, 0);
-  be.register_field(m_elements.buffers.ttens);
-  be.register_field(m_elements.buffers.dptens);
+  be.register_field(m_buffers.vtens, 2, 0);
+  be.register_field(m_buffers.ttens);
+  be.register_field(m_buffers.dptens);
   be.registration_completed();
 }
 
