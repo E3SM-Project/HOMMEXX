@@ -462,7 +462,9 @@ private:
     compute_qtens(kv);
     kv.team_barrier();
     if (m_data.limiter_option == 8) {
+      GPTLstart("limiter");
       limiter_optim_iter_full(kv);
+      GPTLstop("limiter");
       kv.team_barrier();
     }
     apply_spheremp(kv);
@@ -575,11 +577,11 @@ private:
         x[k] = ptens(i,j,vpi)[vsi]/dpm;
       }
 
-      Real sumc = 0;
-      fork { sumc += c[k]; }
+      Real sumc = 0, mass = 0;
+#pragma ivdep
+#pragma simd
+      fork { sumc += c[k]; mass += x[k]*c[k]; }
       if (sumc <= 0) continue;
-      Real mass = 0;
-      fork { mass += x[k]*c[k]; }
 
       Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
 
@@ -593,14 +595,18 @@ private:
 
       for (int iter = 0; iter < 15; ++iter) {
         Real addmass = 0;
+#pragma ivdep
+#pragma simd
         fork {
+          Real delta = 0;
           if (x[k] > maxp) {
-            addmass += (x[k] - maxp)*c[k];
+            delta = x[k] - maxp;
             x[k] = maxp;
           } else if (x[k] < minp) {
-            addmass += (x[k] - minp)*c[k];
+            delta = x[k] - minp;
             x[k] = minp;
           }
+          addmass += delta*c[k];
         }
 
         if (std::abs(addmass) <= 5e-14*std::abs(mass))
@@ -608,30 +614,37 @@ private:
 
         Real weightssum = 0;
         if (addmass > 0) {
+#pragma ivdep
+#pragma simd
           fork {
             if (x[k] < maxp)
               weightssum += c[k];
           }
           const auto adw = addmass/weightssum;
-
+#pragma ivdep
+#pragma simd
           fork {
             if (x[k] < maxp)
               x[k] += adw;
           }
         } else {
+#pragma ivdep
+#pragma simd
           fork {
             if (x[k] > minp)
               weightssum += c[k];
           }
           const auto adw = addmass/weightssum;
-
+#pragma ivdep
+#pragma simd
           fork {
             if (x[k] > minp)
               x[k] += adw;
           }
         }
       }
-
+#pragma ivdep
+#pragma simd
       fork {
         const int i = k / NP, j = k % NP;
         ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
