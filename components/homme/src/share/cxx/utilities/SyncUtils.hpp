@@ -125,15 +125,13 @@ sync_to_host(Source_T source, Dest_T dest)
 }
 
 template <typename Source_T, typename Dest_T>
-typename std::enable_if
-  <
+typename std::enable_if<
     (exec_view_mappable<Source_T, Scalar[NP][NP][NUM_LEV]>::value &&
-     host_view_mappable<Dest_T, Real[NUM_PHYSICAL_LEV][NP][NP]>::value),
-    void
-  >::type
-sync_to_host(Source_T source, Dest_T dest)
-{
-  typename Source_T::HostMirror source_mirror = Kokkos::create_mirror_view(source);
+         host_view_mappable<Dest_T, Real[NUM_PHYSICAL_LEV][NP][NP]>::value),
+    void>::type
+sync_to_host(Source_T source, Dest_T dest) {
+  typename Source_T::HostMirror source_mirror =
+      Kokkos::create_mirror_view(source);
   Kokkos::deep_copy(source_mirror, source);
   for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
     const int ilev = level / VECTOR_SIZE;
