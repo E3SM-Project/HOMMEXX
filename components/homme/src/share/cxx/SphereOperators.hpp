@@ -16,7 +16,11 @@ namespace Homme {
 class SphereOperators
 {
   static int id (const KernelVariables& kv) {
-    return 0; //omp_get_thread_num() / kv.team.team_size();
+#ifdef KOKKOS_HAVE_OPENMP
+    return omp_get_thread_num() / kv.team.team_size();
+#else
+    return 0;
+#endif
   }
 
 public:
@@ -40,7 +44,7 @@ public:
   SphereOperators (const int num_elems, const int qsize = 1)
     : nthreads(
 #ifdef KOKKOS_HAVE_OPENMP
-      omp_get_max_threads()
+      Kokkos::OpenMP::concurrency()
 #else
       1
 #endif
