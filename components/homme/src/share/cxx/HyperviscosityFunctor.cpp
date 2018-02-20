@@ -18,6 +18,17 @@ HyperviscosityFunctor::~HyperviscosityFunctor ()
   // would be in the header file, where HyperviscosityFunctorImpl type is incomplete.
 }
 
+size_t HyperviscosityFunctor::buffers_size () const
+{
+  assert (m_hvf_impl);
+  return m_hvf_impl->buffers_size();
+}
+
+void HyperviscosityFunctor::init_buffers (Real* raw_buffer, const size_t buffer_size) {
+  assert (m_hvf_impl);
+  m_hvf_impl->init_buffers(raw_buffer, buffer_size);
+}
+
 void HyperviscosityFunctor::init_boundary_exchanges () {
   assert (m_hvf_impl);
   m_hvf_impl->init_boundary_exchanges();
