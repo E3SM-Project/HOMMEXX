@@ -71,7 +71,8 @@ public:
               host(ie, var, igp, jgp, k) =
                   std::numeric_limits<Real>::quiet_NaN();
             }
-            for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV;
+            for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV +
+                         _ppm_consts::gs;
                  k < _ppm_consts::AO_PHYSICAL_LEV; ++k) {
               host(ie, var, igp, jgp, k) =
                   std::numeric_limits<Real>::quiet_NaN();
@@ -92,8 +93,9 @@ public:
                ++k) {
             host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
           }
-          for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV;
-               k < _ppm_consts::AO_PHYSICAL_LEV; ++k) {
+          for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV +
+                       _ppm_consts::gs;
+               k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
             host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
           }
         }
@@ -312,7 +314,8 @@ public:
     REQUIRE(remap_vals.extent_int(2) == NP);
     REQUIRE(remap_vals.extent_int(3) == NP);
     REQUIRE(remap_vals.extent_int(4) == NUM_LEV);
-    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tmp = Homme::subview(remap_vals, 0, 0);
+    ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> tmp =
+        Homme::subview(remap_vals, 0, 0);
     REQUIRE(tmp.extent_int(0) == NP);
     REQUIRE(tmp.extent_int(1) == NP);
     REQUIRE(tmp.extent_int(2) == NUM_LEV);
