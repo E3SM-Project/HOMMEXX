@@ -14,6 +14,7 @@ class Comm;
 class Connectivity;
 class Derivative;
 class Elements;
+class Tracers;
 class HybridVCoord;
 class HyperviscosityFunctor;
 class SimulationParams;
@@ -41,6 +42,7 @@ private:
   std::unique_ptr<CaarFunctor>            caar_functor_;
   std::unique_ptr<Comm>                   comm_;
   std::unique_ptr<Elements>               elements_;
+  std::unique_ptr<Tracers>                tracers_;
   std::unique_ptr<Derivative>             derivative_;
   std::unique_ptr<HybridVCoord>           hvcoord_;
   std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
@@ -63,6 +65,7 @@ public:
   CaarFunctor& get_caar_functor();
   Comm& get_comm();
   Elements& get_elements();
+  Tracers& get_tracers();
   Derivative& get_derivative();
   HybridVCoord& get_hvcoord();
   HyperviscosityFunctor& get_hyperviscosity_functor();
