@@ -7,6 +7,8 @@
 #include <random>
 #include <assert.h>
 
+#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
+
 namespace Homme {
 
 void Elements::init(const int num_elems) {
@@ -398,22 +400,28 @@ void Tracers::init (int nelem, int qsize) {
   m_qdp = decltype(m_qdp)("qdp", nelem);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", nelem);
   qlim = decltype(qlim)("qlim", nelem);
-  d = ExecViewManaged<Tracer**>("tracers", nelem, qsize);
+
+  buf = ExecViewManaged<Scalar*>("buf", (nelem*qsize)*(1 + 2)*(NP*NP*NUM_LEV));
+  // TODO Handle runtime qsize.
+  d = ExecViewManaged<Tracer**>("tracers", nelem, QSIZE_D);
+  // TODO do this on device
+  size_t os = 0;
+  for (int ie = 0; ie < nelem; ++ie)
+    for (int iq = 0; iq < QSIZE_D; ++iq) {
+      d(ie,iq).qtens = decltype(d(ie,iq).qtens)(buf.data() + os);
+      os += NP*NP*NUM_LEV;
+      d(ie,iq).vstar_qdp = decltype(d(ie,iq).vstar_qdp)(buf.data() + os);
+      os += 2*NP*NP*NUM_LEV;
+    }
 }
 
-Tracers::Tracer::Tracer ()
-  : qtens(decltype(qtens)("qtens")),
-    qwrk(decltype(qwrk)("qwrk")),
-    vstar_qdp(decltype(vstar_qdp)("vstar_qdp"))
-{}
-
 void Tracers::pull_qdp(CF90Ptr &state_qdp) {
-  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(1));
+  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(0));
   sync_to_device(state_qdp_f90,m_qdp);
 }
 
 void Tracers::push_qdp(F90Ptr &state_qdp) const {
-  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(1));
+  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(0));
   sync_to_host(m_qdp, state_qdp_f90);
 }
 

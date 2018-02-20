@@ -401,7 +401,6 @@ public:
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
                   const Real rhs_multiplier, const DSSOption DSSopt) {
-
     m_data.n0_qdp         = n0_qdp;
     m_data.np1_qdp        = np1_qdp;
     m_data.dt             = dt;

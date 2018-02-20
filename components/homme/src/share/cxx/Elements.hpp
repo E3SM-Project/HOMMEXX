@@ -143,13 +143,10 @@ private:
 
 struct Tracers {
   struct Tracer {
-    // Buffers for EulerStepFunctor
-    // q is tracer ratio, qdp is tracer mass
-    ExecViewManaged<Scalar   [NP][NP][NUM_LEV]> qtens;
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]> qwrk;
-    ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]> vstar_qdp;
-    Tracer();
+    ExecViewUnmanaged<Scalar   [NP][NP][NUM_LEV]> qtens;
+    ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]> vstar_qdp;
   };
+  ExecViewManaged<Scalar*> buf;
 
   //TODO Get these into Tracer.
   // q is tracer ratio, qdp is tracer mass
