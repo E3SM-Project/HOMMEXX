@@ -38,7 +38,13 @@ public:
 
   // This one is used in the unit tests (other than by the other constructor)
   SphereOperators (const int num_elems, const int qsize = 1)
-    : nthreads( omp_get_max_threads() )
+    : nthreads(
+#ifdef KOKKOS_HAVE_OPENMP
+      omp_get_max_threads()
+#else
+      1
+#endif
+               )
     , vector_buf_sl_1 ("single-level vector buffer 1", nthreads)
     , vector_buf_sl_2 ("single-level vector buffer 2", nthreads)
     , scalar_buf_1    ("scalar buffer 1", nthreads)
