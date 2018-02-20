@@ -163,7 +163,7 @@ get_team_size (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
 
 template<typename ExecSpaceType, typename... Tags>
 typename std::enable_if<OnGpu<ExecSpaceType>::value,int>::type
-get_team_size (const Kokkos::TeamPolicy<Hommexx_Cuda,Tags...>& policy) {
+get_team_size (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
   return policy.team_size() * policy.vector_length();
 }
 
@@ -188,7 +188,7 @@ int get_team_idx<Kokkos::TeamPolicy<Hommexx_OpenMP>::member_type> (
 template<>
 KOKKOS_INLINE_FUNCTION
 int get_team_idx<Kokkos::TeamPolicy<Hommexx_Cuda>::member_type>(
-  Kokkos::TeamPolicy<Hommexx_Cuda>::member_type&)
+  const Kokkos::TeamPolicy<Hommexx_Cuda>::member_type&)
 {
   // There are gridDim.x*gridDim.y blocks in the current dispatch. Each block has
   // blockDim.x*blockDim.y*blockDim.z threads. Kokkos organizes teams so that
