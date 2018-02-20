@@ -766,9 +766,11 @@ private:
   typename std::enable_if<std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
   preq_omega_ps_impl(KernelVariables &kv) const {
     assert_vector_size_1();
+#ifdef DEBUG_TRACE
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
       m_elements.buffers.kernel_start_times(kv.ie) = clock();
     });
+#endif
     m_sphere_ops.gradient_sphere(kv,
         Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
@@ -801,9 +803,11 @@ private:
                         0.5 * m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev))) / p;
       });
     });
+#ifdef DEBUG_TRACE
     Kokkos::single(Kokkos::PerTeam(kv.team), [&] () {
       m_elements.buffers.kernel_end_times(kv.ie) = clock();
     });
+#endif
   }
 
   // Non-CUDA version
