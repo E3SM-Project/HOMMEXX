@@ -62,6 +62,12 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 static_assert (!std::is_same<ExecSpace,void>::value,
                "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
 
+template <typename ExeSpace>
+struct OnGpu { enum : bool { value = false }; };
+
+template <>
+struct OnGpu<Hommexx_Cuda> { enum : bool { value = true }; };
+
 // Call this instead of Kokkos::initialize.
 void initialize_kokkos();
 
@@ -149,6 +155,53 @@ get_default_team_policy(const int num_parallel_iterations) {
   return policy;
 }
 
+template<typename ExecSpaceType, typename... Tags>
+typename std::enable_if<!OnGpu<ExecSpaceType>::value,int>::type
+get_team_size (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
+  return policy.team_size();
+}
+
+template<typename ExecSpaceType, typename... Tags>
+typename std::enable_if<OnGpu<ExecSpaceType>::value,int>::type
+get_team_size (const Kokkos::TeamPolicy<Hommexx_Cuda,Tags...>& policy) {
+  return policy.team_size() * policy.vector_length();
+}
+
+template<typename TeamMemberType>
+KOKKOS_INLINE_FUNCTION
+int get_team_idx (const TeamMemberType&) {
+  return 0;
+}
+
+#ifdef KOKKOS_HAVE_OPENMP
+template<>
+KOKKOS_INLINE_FUNCTION
+int get_team_idx<Kokkos::TeamPolicy<Hommexx_OpenMP>::member_type> (
+  const Kokkos::TeamPolicy<Hommexx_OpenMP>::member_type& team_member)
+{
+  // Kokkos puts consecutive threads into the same team.
+  return omp_get_thread_num() / team_member.team_size();
+}
+#endif
+
+#ifdef KOKKOS_HAVE_CUDA
+template<>
+KOKKOS_INLINE_FUNCTION
+int get_team_idx<Kokkos::TeamPolicy<Hommexx_Cuda>::member_type>(
+  Kokkos::TeamPolicy<Hommexx_Cuda>::member_type&)
+{
+  // There are gridDim.x*gridDim.y blocks in the current dispatch. Each block has
+  // blockDim.x*blockDim.y*blockDim.z threads. Kokkos organizes teams so that
+  // all threads in the same team have the same threadIdx.z coordinate (and of
+  // course, a team cannot span multiple blocks). Currently, there is only one
+  // team per block (so blockDim.z=1, and threadIdx.z=0), but this may change.
+  // Therefore, there are NT = gridDim.x*gridDim.y*blockDim.z teams. The follwing
+  // formula assign a number in [0,NT) that is the same for all threads in the
+  // same team.
+  return (blockIdx.x*gridDim.y + blockIdx.y)*blockDim.z + threadIdx.z;
+}
+#endif
+
 // A templated typedef for MD range policy (used in RK stages)
 template<typename ExecutionSpace, int Rank>
 using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
@@ -160,12 +213,6 @@ using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
                               >,
                             Kokkos::IndexType<int>
                           >;
-
-template <typename ExeSpace>
-struct OnGpu { enum : bool { value = false }; };
-
-template <>
-struct OnGpu<Hommexx_Cuda> { enum : bool { value = true }; };
 
 template <typename ExeSpace>
 struct Memory {
@@ -256,7 +303,7 @@ struct Dispatch {
   {
     result = ValueType();
     for (int k = 0; k < NP*NP; ++k)
-      lambda(k, result);  
+      lambda(k, result);
   }
 };
 
