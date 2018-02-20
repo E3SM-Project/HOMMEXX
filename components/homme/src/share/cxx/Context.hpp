@@ -5,8 +5,6 @@
 #include <map>
 #include <memory>
 
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
-
 namespace Homme {
 
 class BoundaryExchange;

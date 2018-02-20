@@ -7,8 +7,6 @@
 #include <random>
 #include <assert.h>
 
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
-
 namespace Homme {
 
 void Elements::init(const int num_elems) {
