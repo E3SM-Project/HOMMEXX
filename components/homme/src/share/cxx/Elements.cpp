@@ -397,7 +397,7 @@ void Tracers::init (int nelem, int qsize) {
   m_Q = decltype(m_Q)("Q", nelem);
   m_qdp = decltype(m_qdp)("qdp", nelem);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", nelem);
-  qlim = decltype(qlim)("qlim", nelem);
+  qlim = decltype(qlim)("qlim", nelem, qsize);
 
   buf = ExecViewManaged<Scalar*>("buf", (nelem*qsize)*(1 + 2)*(NP*NP*NUM_LEV));
   // TODO Handle runtime qsize.

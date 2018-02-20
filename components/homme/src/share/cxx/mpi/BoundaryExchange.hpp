@@ -133,8 +133,8 @@ public:
   void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
                                 ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim);
 
-  template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
+  template<typename... Properties>
+  void register_min_max_fields (ExecView<Scalar**[2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
 
   // Size the buffers, and initialize the MPI types
   void registration_completed();
@@ -410,8 +410,8 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], 
   m_num_1d_fields += num_dims;
 }
 
-template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim)
+template<typename... Properties>
+void BoundaryExchange::register_min_max_fields (ExecView<Scalar**[2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim)
 {
   using Kokkos::ALL;
 

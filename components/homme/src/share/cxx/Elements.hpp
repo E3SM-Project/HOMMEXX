@@ -153,7 +153,7 @@ struct Tracers {
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> m_Q;
   ExecViewManaged<Scalar*[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;  
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> qtens_biharmonic;
-  ExecViewManaged<Scalar*[QSIZE_D][2][NUM_LEV]> qlim; // qmin, qmax
+  ExecViewManaged<Scalar**[2][NUM_LEV]> qlim; // qmin, qmax
 
   ExecViewManaged<Tracer**> d; // (ie, iq)
   void init(int nelem, int qsize);
