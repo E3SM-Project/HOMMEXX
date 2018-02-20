@@ -44,7 +44,6 @@ void Elements::init(const int num_elems) {
 
   m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
 
-  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("q", m_num_elems);
   m_qdp =
       ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
           "qdp", m_num_elems);
@@ -265,16 +264,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   return;
 }
 
-void Elements::pull_from_f90_pointers(
-    CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
-    CF90Ptr &derived_phi, CF90Ptr &derived_omega_p,
-    CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
-  pull_3d(derived_phi, derived_omega_p, derived_v);
-  pull_4d(state_v, state_t, state_dp3d);
-  pull_eta_dot(derived_eta_dot_dpdn);
-  pull_qdp(state_qdp);
-}
-
 void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
   HostViewUnmanaged<const Real *[NUM_PHYSICAL_LEV]   [NP][NP]> derived_phi_f90(derived_phi,m_num_elems);
   HostViewUnmanaged<const Real *[NUM_PHYSICAL_LEV]   [NP][NP]> derived_omega_p_f90(derived_omega_p,m_num_elems);
@@ -300,20 +289,13 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   sync_to_device_i2p(eta_dot_dpdn_f90,m_eta_dot_dpdn);
 }
 
-void Elements::pull_qdp(CF90Ptr &state_qdp) {
-  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
-  sync_to_device(state_qdp_f90,m_qdp);
-}
-
 void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
                                     F90Ptr &state_dp3d, F90Ptr &derived_phi,
                                     F90Ptr &derived_omega_p, F90Ptr &derived_v,
-                                    F90Ptr &derived_eta_dot_dpdn,
-                                    F90Ptr &state_qdp) const {
+                                    F90Ptr &derived_eta_dot_dpdn) const {
   push_3d(derived_phi, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_eta_dot(derived_eta_dot_dpdn);
-  push_qdp(state_qdp);
 }
 
 void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
@@ -339,11 +321,6 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) con
 void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   HostViewUnmanaged<Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
   sync_to_host_p2i(m_eta_dot_dpdn,eta_dot_dpdn_f90);
-}
-
-void Elements::push_qdp(F90Ptr &state_qdp) const {
-  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
-  sync_to_host(m_qdp, state_qdp_f90);
 }
 
 void Elements::d(Real *d_ptr, int ie) const {
@@ -387,21 +364,6 @@ void Elements::BufferViews::init(const int num_elems) {
   dptens = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for dp3d",num_elems);
   vtens  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for velocity",num_elems);
 
-  qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      "buffer for tracers", num_elems);
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
-       num_elems);
-  qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      "buffer for biharmonic term for tracers", num_elems);
-  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "buffer for vstar*qdp", num_elems);
-  qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "work buffer for tracers", num_elems);
-  dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "dpdissk", num_elems);
-  qlim = ExecViewManaged<Scalar* [QSIZE_D][2][NUM_LEV]>(
-      "qlim: combined qmin, qmax", num_elems);
-
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
   sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum buffer", num_elems);
@@ -431,6 +393,32 @@ void Elements::BufferViews::init(const int num_elems) {
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
+}
+
+void Tracers::init (const nelem, const qsize) {
+  m_Q = decltype(m_Q)("Q", nelem);
+  m_qdp = decltype(m_qdp)("qdp", nelem);
+  qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", nelem);
+  qlim = decltype(qlim)("qlim", nelem);
+  d = ExecViewManaged<Tracer**>("tracers", nelem, qsize);
+}
+
+void Tracers::Tracer::Tracer ()
+  : qtens(decltype(qtens)("qtens")),
+    dpdissk(decltype(dpdissk)("dpdissk")),
+    qwrk(decltype(qwrk)("qwrk")),
+    vstar(decltype(vstar)("vstar")),
+    vstar_qdp(decltype(vstar_qdp)("vstar_qdp"))
+{}
+
+void Tracers::pull_qdp(CF90Ptr &state_qdp) {
+  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
+  sync_to_device(state_qdp_f90,m_qdp);
+}
+
+void Tracers::push_qdp(F90Ptr &state_qdp) const {
+  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
+  sync_to_host(m_qdp, state_qdp_f90);
 }
 
 } // namespace Homme

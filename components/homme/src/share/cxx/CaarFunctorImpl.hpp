@@ -38,6 +38,7 @@ struct CaarFunctorImpl {
   CaarData              m_data;
   const HybridVCoord    m_hvcoord;
   const Elements        m_elements;
+  const Tracers         m_t;
   const Derivative      m_deriv;
   const SphereOperators m_sphere_ops;
 
@@ -343,7 +344,7 @@ struct CaarFunctorImpl {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
 //is there ever a check for moist kokkos runs to ake sure qsize >0?
 //or is it in namelist mod?
-        Scalar Qt = m_elements.m_qdp(kv.ie, m_data.n0_qdp, 0, igp, jgp, ilev) /
+        Scalar Qt = m_t.m_qdp(kv.ie, m_data.n0_qdp, 0, igp, jgp, ilev) /
                     m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
         Qt *= (PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0);
         Qt += 1.0;

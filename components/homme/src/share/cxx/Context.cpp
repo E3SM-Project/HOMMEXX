@@ -42,6 +42,11 @@ Elements& Context::get_elements() {
   return *elements_;
 }
 
+Tracers& Context::get_tracers() {
+  if ( ! tracers_) tracers_.reset(new Tracers());
+  return *tracers_;
+}
+
 HybridVCoord& Context::get_hvcoord() {
   if ( ! hvcoord_) hvcoord_.reset(new HybridVCoord());
   return *hvcoord_;

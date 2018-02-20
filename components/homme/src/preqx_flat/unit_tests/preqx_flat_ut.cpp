@@ -123,7 +123,9 @@ public:
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
                                 dp3d.data(), phi.data(),
                                 omega_p.data(), derived_v.data(),
-                                eta_dpdn.data(), qdp.data());
+                                eta_dpdn.data());
+
+    Context::singleton().get_tracers().push_qdp(qdp.data());
 
     Kokkos::deep_copy(spheremp, elements.m_spheremp);
     Kokkos::deep_copy(metdet, elements.m_metdet);
