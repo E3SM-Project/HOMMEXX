@@ -363,48 +363,10 @@ void Elements::dinv(Real *dinv_ptr, int ie) const {
 }
 
 void Elements::BufferViews::init(const int num_elems) {
-  pressure =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
-  pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of pressure", num_elems);
-  temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Virtual Temperature", num_elems);
-  temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of temperature", num_elems);
-  omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Omega_P = omega/pressure = (Dp/Dt)/pressure", num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("(u,v)*dp", num_elems);
-  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Divergence of dp3d * (u,v)", num_elems);
-  ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Kinetic Energy + Geopotential Energy", num_elems);
-  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of ephi", num_elems);
-  vorticity =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
 
   ttens  = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for temperature",num_elems);
   dptens = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for dp3d",num_elems);
   vtens  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for velocity",num_elems);
-
-  qtens = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      "buffer for tracers", num_elems);
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
-       num_elems);
-  qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      "buffer for biharmonic term for tracers", num_elems);
-  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "buffer for vstar*qdp", num_elems);
-  qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "work buffer for tracers", num_elems);
-  dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "dpdissk", num_elems);
-  qlim = ExecViewManaged<Scalar* [QSIZE_D][2][NUM_LEV]>(
-      "qlim: combined qmin, qmax", num_elems);
-
-  preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
-
-  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum buffer", num_elems);
 
   div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
                                                            num_elems);
