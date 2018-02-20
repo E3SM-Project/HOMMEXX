@@ -7,6 +7,7 @@
 #include "Connectivity.hpp"
 #include "Derivative.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "HyperviscosityFunctor.hpp"
 #include "SphereOperators.hpp"
@@ -37,9 +38,17 @@ Comm& Context::get_comm() {
 }
 
 Elements& Context::get_elements() {
-  //if ( ! elements_) elements_ = std::make_shared<Elements>();
   if ( ! elements_) elements_.reset(new Elements());
   return *elements_;
+}
+
+Tracers& Context::get_tracers() {
+  if ( ! tracers_) {
+    auto &elems = get_elements();
+    const auto &params = get_simulation_params();
+    tracers_.reset(new Tracers(elems.num_elems(), params.qsize));
+  }
+  return *tracers_;
 }
 
 HybridVCoord& Context::get_hvcoord() {
