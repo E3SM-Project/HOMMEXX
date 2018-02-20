@@ -462,9 +462,7 @@ private:
     compute_qtens(kv);
     kv.team_barrier();
     if (m_data.limiter_option == 8) {
-      GPTLstart("limiter");
       limiter_optim_iter_full(kv);
-      GPTLstop("limiter");
       kv.team_barrier();
     }
     apply_spheremp(kv);
