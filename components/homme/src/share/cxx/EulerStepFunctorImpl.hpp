@@ -518,8 +518,8 @@ private:
   void compute_vstar_qdp (const KernelVariables& kv) const {
     const auto NP2 = NP * NP;
     const auto qdp = Homme::subview(m_t.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
-    const auto q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
+    const auto q_buf = m_t.d.qtens(kv.ie, kv.iq);
+    const auto v_buf = m_t.d.vstar_qdp(kv.ie, kv.iq);
     const auto vstar = Homme::subview(m_elements.buffers.vstar, kv.ie);
 
     Kokkos::parallel_for (
@@ -541,16 +541,16 @@ private:
   void compute_qtens (const KernelVariables& kv) const {
     m_sphere_ops.divergence_sphere_update(
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
-      Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
+      m_t.d.vstar_qdp(kv.ie, kv.iq),
       Homme::subview(m_t.qtens_biharmonic, kv.ie, kv.iq),
-      Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
+      m_t.d.qtens(kv.ie, kv.iq));
   }
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
-    const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto ptens = m_t.d.qtens(kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_t.qlim, kv.ie, kv.iq);
 
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
@@ -562,7 +562,7 @@ private:
   KOKKOS_INLINE_FUNCTION
   void apply_spheremp (const KernelVariables& kv) const {
     const auto qdp = Homme::subview(m_t.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto qtens = m_t.dqtens(kv.ie, kv.iq);
     const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),

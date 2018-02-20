@@ -44,9 +44,6 @@ void Elements::init(const int num_elems) {
 
   m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
 
-  m_qdp =
-      ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
-          "qdp", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
   m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
   m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn",
@@ -156,7 +153,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   genRandArray(m_v, engine, random_dist);
   genRandArray(m_t, engine, random_dist);
 
-  genRandArray(m_qdp, engine, random_dist);
   genRandArray(m_eta_dot_dpdn, engine, random_dist);
 
   // This ensures the pressure in a single column is monotonically increasing
@@ -363,6 +359,8 @@ void Elements::BufferViews::init(const int num_elems) {
   ttens  = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for temperature",num_elems);
   dptens = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for dp3d",num_elems);
   vtens  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for velocity",num_elems);
+  vstar  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for stuff",num_elems);
+  dpdissk = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("dpdissk", num_elems);
 
   preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
 
@@ -395,7 +393,7 @@ void Elements::BufferViews::init(const int num_elems) {
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
 }
 
-void Tracers::init (const nelem, const qsize) {
+void Tracers::init (int nelem, int qsize) {
   m_Q = decltype(m_Q)("Q", nelem);
   m_qdp = decltype(m_qdp)("qdp", nelem);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", nelem);
@@ -403,21 +401,19 @@ void Tracers::init (const nelem, const qsize) {
   d = ExecViewManaged<Tracer**>("tracers", nelem, qsize);
 }
 
-void Tracers::Tracer::Tracer ()
+Tracers::Tracer::Tracer ()
   : qtens(decltype(qtens)("qtens")),
-    dpdissk(decltype(dpdissk)("dpdissk")),
     qwrk(decltype(qwrk)("qwrk")),
-    vstar(decltype(vstar)("vstar")),
     vstar_qdp(decltype(vstar_qdp)("vstar_qdp"))
 {}
 
 void Tracers::pull_qdp(CF90Ptr &state_qdp) {
-  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
+  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(1));
   sync_to_device(state_qdp_f90,m_qdp);
 }
 
 void Tracers::push_qdp(F90Ptr &state_qdp) const {
-  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
+  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp, d.extent_int(1));
   sync_to_host(m_qdp, state_qdp_f90);
 }
 

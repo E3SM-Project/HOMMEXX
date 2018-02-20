@@ -72,6 +72,8 @@ public:
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ttens;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> dptens;
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vtens;
+    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vstar;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> dpdissk;
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
     // sdot_sum is used in case rsplit=0 and in energy diagnostics
@@ -144,9 +146,7 @@ struct Tracers {
     // Buffers for EulerStepFunctor
     // q is tracer ratio, qdp is tracer mass
     ExecViewManaged<Scalar   [NP][NP][NUM_LEV]> qtens;
-    ExecViewManaged<Scalar            [NP][NP][NUM_LEV]> dpdissk;
     ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]> qwrk;
-    ExecViewManaged<Scalar         [2][NP][NP][NUM_LEV]> vstar;
     ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]> vstar_qdp;
     Tracer();
   };
