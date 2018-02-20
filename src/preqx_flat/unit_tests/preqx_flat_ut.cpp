@@ -100,6 +100,7 @@ public:
   compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
       : functor(elements, Context::singleton().get_derivative(),
         Context::singleton().get_hvcoord(),SphereOperators(elements,Context::singleton().get_derivative()),rsplit_in),
+        policy(functor.m_elements.num_elems(), 16, 4),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -115,6 +116,7 @@ public:
         rsplit(rsplit_in)
         {
 
+    functor.m_sphere_ops.allocate_buffers(policy);
     functor.set_n0_qdp(n0_qdp);
     functor.set_rk_stage_data(nm1, n0, np1, dt, eta_ave_w, false);
 
@@ -146,12 +148,12 @@ public:
   }
 
   void run_functor() const {
-    Kokkos::TeamPolicy<ExecSpace> policy(functor.m_elements.num_elems(), 16, 4);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
   }
 
   CaarFunctorImpl functor;
+  Kokkos::TeamPolicy<ExecSpace> policy;
 
   // host
   // Arrays used to pass data to and from Fortran

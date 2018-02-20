@@ -29,6 +29,9 @@ HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& pa
     }
     Kokkos::deep_copy(m_nu_scale_top, h_nu_scale_top);
   }
+
+  // Allocate buffers in the sphere operators
+  m_sphere_ops.allocate_buffers(Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()));
 }
 
 void HyperviscosityFunctorImpl::init_boundary_exchanges () {

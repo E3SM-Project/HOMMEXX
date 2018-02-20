@@ -39,7 +39,7 @@ struct CaarFunctorImpl {
   const HybridVCoord    m_hvcoord;
   const Elements        m_elements;
   const Derivative      m_deriv;
-  const SphereOperators m_sphere_ops;
+  SphereOperators       m_sphere_ops;
 
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
 
