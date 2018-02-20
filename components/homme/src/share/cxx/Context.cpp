@@ -94,14 +94,11 @@ std::shared_ptr<Connectivity> Context::get_connectivity() {
   return connectivity_;
 }
 
-SphereOperators& Context::get_sphere_operators(int qsize) {
+SphereOperators& Context::get_sphere_operators() {
   if ( ! sphere_operators_) {
-    if (qsize<0) {
-      qsize = get_simulation_params().qsize;
-    }
     Elements&   elements   = get_elements();
     Derivative& derivative = get_derivative();
-    sphere_operators_.reset(new SphereOperators(elements,derivative,qsize));
+    sphere_operators_.reset(new SphereOperators(elements,derivative));
   }
   return *sphere_operators_;
 }

@@ -67,7 +67,7 @@ public:
   HybridVCoord& get_hvcoord();
   HyperviscosityFunctor& get_hyperviscosity_functor();
   SimulationParams& get_simulation_params();
-  SphereOperators& get_sphere_operators(int qsize = -1);
+  SphereOperators& get_sphere_operators();
   TimeLevel& get_time_level();
   EulerStepFunctor& get_euler_step_functor();
   VerticalRemapManager& get_vertical_remap_manager();
