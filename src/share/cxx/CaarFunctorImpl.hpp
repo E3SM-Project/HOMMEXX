@@ -82,7 +82,7 @@ public:
   }
 
   size_t buffers_size () const {
-    const int num_scalar_buffers = m_data.rsplit==0 ? 6 : 5;
+    const int num_scalar_buffers = m_data.rsplit==0 ? 6 : 4;
     const int num_vector_buffers = m_data.rsplit==0 ? 3 : 2;
 
     const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
@@ -117,9 +117,9 @@ public:
       m_buffers.sdot_sum          = RealViewUnmanaged(raw_buffer,ne);
       m_buffers.t_vadv_buf        = ScalarViewUnmanaged(ptr(raw_buffer),ne);
       raw_buffer += scalar_buffer_size;
+      m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+      raw_buffer += scalar_buffer_size;
     }
-    m_buffers.eta_dot_dpdn_buf  = ScalarViewUnmanaged(ptr(raw_buffer),ne);
-    raw_buffer += scalar_buffer_size;
 
     m_buffers.vdp               = VectorViewUnmanaged(ptr(raw_buffer),ne);
     m_buffers.temperature_grad  = VectorViewUnmanaged(ptr(raw_buffer),ne);
@@ -531,28 +531,43 @@ public:
   // Modifies DERIVED_UN0, DERIVED_VN0, OMEGA_P, T, and DP3D
   KOKKOS_INLINE_FUNCTION
   void compute_dp3d_np1(KernelVariables &kv) const {
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int idx) {
-      const int igp = idx / NP;
-      const int jgp = idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        Scalar tmp = m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
-        tmp.shift_left(1);
-        tmp[VECTOR_SIZE - 1] =
-          (ilev + 1 < NUM_LEV) ?
-          m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
-          0;
-        // Add div_vdp before subtracting the previous value to eta_dot_dpdn
-        // This will hopefully reduce numeric error
-        tmp += m_buffers.div_vdp(kv.ie, igp, jgp, ilev);
-        tmp -= m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
-        tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
-              tmp * m_data.dt;
+    if (m_data.rsplit==0) {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                           [&](const int idx) {
+        const int igp = idx / NP;
+        const int jgp = idx % NP;
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+          Scalar tmp = m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
+          tmp.shift_left(1);
+          tmp[VECTOR_SIZE - 1] =
+            (ilev + 1 < NUM_LEV) ?
+            m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev + 1)[0] :
+            0;
+          // Add div_vdp before subtracting the previous value to eta_dot_dpdn
+          // This will hopefully reduce numeric error
+          tmp += m_buffers.div_vdp(kv.ie, igp, jgp, ilev);
+          tmp -= m_buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
+          tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
+                tmp * m_data.dt;
 
-        m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev) =
-            m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
+          m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev) =
+              m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
+        });
       });
-    });
+    } else {
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                           [&](const int idx) {
+        const int igp = idx / NP;
+        const int jgp = idx % NP;
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
+          Scalar tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
+                       m_buffers.div_vdp(kv.ie, igp, jgp, ilev) * m_data.dt;
+
+          m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev) =
+              m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
+        });
+      });
+    }
     kv.team_barrier();
   } // TESTED 12
 
