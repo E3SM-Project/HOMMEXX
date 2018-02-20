@@ -11,6 +11,17 @@ void EulerStepFunctor::reset (const SimulationParams& params) {
   p_->reset(params);
 }
 
+size_t EulerStepFunctor::buffers_size () const
+{
+  assert (p_);
+  return p_->buffers_size();
+}
+
+void EulerStepFunctor::init_buffers (Real* raw_buffer, const size_t buffer_size) {
+  assert (p_);
+  p_->init_buffers(raw_buffer, buffer_size);
+}
+
 void EulerStepFunctor::init_boundary_exchanges () {
   p_->init_boundary_exchanges();
 }

@@ -38,11 +38,27 @@ class EulerStepFunctorImpl {
     DSSOption   DSSopt;
   };
 
+  using ScalarViewUnmanaged = ExecViewUnmanaged<Scalar *   [NP][NP][NUM_LEV]>;
+  using VectorViewUnmanaged = ExecViewUnmanaged<Scalar *[2][NP][NP][NUM_LEV]>;
+  using TracerScalarViewUnmanaged = ExecViewUnmanaged<Scalar *[QSIZE_D]   [NP][NP][NUM_LEV]>;
+  using TracerVectorViewUnmanaged = ExecViewUnmanaged<Scalar *[QSIZE_D][2][NP][NP][NUM_LEV]>;
+  using TracerMaxMinViewUnmanaged = ExecViewUnmanaged<Scalar *[QSIZE_D][2]        [NUM_LEV]>;
+
+  struct EsfBuffers {
+    ScalarViewUnmanaged           dpdissk;
+    VectorViewUnmanaged           vstar;
+    TracerScalarViewUnmanaged     qtens;
+    TracerScalarViewUnmanaged     qtens_biharmonic;
+    TracerVectorViewUnmanaged     vstar_qdp;
+    TracerMaxMinViewUnmanaged     qlim;
+  };
+
   const Elements      m_elements;
   const Derivative    m_deriv;
   const HybridVCoord  m_hvcoord;
   EulerStepData       m_data;
   SphereOperators     m_sphere_ops;
+  EsfBuffers          m_buffers;
 
   bool                m_kernel_will_run_limiters;
 
@@ -73,6 +89,66 @@ public:
     }
   }
 
+  size_t buffers_size () const {
+    const int num_scalar_buffers = 1;
+    const int num_vector_buffers = 1;
+    const int num_tracer_scalar_buffers = 2;
+    const int num_tracer_vector_buffers = 1;
+    const int num_tracer_maxmin_buffers = 1;
+
+    const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_scalar_buffer_size = m_elements.num_elems()*QSIZE_D*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_vector_buffer_size = m_elements.num_elems()*QSIZE_D*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_maxmin_buffer_size = m_elements.num_elems()*QSIZE_D*2*NUM_LEV*VECTOR_SIZE;
+
+    return  num_scalar_buffers*scalar_buffer_size +
+            num_vector_buffers*vector_buffer_size +
+            num_tracer_scalar_buffers*tracer_scalar_buffer_size +
+            num_tracer_maxmin_buffers*tracer_maxmin_buffer_size +
+            num_tracer_vector_buffers*tracer_vector_buffer_size;
+  }
+
+  void init_buffers (Real* raw_buffer, const size_t buffer_size)
+  {
+    const int scalar_buffer_size = m_elements.num_elems()*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int vector_buffer_size = m_elements.num_elems()*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_scalar_buffer_size = m_elements.num_elems()*QSIZE_D*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_vector_buffer_size = m_elements.num_elems()*QSIZE_D*2*NP*NP*NUM_LEV*VECTOR_SIZE;
+    const int tracer_maxmin_buffer_size = m_elements.num_elems()*QSIZE_D*2*NUM_LEV*VECTOR_SIZE;
+
+    const int ne = m_elements.num_elems();
+
+    Real* start = raw_buffer;
+
+    auto ptr = [](Real* raw_buffer) { return reinterpret_cast<Scalar*>(raw_buffer); };
+
+    // TODO: rearrange views order to maximize caching
+    m_buffers.qtens_biharmonic = TracerScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += tracer_scalar_buffer_size;
+
+    m_buffers.qtens = TracerScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += tracer_scalar_buffer_size;
+
+    m_buffers.dpdissk = ScalarViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += scalar_buffer_size;
+
+    m_buffers.vstar = VectorViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += vector_buffer_size;
+
+    m_buffers.vstar_qdp = TracerVectorViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += tracer_vector_buffer_size;
+
+    m_buffers.qlim = TracerMaxMinViewUnmanaged(ptr(raw_buffer),ne);
+    raw_buffer += tracer_maxmin_buffer_size;
+
+    // Sanity check
+    size_t used_size = static_cast<size_t>(std::distance(start,raw_buffer));
+    assert(used_size <= buffer_size);
+    (void)used_size;    // Suppresses a warning in debug build
+    (void)buffer_size;  // Suppresses a warning in debug build
+  }
+
   void init_boundary_exchanges () {
     assert(m_data.qsize >= 0); // after reset() called
 
@@ -82,7 +158,7 @@ public:
       BoundaryExchange& be = *m_mm_be;
       be.set_buffers_manager(bm_exchange_minmax);
       be.set_num_fields(m_data.qsize, 0, 0);
-      be.register_min_max_fields(m_elements.buffers.qlim, m_data.qsize, 0);
+      be.register_min_max_fields(m_buffers.qlim, m_data.qsize, 0);
       be.registration_completed();
     }
 
@@ -91,7 +167,7 @@ public:
       m_mmqb_be->set_buffers_manager(
           Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
-      m_mmqb_be->register_field(m_elements.buffers.qtens_biharmonic, m_data.qsize, 0);
+      m_mmqb_be->register_field(m_buffers.qtens_biharmonic, m_data.qsize, 0);
       m_mmqb_be->registration_completed();
     }
 
@@ -160,7 +236,7 @@ public:
   void operator() (const BIHPre&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_buffers.qtens_biharmonic, kv.ie, kv.iq);
     if (m_data.nu_p > 0) {
       const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
       Kokkos::parallel_for (
@@ -183,7 +259,7 @@ public:
   void operator() (const BIHPost&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_buffers.qtens_biharmonic, kv.ie, kv.iq);
     team.team_barrier();
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
@@ -308,8 +384,8 @@ public:
     const int n0_qdp = m_data.n0_qdp;
     const Real dt = m_data.dt;
     const auto qdp = m_elements.m_qdp;
-    const auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
-    const auto qlim = m_elements.buffers.qlim;
+    const auto qtens_biharmonic= m_buffers.qtens_biharmonic;
+    const auto qlim = m_buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
     Kokkos::RangePolicy<ExecSpace> policy1(0, m_elements.num_elems() * m_data.qsize *
@@ -494,17 +570,17 @@ private:
             //! rhs_multiplier=0 on the first stage:
             const auto dp = e.m_derived_dp(kv.ie,i,j,k) -
               c.rhs_multiplier * c.dt * e.m_derived_divdp_proj(kv.ie,i,j,k);
-            e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
-            e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
+            m_buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
+            m_buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
             if (lim8) {
               //! Note that the term dpdissk is independent of Q
               //! UN-DSS'ed dp at timelevel n0+1:
-              e.buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * e.m_derived_divdp(kv.ie,i,j,k);
+              m_buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * e.m_derived_divdp(kv.ie,i,j,k);
               if (add_ps_diss) {
                 //! add contribution from UN-DSS'ed PS dissipation
                 //!          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
                 //!          elem(ie)%derived%psdiss_biharmonic(:,:)
-                e.buffers.dpdissk(kv.ie,i,j,k) += diss_fac *
+                m_buffers.dpdissk(kv.ie,i,j,k) += diss_fac *
                   e.m_derived_dpdiss_biharmonic(kv.ie,i,j,k) / e.m_spheremp(kv.ie,i,j);
               }
             }
@@ -528,14 +604,14 @@ private:
         const ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]>
           qdp   = Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
         const ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>
-          q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+          q_buf = Homme::subview(m_buffers.qtens, kv.ie, kv.iq);
         const ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>
-          v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
+          v_buf = Homme::subview(m_buffers.vstar_qdp, kv.ie, kv.iq);
 
         Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-          v_buf(0,igp,jgp,ilev) = (m_elements.buffers.vstar(kv.ie, 0, igp, jgp, ilev) *
+          v_buf(0,igp,jgp,ilev) = (m_buffers.vstar(kv.ie, 0, igp, jgp, ilev) *
                                    qdp(igp, jgp, ilev));
-          v_buf(1,igp,jgp,ilev) = (m_elements.buffers.vstar(kv.ie, 1, igp, jgp, ilev) *
+          v_buf(1,igp,jgp,ilev) = (m_buffers.vstar(kv.ie, 1, igp, jgp, ilev) *
                                    qdp(igp, jgp, ilev));
           q_buf(igp,jgp,ilev) = qdp(igp,jgp,ilev);
         });
@@ -552,14 +628,14 @@ private:
       dinv = Homme::subview(m_elements.m_dinv, kv.ie);
     m_sphere_ops.divergence_sphere_update(
       kv, -m_data.dt, 1.0,
-      Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
-      Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
+      Homme::subview(m_buffers.vstar_qdp, kv.ie, kv.iq),
+      Homme::subview(m_buffers.qtens, kv.ie, kv.iq));
   }
 
   KOKKOS_INLINE_FUNCTION
   void add_hyperviscosity (const KernelVariables& kv) const {
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto qtens_biharmonic = Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens = Homme::subview(m_buffers.qtens, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_buffers.qtens_biharmonic, kv.ie, kv.iq);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),
       [&] (const int loop_idx) {
@@ -576,9 +652,9 @@ private:
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
-    const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
-    const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
+    const auto dpmass = Homme::subview(m_buffers.dpdissk, kv.ie);
+    const auto ptens = Homme::subview(m_buffers.qtens, kv.ie, kv.iq);
+    const auto qlim = Homme::subview(m_buffers.qlim, kv.ie, kv.iq);
 
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }
@@ -589,7 +665,7 @@ private:
   KOKKOS_INLINE_FUNCTION
   void apply_spheremp (const KernelVariables& kv) const {
     const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto qtens = Homme::subview(m_buffers.qtens, kv.ie, kv.iq);
     const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),

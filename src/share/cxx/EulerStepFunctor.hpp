@@ -18,6 +18,9 @@ public:
 
   void reset(const SimulationParams& params);
 
+  size_t buffers_size () const;
+  void init_buffers (Real* raw_buffer, const size_t buffer_size);
+
   void init_boundary_exchanges();
 
   void precompute_divdp();
