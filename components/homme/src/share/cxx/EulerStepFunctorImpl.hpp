@@ -594,55 +594,64 @@ private:
     // shared memory.
     Real* const team_data = Memory<ExecSpace>::get_shmem<Real>(team);
 
-    Kokkos::parallel_for (
-      Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
-      [&] (const int ilev) {
-        const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
+    const auto f = [&] (const int ilev) {
+      const int vpi = ilev / VECTOR_SIZE, vsi = ilev % VECTOR_SIZE;
 
-        Real* const data = team_data ?
-          team_data + 2 * NP2 * team.team_rank() :
-          nullptr;
-        Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
+      Real* const data = team_data ?
+      team_data + 2 * NP2 * team.team_rank() :
+      nullptr;
+      Memory<ExecSpace>::AutoArray<Real, NP2> x(data), c(data + NP2);
 
-        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
-            const int i = k / NP, j = k % NP;
-            const auto& dpm = dpmass(i,j,vpi)[vsi];
-            c[k] = sphweights(i,j)*dpm;
-            x[k] = ptens(i,j,vpi)[vsi]/dpm;
-          });
+      Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+          const int i = k / NP, j = k % NP;
+          const auto& dpm = dpmass(i,j,vpi)[vsi];
+          c[k] = sphweights(i,j)*dpm;
+          x[k] = ptens(i,j,vpi)[vsi]/dpm;
+        });
 
-        Kokkos::Real2 sums;
-        Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Kokkos::Real2& sums) {
-            sums.v[0] += x[k]*c[k];
-            sums.v[1] += c[k];
-          }, sums);
-        if (sums.v[1] <= 0) return; //! this should never happen, but if it does, dont limit
+      Kokkos::Real2 sums;
+      Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Kokkos::Real2& sums) {
+          sums.v[0] += x[k]*c[k];
+          sums.v[1] += c[k];
+        }, sums);
+      if (sums.v[1] <= 0) return; //! this should never happen, but if it does, dont limit
 
-        Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
-        // This is a slightly different spot than where this comment came from,
-        // but it's logically equivalent to do it here.
-        //! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
-        //! testing
-        if (minp < 0)
-          minp = qlim(0,vpi)[vsi] = 0;
+      Real minp = qlim(0,vpi)[vsi], maxp = qlim(1,vpi)[vsi];
+      // This is a slightly different spot than where this comment came from,
+      // but it's logically equivalent to do it here.
+      //! IMPOSE ZERO THRESHOLD.  do this here so it can be turned off for
+      //! testing
+      if (minp < 0)
+        minp = qlim(0,vpi)[vsi] = 0;
 
-        //! relax constraints to ensure limiter has a solution:
-        //! This is only needed if running with the SSP CFL>1 or
-        //! due to roundoff errors
-        // This is technically a write race condition, but the same value is
-        // being written, so it doesn't matter.
-        if (sums.v[0] < minp*sums.v[1])
-          minp = qlim(0,vpi)[vsi] = sums.v[0]/sums.v[1];
-        if (sums.v[0] > maxp*sums.v[1])
-          maxp = qlim(1,vpi)[vsi] = sums.v[0]/sums.v[1];
+      //! relax constraints to ensure limiter has a solution:
+      //! This is only needed if running with the SSP CFL>1 or
+      //! due to roundoff errors
+      // This is technically a write race condition, but the same value is
+      // being written, so it doesn't matter.
+      if (sums.v[0] < minp*sums.v[1])
+        minp = qlim(0,vpi)[vsi] = sums.v[0]/sums.v[1];
+      if (sums.v[0] > maxp*sums.v[1])
+        maxp = qlim(1,vpi)[vsi] = sums.v[0]/sums.v[1];
 
-        limit(team, sums.v[0], minp, maxp, x.data(), c.data());
+      limit(team, sums.v[0], minp, maxp, x.data(), c.data());
 
-        Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
-            const int i = k / NP, j = k % NP;
-            ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
-          });
-      });
+      Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
+          const int i = k / NP, j = k % NP;
+          ptens(i,j,vpi)[vsi] = x[k]*dpmass(i,j,vpi)[vsi];
+        });
+    };
+
+    if (OnGpu<ExecSpace>::value || team.team_size() > 1) {
+      Kokkos::parallel_for (
+        Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
+        f);
+    } else {
+#     pragma ivdep
+#     pragma simd
+      for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev)
+        f(ilev);
+    }
   }
 
 public: // Expose for unit testing.
