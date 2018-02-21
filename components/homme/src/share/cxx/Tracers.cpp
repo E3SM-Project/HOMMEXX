@@ -12,12 +12,12 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
       m_q("tracer ratio", num_elems), m_qdp("tracer mass", num_elems),
       qtens_biharmonic("tracer biharmonic tensor", num_elems),
       buf("scalar tracers buffer", m_tracers.size() * Tracer::num_scalars()) {
-
+  auto tracers_mirror = Kokkos::create_mirror_view(m_tracers);
   Scalar *const mem_start = &buf.implementation_map().reference(0);
   size_t mem_pos = 0;
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int tracer = 0; tracer < num_tracers; ++tracer) {
-      auto &t = m_tracers(ie, tracer);
+      auto &t = tracers_mirror(ie, tracer);
       assert(mem_pos < buf.size());
       t.qtens = ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>(mem_start + mem_pos);
       mem_pos += t.qtens.size();
@@ -32,6 +32,7 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
       assert(mem_pos <= buf.size());
     }
   }
+  Kokkos::deep_copy(m_tracers, tracers_mirror);
 }
 
 void Tracers::random_init() {
