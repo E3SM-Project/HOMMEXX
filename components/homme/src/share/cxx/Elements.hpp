@@ -8,49 +8,67 @@ namespace Homme {
 /* Per element data - specific velocity, temperature, pressure, etc. */
 class Elements {
 public:
-  // Coriolis term
-  ExecViewManaged<Real * [NP][NP]> m_fcor;
-  // Quadrature weights and metric tensor
-  ExecViewManaged<Real * [NP][NP]>        m_mp;
-  ExecViewManaged<Real * [NP][NP]>        m_spheremp;
-  ExecViewManaged<Real * [NP][NP]>        m_rspheremp;
-  ExecViewManaged<Real * [2][2][NP][NP]>  m_metinv;
-  ExecViewManaged<Real * [NP][NP]>        m_metdet;
-  // Prescribed surface geopotential height at eta = 1
-  ExecViewManaged<Real * [NP][NP]> m_phis;
 
-  // D (map for covariant coordinates) and D^{-1}
-  ExecViewManaged<Real * [2][2][NP][NP]> m_d;
-  ExecViewManaged<Real * [2][2][NP][NP]> m_dinv;
+  struct Element {
+    static size_t size() {
+      size_t sizes_sum =
+            6*NP*NP                                      // six 2d scalar views
+        + 2*6*NP*NP                                      // two 2d tensor views
+        +   8*NP*NP*NUM_LEV*VECTOR_SIZE                  // eight 3d scalar views
+        + 2*1*NP*NP*NUM_LEV*VECTOR_SIZE                  // one 3d vector view
+        +   2*NUM_TIME_LEVELS*NP*NP*NUM_LEV*VECTOR_SIZE  // two time-dep 3d scalar views
+        + 2*1*NUM_TIME_LEVELS*NP*NP*NUM_LEV*VECTOR_SIZE  // one time-dep 3d vector view
+        +   1*NUM_TIME_LEVELS*NP*NP;                     // one time-dep 2d scalar view
 
-  // Omega is the 'pressure vertical velocity' in papers,
-  // but omega=Dp/Dt  (not really vertical velocity).
-  // In homme omega is scaled, derived%omega_p=(1/p)*(Dp/Dt)
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_omega_p;
-  // Geopotential height field
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_phi;
-  // weighted velocity flux for consistency
-  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_derived_vn0;
+      return sizes_sum;
+    }
 
-  // Velocity in lon lat basis
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> m_v;
-  // Temperature
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
-  // dp ( it is dp/d\eta * delta(eta)), or pseudodensity
-  ExecViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+    void init (Real* buffer);
 
-  ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
+    // Coriolis term
+    ExecViewUnmanaged<Real [NP][NP]> m_fcor;
+    // Quadrature weights and metric tensor
+    ExecViewUnmanaged<Real [NP][NP]>        m_mp;
+    ExecViewUnmanaged<Real [NP][NP]>        m_spheremp;
+    ExecViewUnmanaged<Real [NP][NP]>        m_rspheremp;
+    ExecViewUnmanaged<Real [2][2][NP][NP]>  m_metinv;
+    ExecViewUnmanaged<Real [NP][NP]>        m_metdet;
+    // Prescribed surface geopotential height at eta = 1
+    ExecViewUnmanaged<Real [NP][NP]> m_phis;
 
-  // eta=$\eta$ is the vertical coordinate
-  // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$
-  //    (note there are NUM_PHYSICAL_LEV+1 of them)
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
-    m_derived_dp,                // for dp_tracers at physics timestep
-    m_derived_divdp,             // divergence of dp
-    m_derived_divdp_proj,        // DSSed divdp
-    m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
-    m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
+    // D (map for covariant coordinates) and D^{-1}
+    ExecViewUnmanaged<Real [2][2][NP][NP]> m_d;
+    ExecViewUnmanaged<Real [2][2][NP][NP]> m_dinv;
+
+    // Omega is the 'pressure vertical velocity' in papers,
+    // but omega=Dp/Dt  (not really vertical velocity).
+    // In homme omega is scaled, derived%omega_p=(1/p)*(Dp/Dt)
+    ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]> m_omega_p;
+    // Geopotential height field
+    ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]> m_phi;
+    // weighted velocity flux for consistency
+    ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> m_derived_vn0;
+
+    // Velocity in lon lat basis
+    ExecViewUnmanaged<Scalar [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> m_v;
+    // Temperature
+    ExecViewUnmanaged<Scalar [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_t;
+    // dp ( it is dp/d\eta * delta(eta)), or pseudodensity
+    ExecViewUnmanaged<Scalar [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> m_dp3d;
+
+    ExecViewUnmanaged<Real [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
+
+    // eta=$\eta$ is the vertical coordinate
+    // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$
+    //    (note there are NUM_PHYSICAL_LEV+1 of them)
+    ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]> m_eta_dot_dpdn;
+    ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>
+      m_derived_dp,                // for dp_tracers at physics timestep
+      m_derived_divdp,             // divergence of dp
+      m_derived_divdp_proj,        // DSSed divdp
+      m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
+      m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
+  };
 
   //buffer views are temporaries that matter only during local RK steps
   //(dynamics and tracers time step).
@@ -84,16 +102,9 @@ public:
     ExecViewManaged<Real* [NP][NP]> sdot_sum;
     // Buffers for spherical operators
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> grad_buf;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> curl_buf;
 
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> sphere_vector_buf;
-
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> divergence_temp;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity_temp;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_1;
     ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_2;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_3;
 
     // Buffers for vertical advection terms in V and T for case
     // of Eulerian advection, rsplit=0. These buffers are used in both
@@ -101,14 +112,19 @@ public:
     // to zero at the beginning of each RK stage. Right now there is a code
     // for this, since Elements is a singleton.
     ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
-    ExecViewManaged<Scalar* [NP][NP][NUM_LEV]> t_vadv_buf;
-    ExecViewManaged<Scalar* [NP][NP][NUM_LEV_P]> eta_dot_dpdn_buf;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> t_vadv_buf;
+    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV_P]> eta_dot_dpdn_buf;
 
     ExecViewManaged<clock_t *> kernel_start_times;
     ExecViewManaged<clock_t *> kernel_end_times;
   } buffers;
 
   Elements() = default;
+
+  KOKKOS_INLINE_FUNCTION
+  const Element& get_element(const int ie) {
+    return m_elements(ie);
+  }
 
   void init(const int num_elems);
 
@@ -147,6 +163,9 @@ public:
 
 private:
   int m_num_elems;
+
+  ExecViewManaged<Element*> m_elements;
+  ExecViewManaged<Real*>    m_internal_buffer;
 };
 
 } // Homme
