@@ -168,9 +168,10 @@ struct RemapFunctor : public Remapper,
   RemapType m_remap;
 
   explicit RemapFunctor(const int qsize, const Elements &elements,
-                        const HybridVCoord &hvcoord)
+                        const Tracers &tracers, const HybridVCoord &hvcoord)
       : _RemapFunctorRSplit<nonzero_rsplit>(elements.num_elems()),
-        m_data(qsize), m_elements(elements), m_hvcoord(hvcoord),
+        m_data(qsize), m_elements(elements), m_tracers(tracers),
+        m_hvcoord(hvcoord),
         m_tgt_layer_thickness("Target Layer Thickness", elements.num_elems()),
         valid_layer_thickness(
             "Check for whether the surface thicknesses are positive",
