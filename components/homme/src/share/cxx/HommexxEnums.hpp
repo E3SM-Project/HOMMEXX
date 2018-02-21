@@ -15,6 +15,21 @@ typename std::underlying_type<E>::type etoi(E e) {
   return static_cast<typename std::underlying_type<E>::type>(e);
 }
 
+// ============== Run options check utility enum ================== //
+
+namespace Errors {
+
+enum class ComparisonOp {
+  EQ = 0,   // EQUAL
+  NE,       // NOT EQUAL
+  GT,       // GREATHER THAN
+  LT,       // LESS THAN
+  GE,       // GREATHER THAN OR EQUAL
+  LE        // LESS THAN OR EQUAL
+};
+
+} // namespace Errors
+
 // =================== Run parameters enums ====================== //
 
 enum class MoistDry {
