@@ -156,51 +156,24 @@ get_default_team_policy(const int num_parallel_iterations) {
 }
 
 template<typename ExecSpaceType, typename... Tags>
+static
 typename std::enable_if<!OnGpu<ExecSpaceType>::value,int>::type
-get_team_size (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
-  return policy.team_size();
+get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
+  const int num_parallel_iterations = policy.league_size();
+  const int team_size = policy.team_size();
+  const int concurrency = ExecSpaceType::concurrency();
+  return (concurrency + team_size - 1) / team_size;
 }
 
 template<typename ExecSpaceType, typename... Tags>
+static
 typename std::enable_if<OnGpu<ExecSpaceType>::value,int>::type
-get_team_size (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
-  return policy.team_size() * policy.vector_length();
+get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
+  const int num_parallel_iterations = policy.league_size();
+  const int team_size = policy.team_size() * policy.vector_length();
+  const int concurrency = ExecSpaceType::concurrency();
+  return (concurrency + team_size - 1) / team_size;
 }
-
-template<typename TeamMemberType>
-KOKKOS_INLINE_FUNCTION
-int get_team_idx (const TeamMemberType&) {
-  return 0;
-}
-
-#ifdef KOKKOS_HAVE_OPENMP
-template<>
-KOKKOS_INLINE_FUNCTION
-int get_team_idx<Kokkos::TeamPolicy<Hommexx_OpenMP>::member_type> (
-  const Kokkos::TeamPolicy<Hommexx_OpenMP>::member_type& team_member)
-{
-  // Kokkos puts consecutive threads into the same team.
-  return omp_get_thread_num() / team_member.team_size();
-}
-#endif
-
-#ifdef KOKKOS_HAVE_CUDA
-template<>
-KOKKOS_INLINE_FUNCTION
-int get_team_idx<Kokkos::TeamPolicy<Hommexx_Cuda>::member_type>(
-  const Kokkos::TeamPolicy<Hommexx_Cuda>::member_type&)
-{
-  // There are gridDim.x*gridDim.y blocks in the current dispatch. Each block has
-  // blockDim.x*blockDim.y*blockDim.z threads. Kokkos organizes teams so that
-  // all threads in the same team have the same threadIdx.z coordinate (and of
-  // course, a team cannot span multiple blocks). Currently, there is only one
-  // team per block (so blockDim.z=1, and threadIdx.z=0), but this may change.
-  // Therefore, there are NT = gridDim.x*gridDim.y*blockDim.z teams. The follwing
-  // formula assign a number in [0,NT) that is the same for all threads in the
-  // same team.
-  return (blockIdx.x*gridDim.y + blockIdx.y)*blockDim.z + threadIdx.z;
-}
-#endif
 
 // A templated typedef for MD range policy (used in RK stages)
 template<typename ExecutionSpace, int Rank>
