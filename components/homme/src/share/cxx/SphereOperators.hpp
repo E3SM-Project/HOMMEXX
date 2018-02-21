@@ -38,13 +38,13 @@ public:
   }
 
   // This one is used in the unit tests
-  void set_views (const ExecViewUnmanaged<const Real       [NP][NP]>    dvv_in,
-                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  d,
-                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  dinv,
-                  const ExecViewUnmanaged<const Real * [2][2][NP][NP]>  metinv,
-                  const ExecViewUnmanaged<const Real *       [NP][NP]>  metdet,
-                  const ExecViewUnmanaged<const Real *       [NP][NP]>  spheremp,
-                  const ExecViewUnmanaged<const Real *       [NP][NP]>  mp)
+  void set_views (const ExecViewManaged<const Real         [NP][NP]>  dvv_in,
+                  const ExecViewManaged<const Real * [2][2][NP][NP]>  d,
+                  const ExecViewManaged<const Real * [2][2][NP][NP]>  dinv,
+                  const ExecViewManaged<const Real * [2][2][NP][NP]>  metinv,
+                  const ExecViewManaged<const Real *       [NP][NP]>  metdet,
+                  const ExecViewManaged<const Real *       [NP][NP]>  spheremp,
+                  const ExecViewManaged<const Real *       [NP][NP]>  mp)
   {
     dvv = dvv_in;
     m_d = d;
