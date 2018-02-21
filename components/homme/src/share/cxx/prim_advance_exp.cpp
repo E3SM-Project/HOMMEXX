@@ -39,9 +39,15 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
   Real eta_ave_w = 1.0/params.qsplit;
 
   if (params.time_step_type==0) {
-    Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_not_implemented);
+    std::string msg = "[prim_advance_exp_iter]:";
+    msg += "missing some code for this time step method. ";
+    msg += "The program should have errored out earlier though. Plese, investigate.";
+    Errors::runtime_abort(msg,Errors::err_not_implemented);
   } else if (params.time_step_type==1) {
-    Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_not_implemented);
+    std::string msg = "[prim_advance_exp_iter]:";
+    msg += "missing some code for this time step method. ";
+    msg += "The program should have errored out earlier though. Plese, investigate.";
+    Errors::runtime_abort(msg,Errors::err_not_implemented);
   }
 
 #ifndef CAM
@@ -59,7 +65,12 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
       u3_5stage_timestep(nm1, n0, np1, tl.n0_qdp, dt, eta_ave_w, compute_diagnostics);
       break;
     default:
-      Errors::runtime_abort("[prim_advance_exp_iter",Errors::err_not_implemented);
+      {
+        std::string msg = "[prim_advance_exp_iter]:";
+        msg += "missing some code for this time step method. ";
+        msg += "The program should have errored out earlier though. Plese, investigate.";
+        Errors::runtime_abort(msg,Errors::err_not_implemented);
+      }
   }
 
 #ifdef ENERGY_DIAGNOSTICS
@@ -70,8 +81,10 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
 #endif
 
   if (params.time_step_type==0) {
-    Errors::runtime_abort("'advance hypervis lf' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
+    std::string msg = "[prim_advance_exp_iter]:";
+    msg += "missing some code for this time step method. ";
+    msg += "The program should have errored out earlier though. Plese, investigate.";
+    Errors::runtime_abort(msg,Errors::err_not_implemented);
     // call advance_hypervis_lf(edge3p1,elem,hvcoord,hybrid,deriv,nm1,n0,np1,nets,nete,dt_vis)
 
   } else if (params.time_step_type<=10) {

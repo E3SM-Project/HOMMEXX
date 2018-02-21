@@ -39,7 +39,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   GPTLstop("tl-s deep_copy");
 
   if (params.use_semi_lagrangian_transport) {
-    Errors::runtime_abort("[prim_step]", Errors::err_not_implemented);
+    Errors::option_error("prim_step", "use_semi_lagrangian_transport",params.use_semi_lagrangian_transport);
     // Set derived_star = v
   }
   GPTLstart("tl-s derived_dp");

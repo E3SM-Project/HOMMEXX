@@ -625,20 +625,21 @@ contains
 
 #ifdef USE_KOKKOS_KERNELS
     subroutine init_simulation_params_c (remap_alg, limiter_option, rsplit, qsplit, time_step_type,&
-                                         prescribed_wind, energy_fixer, qsize, state_frequency,    &
-                                         nu, nu_p, nu_q, nu_s, nu_div, nu_top,                           &
+                                         energy_fixer, qsize, state_frequency,                     &
+                                         nu, nu_p, nu_q, nu_s, nu_div, nu_top,                     &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
-                                         moisture, disable_diagnostics, use_semi_lagrange_transport) bind(c)
+                                         prescribed_wind, moisture, disable_diagnostics,           &
+                                         use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
       !
       ! Inputs
       !
       integer(kind=c_int),  intent(in) :: remap_alg, limiter_option, rsplit, qsplit, time_step_type
-      integer(kind=c_int),  intent(in) :: prescribed_wind, energy_fixer
+      integer(kind=c_int),  intent(in) :: energy_fixer
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
       real(kind=c_double),  intent(in) :: nu, nu_p, nu_q, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
-      logical(kind=c_bool), intent(in) :: disable_diagnostics, use_semi_lagrange_transport, moisture
+      logical(kind=c_bool), intent(in) :: prescribed_wind, disable_diagnostics, use_semi_lagrange_transport, moisture
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
@@ -1048,9 +1049,10 @@ contains
     call init_caar_derivative_c(deriv(hybrid%ithr))
 
     call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
-                                   prescribed_wind, energy_fixer, qsize, statefreq,               &
+                                   energy_fixer, qsize, statefreq,                                &
                                    nu, nu_p, nu_q, nu_s, nu_div, nu_top,                          &
                                    hypervis_order, hypervis_subcycle, hypervis_scaling,           &
+                                   LOGICAL(prescribed_wind==1,c_bool),                            &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
                                    LOGICAL(use_semi_lagrange_transport,c_bool))
