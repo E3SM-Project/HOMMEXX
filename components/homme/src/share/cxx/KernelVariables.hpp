@@ -16,7 +16,7 @@ private:
                             !std::is_same<ExecSpaceType,Hommexx_OpenMP>::value,
                             int
                            >::type
-    get_team_idx (const int /*team_size*/, const int /*ie*/, const int /*qsize*/, const int /*iq*/)
+    get_team_idx (const int /*team_size*/, const int /*league_rank*/)
     {
       return 0;
     }
@@ -26,9 +26,9 @@ private:
     static
     KOKKOS_INLINE_FUNCTION
     typename std::enable_if<std::is_same<ExecSpaceType,Kokkos::Cuda>::value,int>::type
-    get_team_idx (const int /*team_size*/, const int ie, const int qsize, const int iq)
+    get_team_idx (const int /*team_size*/, const int league_rank)
     {
-      return ie*qsize + iq;
+      return league_rank;
     }
 #endif
 
@@ -37,7 +37,7 @@ private:
     static
     KOKKOS_INLINE_FUNCTION
     typename std::enable_if<std::is_same<ExecSpaceType,Kokkos::OpenMP>::value,int>::type
-    get_team_idx (const int team_size, const int /*ie*/, const int /*qsize*/, const int /*iq*/)
+    get_team_idx (const int team_size, const int /*league_rank*/)
     {
       // Kokkos puts consecutive threads into the same team.
       return omp_get_thread_num() / team_size;
@@ -52,7 +52,7 @@ public:
       : team(team_in)
       , ie(team_in.league_rank())
       , iq(-1)
-      , team_idx(TeamInfo::get_team_idx<ExecSpace>(team_in.team_size(),team_in.league_rank(),1,0))
+      , team_idx(TeamInfo::get_team_idx<ExecSpace>(team_in.team_size(),team_in.league_rank()))
   {
     // Nothing to be done here
   }
@@ -62,10 +62,7 @@ public:
       : team(team_in)
       , ie(team_in.league_rank() / qsize)
       , iq(team_in.league_rank() % qsize)
-      , team_idx(TeamInfo::get_team_idx<ExecSpace>(team_in.team_size(),
-                                                   team.league_rank() / qsize,
-                                                   qsize,
-                                                   team.league_rank() % qsize))
+      , team_idx(TeamInfo::get_team_idx<ExecSpace>(team_in.team_size(),team_in.league_rank()))
   {
     // Nothing to be done here
   }
