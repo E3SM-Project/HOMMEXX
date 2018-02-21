@@ -41,7 +41,7 @@ struct CaarFunctorImpl {
   const Elements        m_elements;
   const Tracers         m_tracers;
   const Derivative      m_deriv;
-  const SphereOperators m_sphere_ops;
+  SphereOperators       m_sphere_ops;
 
   Kokkos::Array<std::shared_ptr<BoundaryExchange>, NUM_TIME_LEVELS> m_bes;
 

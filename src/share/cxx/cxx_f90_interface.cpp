@@ -24,12 +24,26 @@ extern "C"
 {
 
 void init_simulation_params_c (const int& remap_alg, const int& limiter_option, const int& rsplit, const int& qsplit,
-                               const int& time_step_type, const int& prescribed_wind, const int& energy_fixer,
-                               const int& qsize, const int& state_frequency,
+                               const int& time_step_type, const int& energy_fixer, const int& qsize, const int& state_frequency,
                                const Real& nu, const Real& nu_p, const Real& nu_q, const Real& nu_s, const Real& nu_div, const Real& nu_top,
-                               const int& hypervis_order, const int& hypervis_subcycle, const int& hypervis_scaling,
-                               const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
+                               const int& hypervis_order, const int& hypervis_subcycle, const double& hypervis_scaling,
+                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
 {
+  // Check that the simulation options are supported. This helps us in the future, since we
+  // are currently 'assuming' some option have/not have certain values. As we support for more
+  // options in the C++ build, we will remove some checks
+  Errors::check_option("init_simulation_params_c","vert_remap_q_alg",remap_alg,{1,2});
+  Errors::check_option("init_simulation_params_c","prescribed_wind",prescribed_wind,{false});
+  Errors::check_option("init_simulation_params_c","hypervis_order",hypervis_order,{2});
+  Errors::check_option("init_simulation_params_c","hypervis_scaling",hypervis_scaling,{0.0});
+  Errors::check_option("init_simulation_params_c","use_semi_lagrangian_transport",use_semi_lagrangian_transport,{false});
+  Errors::check_option("init_simulation_params_c","time_step_type",time_step_type,{5});
+  Errors::check_option("init_simulation_params_c","limiter_option",limiter_option,{8});
+  Errors::check_option("init_simulation_params_c","nu_p",nu_p,0.0,Errors::ComparisonOp::GT);
+  Errors::check_option("init_simulation_params_c","nu",nu,0.0,Errors::ComparisonOp::GT);
+  Errors::check_option("init_simulation_params_c","nu_div",nu_div,0.0,Errors::ComparisonOp::GT);
+  Errors::check_options_relation("init_simulation_params_c","nu_div","nu",nu_div,nu,Errors::ComparisonOp::EQ);
+
   // Get the simulation params struct
   SimulationParams& params = Context::singleton().get_simulation_params();
 
@@ -37,16 +51,13 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
     params.remap_alg = RemapAlg::PPM_MIRRORED;
   } else if (remap_alg==2) {
     params.remap_alg = RemapAlg::PPM_FIXED;
-  } else {
-    Errors::runtime_abort("Error in init_simulation_params_c: unknown remap algorithm.\n",
-                           Errors::err_unknown_option);
   }
 
   params.limiter_option                = limiter_option;
   params.rsplit                        = rsplit;
   params.qsplit                        = qsplit;
   params.time_step_type                = time_step_type;
-  params.prescribed_wind               = (prescribed_wind>0);
+  params.prescribed_wind               = prescribed_wind;
   params.energy_fixer                  = (energy_fixer>0);
   params.state_frequency               = state_frequency;
   params.qsize                         = qsize;
@@ -61,17 +72,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
-
-  // Check that the simulation options are supported. This helps us in the future, since we
-  // are currently 'assuming' some option have/not have certain values. As we support for more
-  // options in the C++ build, we will remove some checks
-  Errors::runtime_check(!prescribed_wind,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(hypervis_order==2,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(hypervis_scaling==0,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(!use_semi_lagrangian_transport,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(nu_div==nu,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(nu_p>0,"[init_simulation_params_c]",Errors::err_not_implemented);
-  Errors::runtime_check(time_step_type==5,"[init_simulation_params_c]",Errors::err_not_implemented);
 
   // Now this structure can be used safely
   params.params_set = true;
