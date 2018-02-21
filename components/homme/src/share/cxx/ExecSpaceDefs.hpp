@@ -62,6 +62,12 @@ using ExecSpace = Kokkos::DefaultExecutionSpace::execution_space;
 static_assert (!std::is_same<ExecSpace,void>::value,
                "Error! You are trying to use an ExecutionSpace not enabled in Kokkos.\n");
 
+template <typename ExeSpace>
+struct OnGpu { enum : bool { value = false }; };
+
+template <>
+struct OnGpu<Hommexx_Cuda> { enum : bool { value = true }; };
+
 // Call this instead of Kokkos::initialize.
 void initialize_kokkos();
 
@@ -149,6 +155,26 @@ get_default_team_policy(const int num_parallel_iterations) {
   return policy;
 }
 
+template<typename ExecSpaceType, typename... Tags>
+static
+typename std::enable_if<!OnGpu<ExecSpaceType>::value,int>::type
+get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
+  const int num_parallel_iterations = policy.league_size();
+  const int team_size = policy.team_size();
+  const int concurrency = ExecSpaceType::concurrency();
+  return (concurrency + team_size - 1) / team_size;
+}
+
+template<typename ExecSpaceType, typename... Tags>
+static
+typename std::enable_if<OnGpu<ExecSpaceType>::value,int>::type
+get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
+  const int num_parallel_iterations = policy.league_size();
+  const int team_size = policy.team_size() * policy.vector_length();
+  const int concurrency = ExecSpaceType::concurrency();
+  return (concurrency + team_size - 1) / team_size;
+}
+
 // A templated typedef for MD range policy (used in RK stages)
 template<typename ExecutionSpace, int Rank>
 using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
@@ -160,12 +186,6 @@ using MDRangePolicy = Kokkos::Experimental::MDRangePolicy
                               >,
                             Kokkos::IndexType<int>
                           >;
-
-template <typename ExeSpace>
-struct OnGpu { enum : bool { value = false }; };
-
-template <>
-struct OnGpu<Hommexx_Cuda> { enum : bool { value = true }; };
 
 template <typename ExeSpace>
 struct Memory {
@@ -256,7 +276,7 @@ struct Dispatch {
   {
     result = ValueType();
     for (int k = 0; k < NP*NP; ++k)
-      lambda(k, result);  
+      lambda(k, result);
   }
 };
 
