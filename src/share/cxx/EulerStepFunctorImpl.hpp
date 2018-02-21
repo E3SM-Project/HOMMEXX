@@ -4,6 +4,7 @@
 #include "EulerStepFunctor.hpp"
 #include "Context.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "Derivative.hpp"
 #include "HybridVCoord.hpp"
 #include "HommexxEnums.hpp"
@@ -56,6 +57,7 @@ class EulerStepFunctorImpl {
   };
 
   const Elements      m_elements;
+  const Tracers       m_tracers;
   const Derivative    m_deriv;
   const HybridVCoord  m_hvcoord;
   EulerStepData       m_data;
@@ -72,6 +74,7 @@ public:
 
   EulerStepFunctorImpl ()
    : m_elements   (Context::singleton().get_elements())
+   , m_tracers    (Context::singleton().get_tracers())
    , m_deriv      (Context::singleton().get_derivative())
    , m_hvcoord    (Context::singleton().get_hvcoord())
    , m_sphere_ops (Context::singleton().get_sphere_operators())
@@ -108,7 +111,7 @@ public:
       m_mmqb_be->set_buffers_manager(
           Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
-      m_mmqb_be->register_field(m_elements.buffers.qtens_biharmonic, m_data.qsize, 0);
+      m_mmqb_be->register_field(m_tracers.qtens_biharmonic, m_data.qsize, 0);
       m_mmqb_be->registration_completed();
     }
 
@@ -119,7 +122,7 @@ public:
         BoundaryExchange& be = *m_bes[k];
         be.set_buffers_manager(bm_exchange);
         be.set_num_fields(0, 0, m_data.qsize+1);
-        be.register_field(m_elements.m_qdp, np1_qdp, m_data.qsize, 0);
+        be.register_field(m_tracers.m_qdp, np1_qdp, m_data.qsize, 0);
         be.register_field(dssi == 0 ? m_elements.m_eta_dot_dpdn :
                           dssi == 1 ? m_elements.m_omega_p :
                           m_elements.m_derived_divdp_proj);
@@ -177,7 +180,7 @@ public:
   void operator() (const BIHPre&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     if (m_data.nu_p > 0) {
       const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
       Kokkos::parallel_for (
@@ -200,7 +203,7 @@ public:
   void operator() (const BIHPost&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(e.buffers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     team.team_barrier();
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
@@ -289,7 +292,7 @@ public:
 
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
     const int qsize = m_data.qsize;
-    const auto qdp = m_elements.m_qdp;
+    const auto qdp = m_tracers.m_qdp;
     const Real rkstage = 3.0;
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()*m_data.qsize),
@@ -319,8 +322,8 @@ public:
     const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
     const Real rhsm_dt = rhs_multiplier * m_data.dt;
-    const auto qdp = m_elements.m_qdp;
-    const auto qtens_biharmonic= m_elements.buffers.qtens_biharmonic;
+    const auto qdp = m_tracers.m_qdp;
+    const auto qtens_biharmonic= m_tracers.qtens_biharmonic;
     const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
@@ -515,9 +518,9 @@ private:
   KOKKOS_INLINE_FUNCTION
   void compute_vstar_qdp (const KernelVariables& kv) const {
     const auto NP2 = NP * NP;
-    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
+    const auto qdp = Homme::subview(m_tracers.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
     const auto q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto v_buf = Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq);
+    const auto v_buf = m_tracers.tracer(kv.ie, kv.iq).vstar_qdp;
     const auto vstar = Homme::subview(m_elements.buffers.vstar, kv.ie);
 
     Kokkos::parallel_for (
@@ -539,8 +542,8 @@ private:
   void compute_qtens (const KernelVariables& kv) const {
     m_sphere_ops.divergence_sphere_update(
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
-      Homme::subview(m_elements.buffers.vstar_qdp, kv.ie, kv.iq),
-      Homme::subview(m_elements.buffers.qtens_biharmonic, kv.ie, kv.iq),
+      m_tracers.tracer(kv.ie, kv.iq).vstar_qdp,
+      Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq),
       Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
   }
 
@@ -559,8 +562,8 @@ private:
   //! and we dont want to overwrite n0_qdp until we are done using it
   KOKKOS_INLINE_FUNCTION
   void apply_spheremp (const KernelVariables& kv) const {
-    const auto qdp = Homme::subview(m_elements.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    const auto qtens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto qdp = Homme::subview(m_tracers.m_qdp, kv.ie, m_data.np1_qdp, kv.iq);
+    const auto qtens = m_tracers.tracer(kv.ie, kv.iq).qtens;
     const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),

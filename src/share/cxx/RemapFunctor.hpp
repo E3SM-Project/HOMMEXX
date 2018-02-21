@@ -7,6 +7,7 @@
 #include "ErrorDefs.hpp"
 
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "KernelVariables.hpp"
 #include "Types.hpp"
@@ -156,6 +157,7 @@ struct RemapFunctor : public Remapper,
 
   RemapData m_data;
   const Elements m_elements;
+  const Tracers m_tracers;
   const HybridVCoord m_hvcoord;
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_tgt_layer_thickness;
@@ -197,7 +199,7 @@ struct RemapFunctor : public Remapper,
     if (!nonzero_rsplit || var >= this->num_states_remap) {
       if (var >= this->num_states_remap)
         var -= this->num_states_remap;
-      return Homme::subview(m_elements.m_qdp, kv.ie, m_data.n0_qdp, var);
+      return Homme::subview(m_tracers.m_qdp, kv.ie, m_data.n0_qdp, var);
     } else {
       return this->get_state(kv, m_elements, m_data.np1, var);
     }
