@@ -1,5 +1,6 @@
 #include "Context.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
@@ -92,6 +93,7 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   // Initialize dp3d from ps
   GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
+  Tracers& tracers = Context::singleton().get_tracers();
   HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
   const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
   const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
@@ -140,8 +142,8 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   ////////////////////////////////////////////////////////////////////////
   GPTLstart("tl-sc Q-from-qdp");
   {
-    const auto Q = elements.m_Q;
-    const auto qdp = elements.m_qdp;
+    const auto Q = tracers.m_q;
+    const auto qdp = tracers.m_qdp;
     const auto np1_qdp = tl.np1_qdp;
     const auto np1 = tl.np1;
     const auto qsize = params.qsize;

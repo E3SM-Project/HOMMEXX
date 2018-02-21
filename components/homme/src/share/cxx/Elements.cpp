@@ -46,12 +46,10 @@ void Elements::init(const int num_elems) {
 
   m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
 
-  m_Q = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>("q", m_num_elems);
-  m_qdp =
-      ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>(
-          "qdp", m_num_elems);
-  m_eta_dot_dpdn = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
-  m_derived_dpdiss_ave = ExecViewManaged<Scalar *[NP][NP][NUM_LEV]>("mean dp used to compute psdiss_tens", m_num_elems);
+  m_eta_dot_dpdn =
+      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
+  m_derived_dpdiss_ave = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
+      "mean dp used to compute psdiss_tens", m_num_elems);
 
   m_derived_dp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
     "derived_dp", m_num_elems);
@@ -161,8 +159,6 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   // Note: make sure you init hvcoord before calling this method!
   const auto& hvcoord = Context::singleton().get_hvcoord();
   genRandArray(m_ps_v, engine, std::uniform_real_distribution<Real>(100*hvcoord.ps0,1000*hvcoord.ps0));
-
-  genRandArray(m_qdp, engine, random_dist);
 
   // This ensures the pressure in a single column is monotonically increasing
   // and has fixed upper and lower values
@@ -286,11 +282,10 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
 void Elements::pull_from_f90_pointers(
     CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d,
     CF90Ptr &derived_phi, CF90Ptr &derived_omega_p,
-    CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn, CF90Ptr &state_qdp) {
+    CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn) {
   pull_3d(derived_phi, derived_omega_p, derived_v);
   pull_4d(state_v, state_t, state_dp3d);
   pull_eta_dot(derived_eta_dot_dpdn);
-  pull_qdp(state_qdp);
 }
 
 void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_omega_p, CF90Ptr &derived_v) {
@@ -318,20 +313,13 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   sync_to_device_i2p(eta_dot_dpdn_f90,m_eta_dot_dpdn);
 }
 
-void Elements::pull_qdp(CF90Ptr &state_qdp) {
-  HostViewUnmanaged<const Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
-  sync_to_device(state_qdp_f90,m_qdp);
-}
-
 void Elements::push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t,
                                     F90Ptr &state_dp3d, F90Ptr &derived_phi,
                                     F90Ptr &derived_omega_p, F90Ptr &derived_v,
-                                    F90Ptr &derived_eta_dot_dpdn,
-                                    F90Ptr &state_qdp) const {
+                                    F90Ptr &derived_eta_dot_dpdn) const {
   push_3d(derived_phi, derived_omega_p, derived_v);
   push_4d(state_v, state_t, state_dp3d);
   push_eta_dot(derived_eta_dot_dpdn);
-  push_qdp(state_qdp);
 }
 
 void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_omega_p, F90Ptr &derived_v) const {
@@ -357,11 +345,6 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) con
 void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   HostViewUnmanaged<Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
   sync_to_host_p2i(m_eta_dot_dpdn,eta_dot_dpdn_f90);
-}
-
-void Elements::push_qdp(F90Ptr &state_qdp) const {
-  HostViewUnmanaged<Real *[Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> state_qdp_f90(state_qdp,m_num_elems);
-  sync_to_host(m_qdp, state_qdp_f90);
 }
 
 void Elements::d(Real *d_ptr, int ie) const {
@@ -409,10 +392,6 @@ void Elements::BufferViews::init(const int num_elems) {
       "buffer for tracers", num_elems);
   vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
        num_elems);
-  qtens_biharmonic = ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>(
-      "buffer for biharmonic term for tracers", num_elems);
-  vstar_qdp = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "buffer for vstar*qdp", num_elems);
   qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
       "work buffer for tracers", num_elems);
   dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
