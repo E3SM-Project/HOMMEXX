@@ -13,18 +13,23 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
       qtens_biharmonic("tracer biharmonic tensor", num_elems),
       buf("scalar tracers buffer", m_tracers.size() * Tracer::num_scalars()) {
 
-  Scalar *mem_start = &buf.implementation_map().reference(0);
+  Scalar *const mem_start = &buf.implementation_map().reference(0);
+  size_t mem_pos = 0;
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int tracer = 0; tracer < num_tracers; ++tracer) {
       auto &t = m_tracers(ie, tracer);
-      t.qtens = ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>(mem_start);
-      mem_start += t.qtens.size();
+      assert(mem_pos < buf.size());
+      t.qtens = ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>(mem_start + mem_pos);
+      mem_pos += t.qtens.size();
 
-      t.vstar_qdp = ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>(mem_start);
-      mem_start += t.vstar_qdp.size();
+      assert(mem_pos < buf.size());
+      t.vstar_qdp = ExecViewUnmanaged<Scalar[2][NP][NP][NUM_LEV]>(mem_start + mem_pos);
+      mem_pos += t.vstar_qdp.size();
 
-      t.qlim = ExecViewUnmanaged<Scalar[2][NUM_LEV]>(mem_start);
-      mem_start += t.qlim.size();
+      assert(mem_pos < buf.size());
+      t.qlim = ExecViewUnmanaged<Scalar[2][NUM_LEV]>(mem_start + mem_pos);
+      mem_pos += t.qlim.size();
+      assert(mem_pos <= buf.size());
     }
   }
 }
@@ -35,7 +40,7 @@ void Tracers::random_init() {
   std::mt19937_64 engine(rd());
   std::uniform_real_distribution<Real> random_dist(min_value, 1.0 / min_value);
 
-  genRandArray(m_qdp, engine, random_dist);
+  genRandArray(buf, engine, random_dist);
 }
 
 void Tracers::pull_qdp(CF90Ptr &state_qdp) {
