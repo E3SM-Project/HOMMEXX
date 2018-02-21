@@ -63,9 +63,9 @@ public:
                           num_parallel_iterations : std::min(get_num_concurrent_teams(team_policy),num_parallel_iterations);
 
     if (vector_buf_ml.extent_int(0)<alloc_dim) {
-      vector_buf_sl = ExecViewManaged<Real   *[NUM_2D_VECTOR_BUFFERS][2][NP][NP]>("",alloc_dim);
-      scalar_buf_ml = ExecViewManaged<Scalar *[NUM_3D_SCALAR_BUFFERS]   [NP][NP][NUM_LEV]>("",alloc_dim);
-      vector_buf_ml = ExecViewManaged<Scalar *[NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("",alloc_dim);
+      vector_buf_sl = decltype(vector_buf_sl)("",alloc_dim);
+      scalar_buf_ml = decltype(scalar_buf_ml)("",alloc_dim);
+      vector_buf_ml = decltype(vector_buf_ml)("",alloc_dim);
     }
   }
 
@@ -940,7 +940,7 @@ private:
 
   // These buffers should be enough to handle any single call to any single sphere operator
   ExecViewManaged<Real   * [NUM_2D_VECTOR_BUFFERS][2][NP][NP]>           vector_buf_sl;
-  ExecViewManaged<Scalar * [NUM_3D_SCALAR_BUFFERS]   [NP][NP][NUM_LEV]>  scalar_buf_ml;
+  ExecViewManaged<Scalar * [NUM_3D_SCALAR_BUFFERS][NP][NP][NUM_LEV]>     scalar_buf_ml;
   ExecViewManaged<Scalar * [NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>  vector_buf_ml;
 
   ExecViewManaged<const Real [NP][NP]>          dvv;
