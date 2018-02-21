@@ -159,7 +159,6 @@ template<typename ExecSpaceType, typename... Tags>
 static
 typename std::enable_if<!OnGpu<ExecSpaceType>::value,int>::type
 get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
-  const int num_parallel_iterations = policy.league_size();
   const int team_size = policy.team_size();
   const int concurrency = ExecSpaceType::concurrency();
   return (concurrency + team_size - 1) / team_size;
@@ -169,7 +168,6 @@ template<typename ExecSpaceType, typename... Tags>
 static
 typename std::enable_if<OnGpu<ExecSpaceType>::value,int>::type
 get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& policy) {
-  const int num_parallel_iterations = policy.league_size();
   const int team_size = policy.team_size() * policy.vector_length();
   const int concurrency = ExecSpaceType::concurrency();
   return (concurrency + team_size - 1) / team_size;
