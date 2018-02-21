@@ -86,8 +86,10 @@ public:
     m_data.nu_q = params.nu_q;
 
     if (m_data.limiter_option == 4) {
-      Errors::runtime_abort("Limiter option 4 hasn't been implemented!",
-                            Errors::err_not_implemented);
+      std::string msg = "[EulerStepFunctorImpl::reset]:";
+      msg += "limiter_option=4 is not yet supported in C++. ";
+      msg += "The program should have errored out earlier though. Plese, investigate.";
+      Errors::runtime_abort(msg,Errors::err_not_implemented);
     }
 
     // This will fit the needs of all calls to sphere operators.
