@@ -59,10 +59,8 @@ public:
   void allocate_buffers (const Kokkos::TeamPolicy<ExecSpace,Tags...>& team_policy)
   {
     const int num_parallel_iterations = team_policy.league_size();
-    const int team_size = get_team_size(team_policy);
-    const int concurrency = ExecSpace::concurrency();
-    const int max_num_concurrent_teams = (concurrency + team_size - 1) / team_size;
-    const int alloc_dim = std::min(num_parallel_iterations,max_num_concurrent_teams);
+    const int alloc_dim = OnGpu<ExecSpace>::value ?
+                          num_parallel_iterations : min(get_num_concurrent_teams(team_policy),num_parallel_iterations);
 
     vector_buf_sl = ExecViewManaged<Real   *[NUM_2D_VECTOR_BUFFERS][2][NP][NP]>("",alloc_dim);
     scalar_buf_ml = ExecViewManaged<Scalar *[NUM_3D_SCALAR_BUFFERS]   [NP][NP][NUM_LEV]>("",alloc_dim);
