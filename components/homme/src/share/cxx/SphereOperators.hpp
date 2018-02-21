@@ -62,9 +62,11 @@ public:
     const int alloc_dim = OnGpu<ExecSpace>::value ?
                           num_parallel_iterations : std::min(get_num_concurrent_teams(team_policy),num_parallel_iterations);
 
-    vector_buf_sl = ExecViewManaged<Real   *[NUM_2D_VECTOR_BUFFERS][2][NP][NP]>("",alloc_dim);
-    scalar_buf_ml = ExecViewManaged<Scalar *[NUM_3D_SCALAR_BUFFERS]   [NP][NP][NUM_LEV]>("",alloc_dim);
-    vector_buf_ml = ExecViewManaged<Scalar *[NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("",alloc_dim);
+    if (vector_buf_ml.extent_int(0)<alloc_dim) {
+      vector_buf_sl = ExecViewManaged<Real   *[NUM_2D_VECTOR_BUFFERS][2][NP][NP]>("",alloc_dim);
+      scalar_buf_ml = ExecViewManaged<Scalar *[NUM_3D_SCALAR_BUFFERS]   [NP][NP][NUM_LEV]>("",alloc_dim);
+      vector_buf_ml = ExecViewManaged<Scalar *[NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>("",alloc_dim);
+    }
   }
 
 // ================ SINGLE-LEVEL IMPLEMENTATION =========================== //
