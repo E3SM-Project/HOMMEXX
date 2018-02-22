@@ -113,7 +113,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   be3->set_num_fields(num_min_max_fields_1d,0,0);
   for(int ie = 0; ie < num_elements; ++ie) {
     for(int iq = 0; iq < num_min_max_fields_1d; ++iq) {
-      be3->register_min_max_fields(Homme::subview(field_min_max_1d_cxx, ie, iq), ie, iq);
+      be3->register_min_max_fields(Homme::subview(field_min_max_1d_cxx, ie, iq), ie);
     }
   }
   be3->registration_completed();

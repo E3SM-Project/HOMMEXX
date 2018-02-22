@@ -110,7 +110,7 @@ public:
       be.set_num_fields(m_data.qsize, 0, 0);
       for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
         for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
-          be.register_min_max_fields(m_tracers.device_tracers()(ie, iq).qlim, ie, iq);
+          be.register_min_max_fields(m_tracers.device_tracers()(ie, iq).qlim, ie);
         }
       }
       be.registration_completed();
@@ -121,11 +121,11 @@ public:
       m_mmqb_be->set_buffers_manager(
           Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
-			for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
-				for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
-					m_mmqb_be->register_field(m_tracers.device_tracers()(ie, iq).qtens_biharmonic, ie, iq);
-				}
-			}
+      for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
+        for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
+          m_mmqb_be->register_field(m_tracers.device_tracers()(ie, iq).qtens_biharmonic, ie);
+        }
+      }
       m_mmqb_be->registration_completed();
     }
 
