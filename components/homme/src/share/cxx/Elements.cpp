@@ -109,16 +109,16 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 
   for (int ie=0; ie<m_num_elems; ++ie) {
     const Element& elem = h_elements(ie);
-    sync_to_device(Homme::subview(h_D_f90,ie)        , elem.m_d        );
-    sync_to_device(Homme::subview(h_Dinv_f90,ie)     , elem.m_dinv     );
-    sync_to_device(Homme::subview(h_fcor_f90,ie)     , elem.m_fcor     );
-    sync_to_device(Homme::subview(h_metinv_f90,ie)   , elem.m_metinv   );
-    sync_to_device(Homme::subview(h_mp_f90,ie)       , elem.m_mp       );
-    sync_to_device(Homme::subview(h_spheremp_f90,ie) , elem.m_spheremp );
-    sync_to_device(Homme::subview(h_rspheremp_f90,ie), elem.m_rspheremp);
-    sync_to_device(Homme::subview(h_metdet_f90,ie)   , elem.m_metdet   );
-    sync_to_device(Homme::subview(h_metinv_f90,ie)   , elem.m_metinv   );
-    sync_to_device(Homme::subview(h_phis_f90,ie)     , elem.m_phis     );
+    Kokkos::deep_copy(elem.m_d        , Homme::subview(h_D_f90,ie)        );
+    Kokkos::deep_copy(elem.m_dinv     , Homme::subview(h_Dinv_f90,ie)     );
+    Kokkos::deep_copy(elem.m_fcor     , Homme::subview(h_fcor_f90,ie)     );
+    Kokkos::deep_copy(elem.m_metinv   , Homme::subview(h_metinv_f90,ie)   );
+    Kokkos::deep_copy(elem.m_mp       , Homme::subview(h_mp_f90,ie)       );
+    Kokkos::deep_copy(elem.m_spheremp , Homme::subview(h_spheremp_f90,ie) );
+    Kokkos::deep_copy(elem.m_rspheremp, Homme::subview(h_rspheremp_f90,ie));
+    Kokkos::deep_copy(elem.m_metdet   , Homme::subview(h_metdet_f90,ie)   );
+    Kokkos::deep_copy(elem.m_metinv   , Homme::subview(h_metinv_f90,ie)   );
+    Kokkos::deep_copy(elem.m_phis     , Homme::subview(h_phis_f90,ie)     );
   }
 
   // NOTE: there is no need to copy h_elements into m_elements. They both store
@@ -374,7 +374,7 @@ void Elements::d(Real *d_ptr, int ie) const {
   Kokkos::deep_copy(h_elements,m_elements);
 
   HostViewUnmanaged<Real[2][2][NP][NP]> d_wrapper(d_ptr);
-  sync_to_host(h_elements(ie).m_d,d_wrapper);
+  Kokkos::deep_copy(d_wrapper,h_elements(ie).m_d);
 }
 
 void Elements::dinv(Real *dinv_ptr, int ie) const {
@@ -382,7 +382,7 @@ void Elements::dinv(Real *dinv_ptr, int ie) const {
   Kokkos::deep_copy(h_elements,m_elements);
 
   HostViewUnmanaged<Real[2][2][NP][NP]> dinv_wrapper(dinv_ptr);
-  sync_to_host(h_elements(ie).m_dinv,dinv_wrapper);
+  Kokkos::deep_copy(dinv_wrapper,h_elements(ie).m_dinv);
 }
 
 void Elements::BufferViews::init(const int num_elems) {
