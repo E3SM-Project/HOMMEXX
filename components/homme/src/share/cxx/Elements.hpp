@@ -168,9 +168,6 @@ public:
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
 
-  void d(Real *d_ptr, int ie) const;
-  void dinv(Real *dinv_ptr, int ie) const;
-
 private:
   int m_num_elems;
 

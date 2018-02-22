@@ -260,14 +260,14 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
         genRandArray(h_matrix, engine, random_dist, constrain_det);
         for (int i = 0; i < 2; ++i) {
           for (int j = 0; j < 2; ++j) {
-            h_d(ie, i, j, igp, jgp) = h_matrix(i, j);
+            h_d(i, j, igp, jgp) = h_matrix(i, j);
           }
         }
         const Real determinant = compute_det(h_matrix);
-        h_dinv(ie, 0, 0, igp, jgp) = h_matrix(1, 1) / determinant;
-        h_dinv(ie, 1, 0, igp, jgp) = -h_matrix(1, 0) / determinant;
-        h_dinv(ie, 0, 1, igp, jgp) = -h_matrix(0, 1) / determinant;
-        h_dinv(ie, 1, 1, igp, jgp) = h_matrix(0, 0) / determinant;
+        h_dinv(0, 0, igp, jgp) = h_matrix(1, 1) / determinant;
+        h_dinv(1, 0, igp, jgp) = -h_matrix(1, 0) / determinant;
+        h_dinv(0, 1, igp, jgp) = -h_matrix(0, 1) / determinant;
+        h_dinv(1, 1, igp, jgp) = h_matrix(0, 0) / determinant;
       }
     }
     Kokkos::deep_copy(elem.m_d, h_d);
@@ -372,22 +372,6 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   for (int ie=0; ie<m_num_elems; ++ie) {
     sync_to_host_p2i(h_elements(ie).m_eta_dot_dpdn,Homme::subview(eta_dot_dpdn_f90,ie));
   }
-}
-
-void Elements::d(Real *d_ptr, int ie) const {
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
-
-  HostViewUnmanaged<Real[2][2][NP][NP]> d_wrapper(d_ptr);
-  Kokkos::deep_copy(d_wrapper,h_elements(ie).m_d);
-}
-
-void Elements::dinv(Real *dinv_ptr, int ie) const {
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
-
-  HostViewUnmanaged<Real[2][2][NP][NP]> dinv_wrapper(dinv_ptr);
-  Kokkos::deep_copy(dinv_wrapper,h_elements(ie).m_dinv);
 }
 
 void Elements::BufferViews::init(const int num_elems) {
