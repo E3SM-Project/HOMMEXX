@@ -96,14 +96,14 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
 
   // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly in an unmanaged view
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)
-  HostViewUnmanaged<Real*[NUM_TIME_LEVELS][NP][NP]> ps_v_f90(elem_state_ps_v_ptr,elements.num_elems());
+  HostViewUnmanaged<Real*[NUM_TIME_LEVELS][NP][NP]>  ps_v_f90(elem_state_ps_v_ptr,elements.num_elems());
+  HostViewUnmanaged<Real*[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(elem_derived_omega_p_ptr,elements.num_elems());
+  auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
+  for (int ie=0; ie<elements.num_elems(); ++ie) {
+    sync_to_host(h_elements(ie).m_ps_v,Homme::subview(ps_v_f90,ie));
+    sync_to_host(h_elements(ie).m_omega_p,Homme::subview(omega_p_f90,ie));
+  }
 
-  decltype(elements.m_ps_v)::HostMirror ps_v_host = Kokkos::create_mirror_view(elements.m_ps_v);
-
-  Kokkos::deep_copy(ps_v_host,elements.m_ps_v);
-  Kokkos::deep_copy(ps_v_f90,ps_v_host);
-
-  sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
   for (int ie = 0; ie < elements.num_elems(); ++ie) {
     for (int iq = 0; iq < tracers.num_tracers(); ++iq) {
       sync_to_host(
@@ -152,12 +152,11 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
 
   // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly in an unmanaged view
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)
-  HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NP][NP]> ps_v_f90(elem_state_ps_v_ptr,elements.num_elems());
-
-  decltype(elements.m_ps_v)::HostMirror ps_v_host = Kokkos::create_mirror_view(elements.m_ps_v);
-
-  Kokkos::deep_copy(ps_v_host,ps_v_f90);
-  Kokkos::deep_copy(elements.m_ps_v,ps_v_host);
+  HostViewUnmanaged<const Real*[NUM_TIME_LEVELS][NP][NP]>  ps_v_f90(elem_state_ps_v_ptr,elements.num_elems());
+  auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
+  for (int ie=0; ie<elements.num_elems(); ++ie) {
+    sync_to_device(Homme::subview(ps_v_f90,ie),h_elements(ie).m_ps_v);
+  }
 }
 
 void init_boundary_exchanges_c ()
