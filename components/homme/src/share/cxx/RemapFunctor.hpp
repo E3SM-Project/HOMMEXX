@@ -130,6 +130,9 @@ template <> struct _RemapFunctorRSplit<true> {
     default:
       assert(false);
     }
+
+    // Here just to suppress a compiler warning
+    return ExecViewManaged<Scalar[NP][NP][NUM_LEV]>("");
   }
 };
 
