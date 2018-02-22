@@ -55,18 +55,19 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const TagFirstLaplace&, const TeamMember& team) const {
     KernelVariables kv(team);
+    const Element& elem = m_elements.get_element(kv.ie);
     // Laplacian of temperature
     m_sphere_ops.laplace_simple(kv,
-                   Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
+                   Homme::subview(elem.m_t,m_data.np1),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
     m_sphere_ops.laplace_simple(kv,
-                   Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
+                   Homme::subview(elem.m_dp3d,m_data.np1),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
     m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
-                              Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
+                              Homme::subview(elem.m_v,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
 
@@ -94,41 +95,43 @@ public:
     const int igp  = (idx / (NP*NUM_LEV)) % NP;
     const int jgp  = (idx / NUM_LEV) % NP;
     const int ilev =  idx % NUM_LEV;
+    const Element& elem = m_elements.get_element(ie);
 
     // Apply inverse mass matrix
     m_elements.buffers.vtens(ie,0,igp,jgp,ilev) = (m_data.dt * m_elements.buffers.vtens(ie,0,igp,jgp,ilev) *
-                                                   m_elements.m_rspheremp(ie,igp,jgp));
+                                                   elem.m_rspheremp(igp,jgp));
     m_elements.buffers.vtens(ie,1,igp,jgp,ilev) = (m_data.dt * m_elements.buffers.vtens(ie,1,igp,jgp,ilev) *
-                                                   m_elements.m_rspheremp(ie,igp,jgp));
-    m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
-    m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
+                                                   elem.m_rspheremp(igp,jgp));
+    elem.m_v(m_data.np1,0,igp,jgp,ilev) += m_elements.buffers.vtens(ie,0,igp,jgp,ilev);
+    elem.m_v(m_data.np1,1,igp,jgp,ilev) += m_elements.buffers.vtens(ie,1,igp,jgp,ilev);
 
     m_elements.buffers.ttens(ie,igp,jgp,ilev) = (m_data.dt*m_elements.buffers.ttens(ie,igp,jgp,ilev) *
-                                                 m_elements.m_rspheremp(ie,igp,jgp));
-    const Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,0,igp,jgp,ilev)
-                         + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*m_elements.m_v(ie,m_data.np1,1,igp,jgp,ilev);
-    m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) =
-      m_elements.m_t(ie,m_data.np1,igp,jgp,ilev) + m_elements.buffers.ttens(ie,igp,jgp,ilev) -
+                                                 elem.m_rspheremp(igp,jgp));
+    const Scalar heating = m_elements.buffers.vtens(ie,0,igp,jgp,ilev)*elem.m_v(m_data.np1,0,igp,jgp,ilev)
+                         + m_elements.buffers.vtens(ie,1,igp,jgp,ilev)*elem.m_v(m_data.np1,1,igp,jgp,ilev);
+    elem.m_t(m_data.np1,igp,jgp,ilev) =
+      elem.m_t(m_data.np1,igp,jgp,ilev) + m_elements.buffers.ttens(ie,igp,jgp,ilev) -
       heating/PhysicalConstants::cp;
 
-    m_elements.m_dp3d(ie,m_data.np1,igp,jgp,ilev) = (m_elements.buffers.dptens(ie,igp,jgp,ilev) *
-                                                     m_elements.m_rspheremp(ie,igp,jgp));
+    elem.m_dp3d(m_data.np1,igp,jgp,ilev) = (m_elements.buffers.dptens(ie,igp,jgp,ilev) *
+                                                     elem.m_rspheremp(igp,jgp));
   }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagHyperPreExchange, const TeamMember &team) const {
     KernelVariables kv(team);
+    const Element& elem = m_elements.get_element(kv.ie);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &point_idx) {
       const int igp = point_idx / NP;
       const int jgp = point_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &lev) {
-        m_elements.m_derived_dpdiss_ave(kv.ie, igp, jgp, lev) +=
+        elem.m_derived_dpdiss_ave(igp, jgp, lev) +=
             m_data.eta_ave_w *
-            m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, lev) /
+            elem.m_dp3d(m_data.np1, igp, jgp, lev) /
             m_data.hypervis_subcycle;
-        m_elements.m_derived_dpdiss_biharmonic(kv.ie, igp, jgp, lev) +=
+        elem.m_derived_dpdiss_biharmonic(igp, jgp, lev) +=
             m_data.eta_ave_w * m_elements.buffers.dptens(kv.ie, igp, jgp, lev) /
             m_data.hypervis_subcycle;
       });
@@ -149,21 +152,21 @@ public:
       m_sphere_ops.vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
             kv, m_data.nu_ratio,
             // input
-            Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
+            Homme::subview(elem.m_v, m_data.np1),
             // output
             Homme::subview(laplace_v, kv.ie));
 
       m_sphere_ops.laplace_simple<NUM_BIHARMONIC_LEV>(
             kv,
             // input
-            Homme::subview(m_elements.m_t, kv.ie, m_data.np1),
+            Homme::subview(elem.m_t, m_data.np1),
             // output
             Homme::subview(laplace_t, kv.ie));
 
       m_sphere_ops.laplace_simple<NUM_BIHARMONIC_LEV>(
             kv,
             // input
-            Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
+            Homme::subview(elem.m_dp3d, m_data.np1),
             // output
             Homme::subview(laplace_dp3d, kv.ie));
     }
@@ -206,8 +209,8 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &lev) {
           m_elements.buffers.dptens(kv.ie, igp, jgp, lev) *= m_data.dt;
-          m_elements.buffers.dptens(kv.ie, igp, jgp, lev) += m_elements.m_dp3d(kv.ie,m_data.np1,igp,jgp,lev)
-                                                           * m_elements.m_spheremp(kv.ie,igp,jgp);
+          m_elements.buffers.dptens(kv.ie, igp, jgp, lev) += elem.m_dp3d(m_data.np1,igp,jgp,lev)
+                                                           * elem.m_spheremp(igp,jgp);
       });
     });
   }
