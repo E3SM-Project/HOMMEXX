@@ -66,7 +66,7 @@ void Element::init(Real* buffer) {
   sbuf += NP*NP*NUM_LEV;
 
   buffer = reinterpret_cast<Real*>(sbuf);
-  ExecViewUnmanaged<Real [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
+  m_ps_v = ExecViewUnmanaged<Real [NUM_TIME_LEVELS][NP][NP]> (buffer);
 }
 
 void Elements::init(const int num_elems) {
