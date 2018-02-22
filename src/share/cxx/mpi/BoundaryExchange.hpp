@@ -111,7 +111,11 @@ public:
 
   // Note: num_dims is the # of dimensions to exchange, while start_dim is the first to exchange
   template<int DIM, typename... Properties>
+  void register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim)
+  template<int DIM, typename... Properties>
   void register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim);
+  template<int DIM, typename... Properties>
+  void register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int num_dims, int start_dim);
   template<int DIM, typename... Properties>
   void register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim);
   template <typename... Properties>
@@ -120,10 +124,16 @@ public:
 
   // Note: the outer dimension MUST be sliced, while the inner dimension can be fully exchanged
   template<int OUTER_DIM, int DIM, typename... Properties>
+  void register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int idim_out, int num_dims, int start_dim);
+  template<int OUTER_DIM, int DIM, typename... Properties>
   void register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int idim_out, int num_dims, int start_dim);
 
   template<typename... Properties>
+  void register_field (ExecView<Real[NP][NP], Properties...> field, int ie);
+  template<typename... Properties>
   void register_field (ExecView<Real*[NP][NP], Properties...> field);
+  template<typename... Properties>
+  void register_field (ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie);
   template<typename... Properties>
   void register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field);
 
@@ -264,6 +274,25 @@ void BoundaryExchange::register_field(
 }
 
 template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (num_dims>0 && start_dim>=0 && DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_2d_fields+num_dims<=m_2d_fields.extent_int(1));
+  assert (m_num_1d_fields==0);
+
+  for(int idim=0; idim<num_dims; ++idim) {
+    m_2d_fields(ie, m_num_2d_fields+idim) = Kokkos::subview(field, start_dim+idim, ALL, ALL);
+  }
+
+  m_num_2d_fields += num_dims;
+}
+
+template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim)
 {
   using Kokkos::ALL;
@@ -288,6 +317,27 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties..
 }
 
 template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int num_dims, int start_dim)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (num_dims>0 && start_dim>=0 && DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
+  assert (m_num_1d_fields==0);
+
+  auto l_num_3d_fields = m_num_3d_fields;
+  auto l_3d_fields = m_3d_fields;
+  for(int idim=0; idim<num_dims; ++idim) {
+    m_3d_fields(ie, m_num_3d_fields+idim) = Kokkos::subview(field, start_dim+idim, ALL, ALL, ALL);
+  }
+
+  m_num_3d_fields += num_dims;
+}
+
+template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim)
 {
   using Kokkos::ALL;
@@ -306,6 +356,25 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], P
                          KOKKOS_LAMBDA(const int ie, const int idim){
         l_3d_fields(ie, l_num_3d_fields+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL, ALL);
     });
+  }
+
+  m_num_3d_fields += num_dims;
+}
+
+template<int OUTER_DIM, int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int outer_dim, int num_dims, int start_dim)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (num_dims>0 && start_dim>=0 && outer_dim>=0 && DIM>0 && OUTER_DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
+  assert (m_num_1d_fields==0);
+
+  for(int idim=0; idim<num_dims; ++idim) {
+    m_3d_fields(ie, m_num_3d_fields+idim) = Kokkos::subview(field, outer_dim, start_dim+idim, ALL, ALL, ALL);
   }
 
   m_num_3d_fields += num_dims;
@@ -336,6 +405,21 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
 }
 
 template<typename... Properties>
+void BoundaryExchange::register_field (ExecView<Real[NP][NP], Properties...> field, int ie)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (m_num_2d_fields+1<=m_2d_fields.extent_int(1));
+  assert (m_num_1d_fields==0);
+
+  m_2d_fields(ie, m_num_2d_fields) = field;
+
+  ++m_num_2d_fields;
+}
+
+template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> field)
 {
   using Kokkos::ALL;
@@ -355,6 +439,21 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> fi
   }
 
   ++m_num_2d_fields;
+}
+
+template<typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (m_num_3d_fields+1<=m_3d_fields.extent_int(1));
+  assert (m_num_1d_fields==0);
+
+  m_3d_fields(ie, m_num_3d_fields) = field;
+
+  ++m_num_3d_fields;
 }
 
 template<typename... Properties>
