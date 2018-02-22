@@ -29,12 +29,18 @@ public:
     dvv = derivative.get_dvv();
 
     // Get all needed 2d fields from elements
-    m_d        = elements.m_d;
-    m_dinv     = elements.m_dinv;
-    m_metdet   = elements.m_metdet;
-    m_metinv   = elements.m_metinv;
-    m_spheremp = elements.m_spheremp;
-    m_mp       = elements.m_mp;
+    m_geo_views = ExecViewManaged<GeoViews*>(elements.num_elems());
+    auto geo_views = m_geo_views;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(elements.num_elems()),
+                         KOKKOS_LAMBDA(const int ie) {
+      const Element& e = elements.get_element(ie);
+      geo_views(ie).m_d = e.m_d;
+      geo_views(ie).m_dinv = e.m_dinv;
+      geo_views(ie).m_metdet = e.m_metdet;
+      geo_views(ie).m_metinv = e.m_metinv;
+      geo_views(ie).m_spheremp = e.m_spheremp;
+      geo_views(ie).m_mp = e.m_mp;
+    });
   }
 
   // This one is used in the unit tests
@@ -47,12 +53,20 @@ public:
                   const ExecViewManaged<const Real *       [NP][NP]>  mp)
   {
     dvv = dvv_in;
-    m_d = d;
-    m_dinv = dinv;
-    m_metinv = metinv;
-    m_metdet = metdet;
-    m_spheremp = spheremp;
-    m_mp = mp;
+
+    const int num_elems = metdet.extent_int(0);
+
+    m_geo_views = ExecViewManaged<GeoViews*>(num_elems);
+    auto geo_views = m_geo_views;
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(num_elems),
+                         KOKKOS_LAMBDA(const int ie) {
+      geo_views(ie).m_d        = Homme::subview(d,ie);
+      geo_views(ie).m_dinv     = Homme::subview(dinv,ie);
+      geo_views(ie).m_metdet   = Homme::subview(metdet,ie);
+      geo_views(ie).m_metinv   = Homme::subview(metinv,ie);
+      geo_views(ie).m_spheremp = Homme::subview(spheremp,ie);
+      geo_views(ie).m_mp       = Homme::subview(mp,ie);
+    });
   }
 
   template<typename... Tags>
@@ -76,7 +90,7 @@ public:
                       const ExecViewUnmanaged<const Real    [NP][NP]> scalar,
                       const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
   {
-    const auto& D_inv = Homme::subview(m_dinv,kv.ie);
+    const auto& D_inv = m_geo_views(kv.ie).m_dinv;
     const auto& temp_v_buf = Homme::subview(vector_buf_sl,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     // TODO: Use scratch space for this
@@ -112,7 +126,7 @@ public:
                              const ExecViewUnmanaged<      Real [2][NP][NP]> grad_s) const
   {
     constexpr int np_squared = NP * NP;
-    const auto& D_inv = Homme::subview(m_dinv,kv.ie);
+    const auto& D_inv = m_geo_views(kv.ie).m_dinv;
     const auto& temp_v_buf = Homme::subview(vector_buf_sl,kv.team_idx,0);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
@@ -146,8 +160,8 @@ public:
                         const ExecViewUnmanaged<const Real [2][NP][NP]> v,
                         const ExecViewUnmanaged<      Real    [NP][NP]> div_v) const
   {
-    const auto& metdet = Homme::subview(m_metdet,kv.ie);
-    const auto& D_inv = Homme::subview(m_dinv,kv.ie);
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
+    const auto& D_inv  = m_geo_views(kv.ie).m_dinv;
     const auto& gv_buf = Homme::subview(vector_buf_sl,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -182,8 +196,8 @@ public:
                            const ExecViewUnmanaged<const Real [2][NP][NP]> v,
                            const ExecViewUnmanaged<      Real    [NP][NP]> div_v) const
   {
-    const auto& D_inv = Homme::subview(m_dinv,kv.ie);
-    const auto& spheremp = Homme::subview(m_spheremp,kv.ie);
+    const auto& D_inv    = m_geo_views(kv.ie).m_dinv;
+    const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
     const auto& gv_buf = Homme::subview(vector_buf_sl,kv.team_idx,0);
 
     // copied from strong divergence as is but without metdet
@@ -234,8 +248,8 @@ public:
                        const ExecViewUnmanaged<const Real [NP][NP]> v,
                        const ExecViewUnmanaged<      Real [NP][NP]> vort) const
   {
-    const auto& D = Homme::subview(m_d,kv.ie);
-    const auto& metdet = Homme::subview(m_metdet,kv.ie);
+    const auto& D      = m_geo_views(kv.ie).m_d;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& vcov_buf = Homme::subview(vector_buf_sl,kv.team_idx,0);
 
     constexpr int np_squared = NP * NP;
@@ -291,7 +305,7 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
+    const auto& D_inv = m_geo_views(kv.ie).m_dinv;
     const auto& v_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
 
     constexpr int np_squared = NP * NP;
@@ -335,7 +349,7 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
+    const auto& D_inv = m_geo_views(kv.ie).m_dinv;
     const auto& v_buf = Homme::subview(vector_buf_ml,kv.team_idx, 0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -378,8 +392,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& metdet = Homme::subview(m_metdet, kv.ie);
+    const auto& D_inv  = m_geo_views(kv.ie).m_dinv;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& gv_buf = Homme::subview(vector_buf_ml,kv.team_idx, 0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -426,8 +440,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& metdet = Homme::subview(m_metdet, kv.ie);
+    const auto& D_inv  = m_geo_views(kv.ie).m_dinv;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& gv = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -472,8 +486,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& metdet = Homme::subview(m_metdet, kv.ie);
+    const auto& D      = m_geo_views(kv.ie).m_d;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& vcov_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -517,8 +531,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& metdet = Homme::subview(m_metdet, kv.ie);
+    const auto& D      = m_geo_views(kv.ie).m_d;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -561,8 +575,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
+    const auto& D_inv    = m_geo_views(kv.ie).m_dinv;
+    const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
     const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -629,8 +643,8 @@ public:
 
     const auto& grad_s     = Homme::subview(vector_buf_ml, kv.team_idx, 1);
     const auto& sphere_buf = Homme::subview(vector_buf_ml, kv.team_idx, 2);
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
+    const auto& D_inv    = m_geo_views(kv.ie).m_dinv;
+    const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
 
     gradient_sphere<NUM_LEV_REQUEST>(kv, field, grad_s);
   //now multiply tensorVisc(:,:,i,j)*grad_s(i,j) (matrix*vector, independent of i,j )
@@ -661,8 +675,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& mp = Homme::subview(m_mp, kv.ie);
+    const auto& D  = m_geo_views(kv.ie).m_d;
+    const auto& mp = m_geo_views(kv.ie).m_mp;
     const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
@@ -705,8 +719,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& mp = Homme::subview(m_mp, kv.ie);
+    const auto& D  = m_geo_views(kv.ie).m_d;
+    const auto& mp = m_geo_views(kv.ie).m_mp;
     const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
@@ -751,10 +765,10 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& mp = Homme::subview(m_mp, kv.ie);
-    const auto& metinv = Homme::subview(m_metinv, kv.ie);
-    const auto& metdet = Homme::subview(m_metdet, kv.ie);
+    const auto& D      = m_geo_views(kv.ie).m_d;
+    const auto& mp     = m_geo_views(kv.ie).m_mp;
+    const auto& metinv = m_geo_views(kv.ie).m_metinv;
+    const auto& metdet = m_geo_views(kv.ie).m_metdet;
     const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
@@ -827,8 +841,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
+    const auto& D_inv    = m_geo_views(kv.ie).m_dinv;
+    const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
     const auto& laplace0   = Homme::subview(scalar_buf_ml,kv.team_idx,0);
     const auto& laplace1   = Homme::subview(scalar_buf_ml,kv.team_idx,1);
     const auto& laplace2   = Homme::subview(scalar_buf_ml,kv.team_idx,2);
@@ -891,8 +905,8 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D = Homme::subview(m_d, kv.ie);
-    const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
+    const auto& D        = m_geo_views(kv.ie).m_d;
+    const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
     const auto& div           = Homme::subview(scalar_buf_ml,kv.team_idx,0);
     const auto& vort          = Homme::subview(scalar_buf_ml,kv.team_idx,0);
     const auto& grad_curl_cov = Homme::subview(vector_buf_ml,kv.team_idx,1);
@@ -945,13 +959,17 @@ private:
 
   ExecViewManaged<const Real [NP][NP]>          dvv;
 
-  ExecViewManaged<const Real * [NP][NP]>        m_mp;
-  ExecViewManaged<const Real * [NP][NP]>        m_spheremp;
-  ExecViewManaged<const Real * [NP][NP]>        m_rspheremp;
-  ExecViewManaged<const Real * [2][2][NP][NP]>  m_metinv;
-  ExecViewManaged<const Real * [NP][NP]>        m_metdet;
-  ExecViewManaged<const Real * [2][2][NP][NP]>  m_d;
-  ExecViewManaged<const Real * [2][2][NP][NP]>  m_dinv;
+  struct GeoViews {
+    ExecViewManaged<const Real [NP][NP]>        m_mp;
+    ExecViewManaged<const Real [NP][NP]>        m_spheremp;
+    ExecViewManaged<const Real [NP][NP]>        m_rspheremp;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_metinv;
+    ExecViewManaged<const Real [NP][NP]>        m_metdet;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_d;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_dinv;
+  };
+
+  ExecViewManaged<GeoViews*> m_geo_views;
 };
 
 } // namespace Homme
