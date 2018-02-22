@@ -87,7 +87,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // Exchange
   assert (m_be->is_registration_completed());
   GPTLstart("hvf-bexch");
-  m_be->exchange(m_elements.m_rspheremp);
+  m_be->exchange(m_elements.get_rspheremp());
   GPTLstop("hvf-bexch");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu

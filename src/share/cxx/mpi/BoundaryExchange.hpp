@@ -111,7 +111,7 @@ public:
 
   // Note: num_dims is the # of dimensions to exchange, while start_dim is the first to exchange
   template<int DIM, typename... Properties>
-  void register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim)
+  void register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim);
   template<int DIM, typename... Properties>
   void register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim);
   template<int DIM, typename... Properties>
