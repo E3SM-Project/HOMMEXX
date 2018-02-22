@@ -12,31 +12,47 @@ namespace Homme {
 // Note: we template on ScalarType to allow both Real and Scalar case, and
 //       also to allow const/non-const versions.
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3,
+template <typename ScalarType, int DIM0, int DIM1, int DIM2,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
-ViewUnmanaged<ScalarType[DIM2][DIM3], MemSpace>
-subview(ViewType<ScalarType [DIM1][DIM2][DIM3], MemSpace, Properties...>
-            v_in, const int idim1) {
+ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2], MemSpace, Properties...>
+            v_in, const int idim0) {
   assert(v_in.data() != nullptr);
-  assert(idim1 >= 0 && idim1 < DIM1);
-  return ViewUnmanaged<ScalarType[DIM2][DIM3], MemSpace>(
-      &v_in.implementation_map().reference(idim1, 0, 0));
+  assert(idim0 >= 0 && idim0 < DIM0);
+  return ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>(
+      &v_in.implementation_map().reference(idim0, 0, 0));
 }
 
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
+template <typename ScalarType, int DIM0, int DIM1, int DIM2, int DIM3,
           typename MemSpace, typename... Properties>
 KOKKOS_INLINE_FUNCTION
-ViewUnmanaged<ScalarType[DIM4], MemSpace>
-subview(ViewType<ScalarType [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
-            v_in, const int idim1, const int idim2, const int idim3) {
+ViewUnmanaged<ScalarType[DIM3], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2][DIM3], MemSpace, Properties...>
+            v_in, const int idim0, const int idim1, const int idim2) {
   assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
   assert(idim1 >= 0 && idim1 < DIM1);
   assert(idim2 >= 0 && idim2 < DIM2);
-  assert(idim3 >= 0 && idim3 < DIM3);
-  return ViewUnmanaged<ScalarType[DIM4], MemSpace>(
-      &v_in.implementation_map().reference(idim1, idim2, idim3, 0));
+  return ViewUnmanaged<ScalarType[DIM3], MemSpace>(
+      &v_in.implementation_map().reference(idim0, idim1, idim2, 0));
 }
+
+// TODO: figure out why this routine is needed. The one currently around line 141
+//       should already cover the needs for a rank5 view and 1 passed index.
+//       Still, without this routine, tests failed. After adding it, they passed.
+template <typename ScalarType, int DIM0, int DIM1, int DIM2, int DIM3, int DIM4,
+          typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
+            v_in, const int idim0) {
+  assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
+  return ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace>(
+      &v_in.implementation_map().reference(idim0, 0, 0, 0, 0));
+}
+
 
 // ================ Subviews of several ranks views with runtime 1st dimension ======================= //
 // Note: we template on ScalarType to allow both Real and Scalar case, and
