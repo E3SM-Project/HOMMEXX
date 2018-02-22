@@ -376,7 +376,7 @@ void BoundaryExchange::register_min_max_fields(
   }
 
   // TODO Cleanup BoundaryExchange so this isn't needed
-  m_num_1d_fields = iq;
+  m_num_1d_fields = iq + 1;
 }
 
 } // namespace Homme
