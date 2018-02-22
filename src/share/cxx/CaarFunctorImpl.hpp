@@ -87,7 +87,7 @@ struct CaarFunctorImpl {
   // Depends on PHI (after preq_hydrostatic), PECND
   // Modifies Ephi_grad
   // Computes \nabla (E + phi) + \nabla (P) * Rgas * T_v / P
-  KOKKOS_INLINE_FUNCTION void compute_energy_grad(KernelVariables &kv) const {
+  KOKKOS_INLINE_FUNCTION void compute_energy_grad(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -125,18 +125,18 @@ struct CaarFunctorImpl {
 
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v, ETA_DPDN
-  KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv) const {
+  KOKKOS_INLINE_FUNCTION void compute_phase_3(KernelVariables &kv, const Element& elem) const {
     if (m_data.rsplit == 0) {
       // vertical Eulerian
       assign_zero_to_sdot_sum(kv);
       compute_eta_dot_dpdn_vertadv_euler(kv);
-      preq_vertadv(kv);
-      accumulate_eta_dot_dpdn(kv);
+      preq_vertadv(kv,elem);
+      accumulate_eta_dot_dpdn(kv,elem);
     }
-    compute_omega_p(kv);
-    compute_temperature_np1(kv);
-    compute_velocity_np1(kv);
-    compute_dp3d_np1(kv);
+    compute_omega_p(kv,elem);
+    compute_temperature_np1(kv,elem);
+    compute_velocity_np1(kv,elem);
+    compute_dp3d_np1(kv,elem);
   } // TRIVIAL
   //is it?
 
@@ -173,11 +173,11 @@ struct CaarFunctorImpl {
   // Depends on pressure, PHI, U_current, V_current, METDET,
   // D, DINV, U, V, FCOR, SPHEREMP, T_v
   KOKKOS_INLINE_FUNCTION
-  void compute_velocity_np1(KernelVariables &kv) const {
-    compute_energy_grad(kv);
+  void compute_velocity_np1(KernelVariables &kv, const Element& elem) const {
+    compute_energy_grad(kv,elem);
 
     m_sphere_ops.vorticity_sphere(kv,
-        Homme::subview(m_elements.m_v, kv.ie, m_data.n0),
+        Homme::subview(elem.m_v, m_data.n0),
         Homme::subview(m_elements.buffers.vorticity, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -188,35 +188,35 @@ struct CaarFunctorImpl {
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         // Recycle vort to contain (fcor+vort)
         m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev) +=
-            m_elements.m_fcor(kv.ie, igp, jgp);
+            elem.m_fcor(igp, jgp);
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= -1;
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 0, igp, jgp, ilev)) +
-            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
+            elem.m_v(m_data.n0, 1, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= -1;
 
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
             (rsplit_gt0 ? 0 : - m_elements.buffers.v_vadv_buf(kv.ie, 1, igp, jgp, ilev)) -
-            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
+            elem.m_v(m_data.n0, 0, igp, jgp, ilev) *
             m_elements.buffers.vorticity(kv.ie, igp, jgp, ilev);
 
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.nm1, 0, igp, jgp, ilev);
+            elem.m_v(m_data.nm1, 0, igp, jgp, ilev);
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) *= m_data.dt;
         m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev) +=
-            m_elements.m_v(kv.ie, m_data.nm1, 1, igp, jgp, ilev);
+            elem.m_v(m_data.nm1, 1, igp, jgp, ilev);
 
         // Velocity at np1 = spheremp * buffer
-        m_elements.m_v(kv.ie, m_data.np1, 0, igp, jgp, ilev) =
-            m_elements.m_spheremp(kv.ie, igp, jgp) *
+        elem.m_v(m_data.np1, 0, igp, jgp, ilev) =
+            elem.m_spheremp(igp, jgp) *
             m_elements.buffers.energy_grad(kv.ie, 0, igp, jgp, ilev);
-        m_elements.m_v(kv.ie, m_data.np1, 1, igp, jgp, ilev) =
-            m_elements.m_spheremp(kv.ie, igp, jgp) *
+        elem.m_v(m_data.np1, 1, igp, jgp, ilev) =
+            elem.m_spheremp(igp, jgp) *
             m_elements.buffers.energy_grad(kv.ie, 1, igp, jgp, ilev);
       });
     });
@@ -226,7 +226,7 @@ struct CaarFunctorImpl {
 
   //m_eta is zeroed outside of local kernels, in prim_step
   KOKKOS_INLINE_FUNCTION
-  void accumulate_eta_dot_dpdn(KernelVariables &kv) const {
+  void accumulate_eta_dot_dpdn(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -294,35 +294,35 @@ struct CaarFunctorImpl {
   // Depends on PHIS, DP3D, PHI, pressure, T_v
   // Modifies PHI
   KOKKOS_INLINE_FUNCTION
-  void preq_hydrostatic(KernelVariables &kv) const {
-    preq_hydrostatic_impl<ExecSpace>(kv);
+  void preq_hydrostatic(KernelVariables &kv, const Element& elem) const {
+    preq_hydrostatic_impl<ExecSpace>(kv,elem);
   } // TESTED 3
 
   // Depends on pressure, U_current, V_current, div_vdp,
   // omega_p
   KOKKOS_INLINE_FUNCTION
-  void preq_omega_ps(KernelVariables &kv) const {
-    preq_omega_ps_impl<ExecSpace>(kv);
+  void preq_omega_ps(KernelVariables &kv, const Element& elem) const {
+    preq_omega_ps_impl<ExecSpace>(kv,elem);
   } // TESTED 4
 
   // Depends on DP3D
   KOKKOS_INLINE_FUNCTION
-  void compute_pressure(KernelVariables &kv) const {
-    compute_pressure_impl<ExecSpace>(kv);
+  void compute_pressure(KernelVariables &kv, const Element& elem) const {
+    compute_pressure_impl<ExecSpace>(kv,elem);
   } // TESTED 5
 
   // Depends on DP3D, PHIS, DP3D, PHI, T_v
   // Modifies pressure, PHI
   KOKKOS_INLINE_FUNCTION
-  void compute_scan_properties(KernelVariables &kv) const {
-    compute_pressure(kv);
-    preq_hydrostatic(kv);
-    preq_omega_ps(kv);
+  void compute_scan_properties(KernelVariables &kv, const Element& elem) const {
+    compute_pressure(kv,elem);
+    preq_hydrostatic(kv,elem);
+    preq_omega_ps(kv,elem);
   } // TRIVIAL
 
 //should be renamed, instead of no tracer should be dry
   KOKKOS_INLINE_FUNCTION
-  void compute_temperature_no_tracers_helper(KernelVariables &kv) const {
+  void compute_temperature_no_tracers_helper(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -337,7 +337,7 @@ struct CaarFunctorImpl {
 
 //should be renamed
   KOKKOS_INLINE_FUNCTION
-  void compute_temperature_tracers_helper(KernelVariables &kv) const {
+  void compute_temperature_tracers_helper(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -359,7 +359,7 @@ struct CaarFunctorImpl {
   // Modifies DERIVED_UN0, DERIVED_VN0
   // Requires NUM_LEV * 5 * NP * NP
   KOKKOS_INLINE_FUNCTION
-  void compute_div_vdp(KernelVariables &kv) const {
+  void compute_div_vdp(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -391,17 +391,17 @@ struct CaarFunctorImpl {
   // DINV
   // Might depend on QDP, DP3D_current
   KOKKOS_INLINE_FUNCTION
-  void compute_temperature_div_vdp(KernelVariables &kv) const {
+  void compute_temperature_div_vdp(KernelVariables &kv, const Element& elem) const {
     if (m_data.n0_qdp < 0) {
-      compute_temperature_no_tracers_helper(kv);
+      compute_temperature_no_tracers_helper(kv,elem);
     } else {
-      compute_temperature_tracers_helper(kv);
+      compute_temperature_tracers_helper(kv,elem);
     }
-    compute_div_vdp(kv);
+    compute_div_vdp(kv,elem);
   } // TESTED 9
 
   KOKKOS_INLINE_FUNCTION
-  void compute_omega_p(KernelVariables &kv) const {
+  void compute_omega_p(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -419,10 +419,10 @@ struct CaarFunctorImpl {
   // SPHEREMP (global), T_v, and omega_p
   // block_3d_scalars
   KOKKOS_INLINE_FUNCTION
-  void compute_temperature_np1(KernelVariables &kv) const {
+  void compute_temperature_np1(KernelVariables &kv, const Element& elem) const {
 
     m_sphere_ops.gradient_sphere(kv,
-        Homme::subview(m_elements.m_t, kv.ie, m_data.n0),
+        Homme::subview(elem.m_t, m_data.n0),
         Homme::subview(m_elements.buffers.temperature_grad, kv.ie));
 
     const bool rsplit_gt0 = m_data.rsplit > 0;
@@ -433,9 +433,9 @@ struct CaarFunctorImpl {
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
         const Scalar vgrad_t =
-            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
+            elem.m_v(m_data.n0, 0, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 0, igp, jgp, ilev) +
-            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
+            elem.m_v(m_data.n0, 1, igp, jgp, ilev) *
                 m_elements.buffers.temperature_grad(kv.ie, 1, igp, jgp, ilev);
 
         const Scalar ttens =
@@ -446,9 +446,9 @@ struct CaarFunctorImpl {
                 m_elements.buffers.temperature_virt(kv.ie, igp, jgp, ilev) *
                 m_elements.buffers.omega_p(kv.ie, igp, jgp, ilev);
         Scalar temp_np1 = ttens * m_data.dt +
-                          m_elements.m_t(kv.ie, m_data.nm1, igp, jgp, ilev);
-        temp_np1 *= m_elements.m_spheremp(kv.ie, igp, jgp);
-        m_elements.m_t(kv.ie, m_data.np1, igp, jgp, ilev) = temp_np1;
+                          elem.m_t(m_data.nm1, igp, jgp, ilev);
+        temp_np1 *= elem.m_spheremp(igp, jgp);
+        elem.m_t(m_data.np1, igp, jgp, ilev) = temp_np1;
       });
     });
     kv.team_barrier();
@@ -457,7 +457,7 @@ struct CaarFunctorImpl {
   // Depends on DERIVED_UN0, DERIVED_VN0, U, V,
   // Modifies DERIVED_UN0, DERIVED_VN0, OMEGA_P, T, and DP3D
   KOKKOS_INLINE_FUNCTION
-  void compute_dp3d_np1(KernelVariables &kv) const {
+  void compute_dp3d_np1(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int idx) {
       const int igp = idx / NP;
@@ -474,11 +474,11 @@ struct CaarFunctorImpl {
         // This will hopefully reduce numeric error
         tmp += m_elements.buffers.div_vdp(kv.ie, igp, jgp, ilev);
         tmp -= m_elements.buffers.eta_dot_dpdn_buf(kv.ie, igp, jgp, ilev);
-        tmp = m_elements.m_dp3d(kv.ie, m_data.nm1, igp, jgp, ilev) -
+        tmp = elem.m_dp3d(m_data.nm1, igp, jgp, ilev) -
               tmp * m_data.dt;
 
-        m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, ilev) =
-            m_elements.m_spheremp(kv.ie, igp, jgp) * tmp;
+        elem.m_dp3d(m_data.np1, igp, jgp, ilev) =
+            elem.m_spheremp(igp, jgp) * tmp;
       });
     });
     kv.team_barrier();
@@ -486,7 +486,7 @@ struct CaarFunctorImpl {
 
   // depends on eta_dot_dpdn, dp3d, T, v, modifies v_vadv, t_vadv
   KOKKOS_INLINE_FUNCTION
-  void preq_vertadv(KernelVariables &kv) const {
+  void preq_vertadv(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          KOKKOS_LAMBDA(const int idx) {
       const int igp = idx / NP;
@@ -591,14 +591,15 @@ struct CaarFunctorImpl {
   KOKKOS_INLINE_FUNCTION
   void operator()(const TeamMember &team) const {
     KernelVariables kv(team);
+    const Element& elem = m_elements.get_element(kv.ie);
 
-    compute_temperature_div_vdp(kv);
+    compute_temperature_div_vdp(kv,elem);
     kv.team.team_barrier();
 
-    compute_scan_properties(kv);
+    compute_scan_properties(kv,elem);
     kv.team.team_barrier();
 
-    compute_phase_3(kv);
+    compute_phase_3(kv,elem);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -610,7 +611,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       !std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  compute_pressure_impl(KernelVariables &kv) const {
+  compute_pressure_impl(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
@@ -643,7 +644,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  compute_pressure_impl(KernelVariables &kv) const {
+  compute_pressure_impl(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
@@ -674,7 +675,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       !std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  preq_hydrostatic_impl(KernelVariables &kv) const {
+  preq_hydrostatic_impl(KernelVariables &kv, const Element& elem) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
@@ -729,7 +730,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  preq_hydrostatic_impl(KernelVariables &kv) const {
+  preq_hydrostatic_impl(KernelVariables &kv, const Element& elem) const {
     assert_vector_size_1();
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -784,7 +785,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  preq_omega_ps_impl(KernelVariables &kv) const {
+  preq_omega_ps_impl(KernelVariables &kv, const Element& elem) const {
     assert_vector_size_1();
 #ifdef DEBUG_TRACE
     Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
@@ -836,7 +837,7 @@ private:
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       !std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
-  preq_omega_ps_impl(KernelVariables &kv) const {
+  preq_omega_ps_impl(KernelVariables &kv, const Element& elem) const {
     m_sphere_ops.gradient_sphere(
         kv, Homme::subview(m_elements.buffers.pressure, kv.ie),
         Homme::subview(m_elements.buffers.pressure_grad, kv.ie));
