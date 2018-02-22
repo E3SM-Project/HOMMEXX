@@ -108,7 +108,11 @@ public:
       BoundaryExchange& be = *m_mm_be;
       be.set_buffers_manager(bm_exchange_minmax);
       be.set_num_fields(m_data.qsize, 0, 0);
-      be.register_min_max_fields(m_elements.buffers.qlim, m_data.qsize, 0);
+      for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
+        for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
+          be.register_min_max_fields(m_tracers.tracer(ie, iq).qlim, ie, iq);
+        }
+      }
       be.registration_completed();
     }
 
@@ -330,7 +334,6 @@ public:
     const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_tracers.m_qdp;
     const auto qtens_biharmonic= m_tracers.qtens_biharmonic;
-    const auto qlim = m_elements.buffers.qlim;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
@@ -350,7 +353,7 @@ public:
         const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
-        const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
+        const auto qlim_t = m_tracers.tracer(kv.ie, kv.iq).qlim;
         for (int i = 0; i < NP; ++i)
           for (int j = 0; j < NP; ++j) {
             if (rhs_multiplier != 1.0 && i == 0 && j == 0) {
@@ -525,7 +528,7 @@ private:
   void compute_vstar_qdp (const KernelVariables& kv) const {
     const auto NP2 = NP * NP;
     const auto qdp = Homme::subview(m_tracers.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
-    const auto q_buf = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
+    const auto q_buf = m_tracers.tracer(kv.ie, kv.iq).qtens;
     const auto v_buf = m_tracers.tracer(kv.ie, kv.iq).vstar_qdp;
     const auto vstar = Homme::subview(m_elements.buffers.vstar, kv.ie);
 
@@ -550,15 +553,15 @@ private:
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
       m_tracers.tracer(kv.ie, kv.iq).vstar_qdp,
       Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq),
-      Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq));
+      m_tracers.tracer(kv.ie, kv.iq).qtens);
   }
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
-    const auto ptens = Homme::subview(m_elements.buffers.qtens, kv.ie, kv.iq);
-    const auto qlim = Homme::subview(m_elements.buffers.qlim, kv.ie, kv.iq);
+    const auto ptens = m_tracers.tracer(kv.ie, kv.iq).qtens;
+    const auto qlim = m_tracers.tracer(kv.ie, kv.iq).qlim;
 
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }

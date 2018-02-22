@@ -75,10 +75,8 @@ public:
 
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
-    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
     ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
     ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
-    ExecViewManaged<Scalar* [QSIZE_D][2]        [NUM_LEV]>  qlim; // qmin, qmax
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
     // sdot_sum is used in case rsplit=0 and in energy diagnostics

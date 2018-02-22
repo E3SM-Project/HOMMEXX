@@ -11,7 +11,6 @@
 #include <memory>
 
 #include <vector>
-#include <map>
 
 #include <assert.h>
 
@@ -125,16 +124,9 @@ public:
   template<typename... Properties>
   void register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field);
 
-  // These two registration methods should be used for the exchange of min/max fields
+  // This registration method should be used for the exchange of min/max fields
   template<typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
-                                ExecView<Scalar*[NUM_LEV], Properties...> field_max);
-  template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
-                                ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim);
-
-  template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
+  void register_min_max_fields (ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie, int iq);
 
   // Size the buffers, and initialize the MPI types
   void registration_completed();
@@ -362,75 +354,29 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
   ++m_num_3d_fields;
 }
 
-template<typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
-                                                ExecView<Scalar*[NUM_LEV], Properties...> field_max)
-{
+template <typename... Properties>
+void BoundaryExchange::register_min_max_fields(
+    ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie, int iq) {
   using Kokkos::ALL;
 
   // Sanity checks
-  assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
+  assert(m_registration_started && !m_registration_completed);
+  assert(ie < m_1d_fields.extent_int(0));
+  assert(iq < m_1d_fields.extent_int(1));
+  assert(m_num_2d_fields == 0 && m_num_3d_fields == 0);
 
   {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
-                         KOKKOS_LAMBDA(const int ie){
-      l_1d_fields(ie, l_num_1d_fields, MAX_ID) = Kokkos::subview(field_max, ie, ALL);
-      l_1d_fields(ie, l_num_1d_fields, MIN_ID) = Kokkos::subview(field_min, ie, ALL);
+    auto l_1d_fields = m_1d_fields;
+    Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int &) {
+      l_1d_fields(ie, iq, MAX_ID) =
+          Kokkos::subview(field_min_max, etoi(MAX_ID), ALL);
+      l_1d_fields(ie, iq, MIN_ID) =
+          Kokkos::subview(field_min_max, etoi(MIN_ID), ALL);
     });
   }
 
-  ++m_num_1d_fields;
-}
-
-template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
-                                                ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim)
-{
-  using Kokkos::ALL;
-
-  // Sanity checks
-  assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
-
-  {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-      l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_max, ie, start_dim+idim, ALL);
-      l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min, ie, start_dim+idim, ALL);
-    });
-  }
-
-  m_num_1d_fields += num_dims;
-}
-
-template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim)
-{
-  using Kokkos::ALL;
-
-  // Sanity checks
-  assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
-
-  {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-      l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MAX_ID), ALL);
-      l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MIN_ID), ALL);
-    });
-  }
-
-  m_num_1d_fields += num_dims;
+  // TODO Cleanup BoundaryExchange so this isn't needed
+  m_num_1d_fields = iq;
 }
 
 } // namespace Homme
