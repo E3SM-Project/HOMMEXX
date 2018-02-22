@@ -72,6 +72,10 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
 
+  // TODO Parse a fortran string and set this properly. For now, our code does
+  // not depend on this except to throw an error in apply_test_forcing.
+  params.test_case = TestCase::JW_BAROCLINIC;
+
   // Now this structure can be used safely
   params.params_set = true;
 }
