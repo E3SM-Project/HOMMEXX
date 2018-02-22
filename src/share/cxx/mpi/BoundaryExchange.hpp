@@ -368,9 +368,9 @@ void BoundaryExchange::register_min_max_fields(
   {
     auto l_1d_fields = m_1d_fields;
     Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int &) {
-      l_1d_fields(ie, iq, MAX_ID) =
+      l_1d_fields(ie, iq, etoi(MAX_ID)) =
           Kokkos::subview(field_min_max, etoi(MAX_ID), ALL);
-      l_1d_fields(ie, iq, MIN_ID) =
+      l_1d_fields(ie, iq, etoi(MIN_ID)) =
           Kokkos::subview(field_min_max, etoi(MIN_ID), ALL);
     });
   }
