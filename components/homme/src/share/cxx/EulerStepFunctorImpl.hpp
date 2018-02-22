@@ -130,6 +130,7 @@ public:
     }
 
     auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
+    const auto h_elements = Kokkos::create_mirror_view(m_elements.get_elements());
     for (int np1_qdp = 0, k = 0; np1_qdp < Q_NUM_TIME_LEVELS; ++np1_qdp) {
       for (int dssi = 0; dssi < 3; ++dssi, ++k) {
         m_bes[k] = std::make_shared<BoundaryExchange>();
@@ -137,9 +138,13 @@ public:
         be.set_buffers_manager(bm_exchange);
         be.set_num_fields(0, 0, m_data.qsize+1);
         be.register_field(m_tracers.m_qdp, np1_qdp, m_data.qsize, 0);
-        be.register_field(dssi == 0 ? m_elements.m_eta_dot_dpdn :
-                          dssi == 1 ? m_elements.m_omega_p :
-                          m_elements.m_derived_divdp_proj);
+        for (int ie=0; ie<m_elements.num_elems(); ++ie) {
+          auto dss_field = dssi == 0 ? h_elements(ie).m_eta_dot_dpdn :
+                           dssi == 1 ? h_elements(ie).m_omega_p :
+                           h_elements(ie).m_derived_divdp_proj;
+
+          be.register_field(dss_field,ie);
+        }
         be.registration_completed();
       }
     }
@@ -392,7 +397,7 @@ public:
   void minmax_and_biharmonic() {
     neighbor_minmax_start();
     compute_biharmonic_pre();
-    m_mmqb_be->exchange(m_elements.m_rspheremp);
+    m_mmqb_be->exchange(m_elements.get_rspheremp());
     compute_biharmonic_post();
     neighbor_minmax_finish();
   }
@@ -404,7 +409,7 @@ public:
 
   void exchange_qdp_dss_var () {
     const int idx = 3*m_data.np1_qdp + static_cast<int>(m_data.DSSopt);
-    m_bes[idx]->exchange(m_elements.m_rspheremp);
+    m_bes[idx]->exchange(m_elements.get_rspheremp());
   }
 
   void euler_step(const int np1_qdp, const int n0_qdp, const Real dt,
