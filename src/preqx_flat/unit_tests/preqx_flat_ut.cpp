@@ -128,15 +128,15 @@ public:
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
-                                dp3d.data(), phi.data(),
-                                omega_p.data(), derived_v.data(),
+                                  dp3d.data(), phi.data(),
+                                  omega_p.data(), derived_v.data(),
                                   eta_dpdn.data());
     tracers.push_qdp(qdp.data());
 
 
     const auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
     for (int ie = 0; ie < elements.num_elems(); ++ie) {
-      elements.dinv(Homme::subview(dinv, ie).data(), ie);
+      Kokkos::deep_copy(Homme::subview(dinv, ie),    h_elements(ie).m_dinv);
       Kokkos::deep_copy(Homme::subview(spheremp,ie), h_elements(ie).m_spheremp);
       Kokkos::deep_copy(Homme::subview(metdet,ie),   h_elements(ie).m_metdet);
     }
