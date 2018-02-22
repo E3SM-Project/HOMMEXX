@@ -132,7 +132,9 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  ExecViewUnmanaged<Real*[NP][NP]> get_rspheremp () { return m_rspheremp; }
+  ExecViewUnmanaged<Real*[NP][NP]> get_rspheremp () const {
+    return m_rspheremp;
+  }
 
   void init(const int num_elems);
 
