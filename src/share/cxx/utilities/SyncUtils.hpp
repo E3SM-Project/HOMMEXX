@@ -337,7 +337,7 @@ sync_to_host_p2i(Source_T source, Dest_T dest)
   }
 }
 
-// ===================== SYNC FROM DEVICE TO HOST ============================ //
+// ===================== SYNC FROM HOST TO DEVICE ============================ //
 
 template <typename Source_T, typename Dest_T>
 typename std::enable_if
