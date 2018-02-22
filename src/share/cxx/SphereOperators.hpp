@@ -29,9 +29,9 @@ public:
     dvv = derivative.get_dvv();
 
     // Get all needed 2d fields from elements
-    m_geo_views = ExecViewManaged<GeoViews*>(elements.num_elems());
+    m_geo_views = ExecViewManaged<GeoViews*>("",elements.num_elems());
     auto geo_views = m_geo_views;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(elements.num_elems()),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()),
                          KOKKOS_LAMBDA(const int ie) {
       const Element& e = elements.get_element(ie);
       geo_views(ie).m_d = e.m_d;
@@ -56,9 +56,9 @@ public:
 
     const int num_elems = metdet.extent_int(0);
 
-    m_geo_views = ExecViewManaged<GeoViews*>(num_elems);
+    m_geo_views = ExecViewManaged<GeoViews*>("",num_elems);
     auto geo_views = m_geo_views;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(num_elems),
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,num_elems),
                          KOKKOS_LAMBDA(const int ie) {
       geo_views(ie).m_d        = Homme::subview(d,ie);
       geo_views(ie).m_dinv     = Homme::subview(dinv,ie);
@@ -905,7 +905,6 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& D        = m_geo_views(kv.ie).m_d;
     const auto& spheremp = m_geo_views(kv.ie).m_spheremp;
     const auto& div           = Homme::subview(scalar_buf_ml,kv.team_idx,0);
     const auto& vort          = Homme::subview(scalar_buf_ml,kv.team_idx,0);
