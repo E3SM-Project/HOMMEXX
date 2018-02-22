@@ -7,6 +7,8 @@
 
 #include "utilities/VectorUtils.hpp"
 
+#include <limits>
+
 #define tstart(x)
 #define tstop(x)
 
@@ -133,6 +135,10 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   m_2d_fields = decltype(m_2d_fields)("2d fields", m_num_elems, num_2d_fields);
   m_3d_fields = decltype(m_3d_fields)("3d fields", m_num_elems, num_3d_fields);
 
+  m_num_1d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
+  m_num_2d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
+  m_num_3d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
+
   // Now we can start register fields
   m_registration_started   = true;
   m_registration_completed = false;
@@ -183,6 +189,17 @@ void BoundaryExchange::registration_completed()
   // At this point, the connectivity MUST be finalized already, and the buffers manager must be set already
   assert (m_connectivity && m_connectivity->is_finalized());
   assert (m_buffers_manager);
+
+  // In order to accommodate registration of fields with the methods that take a single element slice, we
+  // had to use the m_num_*d_fields_per_elem views. So now we need to:
+  //   - check that the counters m_num_*d_fields_per_elem are the same across elements
+  //   - copy that value to m_num_*d_fields
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==min_num_registered_fields(m_num_1d_fields_per_elem));
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem)==min_num_registered_fields(m_num_2d_fields_per_elem));
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)==min_num_registered_fields(m_num_3d_fields_per_elem));
+  m_num_1d_fields = max_num_registered_fields(m_num_1d_fields_per_elem);
+  m_num_2d_fields = max_num_registered_fields(m_num_2d_fields_per_elem);
+  m_num_3d_fields = max_num_registered_fields(m_num_3d_fields_per_elem);
 
   // Create the MPI data types, for corners and edges
   // Note: this is the size per element, per connection. It is the number of Real's to send/receive to/from the neighbor
@@ -1057,6 +1074,38 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
 
   // Done
   m_buffer_views_and_requests_built = false;
+}
+
+int BoundaryExchange::max_num_registered_fields (HostViewManaged<int*> num_fields_per_elem)
+{
+  // Needs to be a properly sized view
+  assert (num_fields_per_elem.extent_int(0)==m_num_elems);
+
+  int nmax = 0;
+  for (int ie=0; ie<m_num_elems; ++ie) {
+    // Sanity check
+    assert (num_fields_per_elem(ie)>=0);
+    nmax = std::max(nmax,num_fields_per_elem(ie));
+  }
+  return nmax;
+}
+
+int BoundaryExchange::min_num_registered_fields (HostViewManaged<int*> num_fields_per_elem)
+{
+  // Needs to be a properly sized view
+  assert (num_fields_per_elem.extent_int(0)==m_num_elems);
+
+  int nmin = 0;
+  if (m_num_elems>0) {
+    nmin = std::numeric_limits<int>::max();
+
+    for (int ie=0; ie<m_num_elems; ++ie) {
+      // Sanity check
+      assert (num_fields_per_elem(ie)>=0);
+      nmin = std::min(nmin,num_fields_per_elem(ie));
+    }
+  }
+  return nmin;
 }
 
 void BoundaryExchange::waitall()
