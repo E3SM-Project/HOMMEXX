@@ -131,20 +131,20 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
   {
-    const auto t = elements.m_t;
-    const auto v = elements.m_v;
-    const auto dp3d = elements.m_dp3d;
+    const auto elem_view = elements.get_elements();
     Kokkos::parallel_for(
       Kokkos::RangePolicy<ExecSpace>(0, elements.num_elems()*NP*NP*NUM_LEV),
       KOKKOS_LAMBDA(const int it) {
-         const int ie = it / (NP*NP*NUM_LEV);
-         const int igp = (it / (NP*NUM_LEV)) % NP;
-         const int jgp = (it / NUM_LEV) % NP;
-         const int ilev = it % NUM_LEV;
-         t(ie,nm1,igp,jgp,ilev) = (5.0*t(ie,nm1,igp,jgp,ilev)-t(ie,n0,igp,jgp,ilev))/4.0;
-         v(ie,nm1,0,igp,jgp,ilev) = (5.0*v(ie,nm1,0,igp,jgp,ilev)-v(ie,n0,0,igp,jgp,ilev))/4.0;
-         v(ie,nm1,1,igp,jgp,ilev) = (5.0*v(ie,nm1,1,igp,jgp,ilev)-v(ie,n0,1,igp,jgp,ilev))/4.0;
-         dp3d(ie,nm1,igp,jgp,ilev) = (5.0*dp3d(ie,nm1,igp,jgp,ilev)-dp3d(ie,n0,igp,jgp,ilev))/4.0;
+        const int ie = it / (NP*NP*NUM_LEV);
+        const int igp = (it / (NP*NUM_LEV)) % NP;
+        const int jgp = (it / NUM_LEV) % NP;
+        const int ilev = it % NUM_LEV;
+
+        const Element& elem = elem_view(ie);
+        elem.m_t(nm1,igp,jgp,ilev)    = (5.0*elem.m_t(nm1,igp,jgp,ilev)-elem.m_t(n0,igp,jgp,ilev))/4.0;
+        elem.m_v(nm1,0,igp,jgp,ilev)  = (5.0*elem.m_v(nm1,0,igp,jgp,ilev)-elem.m_v(n0,0,igp,jgp,ilev))/4.0;
+        elem.m_v(nm1,1,igp,jgp,ilev)  = (5.0*elem.m_v(nm1,1,igp,jgp,ilev)-elem.m_v(n0,1,igp,jgp,ilev))/4.0;
+        elem.m_dp3d(nm1,igp,jgp,ilev) = (5.0*elem.m_dp3d(nm1,igp,jgp,ilev)-elem.m_dp3d(n0,igp,jgp,ilev))/4.0;
     });
   }
   ExecSpace::fence();

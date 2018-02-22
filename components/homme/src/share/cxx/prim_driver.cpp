@@ -1,4 +1,3 @@
-
 #include "Context.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
@@ -99,9 +98,8 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
   const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
   const auto ps0 = hvcoord.ps0;
-  const auto ps_v = elements.m_ps_v;
+  const auto elem_view = elements.get_elements();
   {
-    const auto dp3d = elements.m_dp3d;
     const auto n0 = tl.n0;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,elements.num_elems()*NP*NP*NUM_LEV),
                          KOKKOS_LAMBDA(const int idx) {
@@ -110,8 +108,8 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
       const int jgp  =  (idx / NUM_LEV) % NP;
       const int ilev =   idx % NUM_LEV;
 
-      dp3d(ie,n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*ps0
-                               + hybrid_bi_delta[ilev]*ps_v(ie,n0,igp,jgp);
+      elem_view(ie).m_dp3d(n0,igp,jgp,ilev) = hybrid_ai_delta[ilev]*ps0
+                                            + hybrid_bi_delta[ilev]*elem_view(ie).m_ps_v(n0,igp,jgp);
     });
   }
   ExecSpace::fence();
@@ -160,7 +158,7 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
 
           Q(igp, jgp, ilev) = qdp(ie, np1_qdp, iq, igp, jgp, ilev) /
                               (hybrid_ai_delta[ilev] * ps0 +
-                               hybrid_bi_delta[ilev] * ps_v(ie, np1, igp, jgp));
+                               hybrid_bi_delta[ilev] * elem_view(ie).m_ps_v(np1, igp, jgp));
         });
   }
   ExecSpace::fence();
