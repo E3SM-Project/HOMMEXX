@@ -107,6 +107,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_metinv_f90    (metinv,    m_num_elems);
   HostViewUnmanaged<const Real *      [NP][NP]> h_phis_f90      (phis,      m_num_elems);
 
+  m_rspheremp = ExecViewManaged<Real* [NP][NP]>("rspheremp", m_num_elems);
   for (int ie=0; ie<m_num_elems; ++ie) {
     const Element& elem = h_elements(ie);
     Kokkos::deep_copy(elem.m_d        , Homme::subview(h_D_f90,ie)        );
@@ -119,6 +120,10 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
     Kokkos::deep_copy(elem.m_metdet   , Homme::subview(h_metdet_f90,ie)   );
     Kokkos::deep_copy(elem.m_metinv   , Homme::subview(h_metinv_f90,ie)   );
     Kokkos::deep_copy(elem.m_phis     , Homme::subview(h_phis_f90,ie)     );
+
+    // We keep rspheremp with ie index, to make life easier with BoundaryExchange
+    // TODO: see if there is a better solution, and avoid duplicate this view.
+    Kokkos::deep_copy(Homme::subview(m_rspheremp,ie),elem.m_rspheremp);
   }
 
   // NOTE: there is no need to copy h_elements into m_elements. They both store

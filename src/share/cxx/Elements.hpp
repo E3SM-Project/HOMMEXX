@@ -131,6 +131,9 @@ public:
     return m_elements(ie);
   }
 
+  KOKKOS_INLINE_FUNCTION
+  ExecViewUnmanaged<Real*[NP][NP]> get_rspheremp () { return m_rspheremp; }
+
   void init(const int num_elems);
 
   void random_init(int num_elems, Real max_pressure = 1.0);
@@ -169,8 +172,9 @@ public:
 private:
   int m_num_elems;
 
-  ExecViewManaged<Element*> m_elements;
-  ExecViewManaged<Real*>    m_internal_buffer;
+  ExecViewManaged<Real*[NP][NP]>    m_rspheremp;
+  ExecViewManaged<Element*>         m_elements;
+  ExecViewManaged<Real*>            m_internal_buffer;
 };
 
 } // Homme
