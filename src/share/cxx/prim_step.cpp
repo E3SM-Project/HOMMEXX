@@ -2,6 +2,7 @@
 #include "Elements.hpp"
 #include "TimeLevel.hpp"
 #include "SimulationParams.hpp"
+#include "utilities/SubviewUtils.hpp"
 #include "profiling.hpp"
 
 namespace Homme
@@ -28,36 +29,40 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // initialize mean flux accumulation variables and save some variables at n0
   // for use by advection
   // ===============
-  GPTLstart("tl-s deep_copy");
-  Kokkos::deep_copy(elements.m_eta_dot_dpdn,0);
-  Kokkos::deep_copy(elements.m_derived_vn0,0);
-  Kokkos::deep_copy(elements.m_omega_p,0);
-  if (params.nu_p>0) {
-    Kokkos::deep_copy(elements.m_derived_dpdiss_ave,0);
-    Kokkos::deep_copy(elements.m_derived_dpdiss_biharmonic,0);
+  GPTLstart("tl-s deep_copy+derived_dp");
+  {
+    const auto elem_view = elements.get_elements();
+    const int n0 = tl.n0;
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(elements.num_elems()),
+                         KOKKOS_LAMBDA(const TeamMember& team) {
+      const Element& elem = elem_view(team.league_rank());
+      const auto& dp3d = Homme::subview(elem.m_dp3d,n0);
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,NP*NP),
+                           KOKKOS_LAMBDA(const int idx){
+        const int igp = idx / NP;
+        const int jgp = idx % NP;
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,NUM_LEV),
+                             KOKKOS_LAMBDA(const int ilev){
+          elem.m_eta_dot_dpdn(igp,jgp,ilev) = 0.0;
+          elem.m_derived_vn0(0,igp,jgp,ilev) = 0.0;
+          elem.m_derived_vn0(1,igp,jgp,ilev) = 0.0;
+          elem.m_omega_p(igp,jgp,ilev) = 0.0;
+          if (params.nu_p>0) {
+            elem.m_derived_dpdiss_ave(igp,jgp,ilev) = 0.0;
+            elem.m_derived_dpdiss_biharmonic(igp,jgp,ilev) = 0.0;
+          }
+          elem.m_derived_dp(igp,jgp,ilev) = dp3d(igp,jgp,ilev);
+        });
+      });
+    });
   }
-  GPTLstop("tl-s deep_copy");
+  ExecSpace::fence();
+  GPTLstop("tl-s deep_copy+derived_dp");
 
   if (params.use_semi_lagrangian_transport) {
     Errors::option_error("prim_step", "use_semi_lagrangian_transport",params.use_semi_lagrangian_transport);
     // Set derived_star = v
   }
-  GPTLstart("tl-s derived_dp");
-  {
-    const auto derived_dp = elements.m_derived_dp;
-    const auto dp3d = elements.m_dp3d;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,elements.num_elems()*NP*NP*NUM_LEV),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int ie   = ((idx / NUM_LEV) / NP) / NP;
-      const int igp  = ((idx / NUM_LEV) / NP) % NP;
-      const int jgp  =  (idx / NUM_LEV) % NP;
-      const int ilev =   idx % NUM_LEV;
-
-      derived_dp(ie,igp,jgp,ilev) = dp3d(ie,tl.n0,igp,jgp,ilev);
-    });
-  }
-  ExecSpace::fence();
-  GPTLstop("tl-s derived_dp");
 
   // ===============
   // Dynamical Step
