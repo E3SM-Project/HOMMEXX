@@ -8,6 +8,8 @@
 #include "MpiHelpers.hpp"
 #include "Hommexx_Debug.hpp"
 
+#include "utilities/SubviewUtils.hpp"
+
 #include <memory>
 
 #include <vector>
@@ -198,9 +200,9 @@ private:
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
 
-  ExecViewManaged<ExecViewManaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
-  ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
-  ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Real[NP][NP]>**>                  m_2d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
 
   // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
   // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
@@ -258,8 +260,6 @@ public: // This is semantically private but must be public for nvcc.
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_2d_fields.extent_int(0));
@@ -271,7 +271,7 @@ void BoundaryExchange::register_field (ExecView<Real[DIM][NP][NP], Properties...
   auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
   Kokkos::deep_copy(h_2d_fields,m_2d_fields);
   for(int idim=0; idim<num_dims; ++idim) {
-    h_2d_fields(ie, m_num_2d_fields_per_elem(ie)+idim) = Kokkos::subview(field, start_dim+idim, ALL, ALL);
+    h_2d_fields(ie, m_num_2d_fields_per_elem(ie)+idim) = Homme::subview(field, start_dim+idim);
   }
   Kokkos::deep_copy(m_2d_fields,h_2d_fields);
 
@@ -281,8 +281,6 @@ void BoundaryExchange::register_field (ExecView<Real[DIM][NP][NP], Properties...
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && DIM>0);
@@ -298,7 +296,7 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties..
   Kokkos::deep_copy(h_2d_fields,m_2d_fields);
   for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      h_2d_fields(ie,m_num_2d_fields_per_elem(ie)+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL);
+      h_2d_fields(ie,m_num_2d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, start_dim+idim);
     }
     m_num_2d_fields_per_elem(ie) += num_dims;
   }
@@ -308,8 +306,6 @@ void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties..
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_3d_fields.extent_int(0));
@@ -321,7 +317,7 @@ void BoundaryExchange::register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Pr
   auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
   Kokkos::deep_copy(h_3d_fields,m_3d_fields);
   for(int idim=0; idim<num_dims; ++idim) {
-    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Kokkos::subview(field, start_dim+idim, ALL, ALL, ALL);
+    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, start_dim+idim);
   }
   Kokkos::deep_copy(m_3d_fields,h_3d_fields);
 
@@ -331,8 +327,6 @@ void BoundaryExchange::register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Pr
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && DIM>0);
@@ -348,7 +342,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], P
   Kokkos::deep_copy(h_3d_fields,m_3d_fields);
   for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL, ALL);
+      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, start_dim+idim);
     }
     m_num_3d_fields_per_elem(ie) += num_dims;
   }
@@ -358,8 +352,6 @@ void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], P
 template<int OUTER_DIM, int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int outer_dim, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_3d_fields.extent_int(0));
@@ -371,7 +363,7 @@ void BoundaryExchange::register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][N
   auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
   Kokkos::deep_copy(h_3d_fields,m_3d_fields);
   for(int idim=0; idim<num_dims; ++idim) {
-    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Kokkos::subview(field, outer_dim, start_dim+idim, ALL, ALL, ALL);
+    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, outer_dim, start_dim+idim);
   }
   Kokkos::deep_copy(m_3d_fields,h_3d_fields);
 
@@ -381,8 +373,6 @@ void BoundaryExchange::register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][N
 template<int OUTER_DIM, int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int outer_dim, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && outer_dim>=0 && DIM>0 && OUTER_DIM>0);
@@ -399,7 +389,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
   Kokkos::deep_copy(h_3d_fields,m_3d_fields);
   for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
     for (int idim=0; idim<num_dims; ++idim) {
-      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Kokkos::subview(field, ie, outer_dim, start_dim+idim, ALL, ALL, ALL);
+      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, outer_dim, start_dim+idim);
     }
     m_num_3d_fields_per_elem(ie) += num_dims;
   }
@@ -409,8 +399,6 @@ void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real[NP][NP], Properties...> field, int ie)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_2d_fields.extent_int(0));
@@ -428,8 +416,6 @@ void BoundaryExchange::register_field (ExecView<Real[NP][NP], Properties...> fie
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> field)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (max_num_registered_fields(m_num_2d_fields_per_elem)+1<=m_2d_fields.extent_int(1));
@@ -442,7 +428,7 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> fi
   auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
   Kokkos::deep_copy(h_2d_fields,m_2d_fields);
   for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
-    h_2d_fields(ie,m_num_2d_fields_per_elem(ie)) = Kokkos::subview(field, ie, ALL, ALL);
+    h_2d_fields(ie,m_num_2d_fields_per_elem(ie)) = Homme::subview(field, ie);
     ++m_num_2d_fields_per_elem(ie);
   }
   Kokkos::deep_copy(m_2d_fields,h_2d_fields);
@@ -451,8 +437,6 @@ void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> fi
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_3d_fields.extent_int(0));
@@ -470,8 +454,6 @@ void BoundaryExchange::register_field (ExecView<Scalar[NP][NP][NUM_LEV], Propert
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (max_num_registered_fields(m_num_3d_fields_per_elem)+1<=m_3d_fields.extent_int(1));
@@ -484,7 +466,7 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
   auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
   Kokkos::deep_copy(h_3d_fields,m_3d_fields);
   for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
-    h_3d_fields(ie,m_num_3d_fields_per_elem(ie)) = Kokkos::subview(field, ie, ALL, ALL, ALL);
+    h_3d_fields(ie,m_num_3d_fields_per_elem(ie)) = Homme::subview(field, ie);
     ++m_num_3d_fields_per_elem(ie);
   }
   Kokkos::deep_copy(m_3d_fields,h_3d_fields);
@@ -493,8 +475,6 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
 template <typename... Properties>
 void BoundaryExchange::register_min_max_fields(
     ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie) {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (ie>=0 && ie < m_1d_fields.extent_int(0));
@@ -504,8 +484,8 @@ void BoundaryExchange::register_min_max_fields(
 
   auto h_1d_fields = Kokkos::create_mirror_view(m_1d_fields);
   Kokkos::deep_copy(h_1d_fields,m_1d_fields);
-  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MAX_ID)) = Kokkos::subview(field_min_max, etoi(MAX_ID), ALL);
-  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MIN_ID)) = Kokkos::subview(field_min_max, etoi(MIN_ID), ALL);
+  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MAX_ID)) = Homme::subview(field_min_max, etoi(MAX_ID));
+  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MIN_ID)) = Homme::subview(field_min_max, etoi(MIN_ID));
   Kokkos::deep_copy(m_1d_fields,h_1d_fields);
   ++m_num_1d_fields_per_elem(ie);
 }
