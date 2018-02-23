@@ -110,7 +110,7 @@ public:
       be.set_num_fields(m_data.qsize, 0, 0);
       for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
         for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
-          be.register_min_max_fields(m_tracers.tracer(ie, iq).qlim, ie, iq);
+          be.register_min_max_fields(m_tracers.tracers()(ie, iq).qlim, ie, iq);
         }
       }
       be.registration_completed();
