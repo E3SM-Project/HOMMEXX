@@ -96,63 +96,90 @@ TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
     for (int iq = 0; iq < num_tracers; ++iq) {
       Tracers::Tracer t = tracers.device_tracers()(ie, iq);
       genRandArray(t.qtens, engine, dist);
-      REQUIRE(t.qtens(0, 0, 0)[0] >= min_val);
-      REQUIRE(t.qtens(0, 0, 0)[0] <= max_val);
-      REQUIRE(t.qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
-      REQUIRE(t.qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
-      t.qtens(0, 0, 0)[0] = signature;
-      t.qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+
+      auto qtens = Kokkos::create_mirror_view(t.qtens);
+      Kokkos::deep_copy(qtens,t.qtens);
+      REQUIRE(qtens(0, 0, 0)[0] >= min_val);
+      REQUIRE(qtens(0, 0, 0)[0] <= max_val);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qtens(0, 0, 0)[0] = signature;
+      qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qtens,qtens);
 
       genRandArray(t.vstar_qdp, engine, dist);
-      REQUIRE(t.vstar_qdp(0, 0, 0, 0)[0] >= min_val);
-      REQUIRE(t.vstar_qdp(0, 0, 0, 0)[0] <= max_val);
-      REQUIRE(t.vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >=
+      auto vstar_qdp = Kokkos::create_mirror_view(t.vstar_qdp);
+      Kokkos::deep_copy(vstar_qdp,t.vstar_qdp);
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] >= min_val);
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] <= max_val);
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >=
               min_val);
-      REQUIRE(t.vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <=
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <=
               max_val);
-      t.vstar_qdp(0, 0, 0, 0)[0] = signature;
-      t.vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      vstar_qdp(0, 0, 0, 0)[0] = signature;
+      vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.vstar_qdp,vstar_qdp);
 
       genRandArray(t.qlim, engine, dist);
-      REQUIRE(t.qlim(0, 0)[0] >= min_val);
-      REQUIRE(t.qlim(0, 0)[0] <= max_val);
-      REQUIRE(t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
-      REQUIRE(t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
-      t.qlim(0, 0)[0] = signature;
-      t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      auto qlim = Kokkos::create_mirror_view(t.qlim);
+      Kokkos::deep_copy(qlim,t.qlim);
+      REQUIRE(qlim(0, 0)[0] >= min_val);
+      REQUIRE(qlim(0, 0)[0] <= max_val);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qlim(0, 0)[0] = signature;
+      qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qlim,qlim);
 
       genRandArray(t.q, engine, dist);
-      REQUIRE(t.q(0, 0, 0)[0] >= min_val);
-      REQUIRE(t.q(0, 0, 0)[0] <= max_val);
-      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
-      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
-      t.q(0, 0, 0)[0] = signature;
-      t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      auto q = Kokkos::create_mirror_view(t.q);
+      Kokkos::deep_copy(q,t.q);
+      REQUIRE(q(0, 0, 0)[0] >= min_val);
+      REQUIRE(q(0, 0, 0)[0] <= max_val);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      q(0, 0, 0)[0] = signature;
+      q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.q,q);
 
       genRandArray(t.qtens_biharmonic, engine, dist);
-      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] >= min_val);
-      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] <= max_val);
-      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
-      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
-      t.qtens_biharmonic(0, 0, 0)[0] = signature;
-      t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      auto qtens_biharmonic = Kokkos::create_mirror_view(t.qtens_biharmonic);
+      Kokkos::deep_copy(qtens_biharmonic,t.qtens_biharmonic);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] >= min_val);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] <= max_val);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qtens_biharmonic(0, 0, 0)[0] = signature;
+      qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qtens_biharmonic,qtens_biharmonic);
     }
   }
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int iq = 0; iq < num_tracers; ++iq) {
-      Tracers::Tracer t = tracers.tracer(ie, iq);
-      REQUIRE(t.qtens(0, 0, 0)[0] == signature);
-      REQUIRE(t.qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
+      Tracers::Tracer t = tracers.device_tracers()(ie, iq);
+      auto qtens = Kokkos::create_mirror_view(t.qtens);
+      auto vstar_qdp = Kokkos::create_mirror_view(t.vstar_qdp);
+      auto qlim = Kokkos::create_mirror_view(t.qlim);
+      auto q = Kokkos::create_mirror_view(t.q);
+      auto qtens_biharmonic = Kokkos::create_mirror_view(t.qtens_biharmonic);
+      Kokkos::deep_copy(qtens,t.qtens);
+      Kokkos::deep_copy(vstar_qdp,t.vstar_qdp);
+      Kokkos::deep_copy(qlim,t.qlim);
+      Kokkos::deep_copy(q,t.q);
+      Kokkos::deep_copy(qtens_biharmonic,t.qtens_biharmonic);
+
+      REQUIRE(qtens(0, 0, 0)[0] == signature);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
               signature);
-      REQUIRE(t.vstar_qdp(0, 0, 0, 0)[0] == signature);
-      REQUIRE(t.vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] == signature);
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
               signature);
-      REQUIRE(t.qlim(0, 0)[0] == signature);
-      REQUIRE(t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
-      REQUIRE(t.q(0, 0, 0)[0] == signature);
-      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
-      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] == signature);
-      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(qlim(0, 0)[0] == signature);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(q(0, 0, 0)[0] == signature);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] == signature);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
     }
   }
 }
