@@ -136,8 +136,7 @@ public:
     return m_elements;
   }
   ExecViewManaged<Element*>::HostMirror get_elements_host() const {
-    auto h_elements = Kokkos::create_mirror_view(m_elements);
-    Kokkos::deep_copy(h_elements,m_elements);
+    internal_sync_to_host();
     return h_elements;
   }
   KOKKOS_INLINE_FUNCTION
@@ -185,11 +184,15 @@ public:
   ExecViewManaged<clock_t *> kernel_start_times;
   ExecViewManaged<clock_t *> kernel_end_times;
 private:
+  void internal_sync_to_host () const;
+  void internal_sync_to_device () const;
+
   int m_num_elems;
 
-  ExecViewManaged<Real*[NP][NP]>    m_rspheremp;
-  ExecViewManaged<Element*>         m_elements;
-  ExecViewManaged<Real*>            m_internal_buffer;
+  ExecViewManaged<Real*[NP][NP]>          m_rspheremp;
+  ExecViewManaged<Element*>               m_elements;
+  ExecViewManaged<Element*>::HostMirror   h_elements;
+  ExecViewManaged<Real*>                  m_internal_buffer;
 };
 
 } // Homme

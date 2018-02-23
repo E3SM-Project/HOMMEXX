@@ -63,7 +63,7 @@ struct CaarFunctorImpl {
       auto& be = *m_bes[tl];
       be.set_buffers_manager(bm_exchange);
       be.set_num_fields(0,0,4);
-      const auto h_elements = m_elements.get_elements();
+      auto h_elements = m_elements.get_elements_host();
       for (int ie=0; ie<m_elements.num_elems(); ++ie) {
         be.register_field(h_elements(ie).m_v,ie,tl,2,0);
         be.register_field(h_elements(ie).m_t,ie,1,tl);
