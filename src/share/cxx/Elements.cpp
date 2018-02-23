@@ -141,15 +141,16 @@ void Elements::init(const int num_elems) {
 
   // Creating empty view of Element's
   m_elements = ExecViewManaged<Element*>("elements", m_num_elems);
+  h_elements = Kokkos::create_mirror_view(m_elements);
 
   // Init-ing a host copy of m_elements, and then deep_copy-ing it to the device
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
+  internal_sync_to_host();
   Real* data = m_internal_buffer.data();
   for (int ie=0; ie<num_elems; ++ie) {
     h_elements(ie).init(data);
     data += elem_size;
   }
-  Kokkos::deep_copy(m_elements,h_elements);
+  internal_sync_to_device();
 
   kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
   kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
@@ -158,8 +159,6 @@ void Elements::init(const int num_elems) {
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                        CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
                        CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis) {
-
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
 
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_D_f90         (D,         m_num_elems);
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_Dinv_f90      (Dinv,      m_num_elems);
@@ -170,6 +169,8 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   HostViewUnmanaged<const Real *      [NP][NP]> h_metdet_f90    (metdet,    m_num_elems);
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_metinv_f90    (metinv,    m_num_elems);
   HostViewUnmanaged<const Real *      [NP][NP]> h_phis_f90      (phis,      m_num_elems);
+
+  internal_sync_to_host();
 
   m_rspheremp = ExecViewManaged<Real* [NP][NP]>("rspheremp", m_num_elems);
   for (int ie=0; ie<m_num_elems; ++ie) {
@@ -189,10 +190,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
     // TODO: see if there is a better solution, and avoid duplicate this view.
     Kokkos::deep_copy(Homme::subview(m_rspheremp,ie),elem.m_rspheremp);
   }
-
-  // NOTE: there is no need to copy h_elements into m_elements. They both store
-  //       the same device views, so the deep_copy's above already copied the
-  //       data from f90 ptrs into the device views of the given element
+  internal_sync_to_device();
 }
 
 void Elements::random_init(const int num_elems, const Real max_pressure) {
@@ -270,8 +268,7 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
     }
   };
 
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements, m_elements);
+  internal_sync_to_host();
   HostViewManaged<Real[2][2]> h_matrix("single host metric matrix");
 
   for (int ie=0; ie<m_num_elems; ++ie) {
@@ -357,8 +354,7 @@ void Elements::pull_3d(CF90Ptr &derived_phi, CF90Ptr &derived_omega_p, CF90Ptr &
   HostViewUnmanaged<const Real *[NUM_PHYSICAL_LEV]   [NP][NP]> derived_omega_p_f90(derived_omega_p,m_num_elems);
   HostViewUnmanaged<const Real *[NUM_PHYSICAL_LEV][2][NP][NP]> derived_v_f90(derived_v,m_num_elems);
 
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     sync_to_device(Homme::subview(derived_phi_f90,ie),     h_elements(ie).m_phi);
     sync_to_device(Homme::subview(derived_omega_p_f90,ie), h_elements(ie).m_omega_p);
@@ -371,8 +367,7 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d) 
   HostViewUnmanaged<const Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV]   [NP][NP]> state_dp3d_f90 (state_dp3d,m_num_elems);
   HostViewUnmanaged<const Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][2][NP][NP]> state_v_f90    (state_v,m_num_elems);
 
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       sync_to_device(Homme::subview(state_t_f90,ie,tl),    Homme::subview(h_elements(ie).m_t,tl));
@@ -384,8 +379,7 @@ void Elements::pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d) 
 
 void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   HostViewUnmanaged<const Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     sync_to_device(Homme::subview(eta_dot_dpdn_f90,ie), h_elements(ie).m_eta_dot_dpdn);
   }
@@ -405,8 +399,7 @@ void Elements::push_3d(F90Ptr &derived_phi, F90Ptr &derived_omega_p, F90Ptr &der
   HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV]   [NP][NP]> derived_omega_p_f90(derived_omega_p,m_num_elems);
   HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][2][NP][NP]> derived_v_f90(derived_v,m_num_elems);
 
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     sync_to_host(h_elements(ie).m_phi,         Homme::subview(derived_phi_f90,ie));
     sync_to_host(h_elements(ie).m_omega_p,     Homme::subview(derived_omega_p_f90,ie));
@@ -419,8 +412,7 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) con
   HostViewUnmanaged<Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV]   [NP][NP]> state_dp3d_f90 (state_dp3d,m_num_elems);
   HostViewUnmanaged<Real *[NUM_TIME_LEVELS][NUM_PHYSICAL_LEV][2][NP][NP]> state_v_f90    (state_v,m_num_elems);
 
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       sync_to_host(Homme::subview(h_elements(ie).m_t,tl),    Homme::subview(state_t_f90,ie,tl));
@@ -432,11 +424,18 @@ void Elements::push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) con
 
 void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   HostViewUnmanaged<Real *[NUM_INTERFACE_LEV][NP][NP]> eta_dot_dpdn_f90(derived_eta_dot_dpdn,m_num_elems);
-  ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
-  Kokkos::deep_copy(h_elements,m_elements);
+  internal_sync_to_host();
   for (int ie=0; ie<m_num_elems; ++ie) {
     sync_to_host(h_elements(ie).m_eta_dot_dpdn,Homme::subview(eta_dot_dpdn_f90,ie));
   }
+}
+
+void Elements::internal_sync_to_host () const {
+  Kokkos::deep_copy(h_elements,m_elements);
+}
+
+void Elements::internal_sync_to_device () const {
+  Kokkos::deep_copy(m_elements,h_elements);
 }
 
 } // namespace Homme
