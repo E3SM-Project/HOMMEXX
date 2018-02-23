@@ -110,7 +110,7 @@ public:
       be.set_num_fields(m_data.qsize, 0, 0);
       for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
         for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
-          be.register_min_max_fields(m_tracers.tracers()(ie, iq).qlim, ie, iq);
+          be.register_min_max_fields(m_tracers.device_tracers()(ie, iq).qlim, ie, iq);
         }
       }
       be.registration_completed();
@@ -121,7 +121,11 @@ public:
       m_mmqb_be->set_buffers_manager(
           Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
-      m_mmqb_be->register_field(m_tracers.qtens_biharmonic, m_data.qsize, 0);
+			for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
+				for(int iq = 0; iq < m_elements.num_elems(); ++iq) {
+					m_mmqb_be->register_field(m_tracers.tracer(ie, iq).qtens_biharmonic, ie, iq);
+				}
+			}
       m_mmqb_be->registration_completed();
     }
 
@@ -190,7 +194,7 @@ public:
   void operator() (const BIHPre&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = m_tracers.tracer(kv.ie, kv.iq).qtens_biharmonic;
     if (m_data.nu_p > 0) {
       const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
       Kokkos::parallel_for (
@@ -213,7 +217,7 @@ public:
   void operator() (const BIHPost&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
     const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qtens_biharmonic = m_tracers.tracer(kv.ie, kv.iq).qtens_biharmonic;
     team.team_barrier();
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
@@ -333,7 +337,6 @@ public:
     const int n0_qdp = m_data.n0_qdp;
     const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_tracers.m_qdp;
-    const auto qtens_biharmonic= m_tracers.qtens_biharmonic;
     const auto derived_dp = m_elements.m_derived_dp;
     const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
@@ -352,7 +355,7 @@ public:
         const auto dp_t = Homme::subview(derived_dp, kv.ie);
         const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
-        const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
+        const auto qtens_biharmonic_t = m_tracers.tracer(kv.ie, kv.iq).qtens_biharmonic;
         const auto qlim_t = m_tracers.tracer(kv.ie, kv.iq).qlim;
         for (int i = 0; i < NP; ++i)
           for (int j = 0; j < NP; ++j) {
@@ -552,7 +555,7 @@ private:
     m_sphere_ops.divergence_sphere_update(
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
       m_tracers.tracer(kv.ie, kv.iq).vstar_qdp,
-      Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq),
+      m_tracers.tracer(kv.ie, kv.iq).qtens_biharmonic,
       m_tracers.tracer(kv.ie, kv.iq).qtens);
   }
 

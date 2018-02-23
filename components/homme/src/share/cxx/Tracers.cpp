@@ -10,8 +10,6 @@ namespace Homme {
 Tracers::Tracers(const int num_elems, const int num_tracers)
     : m_tracers("tracers structures", num_elems, num_tracers),
       m_h_tracers(Kokkos::create_mirror_view(m_tracers)),
-      m_q("tracer ratio", num_elems), m_qdp("tracer mass", num_elems),
-      qtens_biharmonic("tracer biharmonic tensor", num_elems),
       buf("scalar tracers buffer", m_tracers.size() * Tracer::num_scalars()) {
   Scalar *const mem_start = &buf.implementation_map().reference(0);
   size_t mem_pos = 0;
@@ -29,6 +27,15 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
       assert(mem_pos < buf.size());
       t.qlim = ExecViewUnmanaged<Scalar[2][NUM_LEV]>(mem_start + mem_pos);
       mem_pos += t.qlim.size();
+
+      assert(mem_pos < buf.size());
+      t.q = ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>(mem_start + mem_pos);
+      mem_pos += t.q.size();
+
+      assert(mem_pos < buf.size());
+      t.qtens_biharmonic = ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>(mem_start + mem_pos);
+      mem_pos += t.qtens_biharmonic.size();
+
       assert(mem_pos <= buf.size());
     }
   }
