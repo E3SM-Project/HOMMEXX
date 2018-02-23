@@ -135,9 +135,9 @@ void BoundaryExchange::set_num_fields (const int num_1d_fields, const int num_2d
   m_2d_fields = decltype(m_2d_fields)("2d fields", m_num_elems, num_2d_fields);
   m_3d_fields = decltype(m_3d_fields)("3d fields", m_num_elems, num_3d_fields);
 
-  m_num_1d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
-  m_num_2d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
-  m_num_3d_fields_per_elem = ExecViewManaged<int*>("", m_num_elems);
+  m_num_1d_fields_per_elem = HostViewManaged<int*>("", m_num_elems);
+  m_num_2d_fields_per_elem = HostViewManaged<int*>("", m_num_elems);
+  m_num_3d_fields_per_elem = HostViewManaged<int*>("", m_num_elems);
 
   // Now we can start register fields
   m_registration_started   = true;
