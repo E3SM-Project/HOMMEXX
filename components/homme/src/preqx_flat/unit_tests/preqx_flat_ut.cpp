@@ -206,7 +206,7 @@ public:
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 64.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -299,7 +299,7 @@ public:
 TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 256.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -369,7 +369,7 @@ public:
 TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -436,7 +436,7 @@ public:
 TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 128.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -510,7 +510,7 @@ public:
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 512.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -611,7 +611,7 @@ public:
 TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -705,7 +705,7 @@ public:
 TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 2.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -786,7 +786,7 @@ TEST_CASE("virtual temperature no tracers",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -841,11 +841,11 @@ public:
 };
 
 
-TEST_CASE("moist virtual temperature",
+TEST_CASE("moist_virtual_temperature",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -907,7 +907,7 @@ public:
 TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -977,7 +977,7 @@ public:
 TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<accumulate_eta_dot_dpdn_test>;
@@ -1057,7 +1057,7 @@ public:
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
@@ -1169,7 +1169,7 @@ public:
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
 
