@@ -122,8 +122,8 @@ public:
           Context::singleton().get_buffers_manager(MPI_EXCHANGE));
       m_mmqb_be->set_num_fields(0, 0, m_data.qsize);
 			for(int ie = 0; ie < m_elements.num_elems(); ++ie) {
-				for(int iq = 0; iq < m_elements.num_elems(); ++iq) {
-					m_mmqb_be->register_field(m_tracers.tracer(ie, iq).qtens_biharmonic, ie, iq);
+				for(int iq = 0; iq < m_tracers.num_tracers(); ++iq) {
+					m_mmqb_be->register_field(m_tracers.device_tracers()(ie, iq).qtens_biharmonic, ie, iq);
 				}
 			}
       m_mmqb_be->registration_completed();
