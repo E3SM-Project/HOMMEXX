@@ -298,7 +298,7 @@ typename std::enable_if
      host_view_mappable< Dest_T, Real *[NUM_INTERFACE_LEV][NP][NP]>::value),
     void
   >::type
-sync_to_host_p2i(Source_T source, Dest_T dest)
+sync_to_host(Source_T source, Dest_T dest)
 {
   typename Source_T::HostMirror source_mirror = Kokkos::create_mirror_view(source);
   Kokkos::deep_copy(source_mirror, source);
@@ -322,7 +322,7 @@ typename std::enable_if
      host_view_mappable< Dest_T, Real [NUM_INTERFACE_LEV][NP][NP]>::value),
     void
   >::type
-sync_to_host_p2i(Source_T source, Dest_T dest)
+sync_to_host(Source_T source, Dest_T dest)
 {
   typename Source_T::HostMirror source_mirror = Kokkos::create_mirror_view(source);
   Kokkos::deep_copy(source_mirror, source);
@@ -566,7 +566,7 @@ typename std::enable_if
      exec_view_mappable<Dest_T, Scalar [NP][NP][NUM_LEV]>::value),
     void
   >::type
-sync_to_device_i2p(Source_T source, Dest_T dest)
+sync_to_device(Source_T source, Dest_T dest)
 {
   typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
   for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {

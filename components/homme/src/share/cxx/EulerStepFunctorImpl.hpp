@@ -505,17 +505,17 @@ private:
             //! rhs_multiplier=0 on the first stage:
             const auto dp = elem.m_derived_dp(i,j,k) -
               c.rhs_multiplier * c.dt * elem.m_derived_divdp_proj(i,j,k);
-            m_elements.buffers.vstar(kv.ie,0,i,j,k) = elem.m_derived_vn0(0,i,j,k) / dp;
-            m_elements.buffers.vstar(kv.ie,1,i,j,k) = elem.m_derived_vn0(1,i,j,k) / dp;
+            elem.buffers.vstar(0,i,j,k) = elem.m_derived_vn0(0,i,j,k) / dp;
+            elem.buffers.vstar(1,i,j,k) = elem.m_derived_vn0(1,i,j,k) / dp;
             if (lim8) {
               //! Note that the term dpdissk is independent of Q
               //! UN-DSS'ed dp at timelevel n0+1:
-              m_elements.buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * elem.m_derived_divdp(i,j,k);
+              elem.buffers.dpdissk(i,j,k) = dp - c.dt * elem.m_derived_divdp(i,j,k);
               if (add_ps_diss) {
                 //! add contribution from UN-DSS'ed PS dissipation
                 //!          dpdiss(:,:) = ( hvcoord%hybi(k+1) - hvcoord%hybi(k) ) *
                 //!          elem(ie)%derived%psdiss_biharmonic(:,:)
-                m_elements.buffers.dpdissk(kv.ie,i,j,k) += diss_fac *
+                elem.buffers.dpdissk(i,j,k) += diss_fac *
                   elem.m_derived_dpdiss_biharmonic(i,j,k) / elem.m_spheremp(i,j);
               }
             }
@@ -533,7 +533,7 @@ private:
     const auto qdp = Homme::subview(m_tracers.m_qdp, kv.ie, m_data.n0_qdp, kv.iq);
     const auto q_buf = m_tracers.tracer(kv.ie, kv.iq).qtens;
     const auto v_buf = m_tracers.tracer(kv.ie, kv.iq).vstar_qdp;
-    const auto vstar = Homme::subview(m_elements.buffers.vstar, kv.ie);
+    const auto vstar = m_elements.get_element(kv.ie).buffers.vstar;
 
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP2),
@@ -562,11 +562,10 @@ private:
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const Element& elem = m_elements.get_element(kv.ie);
-    const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
     const auto ptens = m_tracers.tracer(kv.ie, kv.iq).qtens;
     const auto qlim = m_tracers.tracer(kv.ie, kv.iq).qlim;
 
-    limiter_optim_iter_full(kv.team, elem.m_spheremp, dpmass, qlim, ptens);
+    limiter_optim_iter_full(kv.team, elem.m_spheremp, elem.buffers.dpdissk, qlim, ptens);
   }
 
   //! apply mass matrix, overwrite np1 with solution:
