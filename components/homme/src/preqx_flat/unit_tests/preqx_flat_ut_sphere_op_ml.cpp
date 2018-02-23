@@ -105,8 +105,19 @@ class compute_sphere_operator_test_ml {
 
   compute_sphere_operator_test_ml(int num_elems)
       : _num_elems(num_elems),
+        // derivative
+        dvv_d(""),
+
+        // 2d views
+        d_d("", num_elems),
+        dinv_d("", num_elems),
+        metdet_d("", num_elems),
+        metinv_d("", num_elems),
+        mp_d("", num_elems),
+        spheremp_d("", num_elems),
+
+        // Device input/outputs
         scalar_input_d("scalar input", num_elems),
-        scalar_input_COPY2_d("scalar input 2", num_elems),
         vector_input_d("vector input", num_elems),
         tensor_d("tensor", num_elems),
         vec_sph2cart_d("ver_sph2cart", num_elems),
@@ -116,7 +127,6 @@ class compute_sphere_operator_test_ml {
         // Make certain Kokkos doesn't use the same arrays
         // as used on the device when they are mutable
         scalar_input_host("scalar input host", num_elems),
-        scalar_input_COPY2_host("scalar input host copy", num_elems),
         vector_input_host("vector input host", num_elems),
         tensor_host(Kokkos::create_mirror_view(tensor_d)),
         vec_sph2cart_host(
@@ -133,8 +143,6 @@ class compute_sphere_operator_test_ml {
         std::uniform_real_distribution<Real>(-1000.0,
                                              1000.0));
     Kokkos::deep_copy(scalar_input_d, scalar_input_host);
-    Kokkos::deep_copy(scalar_input_COPY2_d, scalar_input_host);
-    Kokkos::deep_copy(scalar_input_COPY2_host, scalar_input_host);
 
     genRandArray(
         vector_input_host, engine,
@@ -143,7 +151,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(vector_input_d, vector_input_host);
 
     // D
-    ExecViewManaged<Real * [2][2][NP][NP]> d_d("",num_elems);
     d_host = Kokkos::create_mirror_view(d_d);
     genRandArray(d_host, engine,
                  std::uniform_real_distribution<Real>(
@@ -151,7 +158,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(d_d, d_host);
 
     // Dinv
-    ExecViewManaged<Real * [2][2][NP][NP]> dinv_d("",num_elems);
     dinv_host = Kokkos::create_mirror_view(dinv_d);
     genRandArray(dinv_host,
                  engine,
@@ -160,7 +166,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(dinv_d, dinv_host);
 
     // metinv
-    ExecViewManaged<Real * [2][2][NP][NP]> metinv_d("",num_elems);
     metinv_host = Kokkos::create_mirror_view(metinv_d);
     genRandArray(metinv_host, engine,
                  std::uniform_real_distribution<Real>(
@@ -168,7 +173,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(metinv_d, metinv_host);
 
     // metdet
-    ExecViewManaged<Real * [NP][NP]> metdet_d("",num_elems);
     metdet_host = Kokkos::create_mirror_view(metdet_d);
     genRandArray(metdet_host, engine,
                  std::uniform_real_distribution<Real>(
@@ -176,7 +180,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(metdet_d, metdet_host);
 
     // spheremp
-    ExecViewManaged<Real * [NP][NP]> spheremp_d("",num_elems);
     spheremp_host = Kokkos::create_mirror_view(spheremp_d);
     genRandArray(spheremp_host, engine,
                  std::uniform_real_distribution<Real>(
@@ -184,7 +187,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(spheremp_d, spheremp_host);
 
     // mp
-    ExecViewManaged<Real * [NP][NP]> mp_d("",num_elems);
     mp_host = Kokkos::create_mirror_view(mp_d);
     genRandArray(mp_host,
                  engine,
@@ -193,7 +195,6 @@ class compute_sphere_operator_test_ml {
     Kokkos::deep_copy(mp_d, mp_host);
 
     // dvv
-    ExecViewManaged<Real[NP][NP]> dvv_d("");
     dvv_host = Kokkos::create_mirror_view(dvv_d);
     genRandArray(dvv_host, engine,
                  std::uniform_real_distribution<Real>(
@@ -256,8 +257,6 @@ class compute_sphere_operator_test_ml {
   // device
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
       scalar_input_d;
-  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>
-      scalar_input_COPY2_d;
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>
       vector_input_d;
   ExecViewManaged<Real * [2][2][NP][NP]> tensor_d;
@@ -269,48 +268,37 @@ class compute_sphere_operator_test_ml {
   // host
   // rely on fact NUM_PHYSICAL_LEV=NUM_LEV*VECTOR_SIZE
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
-      scalar_input_host,
-      scalar_input_COPY2_host;
-  const int scalar_input_len =
-      NUM_PHYSICAL_LEV * NP * NP;  // temp code
+      scalar_input_host;
 
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>::HostMirror
       vector_input_host;
-  const int vector_input_len =
-      NUM_PHYSICAL_LEV * 2 * NP * NP;
 
+  ExecViewManaged<Real * [2][2][NP][NP]>             d_d;
   ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror d_host;
-  const int d_len = 2 * 2 * NP * NP;  // temp code
 
-  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror
-      dinv_host;
-  const int dinv_len = 2 * 2 * NP * NP;  // temp code
+  ExecViewManaged<Real * [2][2][NP][NP]>             dinv_d;
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror dinv_host;
 
-  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror
-      metinv_host;
-  const int metinv_len = 2 * 2 * NP * NP;  // temp code
+  ExecViewManaged<Real * [2][2][NP][NP]>             metinv_d;
+  ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror metinv_host;
 
+  ExecViewManaged<Real * [NP][NP]>             metdet_d;
   ExecViewManaged<Real * [NP][NP]>::HostMirror metdet_host;
-  const int metdet_len = NP * NP;
 
-  ExecViewManaged<Real * [NP][NP]>::HostMirror
-      spheremp_host;
-  const int spheremp_len = NP * NP;
+  ExecViewManaged<Real * [NP][NP]>             spheremp_d;
+  ExecViewManaged<Real * [NP][NP]>::HostMirror spheremp_host;
 
+  ExecViewManaged<Real * [NP][NP]>             mp_d;
   ExecViewManaged<Real * [NP][NP]>::HostMirror mp_host;
-  const int mp_len = NP * NP;
 
+  ExecViewManaged<Real[NP][NP]>             dvv_d;
   ExecViewManaged<Real[NP][NP]>::HostMirror dvv_host;
-  const int dvv_len = NP * NP;
 
   ExecViewManaged<Real * [2][2][NP][NP]>::HostMirror
       tensor_host;
-  const int tensor_len = 2 * 2 * NP * NP;  // temp code
 
   ExecViewManaged<Real * [2][3][NP][NP]>::HostMirror
       vec_sph2cart_host;
-  const int vec_sph2cart_len =
-      2 * 3 * NP * NP;  // temp code
 
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>::HostMirror
       scalar_output_host;

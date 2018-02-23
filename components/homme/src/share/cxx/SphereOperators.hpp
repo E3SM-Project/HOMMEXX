@@ -44,6 +44,7 @@ public:
   void set_dvv (const ExecViewUnmanaged<const Real[NP][NP]> dvv_in)
   {
     // Get dvv
+    dvv = ExecViewManaged<Real[NP][NP]>("");
     Kokkos::deep_copy(dvv, dvv_in);
   }
 
@@ -74,7 +75,7 @@ public:
                   const ExecViewManaged<const Real *       [NP][NP]>  spheremp,
                   const ExecViewManaged<const Real *       [NP][NP]>  mp)
   {
-    Kokkos::deep_copy(dvv,dvv_in);
+    set_dvv(dvv_in);
 
     const int num_elems = metdet.extent_int(0);
 
