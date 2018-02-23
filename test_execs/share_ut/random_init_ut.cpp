@@ -117,6 +117,22 @@ TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
       REQUIRE(t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
       t.qlim(0, 0)[0] = signature;
       t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+
+      genRandArray(t.q, engine, dist);
+      REQUIRE(t.q(0, 0, 0)[0] >= min_val);
+      REQUIRE(t.q(0, 0, 0)[0] <= max_val);
+      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      t.q(0, 0, 0)[0] = signature;
+      t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+
+      genRandArray(t.qtens_biharmonic, engine, dist);
+      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] >= min_val);
+      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] <= max_val);
+      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      t.qtens_biharmonic(0, 0, 0)[0] = signature;
+      t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
     }
   }
   for (int ie = 0; ie < num_elems; ++ie) {
@@ -130,6 +146,10 @@ TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
               signature);
       REQUIRE(t.qlim(0, 0)[0] == signature);
       REQUIRE(t.qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(t.q(0, 0, 0)[0] == signature);
+      REQUIRE(t.q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(t.qtens_biharmonic(0, 0, 0)[0] == signature);
+      REQUIRE(t.qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
     }
   }
 }
