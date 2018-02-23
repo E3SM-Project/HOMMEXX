@@ -11,6 +11,15 @@ namespace Homme {
 // ================ Subviews of several ranks views with all compile-time dimensions ======================= //
 // Note: we template on ScalarType to allow both Real and Scalar case, and
 //       also to allow const/non-const versions.
+template <typename ScalarType, int DIM0, int DIM1, typename MemSpace,
+          typename... Properties>
+KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM1], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1], MemSpace, Properties...> v_in, int idim0) {
+  assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
+  return ViewUnmanaged<ScalarType[DIM1], MemSpace>(
+      &v_in.implementation_map().reference(idim0, 0));
+}
 
 template <typename ScalarType, int DIM0, int DIM1, int DIM2,
           typename MemSpace, typename... Properties>
@@ -22,6 +31,31 @@ subview(ViewType<ScalarType [DIM0][DIM1][DIM2], MemSpace, Properties...>
   assert(idim0 >= 0 && idim0 < DIM0);
   return ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>(
       &v_in.implementation_map().reference(idim0, 0, 0));
+}
+
+template <typename ScalarType, int DIM0, int DIM1, int DIM2,
+          typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM2], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2], MemSpace, Properties...>
+            v_in, const int idim0, const int idim1) {
+  assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
+  assert(idim1 >= 0 && idim1 < DIM1);
+  return ViewUnmanaged<ScalarType[DIM2], MemSpace>(
+      &v_in.implementation_map().reference(idim0, idim1, 0));
+}
+
+template <typename ScalarType, int DIM0, int DIM1, int DIM2, int DIM3,
+          typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2][DIM3], MemSpace, Properties...>
+            v_in, const int idim0) {
+  assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
+  return ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3], MemSpace>(
+      &v_in.implementation_map().reference(idim0, 0, 0, 0));
 }
 
 template <typename ScalarType, int DIM0, int DIM1, int DIM2, int DIM3,
@@ -53,6 +87,18 @@ subview(ViewType<ScalarType [DIM0][DIM1][DIM2][DIM3][DIM4], MemSpace, Properties
       &v_in.implementation_map().reference(idim0, 0, 0, 0, 0));
 }
 
+template <typename ScalarType, int DIM0, int DIM1, int DIM2, int DIM3, int DIM4,
+          typename MemSpace, typename... Properties>
+KOKKOS_INLINE_FUNCTION
+ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
+subview(ViewType<ScalarType [DIM0][DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
+            v_in, const int idim0, const int idim1) {
+  assert(v_in.data() != nullptr);
+  assert(idim0 >= 0 && idim0 < DIM0);
+  assert(idim1 >= 0 && idim1 < DIM1);
+  return ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>(
+      &v_in.implementation_map().reference(idim0, idim1, 0, 0, 0));
+}
 
 // ================ Subviews of several ranks views with runtime 1st dimension ======================= //
 // Note: we template on ScalarType to allow both Real and Scalar case, and
@@ -79,20 +125,6 @@ subview(ViewType<ScalarType * [DIM1][DIM2], MemSpace, Properties...> v_in,
   assert(ie >= 0);
   return ViewUnmanaged<ScalarType[DIM1][DIM2], MemSpace>(
       &v_in.implementation_map().reference(ie, 0, 0));
-}
-
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, typename MemSpace,
-          typename... Properties>
-KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM3], MemSpace>
-subview(ViewType<ScalarType[DIM1][DIM2][DIM3], MemSpace, Properties...> v_in,
-        int idx_1, int idx_2) {
-  assert(v_in.data() != nullptr);
-  assert(idx_1 < v_in.extent_int(0));
-  assert(idx_1 >= 0);
-  assert(idx_2 < v_in.extent_int(1));
-  assert(idx_2 >= 0);
-  return ViewUnmanaged<ScalarType[DIM3], MemSpace>(
-      &v_in.implementation_map().reference(idx_1, idx_2, 0));
 }
 
 template <typename ScalarType, int DIM1, int DIM2, int DIM3, typename MemSpace,
@@ -148,19 +180,6 @@ subview(ViewType<ScalarType * [DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...>
   assert(ie >= 0);
   return ViewUnmanaged<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace>(
       &v_in.implementation_map().reference(ie, 0, 0, 0, 0));
-}
-
-template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
-          typename MemSpace, typename... Properties>
-KOKKOS_INLINE_FUNCTION ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>
-subview(
-    ViewType<ScalarType[DIM1][DIM2][DIM3][DIM4], MemSpace, Properties...> v_in,
-    int var) {
-  assert(v_in.data() != nullptr);
-  assert(var < v_in.extent_int(0));
-  assert(var >= 0);
-  return ViewUnmanaged<ScalarType[DIM2][DIM3][DIM4], MemSpace>(
-      &v_in.implementation_map().reference(var, 0, 0, 0));
 }
 
 template <typename ScalarType, int DIM1, int DIM2, int DIM3, int DIM4,
