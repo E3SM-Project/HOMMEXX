@@ -349,14 +349,15 @@ public:
         num_parallel_iterations, tp);
     Kokkos::TeamPolicy<ExecSpace> policy(num_parallel_iterations,
                                          tv.first, tv.second);
+    auto tracers = m_tracers;
     Kokkos::parallel_for(
       policy,
       KOKKOS_LAMBDA (const TeamMember& team) {
         KernelVariables kv(team, qsize);
         const Element& elem = elem_view(kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
-        const auto qtens_biharmonic_t = m_tracers.tracer(kv.ie, kv.iq).qtens_biharmonic;
-        const auto qlim_t = m_tracers.tracer(kv.ie, kv.iq).qlim;
+        const auto qtens_biharmonic_t = tracers.tracer(kv.ie, kv.iq).qtens_biharmonic;
+        const auto qlim_t = tracers.tracer(kv.ie, kv.iq).qlim;
         for (int i = 0; i < NP; ++i)
           for (int j = 0; j < NP; ++j) {
             if (rhs_multiplier != 1.0 && i == 0 && j == 0) {
