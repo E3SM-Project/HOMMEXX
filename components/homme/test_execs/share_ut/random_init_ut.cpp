@@ -21,7 +21,7 @@ TEST_CASE("dp3d_intervals", "Testing Elements::random_init") {
   elements.random_init(num_elems, max_pressure);
   HostViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d("host dp3d",
                                                                     num_elems);
-  const auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
+  auto h_elements = elements.get_elements_host();
   for (int ie = 0; ie < num_elems; ++ie) {
     Kokkos::deep_copy(Homme::subview(dp3d,ie), h_elements(ie).m_dp3d);
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
@@ -51,7 +51,7 @@ TEST_CASE("d_dinv_check", "Testing Elements::random_init") {
   elements.random_init(num_elems);
   HostViewManaged<Real * [2][2][NP][NP]> d("host d", num_elems);
   HostViewManaged<Real * [2][2][NP][NP]> dinv("host dinv", num_elems);
-  const auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
+  auto h_elements = elements.get_elements_host();
   for (int ie = 0; ie < num_elems; ++ie) {
     Kokkos::deep_copy(Homme::subview(d,ie),    h_elements(ie).m_d);
     Kokkos::deep_copy(Homme::subview(dinv,ie), h_elements(ie).m_dinv);
@@ -94,7 +94,7 @@ TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
   Tracers tracers(num_elems, num_tracers);
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int iq = 0; iq < num_tracers; ++iq) {
-      Tracers::Tracer t = tracers.tracer(ie, iq);
+      Tracers::Tracer t = tracers.device_tracers()(ie, iq);
       genRandArray(t.qtens, engine, dist);
       REQUIRE(t.qtens(0, 0, 0)[0] >= min_val);
       REQUIRE(t.qtens(0, 0, 0)[0] <= max_val);

@@ -271,6 +271,7 @@ void Elements::random_init(const int num_elems, const Real max_pressure) {
   };
 
   ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
+  Kokkos::deep_copy(h_elements, m_elements);
   HostViewManaged<Real[2][2]> h_matrix("single host metric matrix");
 
   for (int ie=0; ie<m_num_elems; ++ie) {
