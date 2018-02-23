@@ -24,6 +24,11 @@ public:
     ExecViewUnmanaged<Scalar[2][NUM_LEV]> qlim;
   };
 
+  HostViewUnmanaged<const Tracer **> tracers() const {
+    return m_h_tracers;
+  }
+
+  // This should only be called from a kernel
   KOKKOS_INLINE_FUNCTION
   const Tracer &tracer(const int ie, const int iq) const {
     return m_tracers(ie, iq);
@@ -40,6 +45,7 @@ public:
 
 private:
   ExecViewManaged<Tracer **> m_tracers;
+  HostViewManaged<Tracer **> m_h_tracers;
   ExecViewManaged<Scalar *> buf;
 };
 
