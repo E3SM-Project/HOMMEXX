@@ -114,6 +114,9 @@ public:
   void register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim);
   template<int DIM, typename... Properties>
   void register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim);
+  template <typename... Properties>
+  void register_field(ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field,
+                      int ie, int iq);
 
   // Note: the outer dimension MUST be sliced, while the inner dimension can be fully exchanged
   template<int OUTER_DIM, int DIM, typename... Properties>
@@ -237,6 +240,28 @@ public: // This is semantically private but must be public for nvcc.
 };
 
 // ============================ REGISTER METHODS ========================= //
+
+template <typename... Properties>
+void BoundaryExchange::register_field(
+    ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie, int iq) {
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert(m_registration_started && !m_registration_completed);
+  assert(0 < ie < m_3d_fields.extent_int(0));
+  assert(0 < iq < m_3d_fields.extent_int(1));
+  assert(m_num_1d_fields == 0);
+
+  {
+    auto l_num_3d_fields = m_num_3d_fields;
+    auto l_3d_fields = m_3d_fields;
+    Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int) {
+      l_3d_fields(ie, iq) = field;
+    });
+  }
+	// Temporary hack
+  m_num_3d_fields = iq + 1;
+}
 
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim)

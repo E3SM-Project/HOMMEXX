@@ -1,3 +1,4 @@
+
 #include "Context.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
@@ -142,23 +143,25 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   ////////////////////////////////////////////////////////////////////////
   GPTLstart("tl-sc Q-from-qdp");
   {
-    const auto Q = tracers.m_q;
     const auto qdp = tracers.m_qdp;
     const auto np1_qdp = tl.np1_qdp;
     const auto np1 = tl.np1;
     const auto qsize = params.qsize;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()*params.qsize*NP*NP*NUM_LEV),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
-      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-      const int jgp  =   (idx / NUM_LEV) % NP;
-      const int ilev =    idx % NUM_LEV;
+    Kokkos::parallel_for(
+        Kokkos::RangePolicy<ExecSpace>(0, elements.num_elems() * params.qsize *
+                                              NP * NP * NUM_LEV),
+        KOKKOS_LAMBDA(const int idx) {
+          const int ie = (((idx / NUM_LEV) / NP) / NP) / qsize;
+          const int iq = (((idx / NUM_LEV) / NP) / NP) % qsize;
+          const int igp = ((idx / NUM_LEV) / NP) % NP;
+          const int jgp = (idx / NUM_LEV) % NP;
+          const int ilev = idx % NUM_LEV;
+          const auto Q = tracers.tracer(ie, iq).q;
 
-      Q(ie,iq,igp,jgp,ilev) = qdp(ie,np1_qdp,iq,igp,jgp,ilev) /
-                              ( hybrid_ai_delta[ilev]*ps0 +
-                                hybrid_bi_delta[ilev]*ps_v(ie,np1,igp,jgp));
-    });
+          Q(igp, jgp, ilev) = qdp(ie, np1_qdp, iq, igp, jgp, ilev) /
+                              (hybrid_ai_delta[ilev] * ps0 +
+                               hybrid_bi_delta[ilev] * ps_v(ie, np1, igp, jgp));
+        });
   }
   ExecSpace::fence();
   GPTLstop("tl-sc Q-from-qdp");
