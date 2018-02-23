@@ -15,32 +15,42 @@ namespace Homme {
 
 class SphereOperators
 {
+public:
   static constexpr int NUM_2D_VECTOR_BUFFERS = 2;
   static constexpr int NUM_3D_SCALAR_BUFFERS = 3;
   static constexpr int NUM_3D_VECTOR_BUFFERS = 3;
 
-public:
+  struct GeoViews {
+    ExecViewManaged<const Real [NP][NP]>        m_mp;
+    ExecViewManaged<const Real [NP][NP]>        m_spheremp;
+    ExecViewManaged<const Real [NP][NP]>        m_rspheremp;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_metinv;
+    ExecViewManaged<const Real [NP][NP]>        m_metdet;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_d;
+    ExecViewManaged<const Real [2][2][NP][NP]>  m_dinv;
+  };
 
   SphereOperators () = default;
 
   SphereOperators (const Elements& elements, const Derivative& derivative)
+   : m_geo_views ("",elements.num_elems())
   {
     // Get dvv
     dvv = derivative.get_dvv();
 
     // Get all needed 2d fields from elements
-    m_geo_views = ExecViewManaged<GeoViews*>("",elements.num_elems());
-    auto geo_views = m_geo_views;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()),
-                         KOKKOS_LAMBDA(const int ie) {
+    auto h_geo_views = Kokkos::create_mirror_view(m_geo_views);
+    Kokkos::deep_copy(h_geo_views,m_geo_views);
+    for (int ie=0; ie<elements.num_elems(); ++ie) {
       const Element& e = elements.get_element(ie);
-      geo_views(ie).m_d = e.m_d;
-      geo_views(ie).m_dinv = e.m_dinv;
-      geo_views(ie).m_metdet = e.m_metdet;
-      geo_views(ie).m_metinv = e.m_metinv;
-      geo_views(ie).m_spheremp = e.m_spheremp;
-      geo_views(ie).m_mp = e.m_mp;
-    });
+      GeoViews& gv = h_geo_views(ie);
+      gv.m_d = e.m_d;
+      gv.m_dinv = e.m_dinv;
+      gv.m_metdet = e.m_metdet;
+      gv.m_metinv = e.m_metinv;
+      gv.m_spheremp = e.m_spheremp;
+      gv.m_mp = e.m_mp;
+    }
   }
 
   // This one is used in the unit tests
@@ -57,16 +67,18 @@ public:
     const int num_elems = metdet.extent_int(0);
 
     m_geo_views = ExecViewManaged<GeoViews*>("",num_elems);
-    auto geo_views = m_geo_views;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,num_elems),
-                         KOKKOS_LAMBDA(const int ie) {
-      geo_views(ie).m_d        = Homme::subview(d,ie);
-      geo_views(ie).m_dinv     = Homme::subview(dinv,ie);
-      geo_views(ie).m_metdet   = Homme::subview(metdet,ie);
-      geo_views(ie).m_metinv   = Homme::subview(metinv,ie);
-      geo_views(ie).m_spheremp = Homme::subview(spheremp,ie);
-      geo_views(ie).m_mp       = Homme::subview(mp,ie);
-    });
+
+    auto h_geo_views = Kokkos::create_mirror_view(m_geo_views);
+    Kokkos::deep_copy(h_geo_views,m_geo_views);
+    for (int ie=0; ie<num_elems; ++ie) {
+      GeoViews& gv = h_geo_views(ie);
+      gv.m_d        = Homme::subview(d,ie);
+      gv.m_dinv     = Homme::subview(dinv,ie);
+      gv.m_metdet   = Homme::subview(metdet,ie);
+      gv.m_metinv   = Homme::subview(metinv,ie);
+      gv.m_spheremp = Homme::subview(spheremp,ie);
+      gv.m_mp       = Homme::subview(mp,ie);
+    }
   }
 
   template<typename... Tags>
@@ -957,16 +969,6 @@ private:
   ExecViewManaged<Scalar * [NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>  vector_buf_ml;
 
   ExecViewManaged<const Real [NP][NP]>          dvv;
-
-  struct GeoViews {
-    ExecViewManaged<const Real [NP][NP]>        m_mp;
-    ExecViewManaged<const Real [NP][NP]>        m_spheremp;
-    ExecViewManaged<const Real [NP][NP]>        m_rspheremp;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_metinv;
-    ExecViewManaged<const Real [NP][NP]>        m_metdet;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_d;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_dinv;
-  };
 
   ExecViewManaged<GeoViews*> m_geo_views;
 };

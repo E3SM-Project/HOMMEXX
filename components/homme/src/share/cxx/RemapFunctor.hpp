@@ -131,8 +131,8 @@ template <> struct _RemapFunctorRSplit<true> {
       assert(false);
     }
 
-    // Here just to suppress a compiler warning
-    return ExecViewManaged<Scalar[NP][NP][NUM_LEV]>("");
+    // Return a dummy view here, just to suppress a compiler warning
+    return elem.buffers.ttens;
   }
 };
 

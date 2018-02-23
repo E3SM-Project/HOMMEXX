@@ -33,27 +33,23 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   {
     const auto elem_view = elements.get_elements();
     const int n0 = tl.n0;
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace>(elements.num_elems()),
-                         KOKKOS_LAMBDA(const TeamMember& team) {
-      const Element& elem = elem_view(team.league_rank());
-      const auto& dp3d = Homme::subview(elem.m_dp3d,n0);
-      Kokkos::parallel_for(Kokkos::TeamThreadRange(team,NP*NP),
-                           KOKKOS_LAMBDA(const int idx){
-        const int igp = idx / NP;
-        const int jgp = idx % NP;
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,NUM_LEV),
-                             KOKKOS_LAMBDA(const int ilev){
-          elem.m_eta_dot_dpdn(igp,jgp,ilev) = 0.0;
-          elem.m_derived_vn0(0,igp,jgp,ilev) = 0.0;
-          elem.m_derived_vn0(1,igp,jgp,ilev) = 0.0;
-          elem.m_omega_p(igp,jgp,ilev) = 0.0;
-          if (params.nu_p>0) {
-            elem.m_derived_dpdiss_ave(igp,jgp,ilev) = 0.0;
-            elem.m_derived_dpdiss_biharmonic(igp,jgp,ilev) = 0.0;
-          }
-          elem.m_derived_dp(igp,jgp,ilev) = dp3d(igp,jgp,ilev);
-        });
-      });
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()*NP*NP*NUM_LEV),
+                         KOKKOS_LAMBDA(const int idx) {
+      const int ie   = ((idx / NUM_LEV) / NP) / NP;
+      const int igp  = ((idx / NUM_LEV) / NP) % NP;
+      const int jgp  =  (idx / NUM_LEV) % NP;
+      const int ilev =   idx % NUM_LEV;
+
+      const Element& elem = elem_view(ie);
+      elem.m_eta_dot_dpdn(igp,jgp,ilev) = 0.0;
+      elem.m_derived_vn0(0,igp,jgp,ilev) = 0.0;
+      elem.m_derived_vn0(1,igp,jgp,ilev) = 0.0;
+      elem.m_omega_p(igp,jgp,ilev) = 0.0;
+      if (params.nu_p>0) {
+        elem.m_derived_dpdiss_ave(igp,jgp,ilev) = 0.0;
+        elem.m_derived_dpdiss_biharmonic(igp,jgp,ilev) = 0.0;
+      }
+      elem.m_derived_dp(igp,jgp,ilev) = elem.m_dp3d(n0,igp,jgp,ilev);
     });
   }
   ExecSpace::fence();

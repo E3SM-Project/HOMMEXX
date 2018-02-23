@@ -787,12 +787,10 @@ private:
     assert_vector_size_1();
 #ifdef DEBUG_TRACE
     Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-      elem.buffers.kernel_start_times(kv.ie) = clock();
+      m_elements.kernel_start_times(kv.ie) = clock();
     });
 #endif
-    m_sphere_ops.gradient_sphere(
-        kv, Homme::subview(elem.buffers.pressure, kv.ie),
-        Homme::subview(elem.buffers.pressure_grad, kv.ie));
+    m_sphere_ops.gradient_sphere(kv, elem.buffers.pressure, elem.buffers.pressure_grad);
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
@@ -826,7 +824,7 @@ private:
     });
 #ifdef DEBUG_TRACE
     Kokkos::single(Kokkos::PerTeam(kv.team), [&]() {
-      elem.buffers.kernel_end_times(kv.ie) = clock();
+      m_elements.kernel_end_times(kv.ie) = clock();
     });
 #endif
   }
