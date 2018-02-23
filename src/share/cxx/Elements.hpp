@@ -5,6 +5,56 @@
 
 namespace Homme {
 
+// A struct holding buffers in a single 3d column, that are used by
+// all functors (except SphereOperators) to store intermediate results
+struct BufferViews {
+  static size_t size() {
+    size_t sizes_sum =
+           2*NP*NP                                      // two 2d scalar views
+      +   13*NP*NP*NUM_LEV*VECTOR_SIZE                  // thirteen 3d scalar views
+      + 2* 8*NP*NP*NUM_LEV*VECTOR_SIZE;                 // eight 3d vector view
+
+    return sizes_sum;
+  }
+
+  void init (Real* raw_buffer);
+
+  // Buffers for CaarFunctor
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> pressure;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> pressure_grad;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> temperature_virt;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> temperature_grad;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> omega_p;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> vdp;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> div_vdp;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> ephi;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> energy_grad;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> vorticity;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> ttens;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> dptens;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> vtens;
+  ExecViewUnmanaged<Real      [NP][NP]> preq_buf;
+  // sdot_sum is used in case rsplit=0 and in energy diagnostics
+  // (not yet coded).
+  ExecViewUnmanaged<Real      [NP][NP]> sdot_sum;
+  // Buffers for vertical advection terms in V and T for case
+  // of Eulerian advection, rsplit=0. These buffers are used in both
+  // cases, rsplit>0 and =0. Some of these values need to be init-ed
+  // to zero at the beginning of each RK stage.
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> v_vadv_buf;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> t_vadv_buf;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> eta_dot_dpdn_buf;
+
+  // Buffers for EulerStepFunctor
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>  vstar;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]>  dpdissk;
+
+  // Buffers for HyperviscosityFunctor
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> lapl_buf_1;
+  ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> lapl_buf_2;
+  ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> vlapl_buf;
+};
+
 // A struct holding data in a single 3d column (one 2d elem, all vertical levels)
 struct Element {
   static size_t size() {
@@ -17,10 +67,12 @@ struct Element {
       + 2*1*NUM_TIME_LEVELS*NP*NP*NUM_LEV*VECTOR_SIZE  // one time-dep 3d vector view
       +   1*NUM_TIME_LEVELS*NP*NP;                     // one time-dep 2d scalar view
 
+    sizes_sum += BufferViews::size();
+
     return sizes_sum;
   }
 
-  void init (Real* buffer);
+  void init (Real* raw_buffer);
 
   // Coriolis term
   ExecViewUnmanaged<Real [NP][NP]> m_fcor;
@@ -65,66 +117,28 @@ struct Element {
     m_derived_divdp_proj,        // DSSed divdp
     m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
     m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
+
+  // This struct contains all the buffers needed by all the
+  // functors (except SphereOperators, which has its own)
+  // to operate on a single element
+
+  BufferViews     buffers;
 };
 
 /* Per element data - specific velocity, temperature, pressure, etc. */
 class Elements {
 public:
 
-  //buffer views are temporaries that matter only during local RK steps
-  //(dynamics and tracers time step).
-  //m_ views are also used outside of local timesteps.
-  struct BufferViews {
-
-    BufferViews() = default;
-    void init(const int num_elems);
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> pressure;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> pressure_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> temperature_virt;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> temperature_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> omega_p;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vdp;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> div_vdp;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ephi;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> energy_grad;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> vorticity;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> ttens;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> dptens;
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> vtens;
-
-    // Buffers for EulerStepFunctor
-    ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
-    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
-    ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
-
-    ExecViewManaged<Real* [NP][NP]> preq_buf;
-    // sdot_sum is used in case rsplit=0 and in energy diagnostics
-    // (not yet coded).
-    ExecViewManaged<Real* [NP][NP]> sdot_sum;
-    // Buffers for spherical operators
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> div_buf;
-
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_1;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> lapl_buf_2;
-
-    // Buffers for vertical advection terms in V and T for case
-    // of Eulerian advection, rsplit=0. These buffers are used in both
-    // cases, rsplit>0 and =0. Some of these values need to be init-ed
-    // to zero at the beginning of each RK stage. Right now there is a code
-    // for this, since Elements is a singleton.
-    ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]> v_vadv_buf;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]> t_vadv_buf;
-    ExecViewManaged<Scalar*    [NP][NP][NUM_LEV_P]> eta_dot_dpdn_buf;
-
-    ExecViewManaged<clock_t *> kernel_start_times;
-    ExecViewManaged<clock_t *> kernel_end_times;
-  } buffers;
-
   Elements() = default;
 
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<Element*> get_elements() const {
     return m_elements;
+  }
+  ExecViewManaged<Element*>::HostMirror get_elements_host() const {
+    auto h_elements = Kokkos::create_mirror_view(m_elements);
+    Kokkos::deep_copy(h_elements,m_elements);
+    return h_elements;
   }
   KOKKOS_INLINE_FUNCTION
   const Element& get_element(const int ie) const {
@@ -168,6 +182,8 @@ public:
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
 
+  ExecViewManaged<clock_t *> kernel_start_times;
+  ExecViewManaged<clock_t *> kernel_end_times;
 private:
   int m_num_elems;
 
