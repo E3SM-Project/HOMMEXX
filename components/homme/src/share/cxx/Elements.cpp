@@ -11,32 +11,92 @@
 
 namespace Homme {
 
-void Element::init(Real* buffer) {
+void BufferViews::init (Real* raw_buffer) {
 
-  m_phis = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
+  preq_buf = ExecViewUnmanaged<Real [NP][NP]> (raw_buffer);
+  raw_buffer += NP*NP;
+  sdot_sum = ExecViewUnmanaged<Real [NP][NP]> (raw_buffer);
+  raw_buffer += NP*NP;
 
-  m_fcor = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
+  Scalar* sbuf = reinterpret_cast<Scalar*>(raw_buffer);
 
-  m_mp = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
-  m_spheremp = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
-  m_rspheremp = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
+  pressure = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  pressure_grad = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
 
-  m_metdet = ExecViewUnmanaged<Real [NP][NP]>(buffer);
-  buffer += NP*NP;
-  m_metinv = ExecViewUnmanaged<Real [2][2][NP][NP]>(buffer);
-  buffer += 2*2*NP*NP;
+  temperature_virt = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  temperature_grad = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
 
-  m_d    = ExecViewUnmanaged<Real [2][2][NP][NP]>(buffer);
-  buffer += 2*2*NP*NP;
-  m_dinv = ExecViewUnmanaged<Real [2][2][NP][NP]>(buffer);
-  buffer += 2*2*NP*NP;
+  omega_p = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  vdp = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
+  div_vdp = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  ephi = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  energy_grad = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
 
-  Scalar* sbuf = reinterpret_cast<Scalar*>(buffer);
+  vorticity = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  ttens = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  dptens = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  vtens = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
+
+  t_vadv_buf = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  v_vadv_buf = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
+  eta_dot_dpdn_buf = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+
+  vstar = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
+  dpdissk = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+
+  lapl_buf_1 = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  lapl_buf_2 = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
+  sbuf += NP*NP*NUM_LEV;
+  vlapl_buf = ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]>(sbuf);
+  sbuf += 2*NP*NP*NUM_LEV;
+}
+
+
+void Element::init(Real* raw_buffer) {
+
+  m_phis = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+
+  m_fcor = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+
+  m_mp = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+  m_spheremp = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+  m_rspheremp = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+
+  m_metdet = ExecViewUnmanaged<Real [NP][NP]>(raw_buffer);
+  raw_buffer += NP*NP;
+  m_metinv = ExecViewUnmanaged<Real [2][2][NP][NP]>(raw_buffer);
+  raw_buffer += 2*2*NP*NP;
+
+  m_d    = ExecViewUnmanaged<Real [2][2][NP][NP]>(raw_buffer);
+  raw_buffer += 2*2*NP*NP;
+  m_dinv = ExecViewUnmanaged<Real [2][2][NP][NP]>(raw_buffer);
+  raw_buffer += 2*2*NP*NP;
+
+  Scalar* sbuf = reinterpret_cast<Scalar*>(raw_buffer);
 
   m_omega_p = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
   sbuf += NP*NP*NUM_LEV;
@@ -65,8 +125,11 @@ void Element::init(Real* buffer) {
   m_derived_dpdiss_biharmonic = ExecViewUnmanaged<Scalar [NP][NP][NUM_LEV]>(sbuf);
   sbuf += NP*NP*NUM_LEV;
 
-  buffer = reinterpret_cast<Real*>(sbuf);
-  m_ps_v = ExecViewUnmanaged<Real [NUM_TIME_LEVELS][NP][NP]> (buffer);
+  raw_buffer = reinterpret_cast<Real*>(sbuf);
+  m_ps_v = ExecViewUnmanaged<Real [NUM_TIME_LEVELS][NP][NP]> (raw_buffer);
+  raw_buffer += NUM_TIME_LEVELS*NP*NP;
+
+  buffers.init(raw_buffer);
 }
 
 void Elements::init(const int num_elems) {
@@ -88,7 +151,8 @@ void Elements::init(const int num_elems) {
   }
   Kokkos::deep_copy(m_elements,h_elements);
 
-  buffers.init(num_elems);
+  kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
+  kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
 }
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
@@ -322,7 +386,7 @@ void Elements::pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn) {
   ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
   Kokkos::deep_copy(h_elements,m_elements);
   for (int ie=0; ie<m_num_elems; ++ie) {
-    sync_to_device_i2p(Homme::subview(eta_dot_dpdn_f90,ie), h_elements(ie).m_eta_dot_dpdn);
+    sync_to_device(Homme::subview(eta_dot_dpdn_f90,ie), h_elements(ie).m_eta_dot_dpdn);
   }
 }
 
@@ -370,60 +434,8 @@ void Elements::push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const {
   ExecViewManaged<Element*>::HostMirror h_elements = Kokkos::create_mirror_view(m_elements);
   Kokkos::deep_copy(h_elements,m_elements);
   for (int ie=0; ie<m_num_elems; ++ie) {
-    sync_to_host_p2i(h_elements(ie).m_eta_dot_dpdn,Homme::subview(eta_dot_dpdn_f90,ie));
+    sync_to_host(h_elements(ie).m_eta_dot_dpdn,Homme::subview(eta_dot_dpdn_f90,ie));
   }
-}
-
-void Elements::BufferViews::init(const int num_elems) {
-  pressure =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Pressure buffer", num_elems);
-  pressure_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of pressure", num_elems);
-  temperature_virt = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Virtual Temperature", num_elems);
-  temperature_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of temperature", num_elems);
-  omega_p = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Omega_P = omega/pressure = (Dp/Dt)/pressure", num_elems);
-  vdp = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("(u,v)*dp", num_elems);
-  div_vdp = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Divergence of dp3d * (u,v)", num_elems);
-  ephi = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "Kinetic Energy + Geopotential Energy", num_elems);
-  energy_grad = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>(
-      "Gradient of ephi", num_elems);
-  vorticity =
-      ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Vorticity", num_elems);
-
-  ttens  = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for temperature",num_elems);
-  dptens = ExecViewManaged<Scalar*    [NP][NP][NUM_LEV]>("Temporary for dp3d",num_elems);
-  vtens  = ExecViewManaged<Scalar* [2][NP][NP][NUM_LEV]>("Temporary for velocity",num_elems);
-
-  vstar = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("buffer for (flux v)/dp",
-       num_elems);
-  qwrk      = ExecViewManaged<Scalar * [QSIZE_D][2][NP][NP][NUM_LEV]>(
-      "work buffer for tracers", num_elems);
-  dpdissk = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(
-      "dpdissk", num_elems);
-
-  preq_buf = ExecViewManaged<Real * [NP][NP]>("Preq Buffer", num_elems);
-
-  sdot_sum = ExecViewManaged<Real * [NP][NP]>("Sdot sum buffer", num_elems);
-
-  div_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("Divergence Buffer",
-                                                           num_elems);
-
-  lapl_buf_1 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
-  lapl_buf_2 = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("Scalar laplacian Buffer", num_elems);
-  v_vadv_buf = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("v_vadv buffer",
-                                                              num_elems);
-  t_vadv_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("t_vadv buffer",
-                                                           num_elems);
-  eta_dot_dpdn_buf = ExecViewManaged<Scalar * [NP][NP][NUM_LEV_P]>("eta_dot_dpdpn buffer",
-                                                                   num_elems);
-
-  kernel_start_times = ExecViewManaged<clock_t *>("Start Times", num_elems);
-  kernel_end_times = ExecViewManaged<clock_t *>("End Times", num_elems);
 }
 
 } // namespace Homme
