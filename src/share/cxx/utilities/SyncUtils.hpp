@@ -264,33 +264,8 @@ sync_to_host(Source_T source, Dest_T dest) {
   }
 }
 
-// These last two sync_to_host deal with views with NUM_INTERFACE_LEV levels on host,
-// and either copy the whole view to a view with NUM_LEV_P level packs (1st version) ,
-// or copy only the first NUM_PHYSICAL_LEV to a view with NUM_LEV level packs (2nd version)
-template <typename Source_T, typename Dest_T>
-typename std::enable_if
-  <
-    (exec_view_mappable<Source_T, Scalar * [NP][NP][NUM_LEV_P]>::value &&
-     host_view_mappable<Dest_T, Real * [NUM_INTERFACE_LEV][NP][NP]>::value),
-    void
-  >::type
-sync_to_host(Source_T source, Dest_T dest)
-{
-  typename Source_T::HostMirror source_mirror = Kokkos::create_mirror_view(source);
-  Kokkos::deep_copy(source_mirror, source);
-  for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int level = 0; level < NUM_INTERFACE_LEV; ++level) {
-      const int ilev = level / VECTOR_SIZE;
-      const int ivec = level % VECTOR_SIZE;
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp) {
-          dest(ie, level, igp, jgp) = source_mirror(ie, igp, jgp, ilev)[ivec];
-        }
-      }
-    }
-  }
-}
-
+// This last sync_to_host deals with views with NUM_INTERFACE_LEV levels on host,
+// copy only the first NUM_PHYSICAL_LEV to a view with NUM_LEV level packs
 template <typename Source_T, typename Dest_T>
 typename std::enable_if
   <
@@ -532,33 +507,8 @@ sync_to_device(Source_T source, Dest_T dest)
   Kokkos::deep_copy(dest, dest_mirror);
 }
 
-// These last two sync_to_host deal with views with NUM_INTERFACE_LEV levels on host,
-// and either copy the whole view from a view with NUM_LEV_P level packs (1st version) ,
-// or copy only the first NUM_PHYSICAL_LEV from a view with NUM_LEV level packs (2nd version)
-template <typename Source_T, typename Dest_T>
-typename std::enable_if
-  <
-    (host_view_mappable<Source_T, Real*[NUM_INTERFACE_LEV][NP][NP]>::value &&
-     exec_view_mappable<Dest_T, Scalar*[NP][NP][NUM_LEV_P]>::value),
-    void
-  >::type
-sync_to_device(Source_T source, Dest_T dest)
-{
-  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
-  for (int ie = 0; ie < source.extent_int(0); ++ie) {
-    for (int level = 0; level < NUM_INTERFACE_LEV; ++level) {
-      const int ilev = level / VECTOR_SIZE;
-      const int ivec = level % VECTOR_SIZE;
-      for (int igp = 0; igp < NP; ++igp) {
-        for (int jgp = 0; jgp < NP; ++jgp) {
-          dest_mirror(ie, igp, jgp, ilev)[ivec] = source(ie, level, igp, jgp);
-        }
-      }
-    }
-  }
-  Kokkos::deep_copy(dest, dest_mirror);
-}
-
+// This last sync_to_device deals with views with NUM_INTERFACE_LEV levels on host,
+// copy only the first NUM_PHYSICAL_LEV from a view with NUM_LEV level packs
 template <typename Source_T, typename Dest_T>
 typename std::enable_if
   <
