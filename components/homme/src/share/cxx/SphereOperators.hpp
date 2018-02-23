@@ -21,13 +21,12 @@ public:
   static constexpr int NUM_3D_VECTOR_BUFFERS = 3;
 
   struct GeoViews {
-    ExecViewManaged<const Real [NP][NP]>        m_mp;
-    ExecViewManaged<const Real [NP][NP]>        m_spheremp;
-    ExecViewManaged<const Real [NP][NP]>        m_rspheremp;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_metinv;
-    ExecViewManaged<const Real [NP][NP]>        m_metdet;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_d;
-    ExecViewManaged<const Real [2][2][NP][NP]>  m_dinv;
+    ExecViewUnmanaged<const Real [NP][NP]>        m_mp;
+    ExecViewUnmanaged<const Real [NP][NP]>        m_spheremp;
+    ExecViewUnmanaged<const Real [2][2][NP][NP]>  m_metinv;
+    ExecViewUnmanaged<const Real [NP][NP]>        m_metdet;
+    ExecViewUnmanaged<const Real [2][2][NP][NP]>  m_d;
+    ExecViewUnmanaged<const Real [2][2][NP][NP]>  m_dinv;
   };
 
   SphereOperators () = default;
@@ -36,13 +35,24 @@ public:
    : m_geo_views ("",elements.num_elems())
   {
     // Get dvv
-    dvv = derivative.get_dvv();
+    set_dvv(derivative.get_dvv());
 
     // Get all needed 2d fields from elements
+    set_geo_views(elements.get_elements_host());
+  }
+
+  void set_dvv (const ExecViewUnmanaged<const Real[NP][NP]> dvv_in)
+  {
+    // Get dvv
+    Kokkos::deep_copy(dvv, dvv_in);
+  }
+
+  void set_geo_views (const HostViewUnmanaged<Element*> h_elements)
+  {
+    // Get all needed 2d fields from the element
     auto h_geo_views = Kokkos::create_mirror_view(m_geo_views);
-    Kokkos::deep_copy(h_geo_views,m_geo_views);
-    for (int ie=0; ie<elements.num_elems(); ++ie) {
-      const Element& e = elements.get_element(ie);
+    for (int ie=0; ie<h_elements.extent_int(0); ++ie) {
+      const Element& e = h_elements(ie);
       GeoViews& gv = h_geo_views(ie);
       gv.m_d = e.m_d;
       gv.m_dinv = e.m_dinv;
@@ -51,6 +61,8 @@ public:
       gv.m_spheremp = e.m_spheremp;
       gv.m_mp = e.m_mp;
     }
+
+    Kokkos::deep_copy(m_geo_views,h_geo_views);
   }
 
   // This one is used in the unit tests
@@ -62,7 +74,7 @@ public:
                   const ExecViewManaged<const Real *       [NP][NP]>  spheremp,
                   const ExecViewManaged<const Real *       [NP][NP]>  mp)
   {
-    dvv = dvv_in;
+    Kokkos::deep_copy(dvv,dvv_in);
 
     const int num_elems = metdet.extent_int(0);
 
@@ -79,6 +91,7 @@ public:
       gv.m_spheremp = Homme::subview(spheremp,ie);
       gv.m_mp       = Homme::subview(mp,ie);
     }
+    Kokkos::deep_copy(m_geo_views,h_geo_views);
   }
 
   template<typename... Tags>
@@ -968,7 +981,7 @@ private:
   ExecViewManaged<Scalar * [NUM_3D_SCALAR_BUFFERS][NP][NP][NUM_LEV]>     scalar_buf_ml;
   ExecViewManaged<Scalar * [NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>  vector_buf_ml;
 
-  ExecViewManaged<const Real [NP][NP]>          dvv;
+  ExecViewManaged<Real [NP][NP]>          dvv;
 
   ExecViewManaged<GeoViews*> m_geo_views;
 };

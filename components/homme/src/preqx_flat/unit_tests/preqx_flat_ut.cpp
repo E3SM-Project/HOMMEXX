@@ -134,12 +134,14 @@ public:
     tracers.push_qdp(qdp.data());
 
 
-    const auto h_elements = Kokkos::create_mirror_view(elements.get_elements());
+    auto h_elements = elements.get_elements_host();
     for (int ie = 0; ie < elements.num_elems(); ++ie) {
       Kokkos::deep_copy(Homme::subview(dinv, ie),    h_elements(ie).m_dinv);
       Kokkos::deep_copy(Homme::subview(spheremp,ie), h_elements(ie).m_spheremp);
       Kokkos::deep_copy(Homme::subview(metdet,ie),   h_elements(ie).m_metdet);
     }
+    functor.m_sphere_ops.set_geo_views(h_elements);
+    functor.m_sphere_ops.set_dvv(Context::singleton().get_derivative().get_dvv());
   }
 
   KOKKOS_INLINE_FUNCTION
