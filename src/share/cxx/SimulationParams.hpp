@@ -27,8 +27,6 @@ struct SimulationParams
 
   bool      prescribed_wind;
 
-  double    time_step;
-
   int       state_frequency;
   bool      energy_fixer;
   bool      disable_diagnostics;
@@ -43,8 +41,6 @@ struct SimulationParams
   int       hypervis_order;
   int       hypervis_subcycle;
   double    hypervis_scaling;
-
-  double    ur_weight;
 
   // Use this member to check whether the struct has been initialized
   bool      params_set;
