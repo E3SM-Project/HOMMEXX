@@ -78,7 +78,7 @@ TEST_CASE("d_dinv_check", "Testing Elements::random_init") {
     }
   }
 }
-
+#if 0
 TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
   // Ensures three things - that genRandArray results in an array starting and
   // ending with values between the specified bounds, that it does not exceed
@@ -183,3 +183,4 @@ TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
     }
   }
 }
+#endif
