@@ -130,7 +130,7 @@ public:
     }
 
     auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
-    const auto h_elements = Kokkos::create_mirror_view(m_elements.get_elements());
+    auto h_elements = m_elements.get_elements_host();
     for (int np1_qdp = 0, k = 0; np1_qdp < Q_NUM_TIME_LEVELS; ++np1_qdp) {
       for (int dssi = 0; dssi < 3; ++dssi, ++k) {
         m_bes[k] = std::make_shared<BoundaryExchange>();
