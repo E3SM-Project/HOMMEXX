@@ -204,7 +204,7 @@ struct RemapFunctor : public Remapper,
     if (!nonzero_rsplit || var >= this->num_states_remap) {
       if (var >= this->num_states_remap)
         var -= this->num_states_remap;
-      return Homme::subview(m_tracers.m_qdp, kv.ie, m_data.n0_qdp, var);
+      return Homme::subview(m_tracers.qdp, kv.ie, m_data.n0_qdp, var);
     } else {
       return this->get_state(kv, m_elements.get_element(kv.ie), m_data.np1, var);
     }

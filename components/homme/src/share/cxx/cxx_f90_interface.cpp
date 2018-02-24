@@ -105,11 +105,7 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   }
 
   HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> elem_Q(elem_Q_ptr, elements.num_elems());
-  for (int ie = 0; ie < elements.num_elems(); ++ie) {
-    for (int iq = 0; iq < tracers.num_tracers(); ++iq) {
-      sync_to_host(tracers.device_tracers()(ie, iq).q, Homme::subview(elem_Q, ie, iq));
-    }
-  }
+  sync_to_host(tracers.q, elem_Q);
 }
 
 void init_derivative_c (CF90Ptr& dvv)

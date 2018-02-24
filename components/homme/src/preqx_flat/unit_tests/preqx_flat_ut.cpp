@@ -909,7 +909,7 @@ TEST_CASE("moist_virtual_temperature",
   tracers.random_init();
 
   TestType test_functor(elements, tracers);
-  sync_to_host(tracers.m_qdp, test_functor.qdp);
+  sync_to_host(tracers.qdp, test_functor.qdp);
   auto h_elements = elements.get_elements_host();
   for (int ie=0; ie<num_elems; ++ie) {
     sync_to_host(h_elements(ie).m_dp3d, Homme::subview(test_functor.dp3d,ie));
