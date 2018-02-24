@@ -209,8 +209,8 @@ private:
   // connection, it will point to the corresponding mpi buffer, and for missing
   // connection, it will point to the send/recv blackhole.
 
-  ExecViewManaged<ExecViewUnmanaged<Scalar[NUM_LEV][2]>**[NUM_CONNECTIONS]>  m_send_1d_buffers;
-  ExecViewManaged<ExecViewUnmanaged<Scalar[NUM_LEV][2]>**[NUM_CONNECTIONS]>  m_recv_1d_buffers;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[2][NUM_LEV]>**[NUM_CONNECTIONS]>  m_send_1d_buffers;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[2][NUM_LEV]>**[NUM_CONNECTIONS]>  m_recv_1d_buffers;
 
   ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>               m_send_2d_buffers;
   ExecViewManaged<ExecViewUnmanaged<Real*>**[NUM_CONNECTIONS]>               m_recv_2d_buffers;
