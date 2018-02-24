@@ -8,10 +8,11 @@
 #include "MpiHelpers.hpp"
 #include "Hommexx_Debug.hpp"
 
+#include "utilities/SubviewUtils.hpp"
+
 #include <memory>
 
 #include <vector>
-#include <map>
 
 #include <assert.h>
 
@@ -112,29 +113,32 @@ public:
 
   // Note: num_dims is the # of dimensions to exchange, while start_dim is the first to exchange
   template<int DIM, typename... Properties>
+  void register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim);
+  template<int DIM, typename... Properties>
   void register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim);
+  template<int DIM, typename... Properties>
+  void register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int num_dims, int start_dim);
   template<int DIM, typename... Properties>
   void register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim);
 
   // Note: the outer dimension MUST be sliced, while the inner dimension can be fully exchanged
   template<int OUTER_DIM, int DIM, typename... Properties>
+  void register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int idim_out, int num_dims, int start_dim);
+  template<int OUTER_DIM, int DIM, typename... Properties>
   void register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int idim_out, int num_dims, int start_dim);
 
   template<typename... Properties>
+  void register_field (ExecView<Real[NP][NP], Properties...> field, int ie);
+  template<typename... Properties>
   void register_field (ExecView<Real*[NP][NP], Properties...> field);
+  template<typename... Properties>
+  void register_field (ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie);
   template<typename... Properties>
   void register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field);
 
-  // These two registration methods should be used for the exchange of min/max fields
+  // This registration method should be used for the exchange of min/max fields
   template<typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
-                                ExecView<Scalar*[NUM_LEV], Properties...> field_max);
-  template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
-                                ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim);
-
-  template<int DIM, typename... Properties>
-  void register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
+  void register_min_max_fields (ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie);
 
   // Size the buffers, and initialize the MPI types
   void registration_completed();
@@ -186,6 +190,9 @@ private:
 
   void build_buffer_views_and_requests ();
 
+  int max_num_registered_fields (HostViewManaged<int*> num_fields_per_elem);
+  int min_num_registered_fields (HostViewManaged<int*> num_fields_per_elem);
+
   std::shared_ptr<Connectivity>   m_connectivity;
 
   int                       m_elem_buf_size[2];
@@ -193,9 +200,9 @@ private:
   std::vector<MPI_Request>  m_send_requests;
   std::vector<MPI_Request>  m_recv_requests;
 
-  ExecViewManaged<ExecViewManaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
-  ExecViewManaged<ExecViewManaged<Real[NP][NP]>**>                  m_2d_fields;
-  ExecViewManaged<ExecViewManaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[NUM_LEV]>**[2]>            m_1d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Real[NP][NP]>**>                  m_2d_fields;
+  ExecViewManaged<ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]>**>       m_3d_fields;
 
   // This class contains all the buffers to be stuffed in the buffers views, and used in pack/unpack,
   // as well as the mpi buffers used in MPI calls (which are the same as the former if MPIMemSpace=ExecMemSpace),
@@ -223,6 +230,10 @@ private:
   int         m_num_2d_fields;
   int         m_num_3d_fields;
 
+  HostViewManaged<int*> m_num_1d_fields_per_elem;
+  HostViewManaged<int*> m_num_2d_fields_per_elem;
+  HostViewManaged<int*> m_num_3d_fields_per_elem;
+
   // The following flags are used to ensure that a bad user does not call setup/cleanup/registration
   // methods of this class in an order that generate errors. And if he/she does, we try to avoid errors.
   bool        m_registration_started;
@@ -247,190 +258,236 @@ public: // This is semantically private but must be public for nvcc.
 // ============================ REGISTER METHODS ========================= //
 
 template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Real[DIM][NP][NP], Properties...> field, int ie, int num_dims, int start_dim)
+{
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (ie>=0 && ie < m_2d_fields.extent_int(0));
+  assert (num_dims>0 && start_dim>=0 && DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_2d_fields_per_elem(ie)+num_dims<=m_2d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+
+  auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
+  Kokkos::deep_copy(h_2d_fields,m_2d_fields);
+  for(int idim=0; idim<num_dims; ++idim) {
+    h_2d_fields(ie, m_num_2d_fields_per_elem(ie)+idim) = Homme::subview(field, start_dim+idim);
+  }
+  Kokkos::deep_copy(m_2d_fields,h_2d_fields);
+
+  m_num_2d_fields_per_elem(ie) += num_dims;
+}
+
+template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[DIM][NP][NP], Properties...> field, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && DIM>0);
   assert (start_dim+num_dims<=DIM);
-  assert (m_num_2d_fields+num_dims<=m_2d_fields.extent_int(1));
-  assert (m_num_1d_fields==0);
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem)+num_dims<=m_2d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+  // Don't register one field on a few elements, then pause, register another field on all elements, then go
+  // back to finish registering the first field on the remaining elements. When you register a field one
+  // element at a time, please, complete all elements before moving to the next field
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem)==min_num_registered_fields(m_num_2d_fields_per_elem));
 
-  {
-    auto l_num_2d_fields = m_num_2d_fields;
-    auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-        l_2d_fields(ie, l_num_2d_fields+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL);
-    });
+  auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
+  Kokkos::deep_copy(h_2d_fields,m_2d_fields);
+  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+    for (int idim=0; idim<num_dims; ++idim) {
+      h_2d_fields(ie,m_num_2d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, start_dim+idim);
+    }
+    m_num_2d_fields_per_elem(ie) += num_dims;
   }
+  Kokkos::deep_copy(m_2d_fields,h_2d_fields);
+}
 
-  m_num_2d_fields += num_dims;
+template<int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int num_dims, int start_dim)
+{
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (ie>=0 && ie < m_3d_fields.extent_int(0));
+  assert (num_dims>0 && start_dim>=0 && DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_3d_fields_per_elem(ie)+num_dims<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  for(int idim=0; idim<num_dims; ++idim) {
+    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, start_dim+idim);
+  }
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
+
+  m_num_3d_fields_per_elem(ie) += num_dims;
 }
 
 template<int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[DIM][NP][NP][NUM_LEV], Properties...> field, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && DIM>0);
   assert (start_dim+num_dims<=DIM);
-  assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
-  assert (m_num_1d_fields==0);
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)+num_dims<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+  // Don't register one field on a few elements, then pause, register another field on all elements, then go
+  // back to finish registering the first field on the remaining elements. When you register a field one
+  // element at a time, please, complete all elements before moving to the next field
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)==min_num_registered_fields(m_num_3d_fields_per_elem));
 
-  {
-    auto l_num_3d_fields = m_num_3d_fields;
-    auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-        l_3d_fields(ie, l_num_3d_fields+idim) = Kokkos::subview(field, ie, start_dim+idim, ALL, ALL, ALL);
-    });
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+    for (int idim=0; idim<num_dims; ++idim) {
+      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, start_dim+idim);
+    }
+    m_num_3d_fields_per_elem(ie) += num_dims;
   }
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
+}
 
-  m_num_3d_fields += num_dims;
+template<int OUTER_DIM, int DIM, typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int ie, int outer_dim, int num_dims, int start_dim)
+{
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (ie>=0 && ie < m_3d_fields.extent_int(0));
+  assert (num_dims>0 && start_dim>=0 && outer_dim>=0 && DIM>0 && OUTER_DIM>0);
+  assert (start_dim+num_dims<=DIM);
+  assert (m_num_3d_fields_per_elem(ie)+num_dims<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  for(int idim=0; idim<num_dims; ++idim) {
+    h_3d_fields(ie, m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, outer_dim, start_dim+idim);
+  }
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
+
+  m_num_3d_fields_per_elem(ie) += num_dims;
 }
 
 template<int OUTER_DIM, int DIM, typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[OUTER_DIM][DIM][NP][NP][NUM_LEV], Properties...> field, int outer_dim, int num_dims, int start_dim)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
   assert (num_dims>0 && start_dim>=0 && outer_dim>=0 && DIM>0 && OUTER_DIM>0);
   assert (start_dim+num_dims<=DIM);
-  assert (m_num_3d_fields+num_dims<=m_3d_fields.extent_int(1));
-  assert (m_num_1d_fields==0);
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)+num_dims<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
 
-  {
-    auto l_num_3d_fields = m_num_3d_fields;
-    auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-        l_3d_fields(ie, l_num_3d_fields+idim) = Kokkos::subview(field, ie, outer_dim, start_dim+idim, ALL, ALL, ALL);
-    });
+  // Don't register one field on a few elements, then pause, register another field on all elements, then go
+  // back to finish registering the first field on the remaining elements. When you register a field one
+  // element at a time, please, complete all elements before moving to the next field
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)==min_num_registered_fields(m_num_3d_fields_per_elem));
+
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+    for (int idim=0; idim<num_dims; ++idim) {
+      h_3d_fields(ie,m_num_3d_fields_per_elem(ie)+idim) = Homme::subview(field, ie, outer_dim, start_dim+idim);
+    }
+    m_num_3d_fields_per_elem(ie) += num_dims;
   }
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
+}
 
-  m_num_3d_fields += num_dims;
+template<typename... Properties>
+void BoundaryExchange::register_field (ExecView<Real[NP][NP], Properties...> field, int ie)
+{
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (ie>=0 && ie < m_2d_fields.extent_int(0));
+  assert (m_num_2d_fields_per_elem(ie)+1<=m_2d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+
+  auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
+  Kokkos::deep_copy(h_2d_fields,m_2d_fields);
+  h_2d_fields(ie, m_num_2d_fields_per_elem(ie)) = field;
+  Kokkos::deep_copy(m_2d_fields,h_2d_fields);
+
+  ++m_num_2d_fields_per_elem(ie);
 }
 
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Real*[NP][NP], Properties...> field)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
-  assert (m_num_2d_fields+1<=m_2d_fields.extent_int(1));
-  assert (m_num_1d_fields==0);
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem)+1<=m_2d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+  // Don't register one field on a few elements, then pause, register another field on all elements, then go
+  // back to finish registering the first field on the remaining elements. When you register a field one
+  // element at a time, please, complete all elements before moving to the next field
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem)==min_num_registered_fields(m_num_2d_fields_per_elem));
 
-  {
-    auto l_num_2d_fields = m_num_2d_fields;
-    auto l_2d_fields = m_2d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
-                         KOKKOS_LAMBDA(const int ie){
-      l_2d_fields(ie, l_num_2d_fields) = Kokkos::subview(field, ie, ALL, ALL);
-    });
+  auto h_2d_fields = Kokkos::create_mirror_view(m_2d_fields);
+  Kokkos::deep_copy(h_2d_fields,m_2d_fields);
+  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+    h_2d_fields(ie,m_num_2d_fields_per_elem(ie)) = Homme::subview(field, ie);
+    ++m_num_2d_fields_per_elem(ie);
   }
+  Kokkos::deep_copy(m_2d_fields,h_2d_fields);
+}
 
-  ++m_num_2d_fields;
+template<typename... Properties>
+void BoundaryExchange::register_field (ExecView<Scalar[NP][NP][NUM_LEV], Properties...> field, int ie)
+{
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (ie>=0 && ie < m_3d_fields.extent_int(0));
+  assert (m_num_3d_fields_per_elem(ie)+1<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  h_3d_fields(ie, m_num_3d_fields_per_elem(ie)) = field;
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
+
+  ++m_num_3d_fields_per_elem(ie);
 }
 
 template<typename... Properties>
 void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field)
 {
-  using Kokkos::ALL;
-
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
-  assert (m_num_3d_fields+1<=m_3d_fields.extent_int(1));
-  assert (m_num_1d_fields==0);
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)+1<=m_3d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_1d_fields_per_elem)==0);
+  // Don't register one field on a few elements, then pause, register another field on all elements, then go
+  // back to finish registering the first field on the remaining elements. When you register a field one
+  // element at a time, please, complete all elements before moving to the next field
+  assert (max_num_registered_fields(m_num_3d_fields_per_elem)==min_num_registered_fields(m_num_3d_fields_per_elem));
 
-  {
-    auto l_num_3d_fields = m_num_3d_fields;
-    auto l_3d_fields = m_3d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
-                         KOKKOS_LAMBDA(const int ie){
-      l_3d_fields(ie, l_num_3d_fields) = Kokkos::subview(field, ie, ALL, ALL, ALL);
-    });
+  auto h_3d_fields = Kokkos::create_mirror_view(m_3d_fields);
+  Kokkos::deep_copy(h_3d_fields,m_3d_fields);
+  for (int ie=0; ie<m_connectivity->get_num_local_elements(); ++ie) {
+    h_3d_fields(ie,m_num_3d_fields_per_elem(ie)) = Homme::subview(field, ie);
+    ++m_num_3d_fields_per_elem(ie);
   }
-
-  ++m_num_3d_fields;
+  Kokkos::deep_copy(m_3d_fields,h_3d_fields);
 }
 
-template<typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[NUM_LEV], Properties...> field_min,
-                                                ExecView<Scalar*[NUM_LEV], Properties...> field_max)
-{
-  using Kokkos::ALL;
-
+template <typename... Properties>
+void BoundaryExchange::register_min_max_fields(
+    ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie) {
   // Sanity checks
   assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
+  assert (ie>=0 && ie < m_1d_fields.extent_int(0));
+  assert (m_num_1d_fields_per_elem(ie)+1<=m_1d_fields.extent_int(1));
+  assert (max_num_registered_fields(m_num_2d_fields_per_elem) == 0 &&
+          max_num_registered_fields(m_num_3d_fields_per_elem) == 0);
 
-  {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0, m_connectivity->get_num_local_elements()),
-                         KOKKOS_LAMBDA(const int ie){
-      l_1d_fields(ie, l_num_1d_fields, MAX_ID) = Kokkos::subview(field_max, ie, ALL);
-      l_1d_fields(ie, l_num_1d_fields, MIN_ID) = Kokkos::subview(field_min, ie, ALL);
-    });
-  }
-
-  ++m_num_1d_fields;
-}
-
-template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_min,
-                                                ExecView<Scalar*[DIM][NUM_LEV], Properties...> field_max, int num_dims, int start_dim)
-{
-  using Kokkos::ALL;
-
-  // Sanity checks
-  assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
-
-  {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-      l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_max, ie, start_dim+idim, ALL);
-      l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min, ie, start_dim+idim, ALL);
-    });
-  }
-
-  m_num_1d_fields += num_dims;
-}
-
-template<int DIM, typename... Properties>
-void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim)
-{
-  using Kokkos::ALL;
-
-  // Sanity checks
-  assert (m_registration_started && !m_registration_completed);
-  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
-  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
-
-  {
-    auto l_num_1d_fields = m_num_1d_fields;
-    auto l_1d_fields     = m_1d_fields;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int idim){
-      l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MAX_ID), ALL);
-      l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MIN_ID), ALL);
-    });
-  }
-
-  m_num_1d_fields += num_dims;
+  auto h_1d_fields = Kokkos::create_mirror_view(m_1d_fields);
+  Kokkos::deep_copy(h_1d_fields,m_1d_fields);
+  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MAX_ID)) = Homme::subview(field_min_max, etoi(MAX_ID));
+  h_1d_fields(ie,m_num_1d_fields_per_elem(ie),etoi(MIN_ID)) = Homme::subview(field_min_max, etoi(MIN_ID));
+  Kokkos::deep_copy(m_1d_fields,h_1d_fields);
+  ++m_num_1d_fields_per_elem(ie);
 }
 
 } // namespace Homme

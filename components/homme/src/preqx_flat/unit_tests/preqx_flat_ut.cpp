@@ -9,6 +9,7 @@
 #include "CaarFunctorImpl.hpp"
 #include "EulerStepFunctorImpl.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
@@ -97,9 +98,13 @@ void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
  */
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
-  compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
-      : functor(elements, Context::singleton().get_derivative(),
-        Context::singleton().get_hvcoord(),SphereOperators(elements,Context::singleton().get_derivative()),rsplit_in),
+  compute_subfunctor_test(Elements &elements, Tracers &tracers,
+                          const int rsplit_in = 0)
+      : functor(
+            elements, tracers, Context::singleton().get_derivative(),
+            Context::singleton().get_hvcoord(),
+            SphereOperators(elements, Context::singleton().get_derivative()),
+            rsplit_in),
         policy(functor.m_elements.num_elems(), 16, 4),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
@@ -123,17 +128,20 @@ public:
     Context::singleton().get_derivative().dvv(dvv.data());
 
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
-                                dp3d.data(), phi.data(),
-                                omega_p.data(), derived_v.data(),
-                                eta_dpdn.data(), qdp.data());
+                                  dp3d.data(), phi.data(),
+                                  omega_p.data(), derived_v.data(),
+                                  eta_dpdn.data());
+    tracers.push_qdp(qdp.data());
 
-    Kokkos::deep_copy(spheremp, elements.m_spheremp);
-    Kokkos::deep_copy(metdet, elements.m_metdet);
 
+    auto h_elements = elements.get_elements_host();
     for (int ie = 0; ie < elements.num_elems(); ++ie) {
-      elements.dinv(Homme::subview(dinv, ie).data(),
-                  ie);
+      Kokkos::deep_copy(Homme::subview(dinv, ie),    h_elements(ie).m_dinv);
+      Kokkos::deep_copy(Homme::subview(spheremp,ie), h_elements(ie).m_spheremp);
+      Kokkos::deep_copy(Homme::subview(metdet,ie),   h_elements(ie).m_metdet);
     }
+    functor.m_sphere_ops.set_geo_views(h_elements);
+    functor.m_sphere_ops.set_dvv(Context::singleton().get_derivative().get_dvv());
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -193,14 +201,15 @@ class compute_energy_grad_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_energy_grad(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_energy_grad(kv,elem);
   }
 };
 
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 64.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -209,6 +218,10 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   // initialized in the singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
@@ -219,22 +232,27 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   genRandArray(pressure_in,         engine, std::uniform_real_distribution<Real>(0.1, 100.0));
   genRandArray(pressure_grad_in,    engine, std::uniform_real_distribution<Real>(0.1, 100.0));
 
-  Kokkos::deep_copy(elements.buffers.temperature_virt, temperature_virt_in);
-  Kokkos::deep_copy(elements.buffers.pressure, pressure_in);
-  Kokkos::deep_copy(elements.buffers.pressure_grad, pressure_grad_in);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    const auto& buffers = h_elements(ie).buffers;
+    Kokkos::deep_copy(buffers.temperature_virt, Homme::subview(temperature_virt_in,ie));
+    Kokkos::deep_copy(buffers.pressure,         Homme::subview(pressure_in,ie));
+    Kokkos::deep_copy(buffers.pressure_grad,    Homme::subview(pressure_grad_in,ie));
+  }
 
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements, tracers);
   test_functor.run_functor();
 
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
       "energy_grad output", num_elems);
-  Kokkos::deep_copy(energy_grad_out, elements.buffers.energy_grad);
 
   HostViewManaged<Real[2][NP][NP]> vtemp("vtemp");
   HostViewManaged<Real[NP][NP]> tvirt("tvirt");
   HostViewManaged<Real[NP][NP]> press("press");
   HostViewManaged<Real[2][NP][NP]> press_grad("press_grad");
   for (int ie = 0; ie < num_elems; ++ie) {
+    // Get the C results on this element back to host
+    Kokkos::deep_copy(Homme::subview(energy_grad_out,ie), h_elements(ie).buffers.energy_grad);
     for (int level = 0; level < NUM_LEV; ++level) {
       for (int v = 0; v < VECTOR_SIZE; ++v) {
         for (int i = 0; i < NP; i++) {
@@ -282,40 +300,47 @@ class preq_omega_ps_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.preq_omega_ps(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.preq_omega_ps(kv,elem);
   }
 };
 
 TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 256.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
+  using real_pdf = std::uniform_real_distribution<Real>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-  genRandArray(pressure, engine,
-               std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(pressure, elements.buffers.pressure);
-
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
-  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
+  genRandArray(pressure, engine, real_pdf(0, 100.0));
+  genRandArray(div_vdp,  engine, real_pdf(0, 100.0));
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(pressure,ie), h_elements(ie).buffers.pressure);
+    sync_to_device(Homme::subview(div_vdp,ie),  h_elements(ie).buffers.div_vdp);
+  }
 
-  compute_subfunctor_test<preq_omega_ps_test> test_functor(elements);
+  compute_subfunctor_test<preq_omega_ps_test> test_functor(elements, tracers);
   test_functor.run_functor();
-  // Results of the computation
+
+  // Will hold the result of the C computation
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
-  Kokkos::deep_copy(omega_p, elements.buffers.omega_p);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90(
       "Fortran omega_p");
@@ -327,6 +352,10 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
             .data(),
         Homme::subview(test_functor.dinv, ie).data(),
         test_functor.dvv.data());
+
+    // Get the C results on this element back to host
+    Kokkos::deep_copy(Homme::subview(omega_p,ie), h_elements(ie).buffers.omega_p);
+
     for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
       // Note this MUST be this loop so that k is set properly
       for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
@@ -348,17 +377,19 @@ class preq_hydrostatic_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.preq_hydrostatic(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.preq_hydrostatic(kv,elem);
   }
 };
 
 TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
+  using real_pdf = std::uniform_real_distribution<Real>;
 
   using TestType = compute_subfunctor_test<preq_hydrostatic_test>;
 
@@ -367,22 +398,28 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
       "host virtual temperature", num_elems);
-  genRandArray(temperature_virt, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
                                                               num_elems);
-  genRandArray(pressure, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(pressure, elements.buffers.pressure);
+  genRandArray(temperature_virt, engine, real_pdf(0.0125,1.0));
+  genRandArray(pressure, engine, real_pdf(0.0125, 1.0));
 
-  TestType test_functor(elements);
-  Kokkos::deep_copy(test_functor.phis, elements.m_phis);
-  sync_to_host(elements.m_dp3d, test_functor.dp3d);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(temperature_virt,ie), h_elements(ie).buffers.temperature_virt);
+    sync_to_device(Homme::subview(pressure,ie),         h_elements(ie).buffers.pressure);
+  }
+
+  TestType test_functor(elements, tracers);
+  for (int ie=0; ie<num_elems; ++ie) {
+    Kokkos::deep_copy(Homme::subview(test_functor.phis,ie), h_elements(ie).m_phis);
+    sync_to_host(h_elements(ie).m_dp3d, Homme::subview(test_functor.dp3d,ie));
+  }
   test_functor.run_functor();
-  sync_to_host(elements.m_phi, test_functor.phi);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> phi_f90("Fortran phi");
   for (int ie = 0; ie < num_elems; ++ie) {
@@ -393,6 +430,8 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
         Homme::subview(pressure, ie)
             .data(),
         Homme::subview(test_functor.dp3d, ie, test_functor.n0).data());
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_phi, Homme::subview(test_functor.phi,ie));
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -412,35 +451,44 @@ class dp3d_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_dp3d_np1(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_dp3d_np1(kv,elem);
   }
 };
 
 TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 128.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
+  using real_pdf = std::uniform_real_distribution<Real>;
 
   // This must be a reference to ensure the views are initialized in the
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
                                                              num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
 
-  genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
-  genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  genRandArray(div_vdp, engine, real_pdf(    0, 100.0));
+  genRandArray(eta_dot, engine, real_pdf(-10.0,  10.0));
 
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(div_vdp,ie), h_elements(ie).buffers.div_vdp);
+    sync_to_device(Homme::subview(eta_dot,ie), h_elements(ie).buffers.eta_dot_dpdn_buf);
+  }
 
-  compute_subfunctor_test<dp3d_test> test_functor(elements);
+  compute_subfunctor_test<dp3d_test> test_functor(elements, tracers);
 
   // To ensure the Fortran doesn't pass without doing anything,
   // copy the initial state before running any of the test
@@ -449,7 +497,6 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   Kokkos::deep_copy(dp3d_f90, test_functor.dp3d);
 
   test_functor.run_functor();
-  sync_to_host(elements.m_dp3d, test_functor.dp3d);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_dp3d_np1_c_int(
@@ -461,6 +508,8 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
             .data(),
         Homme::subview(eta_dot, ie).data(),
         Homme::subview(dp3d_f90, ie).data());
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_dp3d, Homme::subview(test_functor.dp3d,ie));
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -482,14 +531,15 @@ class vdp_vn0_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_div_vdp(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_div_vdp(kv,elem);
   }
 };
 
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 512.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -498,76 +548,85 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
-  sync_to_host(elements.m_derived_vn0, vn0_f90);
+  const auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_host(h_elements(ie).m_derived_vn0, Homme::subview(vn0_f90,ie));
+  }
 
-  compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
+  compute_subfunctor_test<vdp_vn0_test> test_functor(elements, tracers);
   test_functor.run_functor();
 
-  sync_to_host(elements.m_derived_vn0, test_functor.derived_v);
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> vdp("vdp results", num_elems);
-  Kokkos::deep_copy(vdp, elements.buffers.vdp);
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> div_vdp("div_vdp results",
                                                       num_elems);
-  Kokkos::deep_copy(div_vdp, elements.buffers.div_vdp);
 
   HostViewManaged<Real[2][NP][NP]> vdp_f90("vdp f90 results");
   HostViewManaged<Real[NP][NP]> div_vdp_f90("div_vdp f90 results");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
-        caar_compute_divdp_c_int(
-            compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
-            Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
-            Homme::subview(test_functor.dp3d, ie, test_functor.n0, level).data(),
-            Homme::subview(test_functor.dinv, ie).data(),
-            Homme::subview(test_functor.metdet, ie)
-                .data(),
-            test_functor.dvv.data(),
-            Homme::subview(vn0_f90, ie, level).data(),
-            vdp_f90.data(), div_vdp_f90.data());
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp) {
-            for (int hgp = 0; hgp < 2; ++hgp) {
-              {
-                // Check vdp
-                Real correct = vdp_f90(hgp, igp, jgp);
-                REQUIRE(!std::isnan(correct));
-                Real computed = vdp(ie, hgp, igp, jgp, vec_lev)[vector];
-                REQUIRE(!std::isnan(computed));
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_derived_vn0, Homme::subview(test_functor.derived_v,ie));
+    Kokkos::deep_copy(Homme::subview(vdp,ie),     h_elements(ie).buffers.vdp);
+    Kokkos::deep_copy(Homme::subview(div_vdp,ie), h_elements(ie).buffers.div_vdp);
+
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      const int ilev = level / VECTOR_SIZE;
+      const int ivec = level % VECTOR_SIZE;
+      caar_compute_divdp_c_int(
+          compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
+          Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
+          Homme::subview(test_functor.dp3d, ie, test_functor.n0, level).data(),
+          Homme::subview(test_functor.dinv, ie).data(),
+          Homme::subview(test_functor.metdet, ie)
+              .data(),
+          test_functor.dvv.data(),
+          Homme::subview(vn0_f90, ie, level).data(),
+          vdp_f90.data(), div_vdp_f90.data());
+      for (int igp = 0; igp < NP; ++igp) {
+        for (int jgp = 0; jgp < NP; ++jgp) {
+          for (int hgp = 0; hgp < 2; ++hgp) {
+            {
+              // Check vdp
+              Real correct = vdp_f90(hgp, igp, jgp);
+              REQUIRE(!std::isnan(correct));
+              Real computed = vdp(ie, hgp, igp, jgp, ilev)[ivec];
+              REQUIRE(!std::isnan(computed));
 
 //og why is this if? what is special about correct=0?
 //i see this can backfire
-                if (correct != 0.0) {
-                  Real rel_error = compare_answers(correct, computed);
-                  REQUIRE(rel_threshold >= rel_error);
-                }
-              }
-              {
-                // Check derived_vn0
-                Real correct = vn0_f90(ie, level, hgp, igp, jgp);
-                REQUIRE(!std::isnan(correct));
-                Real computed =
-                    test_functor.derived_v(ie, level, hgp, igp, jgp);
-                REQUIRE(!std::isnan(computed));
-                if (correct != 0.0) {
-                  Real rel_error = compare_answers(correct, computed);
-                  REQUIRE(rel_threshold >= rel_error);
-                }
+              if (correct != 0.0) {
+                Real rel_error = compare_answers(correct, computed);
+                REQUIRE(rel_threshold >= rel_error);
               }
             }
             {
-              // Check div_vdp
-              Real correct = div_vdp_f90(igp, jgp);
+              // Check derived_vn0
+              Real correct = vn0_f90(ie, level, hgp, igp, jgp);
               REQUIRE(!std::isnan(correct));
-              Real computed = div_vdp(ie, igp, jgp, vec_lev)[vector];
+              Real computed =
+                  test_functor.derived_v(ie, level, hgp, igp, jgp);
               REQUIRE(!std::isnan(computed));
-              Real rel_error = compare_answers(correct, computed);
-              REQUIRE(rel_threshold >= rel_error);
+              if (correct != 0.0) {
+                Real rel_error = compare_answers(correct, computed);
+                REQUIRE(rel_threshold >= rel_error);
+              }
             }
+          }
+          {
+            // Check div_vdp
+            Real correct = div_vdp_f90(igp, jgp);
+            REQUIRE(!std::isnan(correct));
+            Real computed = div_vdp(ie, igp, jgp, ilev)[ivec];
+            REQUIRE(!std::isnan(computed));
+            Real rel_error = compare_answers(correct, computed);
+            REQUIRE(rel_threshold >= rel_error);
           }
         }
       }
@@ -579,14 +638,15 @@ class pressure_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_pressure(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_pressure(kv,elem);
   }
 };
 
 TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -597,6 +657,10 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
@@ -626,7 +690,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
@@ -636,17 +700,19 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> pressure_cxx("pressure_cxx",
                                                            num_elems);
-  Kokkos::deep_copy(pressure_cxx, elements.buffers.pressure);
-
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> pressure_f90("pressure_f90");
 
-  sync_to_host(elements.m_dp3d, test_functor.dp3d);
-
+  auto h_elements = elements.get_elements_host();
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_pressure_c_int(
         hybrid_ai_mirror(0), test_functor.functor.m_hvcoord.ps0,
         Homme::subview(test_functor.dp3d, ie, test_functor.n0).data(),
         pressure_f90.data());
+
+    // Get the C results on this element back to host
+    Kokkos::deep_copy(Homme::subview(pressure_cxx,ie), h_elements(ie).buffers.pressure);
+
+    // Check results
     for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
       for (int vector = 0; vector < VECTOR_SIZE && level < NUM_PHYSICAL_LEV;
            ++vector, ++level) {
@@ -669,17 +735,19 @@ class temperature_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_temperature_np1(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_temperature_np1(kv,elem);
   }
 };
 
 TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 2.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
+  using real_pdf = std::uniform_real_distribution<Real>;
 
   using TestType = compute_subfunctor_test<temperature_test>;
 
@@ -687,29 +755,37 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     temperature_virt("Virtual temperature test", num_elems);
-  genRandArray(temperature_virt, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(temperature_virt, elements.buffers.temperature_virt);
-
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
     omega_p("Omega P test", num_elems);
-  genRandArray(omega_p, engine, std::uniform_real_distribution<Real>(0, 1.0));
-  sync_to_device(omega_p, elements.buffers.omega_p);
-
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror t_vadv_f90("t_vadv", num_elems);
-  genRandArray(t_vadv_f90, engine, std::uniform_real_distribution<Real>(-100, 100));
-  sync_to_device(t_vadv_f90, elements.buffers.t_vadv_buf);
 
-  TestType test_functor(elements);
+  genRandArray(omega_p,          engine, real_pdf(   0.0,   1.0));
+  genRandArray(temperature_virt, engine, real_pdf(   0.0,   1.0));
+  genRandArray(t_vadv_f90,       engine, real_pdf(-100.0, 100.0));
+
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(omega_p,ie),          h_elements(ie).buffers.omega_p);
+    sync_to_device(Homme::subview(temperature_virt,ie), h_elements(ie).buffers.temperature_virt);
+    sync_to_device(Homme::subview(t_vadv_f90,ie),       h_elements(ie).buffers.t_vadv_buf);
+  }
+
+  TestType test_functor(elements, tracers);
   test_functor.run_functor();
-
-  sync_to_host(elements.m_t, test_functor.temperature);
 
   HostViewManaged<Real [NP][NP]> temperature_f90("Temperature f90");
   for (int ie = 0; ie < num_elems; ++ie) {
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_t, Homme::subview(test_functor.temperature,ie));
+
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
 
       caar_compute_temperature_c_int(test_functor.dt,
@@ -745,7 +821,8 @@ class virtual_temperature_no_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_temperature_no_tracers_helper(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_temperature_no_tracers_helper(kv,elem);
   }
 };
 
@@ -753,10 +830,7 @@ TEST_CASE("virtual temperature no tracers",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
-
-  std::random_device rd;
-  rngAlg engine(rd());
+  constexpr const int num_elems = 2;
 
   using TestType = compute_subfunctor_test<virtual_temperature_no_tracers_test>;
 
@@ -765,14 +839,18 @@ TEST_CASE("virtual temperature no tracers",
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  TestType test_functor(elements);
-  sync_to_host(elements.m_t, test_functor.temperature);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
+  TestType test_functor(elements, tracers);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_host(h_elements(ie).m_t, Homme::subview(test_functor.temperature,ie));
+  }
   test_functor.run_functor();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
-
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -781,6 +859,10 @@ TEST_CASE("virtual temperature no tracers",
     caar_compute_temperature_no_tracers_c_int(
         Homme::subview(test_functor.temperature, ie, test_functor.n0).data(),
         temperature_virt_f90.data());
+
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).buffers.temperature_virt, Homme::subview(temperature_virt_cxx,ie));
+
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -800,16 +882,17 @@ class virtual_temperature_with_tracers_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_temperature_tracers_helper(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_temperature_tracers_helper(kv,elem);
   }
 };
 
 
-TEST_CASE("moist virtual temperature",
+TEST_CASE("moist_virtual_temperature",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -822,16 +905,20 @@ TEST_CASE("moist virtual temperature",
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  TestType test_functor(elements);
-  sync_to_host(elements.m_qdp, test_functor.qdp);
-  sync_to_host(elements.m_dp3d, test_functor.dp3d);
-  sync_to_host(elements.m_t, test_functor.temperature);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
+  TestType test_functor(elements, tracers);
+  sync_to_host(tracers.m_qdp, test_functor.qdp);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_host(h_elements(ie).m_dp3d, Homme::subview(test_functor.dp3d,ie));
+    sync_to_host(h_elements(ie).m_t,    Homme::subview(test_functor.temperature,ie));
+  }
   test_functor.run_functor();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
   temperature_virt_cxx("virtual temperature cxx", num_elems);
-
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -842,6 +929,10 @@ TEST_CASE("moist virtual temperature",
         Homme::subview(test_functor.dp3d, ie, test_functor.n0).data(),
         Homme::subview(test_functor.temperature, ie, test_functor.n0).data(),
         temperature_virt_f90.data());
+
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).buffers.temperature_virt, Homme::subview(temperature_virt_cxx,ie));
+
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -861,17 +952,19 @@ class omega_p_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_omega_p(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_omega_p(kv,elem);
   }
 };
 
 TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
+  using real_pdf = std::uniform_real_distribution<Real>;
 
   using TestType = compute_subfunctor_test<omega_p_test>;
 
@@ -880,26 +973,22 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-//which omega_p should survive? buffers or m_omega_p?
-//sort it out
-  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
-      "source omega p", num_elems);
-  genRandArray(source_omega_p, engine,
-               std::uniform_real_distribution<Real>(0.0125, 1.0));
-  sync_to_device(source_omega_p, elements.buffers.omega_p);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90("omega p f90",
                                                                  num_elems);
+  HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> source_omega_p(
+      "source omega p", num_elems);
+  genRandArray(source_omega_p, engine, real_pdf(0.0125, 1.0));
 
-  TestType test_functor(elements);
-  sync_to_host(elements.m_omega_p, omega_p_f90);
+  auto h_elements = elements.get_elements_host();
+  TestType test_functor(elements, tracers);
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(source_omega_p,ie), h_elements(ie).buffers.omega_p);
+    sync_to_host(h_elements(ie).m_omega_p, Homme::subview(omega_p_f90,ie));
+  }
   test_functor.run_functor();
-  sync_to_host(elements.m_omega_p, test_functor.omega_p);
-
-  ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
-  temperature_virt_cxx("virtual temperature cxx", num_elems);
-
-  sync_to_host(elements.buffers.temperature_virt, temperature_virt_cxx);
 
   HostViewManaged<Real[NUM_PHYSICAL_LEV][NP][NP]> temperature_virt_f90(
       "virtual temperature f90");
@@ -908,6 +997,8 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
     caar_compute_omega_p_c_int(test_functor.eta_ave_w,
                                Homme::subview(source_omega_p, ie).data(),
                                Homme::subview(omega_p_f90, ie).data());
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_omega_p, Homme::subview(test_functor.omega_p,ie));
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -928,20 +1019,24 @@ class accumulate_eta_dot_dpdn_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.accumulate_eta_dot_dpdn(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.accumulate_eta_dot_dpdn(kv,elem);
   }
 };
 
 TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<accumulate_eta_dot_dpdn_test>;
 
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("eta dot", num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
@@ -964,24 +1059,29 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bi_mirror.data());
 
   constexpr int rsplit = 0;
-  TestType test_functor(elements,rsplit);
+  TestType test_functor(elements, tracers, rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
 
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
                                                 TestType::dt, TestType::eta_ave_w, false);
 
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_host_p2i(elements.m_eta_dot_dpdn, eta_dot_total_f90);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(eta_dot,ie), h_elements(ie).buffers.eta_dot_dpdn_buf);
+    sync_to_host(h_elements(ie).m_eta_dot_dpdn, Homme::subview(eta_dot_total_f90,ie));
+  }
   //will run on device
   test_functor.run_functor();
-
-  sync_to_host_p2i(elements.m_eta_dot_dpdn, test_functor.eta_dpdn);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_adjust_eta_dot_dpdn_c_int(test_functor.eta_ave_w,
                                Homme::subview(eta_dot_total_f90, ie).data(),
                                Homme::subview(eta_dot, ie).data());
+
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).m_eta_dot_dpdn, Homme::subview(test_functor.eta_dpdn,ie));
+
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -1003,7 +1103,8 @@ class eta_dot_dpdn_vertadv_euler_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.compute_eta_dot_dpdn_vertadv_euler(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.compute_eta_dot_dpdn_vertadv_euler(kv,elem);
   }
 };
 
@@ -1012,7 +1113,7 @@ public:
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
@@ -1021,6 +1122,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   // on host first
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
@@ -1028,9 +1133,14 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
   genRandArray(sdot_sum, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
-  sync_to_device(div_vdp, elements.buffers.div_vdp);
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_device(sdot_sum, elements.buffers.sdot_sum);
+
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<num_elems; ++ie) {
+    sync_to_device(Homme::subview(div_vdp,ie),  h_elements(ie).buffers.div_vdp);
+    sync_to_device(Homme::subview(eta_dot,ie),  h_elements(ie).buffers.eta_dot_dpdn_buf);
+    Kokkos::deep_copy(h_elements(ie).buffers.sdot_sum, Homme::subview(sdot_sum,ie));
+  }
+
 //only hybi is used, should the rest be quiet_nans? yes
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
   ExecViewManaged<Real[NUM_INTERFACE_LEV]>::HostMirror hybrid_ai_mirror("hybrid_ai_host");
@@ -1056,7 +1166,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bi_mirror.data());
 
   constexpr int rsplit = 0;
-  TestType test_functor(elements,rsplit);
+  TestType test_functor(elements, tracers, rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
 
@@ -1067,8 +1177,6 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   //will run on device
   test_functor.run_functor();
 
-  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
-  sync_to_host(elements.buffers.sdot_sum, sdot_sum);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     caar_compute_eta_dot_dpdn_vertadv_euler_c_int(
@@ -1076,6 +1184,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
                                Homme::subview(sdot_sum_f90, ie).data(),
                                Homme::subview(div_vdp, ie).data(),
                                hybrid_bi_mirror.data());
+
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).buffers.eta_dot_dpdn_buf, Homme::subview(eta_dot,ie));
+    Kokkos::deep_copy(Homme::subview(sdot_sum,ie), h_elements(ie).buffers.sdot_sum);
 
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {
@@ -1111,7 +1223,8 @@ class preq_vertadv_test {
 public:
   KOKKOS_INLINE_FUNCTION
   static void test_functor(const CaarFunctorImpl &functor, KernelVariables &kv) {
-    functor.preq_vertadv(kv);
+    const Element& elem = functor.m_elements.get_element(kv.ie);
+    functor.preq_vertadv(kv,elem);
   }
 };
 
@@ -1120,7 +1233,7 @@ public:
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
 
@@ -1130,6 +1243,9 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   // on host first
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
@@ -1143,9 +1259,12 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   genRandArray(v_vadv, engine, std::uniform_real_distribution<Real>(-100, 100));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-100, 100));
 
-  sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
-  sync_to_device(t_vadv, elements.buffers.t_vadv_buf);
-  sync_to_device(v_vadv, elements.buffers.v_vadv_buf);
+  auto h_elements = elements.get_elements_host();
+  for (int ie=0; ie<elements.num_elems(); ++ie) {
+    sync_to_device(Homme::subview(eta_dot,ie), h_elements(ie).buffers.eta_dot_dpdn_buf);
+    sync_to_device(Homme::subview(t_vadv,ie),  h_elements(ie).buffers.t_vadv_buf);
+    sync_to_device(Homme::subview(v_vadv,ie),  h_elements(ie).buffers.v_vadv_buf);
+  }
 
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
@@ -1156,15 +1275,10 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   deep_copy(t_vadv_f90, t_vadv);
   deep_copy(v_vadv_f90, v_vadv);
 
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
   test_functor.run_functor();
 
   const int n0 = test_functor.n0;
-
-  //now copy buffer vals back to test values
-  sync_to_host(elements.buffers.eta_dot_dpdn_buf, eta_dot);
-  sync_to_host(elements.buffers.t_vadv_buf, t_vadv);
-  sync_to_host(elements.buffers.v_vadv_buf, v_vadv);
 
   for (int ie = 0; ie < num_elems; ++ie) {
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
@@ -1182,6 +1296,11 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
         Homme::subview(t_vadv_f90, ie).data(),
         Homme::subview(v_vadv_f90, ie).data()
     );//preq vertadv call
+
+    // Get the C results on this element back to host
+    sync_to_host(h_elements(ie).buffers.eta_dot_dpdn_buf, Homme::subview(eta_dot,ie));
+    sync_to_host(h_elements(ie).buffers.t_vadv_buf      , Homme::subview(t_vadv,ie) );
+    sync_to_host(h_elements(ie).buffers.v_vadv_buf      , Homme::subview(v_vadv,ie) );
 
     for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
       for (int igp = 0; igp < NP; ++igp) {

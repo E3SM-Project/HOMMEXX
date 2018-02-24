@@ -40,9 +40,12 @@ void HyperviscosityFunctorImpl::init_boundary_exchanges () {
   auto bm_exchange = Context::singleton().get_buffers_manager(MPI_EXCHANGE);
   be.set_buffers_manager(bm_exchange);
   be.set_num_fields(0, 0, 4);
-  be.register_field(m_elements.buffers.vtens, 2, 0);
-  be.register_field(m_elements.buffers.ttens);
-  be.register_field(m_elements.buffers.dptens);
+  auto h_elements = m_elements.get_elements_host();
+  for (int ie=0; ie<m_elements.num_elems(); ++ie) {
+    be.register_field(h_elements(ie).buffers.vtens, ie, 2, 0);
+    be.register_field(h_elements(ie).buffers.ttens, ie);
+    be.register_field(h_elements(ie).buffers.dptens,ie);
+  }
   be.registration_completed();
 }
 
@@ -87,7 +90,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // Exchange
   assert (m_be->is_registration_completed());
   GPTLstart("hvf-bexch");
-  m_be->exchange(m_elements.m_rspheremp);
+  m_be->exchange(m_elements.get_rspheremp());
   GPTLstop("hvf-bexch");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
