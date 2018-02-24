@@ -197,7 +197,7 @@ void BoundaryExchange::registration_completed()
   assert (max_num_registered_fields(m_num_1d_fields_per_elem)==min_num_registered_fields(m_num_1d_fields_per_elem));
   assert (max_num_registered_fields(m_num_2d_fields_per_elem)==min_num_registered_fields(m_num_2d_fields_per_elem));
   assert (max_num_registered_fields(m_num_3d_fields_per_elem)==min_num_registered_fields(m_num_3d_fields_per_elem));
-  m_num_1d_fields = max_num_registered_fields(m_num_1d_fields_per_elem);
+  //m_num_1d_fields = max_num_registered_fields(m_num_1d_fields_per_elem);
   m_num_2d_fields = max_num_registered_fields(m_num_2d_fields_per_elem);
   m_num_3d_fields = max_num_registered_fields(m_num_3d_fields_per_elem);
 
