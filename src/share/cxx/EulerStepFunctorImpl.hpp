@@ -548,7 +548,7 @@ private:
   void compute_qtens (const KernelVariables& kv) const {
     m_sphere_ops.divergence_sphere_update(
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
-      Homme::subview(m_elements.buffers.vstar, kv.ie),
+      Homme::subview(m_tracers.vstar_qdp, kv.ie, kv.iq),
       Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq),
       Homme::subview(m_tracers.qtens, kv.ie, kv.iq));
   }
