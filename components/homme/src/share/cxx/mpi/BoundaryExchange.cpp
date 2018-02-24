@@ -667,9 +667,9 @@ void BoundaryExchange::pack_and_send_min_max ()
       // lid. We can do it here
       const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MAX_ID) =
+      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MAX_ID, ilev) =
         fields_1d(field_lidpos.lid, ifield, MAX_ID)[ilev];
-      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(ilev, MIN_ID) =
+      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MIN_ID, ilev) =
         fields_1d(field_lidpos.lid, ifield, MIN_ID)[ilev];
     });
   ExecSpace::fence();
@@ -748,9 +748,9 @@ void BoundaryExchange::recv_and_unpack_min_max ()
           continue;
         }
         fields_1d(ie, ifield, MAX_ID)[ilev] = max(fields_1d(ie, ifield, MAX_ID)[ilev],
-                                                  recv_1d_buffers(ie, ifield, neighbor)(ilev, MAX_ID));
+                                                  recv_1d_buffers(ie, ifield, neighbor)(MAX_ID, ilev));
         fields_1d(ie, ifield, MIN_ID)[ilev] = min(fields_1d(ie, ifield, MIN_ID)[ilev],
-                                                  recv_1d_buffers(ie, ifield, neighbor)(ilev, MIN_ID));
+                                                  recv_1d_buffers(ie, ifield, neighbor)(MIN_ID, ilev));
       }
     });
   ExecSpace::fence();
@@ -871,9 +871,9 @@ void BoundaryExchange::build_buffer_views_and_requests()
       auto recv_buffer = h_all_recv_buffers[info.sharing];
 
       for (int ifield=0; ifield<m_num_1d_fields; ++ifield) {
-        h_send_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(
-          reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing]));
-        h_recv_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[NUM_LEV][2]>(
+        h_send_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[2][NUM_LEV]>(
+          reinterpret_cast<Scalar*>(send_buffer.get() + h_buf_offset[info.sharing])   );
+        h_recv_1d_buffers(local.lid, ifield, local.pos) = ExecViewUnmanaged<Scalar[2][NUM_LEV]>(
           reinterpret_cast<Scalar*>(recv_buffer.get() + h_buf_offset[info.sharing]));
         h_buf_offset[info.sharing] += h_increment_1d[info.kind]*NUM_LEV*VECTOR_SIZE;
       }
