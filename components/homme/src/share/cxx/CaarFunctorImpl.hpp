@@ -343,7 +343,7 @@ struct CaarFunctorImpl {
       const int igp = idx / NP;
       const int jgp = idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV), [&] (const int& ilev) {
-        Scalar Qt = m_tracers.m_qdp(kv.ie, m_data.n0_qdp, 0, igp, jgp, ilev) /
+        Scalar Qt = m_tracers.qdp(kv.ie, m_data.n0_qdp, 0, igp, jgp, ilev) /
                     m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev);
         Qt *= (PhysicalConstants::Rwater_vapor / PhysicalConstants::Rgas - 1.0);
         Qt += 1.0;

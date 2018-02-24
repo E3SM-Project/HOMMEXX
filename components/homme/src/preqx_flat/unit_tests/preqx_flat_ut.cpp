@@ -862,7 +862,7 @@ TEST_CASE("moist_virtual_temperature",
   tracers.random_init();
 
   TestType test_functor(elements, tracers);
-  sync_to_host(tracers.m_qdp, test_functor.qdp);
+  sync_to_host(tracers.qdp, test_functor.qdp);
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
   sync_to_host(elements.m_t, test_functor.temperature);
   test_functor.run_functor();

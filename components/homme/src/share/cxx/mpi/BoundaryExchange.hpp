@@ -128,6 +128,8 @@ public:
   void register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Properties...> field);
 
   // This registration method should be used for the exchange of min/max fields
+  template<int DIM, typename... Properties>
+  void register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim);
   template<typename... Properties>
   void register_min_max_fields (ExecView<Scalar[2][NUM_LEV], Properties...> field_min_max, int ie, int iq);
 
@@ -377,6 +379,29 @@ void BoundaryExchange::register_field (ExecView<Scalar*[NP][NP][NUM_LEV], Proper
   }
 
   ++m_num_3d_fields;
+}
+
+template<int DIM, typename... Properties>
+void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV], Properties...> field_min_max, int num_dims, int start_dim)
+{
+  using Kokkos::ALL;
+
+  // Sanity checks
+  assert (m_registration_started && !m_registration_completed);
+  assert (m_num_1d_fields+1<=m_1d_fields.extent_int(1));
+  assert (m_num_2d_fields==0 && m_num_3d_fields==0);
+
+  {
+    auto l_num_1d_fields = m_num_1d_fields;
+    auto l_1d_fields     = m_1d_fields;
+    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_connectivity->get_num_local_elements(), num_dims}, {1, 1}),
+                         KOKKOS_LAMBDA(const int ie, const int idim){
+      l_1d_fields(ie, l_num_1d_fields+idim, MAX_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MAX_ID), ALL);
+      l_1d_fields(ie, l_num_1d_fields+idim, MIN_ID) = Kokkos::subview(field_min_max, ie, start_dim+idim, etoi(MIN_ID), ALL);
+    });
+  }
+
+  m_num_1d_fields += num_dims;
 }
 
 template <typename... Properties>
