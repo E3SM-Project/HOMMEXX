@@ -60,7 +60,7 @@ void prim_step (const Real dt, const bool compute_diagnostics)
     });
   }
   ExecSpace::fence();
-  GPTLstop("tl-s derived_dp+derived_dp");
+  GPTLstop("tl-s deep_copy+derived_dp");
 
   // ===============
   // Dynamical Step
