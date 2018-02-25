@@ -24,26 +24,22 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // Get the time level info
   TimeLevel& tl = Context::singleton().get_time_level();
 
-  // ===============
-  // initialize mean flux accumulation variables and save some variables at n0
-  // for use by advection
-  // ===============
-  GPTLstart("tl-s deep_copy");
-  Kokkos::deep_copy(elements.m_eta_dot_dpdn,0);
-  Kokkos::deep_copy(elements.m_derived_vn0,0);
-  Kokkos::deep_copy(elements.m_omega_p,0);
-  if (params.nu_p>0) {
-    Kokkos::deep_copy(elements.m_derived_dpdiss_ave,0);
-    Kokkos::deep_copy(elements.m_derived_dpdiss_biharmonic,0);
-  }
-  GPTLstop("tl-s deep_copy");
-
   if (params.use_semi_lagrangian_transport) {
     Errors::option_error("prim_step", "use_semi_lagrangian_transport",params.use_semi_lagrangian_transport);
     // Set derived_star = v
   }
-  GPTLstart("tl-s derived_dp");
+
+  // ===============
+  // initialize mean flux accumulation variables and save some variables at n0
+  // for use by advection
+  // ===============
+  GPTLstart("tl-s deep_copy+derived_dp");
   {
+    const auto eta_dot_dpdn = elements.m_eta_dot_dpdn;
+    const auto derived_vn0 = elements.m_derived_vn0;
+    const auto omega_p = elements.m_omega_p;
+    const auto derived_dpdiss_ave = elements.m_derived_dpdiss_ave;
+    const auto derived_dpdiss_biharmonic = elements.m_derived_dpdiss_biharmonic;
     const auto derived_dp = elements.m_derived_dp;
     const auto dp3d = elements.m_dp3d;
     Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace> (0,elements.num_elems()*NP*NP*NUM_LEV),
@@ -52,12 +48,19 @@ void prim_step (const Real dt, const bool compute_diagnostics)
       const int igp  = ((idx / NUM_LEV) / NP) % NP;
       const int jgp  =  (idx / NUM_LEV) % NP;
       const int ilev =   idx % NUM_LEV;
-
+      eta_dot_dpdn(ie,igp,jgp,ilev) = 0;
+      derived_vn0(ie,0,igp,jgp,ilev) = 0;
+      derived_vn0(ie,1,igp,jgp,ilev) = 0;
+      omega_p(ie,igp,jgp,ilev) = 0;
+      if (params.nu_p>0) {
+        derived_dpdiss_ave(ie,igp,jgp,ilev) = 0;
+        derived_dpdiss_biharmonic(ie,igp,jgp,ilev) = 0;
+      }
       derived_dp(ie,igp,jgp,ilev) = dp3d(ie,tl.n0,igp,jgp,ilev);
     });
   }
   ExecSpace::fence();
-  GPTLstop("tl-s derived_dp");
+  GPTLstop("tl-s derived_dp+derived_dp");
 
   // ===============
   // Dynamical Step
