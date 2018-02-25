@@ -1,8 +1,10 @@
 #include <catch/catch.hpp>
 
 #include <iostream>
+#include <random>
 
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "Types.hpp"
 #include "utilities/TestUtils.hpp"
 #include "utilities/SubviewUtils.hpp"
@@ -19,8 +21,9 @@ TEST_CASE("dp3d_intervals", "Testing Elements::random_init") {
   elements.random_init(num_elems, max_pressure);
   HostViewManaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> dp3d("host dp3d",
                                                                     num_elems);
-  Kokkos::deep_copy(dp3d, elements.m_dp3d);
+  auto h_elements = elements.get_elements_host();
   for (int ie = 0; ie < num_elems; ++ie) {
+    Kokkos::deep_copy(Homme::subview(dp3d,ie), h_elements(ie).m_dp3d);
     for (int tl = 0; tl < NUM_TIME_LEVELS; ++tl) {
       for (int igp = 0; igp < NP; ++igp) {
         for (int jgp = 0; jgp < NP; ++jgp) {
@@ -48,9 +51,10 @@ TEST_CASE("d_dinv_check", "Testing Elements::random_init") {
   elements.random_init(num_elems);
   HostViewManaged<Real * [2][2][NP][NP]> d("host d", num_elems);
   HostViewManaged<Real * [2][2][NP][NP]> dinv("host dinv", num_elems);
-  Kokkos::deep_copy(d, elements.m_d);
-  Kokkos::deep_copy(dinv, elements.m_dinv);
+  auto h_elements = elements.get_elements_host();
   for (int ie = 0; ie < num_elems; ++ie) {
+    Kokkos::deep_copy(Homme::subview(d,ie),    h_elements(ie).m_d);
+    Kokkos::deep_copy(Homme::subview(dinv,ie), h_elements(ie).m_dinv);
     for (int igp = 0; igp < NP; ++igp) {
       for (int jgp = 0; jgp < NP; ++jgp) {
         const Real det_1 = d(ie, 0, 0, igp, jgp) * d(ie, 1, 1, igp, jgp) -
@@ -74,3 +78,109 @@ TEST_CASE("d_dinv_check", "Testing Elements::random_init") {
     }
   }
 }
+#if 0
+TEST_CASE("tracers_check", "Testing Tracers::Tracers(int, int)") {
+  // Ensures three things - that genRandArray results in an array starting and
+  // ending with values between the specified bounds, that it does not exceed
+  // the bounds specified, and that the tracers aren't accidentally overwriting
+  // each other
+  constexpr int num_elems = 3;
+  constexpr int num_tracers = 5;
+  constexpr Real min_val = 5.3, max_val = 9.3;
+  constexpr Real signature = min_val - 1.0;
+  std::random_device rd;
+  std::mt19937_64 engine(rd());
+  std::uniform_real_distribution<Real> dist(min_val, max_val);
+  Tracers tracers(num_elems, num_tracers);
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int iq = 0; iq < num_tracers; ++iq) {
+      Tracers::Tracer t = tracers.device_tracers()(ie, iq);
+      genRandArray(t.qtens, engine, dist);
+
+      auto qtens = Kokkos::create_mirror_view(t.qtens);
+      Kokkos::deep_copy(qtens,t.qtens);
+      REQUIRE(qtens(0, 0, 0)[0] >= min_val);
+      REQUIRE(qtens(0, 0, 0)[0] <= max_val);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qtens(0, 0, 0)[0] = signature;
+      qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qtens,qtens);
+
+      genRandArray(t.vstar_qdp, engine, dist);
+      auto vstar_qdp = Kokkos::create_mirror_view(t.vstar_qdp);
+      Kokkos::deep_copy(vstar_qdp,t.vstar_qdp);
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] >= min_val);
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] <= max_val);
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >=
+              min_val);
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <=
+              max_val);
+      vstar_qdp(0, 0, 0, 0)[0] = signature;
+      vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.vstar_qdp,vstar_qdp);
+
+      genRandArray(t.qlim, engine, dist);
+      auto qlim = Kokkos::create_mirror_view(t.qlim);
+      Kokkos::deep_copy(qlim,t.qlim);
+      REQUIRE(qlim(0, 0)[0] >= min_val);
+      REQUIRE(qlim(0, 0)[0] <= max_val);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qlim(0, 0)[0] = signature;
+      qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qlim,qlim);
+
+      genRandArray(t.q, engine, dist);
+      auto q = Kokkos::create_mirror_view(t.q);
+      Kokkos::deep_copy(q,t.q);
+      REQUIRE(q(0, 0, 0)[0] >= min_val);
+      REQUIRE(q(0, 0, 0)[0] <= max_val);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      q(0, 0, 0)[0] = signature;
+      q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.q,q);
+
+      genRandArray(t.qtens_biharmonic, engine, dist);
+      auto qtens_biharmonic = Kokkos::create_mirror_view(t.qtens_biharmonic);
+      Kokkos::deep_copy(qtens_biharmonic,t.qtens_biharmonic);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] >= min_val);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] <= max_val);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] >= min_val);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] <= max_val);
+      qtens_biharmonic(0, 0, 0)[0] = signature;
+      qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] = signature;
+      Kokkos::deep_copy(t.qtens_biharmonic,qtens_biharmonic);
+    }
+  }
+  for (int ie = 0; ie < num_elems; ++ie) {
+    for (int iq = 0; iq < num_tracers; ++iq) {
+      Tracers::Tracer t = tracers.device_tracers()(ie, iq);
+      auto qtens = Kokkos::create_mirror_view(t.qtens);
+      auto vstar_qdp = Kokkos::create_mirror_view(t.vstar_qdp);
+      auto qlim = Kokkos::create_mirror_view(t.qlim);
+      auto q = Kokkos::create_mirror_view(t.q);
+      auto qtens_biharmonic = Kokkos::create_mirror_view(t.qtens_biharmonic);
+      Kokkos::deep_copy(qtens,t.qtens);
+      Kokkos::deep_copy(vstar_qdp,t.vstar_qdp);
+      Kokkos::deep_copy(qlim,t.qlim);
+      Kokkos::deep_copy(q,t.q);
+      Kokkos::deep_copy(qtens_biharmonic,t.qtens_biharmonic);
+
+      REQUIRE(qtens(0, 0, 0)[0] == signature);
+      REQUIRE(qtens(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
+              signature);
+      REQUIRE(vstar_qdp(0, 0, 0, 0)[0] == signature);
+      REQUIRE(vstar_qdp(1, NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] ==
+              signature);
+      REQUIRE(qlim(0, 0)[0] == signature);
+      REQUIRE(qlim(1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(q(0, 0, 0)[0] == signature);
+      REQUIRE(q(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+      REQUIRE(qtens_biharmonic(0, 0, 0)[0] == signature);
+      REQUIRE(qtens_biharmonic(NP - 1, NP - 1, NUM_LEV - 1)[VECTOR_SIZE - 1] == signature);
+    }
+  }
+}
+#endif

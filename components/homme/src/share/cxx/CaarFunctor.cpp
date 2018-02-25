@@ -15,23 +15,26 @@ CaarFunctor::CaarFunctor()
  : m_policy (Homme::get_default_team_policy<ExecSpace>(Context::singleton().get_elements().num_elems()))
 {
   Elements&        elements   = Context::singleton().get_elements();
+  Tracers&         tracers    = Context::singleton().get_tracers();
   Derivative&      derivative = Context::singleton().get_derivative();
   HybridVCoord&    hvcoord    = Context::singleton().get_hvcoord();
   SphereOperators& sphere_ops = Context::singleton().get_sphere_operators();
   const int        rsplit     = Context::singleton().get_simulation_params().rsplit;
 
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements,tracers,derivative,hvcoord,sphere_ops,rsplit));
   m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 
-CaarFunctor::CaarFunctor(const Elements& elements, const Derivative& derivative,
-                         const HybridVCoord& hvcoord, const SphereOperators& sphere_ops,
-                         const int rsplit)
- : m_policy (Homme::get_default_team_policy<ExecSpace>(elements.num_elems()))
-{
+CaarFunctor::CaarFunctor(const Elements &elements, const Tracers &tracers,
+                         const Derivative &derivative,
+                         const HybridVCoord &hvcoord,
+                         const SphereOperators &sphere_ops, const int rsplit)
+    : m_policy(
+          Homme::get_default_team_policy<ExecSpace>(elements.num_elems())) {
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,derivative,hvcoord,sphere_ops,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements, tracers, derivative, hvcoord,
+                                        sphere_ops, rsplit));
   m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 
@@ -100,7 +103,7 @@ void CaarFunctor::run (const int nm1, const int n0,   const int np1,
   ExecSpace::fence();
   GPTLstop("caar compute");
   start_timer("caar_bexchV");
-  m_caar_impl->m_bes[np1]->exchange(m_caar_impl->m_elements.m_rspheremp);
+  m_caar_impl->m_bes[np1]->exchange(m_caar_impl->m_elements.get_rspheremp());
   stop_timer("caar_bexchV");
   profiling_pause();
 }
