@@ -29,9 +29,9 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 
 // sort out const here
-void compute_ppm_grids_c_callable(const Real *dx, Real *rslt, const int &alg);
+void compute_ppm_grids_c_callable(const Scalar *dx, Real *rslt, const int &alg);
 
-// Technically takes a Real *, but that introduces needless complexity elsewhere
+// Technically takes Real *'s, but that introduces needless complexity elsewhere
 void compute_ppm_c_callable(const Scalar *a, const Real *dx, Real *coefs,
                             const int &alg);
 
@@ -90,18 +90,24 @@ public:
   }
 
   static bool nan_dpo_boundaries(
-      HostViewUnmanaged<Real * [NP][NP][_ppm_consts::DPO_PHYSICAL_LEV]> host) {
+      HostViewUnmanaged<Scalar * [NP][NP][_ppm_consts::DPO_LEV]> host) {
     for (int ie = 0; ie < host.extent_int(0); ++ie) {
       for (int igp = 0; igp < host.extent_int(1); ++igp) {
         for (int jgp = 0; jgp < host.extent_int(2); ++jgp) {
           for (int k = 0; k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs;
                ++k) {
-            host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
+            const int klev = k / VECTOR_SIZE;
+            const int kvec = k % VECTOR_SIZE;
+            host(ie, igp, jgp, klev)[kvec] =
+                std::numeric_limits<Real>::quiet_NaN();
           }
           for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV +
                        _ppm_consts::gs;
                k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
-            host(ie, igp, jgp, k) = std::numeric_limits<Real>::quiet_NaN();
+            const int klev = k / VECTOR_SIZE;
+            const int kvec = k % VECTOR_SIZE;
+            host(ie, igp, jgp, klev)[kvec] =
+                std::numeric_limits<Real>::quiet_NaN();
           }
         }
       }
@@ -120,8 +126,7 @@ public:
     ExecSpace::fence();
 
     const int remap_alg = boundary_cond::fortran_remap_alg;
-    HostViewManaged<Real[_ppm_consts::DPO_PHYSICAL_LEV]> f90_input(
-        "fortran dpo");
+    HostViewManaged<Scalar[_ppm_consts::DPO_LEV]> f90_input("fortran dpo");
     HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_result(
         "fortran ppmdx");
     auto kokkos_result = Kokkos::create_mirror_view(remap.ppmdx);
@@ -132,12 +137,21 @@ public:
           Kokkos::deep_copy(f90_input, Homme::subview(remap.dpo, ie, igp, jgp));
           // These arrays must be 0 offset.
           for (int k = 0; k < NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs; ++k) {
-            f90_input(k) =
-                f90_input(k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs);
+            const int klev = k / VECTOR_SIZE;
+            const int kvec = k % VECTOR_SIZE;
+            const int klev_pad =
+                (k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs) /
+                VECTOR_SIZE;
+            const int kvec_pad =
+                (k + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs) %
+                VECTOR_SIZE;
+            f90_input(klev)[kvec] = f90_input(klev_pad)[kvec_pad];
           }
           for (int k = NUM_PHYSICAL_LEV + 2 * _ppm_consts::gs;
                k < _ppm_consts::DPO_PHYSICAL_LEV; ++k) {
-            f90_input(k) = std::numeric_limits<Real>::quiet_NaN();
+            const int klev = k / VECTOR_SIZE;
+            const int kvec = k % VECTOR_SIZE;
+            f90_input(klev)[kvec] = std::numeric_limits<Real>::quiet_NaN();
           }
           compute_ppm_grids_c_callable(f90_input.data(), f90_result.data(),
                                        remap_alg);
