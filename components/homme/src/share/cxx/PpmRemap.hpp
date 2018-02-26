@@ -214,7 +214,9 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                            [&](const int k) {
         const int ilevel = k / VECTOR_SIZE;
         const int ivector = k % VECTOR_SIZE;
-        ao(kv.ie, remap_idx, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
+				const int ilevel_pad = (k + _ppm_consts::INITIAL_PADDING) / VECTOR_SIZE;
+				const int ivector_pad = (k + _ppm_consts::INITIAL_PADDING) % VECTOR_SIZE;
+        ao(kv.ie, remap_idx, igp, jgp, ilevel_pad)[ivector_pad] =
             remap_var(igp, jgp, ilevel)[ivector] /
             dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING);
       });
@@ -240,16 +242,20 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       // the ghost cells
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, gs),
                            [&](const int &k_0) {
-        ao(kv.ie, remap_idx, igp, jgp,
-           _ppm_consts::INITIAL_PADDING - 1 - k_0 - 1 + 1) =
-            ao(kv.ie, remap_idx, igp, jgp, k_0 + _ppm_consts::INITIAL_PADDING);
+				const int ilevel = (k_0 + _ppm_consts::INITIAL_PADDING) / VECTOR_SIZE;
+				const int ivector = (k_0 + _ppm_consts::INITIAL_PADDING) % VECTOR_SIZE;
+				const int ilevel_mirror = (_ppm_consts::INITIAL_PADDING - 1 - k_0) / VECTOR_SIZE;
+				const int ivector_mirror = (_ppm_consts::INITIAL_PADDING - 1 - k_0) % VECTOR_SIZE;
+        ao(kv.ie, remap_idx, igp, jgp, ilevel_mirror)[ivector_mirror] =
+            ao(kv.ie, remap_idx, igp, jgp, ilevel)[ivector];
 
-        ao(kv.ie, remap_idx, igp, jgp, NUM_PHYSICAL_LEV +
-                                           _ppm_consts::INITIAL_PADDING -
-                                           _ppm_consts::gs + k_0 + 1 + 1) =
+				const int ilevel_top = (NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs + 1 - k_0) / VECTOR_SIZE;
+				const int ivector_top = (NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING - _ppm_consts::gs + 1 - k_0) % VECTOR_SIZE;
+				const int ilevel_top_m = (NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING + k_0) / VECTOR_SIZE;
+				const int ivector_top_m = (NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING + k_0) % VECTOR_SIZE;
+        ao(kv.ie, remap_idx, igp, jgp, ilevel_top_m)[ivector_top_m] =
             ao(kv.ie, remap_idx, igp, jgp,
-               NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING -
-                   _ppm_consts::gs + 1 - k_0 - 1 + 1);
+               ilevel_top)[ivector_top];
       }); // end ghost cell loop
 
       // Computes a monotonic and conservative PPM reconstruction
