@@ -682,40 +682,40 @@ void BoundaryExchange::pack_and_send_min_max ()
           fields_1d(field_lidpos.lid, ifield)(MIN_ID, ilev);
       });
   } else {
-      const auto num_parallel_iterations = m_num_elems*num_1d_fields*NUM_CONNECTIONS;
-      ThreadPreferences tp;
-      tp.max_threads_usable = 1;
-      tp.max_vectors_usable = NUM_LEV;
-      const auto threads_vectors =
-        DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
-          num_parallel_iterations, tp);
-      const auto policy = Kokkos::TeamPolicy<ExecSpace>(
-        num_parallel_iterations, threads_vectors.first, threads_vectors.second);
-      Kokkos::parallel_for(
-        policy,
-        KOKKOS_LAMBDA(const TeamMember& team) {
-          Homme::KernelVariables kv(team, num_1d_fields*NUM_CONNECTIONS);
-          const int ie = kv.ie;
-          const int ifield = kv.iq / NUM_CONNECTIONS;
-          const int iconn = kv.iq % NUM_CONNECTIONS;
-          const ConnectionInfo& info = connections(ie, iconn);
-          if (info.kind == etoi(ConnectionSharing::MISSING)) return;
-          const LidGidPos& field_lidpos = info.local;
-          const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
-                                            info.remote :
-                                            info.local);
-          const auto& sb = send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
-          const auto& f1 = fields_1d(field_lidpos.lid, ifield);
-          for (int k = 0; k < 2; ++k) {
-            auto* const sbp = &sb(k, 0);
-            const auto* const f1p = &f1(k, 0);
-            Kokkos::parallel_for(
-              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-              [&] (const int& ilev) {
-                sbp[ilev] = f1p[ilev];
-              });
-          }
-        });
+    const auto num_parallel_iterations = m_num_elems*num_1d_fields*NUM_CONNECTIONS;
+    ThreadPreferences tp;
+    tp.max_threads_usable = 1;
+    tp.max_vectors_usable = NUM_LEV;
+    const auto threads_vectors =
+      DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+        num_parallel_iterations, tp);
+    const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+      num_parallel_iterations, threads_vectors.first, threads_vectors.second);
+    Kokkos::parallel_for(
+      policy,
+      KOKKOS_LAMBDA(const TeamMember& team) {
+        Homme::KernelVariables kv(team, num_1d_fields*NUM_CONNECTIONS);
+        const int ie = kv.ie;
+        const int ifield = kv.iq / NUM_CONNECTIONS;
+        const int iconn = kv.iq % NUM_CONNECTIONS;
+        const ConnectionInfo& info = connections(ie, iconn);
+        if (info.kind == etoi(ConnectionSharing::MISSING)) return;
+        const LidGidPos& field_lidpos = info.local;
+        const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
+                                          info.remote :
+                                          info.local);
+        const auto& sb = send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
+        const auto& f1 = fields_1d(field_lidpos.lid, ifield);
+        for (int k = 0; k < 2; ++k) {
+          auto* const sbp = &sb(k, 0);
+          const auto* const f1p = &f1(k, 0);
+          Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+            [&] (const int& ilev) {
+              sbp[ilev] = f1p[ilev];
+            });
+        }
+      });
   }
   ExecSpace::fence();
   to(pack);
@@ -780,26 +780,73 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   // --- Unpack --- //
   ta(unpack);
   const auto num_1d_fields = m_num_1d_fields;
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
-    KOKKOS_LAMBDA(const int it) {
-      const int ie = it / (num_1d_fields*NUM_LEV);
-      const int ifield = (it / NUM_LEV) % num_1d_fields;
-      const int ilev = it % NUM_LEV;
-      for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
-        // Note: for min/max exchange, we really need to skip MISSING
-        //       connections (while for 'normal' exchange, the missing recv
-        //       buffer points to a blackhole fileld with 0's, which do not
-        //       alter the accummulation)
-        if (connections(ie, neighbor).kind==etoi(ConnectionKind::MISSING)) {
-          continue;
+  if (OnGpu<ExecSpace>::value) {
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = it / (num_1d_fields*NUM_LEV);
+        const int ifield = (it / NUM_LEV) % num_1d_fields;
+        const int ilev = it % NUM_LEV;
+        for (int neighbor=0; neighbor<NUM_CONNECTIONS; ++neighbor) {
+          // Note: for min/max exchange, we really need to skip MISSING
+          //       connections (while for 'normal' exchange, the missing recv
+          //       buffer points to a blackhole fileld with 0's, which do not
+          //       alter the accummulation)
+          if (connections(ie, neighbor).kind==etoi(ConnectionKind::MISSING)) {
+            continue;
+          }
+          fields_1d(ie, ifield)(MAX_ID, ilev) = max(fields_1d(ie, ifield)(MAX_ID, ilev),
+                                                    recv_1d_buffers(ie, ifield, neighbor)(MAX_ID, ilev));
+          fields_1d(ie, ifield)(MIN_ID, ilev) = min(fields_1d(ie, ifield)(MIN_ID, ilev),
+                                                    recv_1d_buffers(ie, ifield, neighbor)(MIN_ID, ilev));
         }
-        fields_1d(ie, ifield)(MAX_ID, ilev) = max(fields_1d(ie, ifield)(MAX_ID, ilev),
-                                                  recv_1d_buffers(ie, ifield, neighbor)(MAX_ID, ilev));
-        fields_1d(ie, ifield)(MIN_ID, ilev) = min(fields_1d(ie, ifield)(MIN_ID, ilev),
-                                                  recv_1d_buffers(ie, ifield, neighbor)(MIN_ID, ilev));
-      }
-    });
+      });
+  } else {
+    const auto num_parallel_iterations = m_num_elems*num_1d_fields;
+    ThreadPreferences tp;
+    tp.max_threads_usable = 1;
+    tp.max_vectors_usable = NUM_LEV;
+    const auto threads_vectors =
+      DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+        num_parallel_iterations, tp);
+    const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+      num_parallel_iterations, threads_vectors.first, threads_vectors.second);
+    Kokkos::parallel_for(
+      policy,
+      KOKKOS_LAMBDA(const TeamMember& team) {
+        Homme::KernelVariables kv(team, num_1d_fields);
+        const int ie = kv.ie;
+        const int ifield = kv.iq;
+        for (int iconn = 0; iconn < NUM_CONNECTIONS; ++iconn) {
+          const ConnectionInfo& info = connections(ie, iconn);
+          if (info.kind == etoi(ConnectionSharing::MISSING)) continue;
+          const LidGidPos& field_lidpos = info.local;
+          const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
+                                            info.remote :
+                                            info.local);
+          const auto& rb = recv_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
+          const auto& f1 = fields_1d(field_lidpos.lid, ifield);
+          {
+            const auto* const rbp = &rb(0, 0);
+            auto* const f1p = &f1(0, 0);
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+                f1p[ilev] = min(f1p[ilev], rbp[ilev]);
+              });
+          }
+          {
+            const auto* const rbp = &rb(1, 0);
+            auto* const f1p = &f1(1, 0);
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+                f1p[ilev] = max(f1p[ilev], rbp[ilev]);
+              });
+          }
+        }
+      });
+  }
   ExecSpace::fence();
   to(unpack);
 
