@@ -820,12 +820,8 @@ void BoundaryExchange::recv_and_unpack_min_max ()
         for (int iconn = 0; iconn < NUM_CONNECTIONS; ++iconn) {
           const ConnectionInfo& info = connections(ie, iconn);
           if (info.kind == etoi(ConnectionSharing::MISSING)) continue;
-          const LidGidPos& field_lidpos = info.local;
-          const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
-                                            info.remote :
-                                            info.local);
-          const auto& rb = recv_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
-          const auto& f1 = fields_1d(field_lidpos.lid, ifield);
+          const auto& rb = recv_1d_buffers(ie, ifield, iconn);
+          const auto& f1 = fields_1d(ie, ifield);
           {
             const auto* const rbp = &rb(0, 0);
             auto* const f1p = &f1(0, 0);
