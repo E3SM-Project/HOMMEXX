@@ -9,13 +9,6 @@
 
 #define tstart(x)
 #define tstop(x)
-#if 1
-# define ta(x) GPTLstart("amb " # x)
-# define to(x) GPTLstop("amb " # x)
-#else
-# define ta(x))
-# define to(x)
-#endif
 
 namespace Homme
 {
@@ -280,7 +273,7 @@ void BoundaryExchange::exchange_min_max ()
 
 void BoundaryExchange::pack_and_send ()
 {
-  GPTLstart("be pack_and_send");
+  tstart("be pack_and_send");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -308,7 +301,6 @@ void BoundaryExchange::pack_and_send ()
 
   // ---- Pack ---- //
   // First, pack 2d fields (if any)...
-  ta(vpack);
   auto connections = m_connectivity->get_connections<ExecMemSpace>();
   if (m_num_2d_fields>0) {
     auto fields_2d = m_2d_fields;
@@ -404,7 +396,6 @@ void BoundaryExchange::pack_and_send ()
     }
   }
   ExecSpace::fence();
-  to(vpack);
 
   // ---- Send ---- //
   tstart("be sync_send_buffer");
@@ -414,11 +405,10 @@ void BoundaryExchange::pack_and_send ()
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  tstop("be send");
 
   // Notify a send is ongoing
   m_send_pending = true;
-  GPTLstop("be pack_and_send");
+  tstop("be pack_and_send");
 }
 
 void BoundaryExchange::recv_and_unpack () {
@@ -427,7 +417,7 @@ void BoundaryExchange::recv_and_unpack () {
 
 void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
-  GPTLstart("be recv_and_unpack");
+  tstart("be recv_and_unpack");
   tstart("be recv_and_unpack book");
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
@@ -470,7 +460,6 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
 
   tstop("be recv_and_unpack book");
 
-  ta(vunpack);
   // --- Unpack --- //
   // First, unpack 2d fields (if any)...
   if (m_num_2d_fields>0) {
@@ -595,7 +584,6 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
     }
   }
   ExecSpace::fence();
-  to(vunpack);
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
@@ -615,12 +603,11 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
   m_send_pending = false;
   m_recv_pending = false;
   tstop("be recv_and_unpack book");
-  GPTLstop("be recv_and_unpack");
+  tstop("be recv_and_unpack");
 }
 
 void BoundaryExchange::pack_and_send_min_max ()
 {
-  ta(pack_and_send_min_max);
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -657,7 +644,6 @@ void BoundaryExchange::pack_and_send_min_max ()
   auto send_1d_buffers = m_send_1d_buffers;
 
   // ---- Pack ---- //
-  ta(pack);
   const auto num_1d_fields = m_num_1d_fields;
   if (OnGpu<ExecSpace>::value) {
     Kokkos::parallel_for(
@@ -718,24 +704,19 @@ void BoundaryExchange::pack_and_send_min_max ()
       });
   }
   ExecSpace::fence();
-  to(pack);
 
   // ---- Send ---- //
-  ta(send);
   m_buffers_manager->sync_send_buffer(this);
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
                             m_connectivity->get_comm().m_mpi_comm);
-  to(send);
 
   // Mark send buffer as busy
   m_send_pending = true;
-  to(pack_and_send_min_max);
 }
 
 void BoundaryExchange::recv_and_unpack_min_max ()
 {
-  ta(recv_and_unpack_min_max);
   // The registration MUST be completed by now
   // Note: this also implies connectivity and buffers manager are valid
   assert (m_registration_completed);
@@ -763,11 +744,9 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   }
 
   // ---- Recv ---- //
-  ta(waitall);
   if ( ! m_recv_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Waitall(m_recv_requests.size(), m_recv_requests.data(), MPI_STATUSES_IGNORE),
                             m_connectivity->get_comm().m_mpi_comm); // Wait for all data to arrive
-  to(waitall);
 
   m_buffers_manager->sync_recv_buffer(this); // Deep copy mpi_recv_buffer into recv_buffer (no op if MPI is on device)
 
@@ -778,7 +757,6 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   auto recv_1d_buffers = m_recv_1d_buffers;
 
   // --- Unpack --- //
-  ta(unpack);
   const auto num_1d_fields = m_num_1d_fields;
   if (OnGpu<ExecSpace>::value) {
     Kokkos::parallel_for(
@@ -844,7 +822,6 @@ void BoundaryExchange::recv_and_unpack_min_max ()
       });
   }
   ExecSpace::fence();
-  to(unpack);
 
   // If another BE structure starts an exchange, it has no way to check that
   // this object has finished its send requests, and may erroneously reuse the
@@ -858,7 +835,6 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   m_buffers_manager->unlock_buffers();
   m_send_pending = false;
   m_recv_pending = false;
-  to(recv_and_unpack_min_max);
 }
 
 void BoundaryExchange::build_buffer_views_and_requests()
