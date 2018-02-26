@@ -659,32 +659,69 @@ void BoundaryExchange::pack_and_send_min_max ()
   // ---- Pack ---- //
   ta(pack);
   const auto num_1d_fields = m_num_1d_fields;
-  Kokkos::parallel_for(
-    Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
-    KOKKOS_LAMBDA(const int it) {
-      const int ie = it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
-      const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
-      const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
-      const int ilev = it % NUM_LEV;
-      const ConnectionInfo& info = connections(ie, iconn);
-      const LidGidPos& field_lidpos  = info.local;
-      // For the buffer, in case of local connection, use remote info. In fact,
-      // while with shared connections the mpi call will take care of "copying"
-      // data to the remote recv buffer in the correct remote element lid, for
-      // local connections we need to manually copy on the remote element
-      // lid. We can do it here
-      const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
+  if (OnGpu<ExecSpace>::value) {
+    Kokkos::parallel_for(
+      Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+      KOKKOS_LAMBDA(const int it) {
+        const int ie = it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
+        const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
+        const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
+        const int ilev = it % NUM_LEV;
+        const ConnectionInfo& info = connections(ie, iconn);
+        const LidGidPos& field_lidpos  = info.local;
+        // For the buffer, in case of local connection, use remote info. In fact,
+        // while with shared connections the mpi call will take care of "copying"
+        // data to the remote recv buffer in the correct remote element lid, for
+        // local connections we need to manually copy on the remote element
+        // lid. We can do it here
+        const LidGidPos& buffer_lidpos = info.sharing==etoi(ConnectionSharing::LOCAL) ? info.remote : info.local;
 
-      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MAX_ID, ilev) =
-        fields_1d(field_lidpos.lid, ifield)(MAX_ID, ilev);
-      send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MIN_ID, ilev) =
-        fields_1d(field_lidpos.lid, ifield)(MIN_ID, ilev);
-    });
+        send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MAX_ID, ilev) =
+          fields_1d(field_lidpos.lid, ifield)(MAX_ID, ilev);
+        send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos)(MIN_ID, ilev) =
+          fields_1d(field_lidpos.lid, ifield)(MIN_ID, ilev);
+      });
+  } else {
+      const auto num_parallel_iterations = m_num_elems*num_1d_fields*NUM_CONNECTIONS;
+      ThreadPreferences tp;
+      tp.max_threads_usable = 1;
+      tp.max_vectors_usable = NUM_LEV;
+      const auto threads_vectors =
+        DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
+          num_parallel_iterations, tp);
+      const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+        num_parallel_iterations, threads_vectors.first, threads_vectors.second);
+      Kokkos::parallel_for(
+        policy,
+        KOKKOS_LAMBDA(const TeamMember& team) {
+          Homme::KernelVariables kv(team, num_1d_fields*NUM_CONNECTIONS);
+          const int ie = kv.ie;
+          const int ifield = kv.iq / NUM_CONNECTIONS;
+          const int iconn = kv.iq % NUM_CONNECTIONS;
+          const ConnectionInfo& info = connections(ie, iconn);
+          if (info.kind == etoi(ConnectionSharing::MISSING)) return;
+          const LidGidPos& field_lidpos = info.local;
+          const LidGidPos& buffer_lidpos = (info.sharing == etoi(ConnectionSharing::LOCAL) ?
+                                            info.remote :
+                                            info.local);
+          const auto& sb = send_1d_buffers(buffer_lidpos.lid, ifield, buffer_lidpos.pos);
+          const auto& f1 = fields_1d(field_lidpos.lid, ifield);
+          for (int k = 0; k < 2; ++k) {
+            auto* const sbp = &sb(k, 0);
+            const auto* const f1p = &f1(k, 0);
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& ilev) {
+                sbp[ilev] = f1p[ilev];
+              });
+          }
+        });
+  }
   ExecSpace::fence();
   to(pack);
 
   // ---- Send ---- //
-  tstart(send);
+  ta(send);
   m_buffers_manager->sync_send_buffer(this);
   if ( ! m_send_requests.empty())
     HOMMEXX_MPI_CHECK_ERROR(MPI_Startall(m_send_requests.size(), m_send_requests.data()),
