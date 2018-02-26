@@ -688,7 +688,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // deformation. Numerous tests confirmed that the
         // bottom and top of the grids match to machine
         // precision, so set them equal to each other.
-        int kk = k + 1;
+        int kk = k;
         // This reduces the work required to find the index where this
         // fails at, and is typically less than NUM_PHYSICAL_LEV^2 Since
         // the top bounds match anyway, the value of the coefficients
@@ -704,33 +704,31 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // least once
         assert(pio(kv.ie, igp, jgp, _ppm_consts::PIO_PHYSICAL_LEV - 1) >
                pin(kv.ie, igp, jgp, k + 1));
-        while (pio(kv.ie, igp, jgp, kk - 1) <= pin(kv.ie, igp, jgp, k + 1)) {
+        while (pio(kv.ie, igp, jgp, kk) <= pin(kv.ie, igp, jgp, k + 1)) {
           kk++;
           assert(kk - 1 < pio.extent_int(3));
         }
-
         kk--;
+
         // This is to keep the indices in bounds.
-        if (kk == _ppm_consts::PIN_PHYSICAL_LEV) {
-          kk = _ppm_consts::PIN_PHYSICAL_LEV - 1;
+        if (kk == _ppm_consts::PIN_PHYSICAL_LEV - 1) {
+          kk = _ppm_consts::PIN_PHYSICAL_LEV - 2;
         }
         // kk is now the cell index we're integrating over.
-
         // Save kk for reuse
-        kid(kv.ie, igp, jgp, k) = kk - 1;
+        kid(kv.ie, igp, jgp, k) = kk;
         // PPM interpolants are normalized to an independent coordinate
         // domain
         // [-0.5, 0.5].
-        assert(kk - 1 >= 0);
-        assert(kk < pio.extent_int(3));
-        const int kklev_next =
-            (kk + 1 + _ppm_consts::INITIAL_PADDING - gs) / VECTOR_SIZE;
-        const int kkvec_next =
-            (kk + 1 + _ppm_consts::INITIAL_PADDING - gs) % VECTOR_SIZE;
+        assert(kk >= 0);
+        assert(kk <= pio.extent_int(3));
+        const int kklev = kk / VECTOR_SIZE;
+        const int kkvec = kk % VECTOR_SIZE;
         z2(kv.ie, igp, jgp, k) =
             (pin(kv.ie, igp, jgp, k + 1) -
-             (pio(kv.ie, igp, jgp, kk - 1) + pio(kv.ie, igp, jgp, kk)) * 0.5) /
-            dpo(kv.ie, igp, jgp, kklev_next)[kkvec_next];
+             (pio(kv.ie, igp, jgp, kk) + pio(kv.ie, igp, jgp, kk + 1)) * 0.5) /
+            dpo(kv.ie, igp, jgp,
+                kklev + _ppm_consts::VECTOR_PADDING)[kkvec];
       });
 
       ExecViewUnmanaged<Scalar[_ppm_consts::DPO_LEV]> point_dpo =
