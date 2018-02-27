@@ -43,7 +43,21 @@ vform         = "ccm"
 vfile_mid = './acme-72m.ascii'
 vfile_int = './acme-72i.ascii'
 /
-
+&solver_nl
+precon_method = "identity"
+maxits        = 500
+tol           = 1.e-9
+/
+&filter_nl
+filter_type   = "taylor"
+transfer_type = "bv"
+filter_freq   = 0
+filter_mu     = 0.04D0
+p_bv          = 12.0D0
+s_bv          = .666666666666666666D0
+wght_fm       = 0.10D0
+kcut_fm       = 2
+/
 &prof_inparm
 profile_outpe_num = 100
 profile_single_file		= .true.
