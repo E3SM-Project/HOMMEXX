@@ -38,11 +38,6 @@ hypervis_scaling=0
 hypervis_order = 2
 hypervis_subcycle=3    ! ne30: 3  ne120: 4
 /
-&vert_nl
-vform         = "ccm"
-vfile_mid = './acme-72m.ascii'
-vfile_int = './acme-72i.ascii'
-/
 &solver_nl
 precon_method = "identity"
 maxits        = 500
@@ -57,6 +52,11 @@ p_bv          = 12.0D0
 s_bv          = .666666666666666666D0
 wght_fm       = 0.10D0
 kcut_fm       = 2
+/
+&vert_nl
+vform         = "ccm"
+vfile_mid = './acme-72m.ascii'
+vfile_int = './acme-72i.ascii'
 /
 &prof_inparm
 profile_outpe_num = 100
