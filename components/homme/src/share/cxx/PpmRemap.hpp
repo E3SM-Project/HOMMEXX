@@ -179,7 +179,9 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         ai("ai", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
         parabola_coeffs(
             "Coefficients for the interpolating parabola",
-            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)) {}
+            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        final_mass(
+            "final masses for overlapping regions", num_elems * num_remap) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
@@ -256,6 +258,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                     Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
                     Homme::subview(mass_o, kv.team_idx, igp, jgp),
                     Homme::subview(dpo, kv.ie, igp, jgp),
+                    Homme::subview(final_mass, kv.team_idx, igp, jgp),
                     Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
     kv.team_barrier();
@@ -276,85 +279,43 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     return mass;
   }
 
-  template <typename ExecSpaceType = ExecSpace>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<
-      !Homme::OnGpu<ExecSpaceType>::value, void>::type
-  compute_remap(
+  void compute_remap(
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
       ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
       ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
+			ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> new_mass,
       ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
     // Compute tracer values on the new grid by integrating from the old cell
     // bottom to the new cell interface to form a new grid mass accumulation.
-    // Taking the difference between accumulation at successive interfaces
+    // Store the mass in the integral bounds for that level
+    // Then take the difference between accumulation at successive interfaces
     // gives the mass inside each cell. Since Qdp is supposed to hold the full
     // mass this needs no normalization.
-    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-      Real mass_1 = 0.0;
-
-      for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
-        const Real x2_cur_lev = integral_bounds(k);
-
-        const int kk_cur_lev = k_id(k);
-        assert(kk_cur_lev >= 0);
-        assert(kk_cur_lev < parabola_coeffs.extent_int(1));
-
-        const Real mass_2 = compute_mass(
-            parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-            parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
-            prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
-
-        const int ilevel = k / VECTOR_SIZE;
-        const int ivector = k % VECTOR_SIZE;
-        remap_var(ilevel)[ivector] = mass_2 - mass_1;
-        mass_1 = mass_2;
-      }
-    });
-  }
-
-  template <typename ExecSpaceType = ExecSpace>
-  KOKKOS_INLINE_FUNCTION typename std::enable_if<
-      Homme::OnGpu<ExecSpaceType>::value, void>::type
-  compute_remap(
-      KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
-      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
-      ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
-      ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
-      ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
-      ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
-    // Compute tracer values on the new grid by integrating from the old cell
-    // bottom to the new cell interface to form a new grid mass accumulation.
-    // Taking the difference between accumulation at successive interfaces
-    // gives the mass inside each cell. Since Qdp is supposed to hold the full
-    // mass this needs no normalization.
-    // This duplicates work, but the parallel gain on CUDA is >> 2
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
-      const Real mass_1 =
-          (k > 0) ? compute_mass(
-                        parabola_coeffs(2, k_id(k - 1)),
-                        parabola_coeffs(1, k_id(k - 1)),
-                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1)),
-                        prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
-                        integral_bounds(k - 1))
-                  : 0.0;
-
-      const Real x2_cur_lev = integral_bounds(k);
-
       const int kk_cur_lev = k_id(k);
       assert(kk_cur_lev >= 0);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
-      const Real mass_2 = compute_mass(
+      const Real x2_cur_lev = integral_bounds(k);
+			// Repurpose the parabola_coeffs buffer to store the mass
+      new_mass(k) = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
           parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
-
+    });
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                         [&](const int k) {
       const int ilevel = k / VECTOR_SIZE;
       const int ivector = k % VECTOR_SIZE;
-      remap_var(ilevel)[ivector] = mass_2 - mass_1;
+			if(k > 0) {
+				remap_var(ilevel)[ivector] = new_mass(k) - new_mass(k - 1);
+			}
+			else {
+				remap_var(ilevel)[ivector] = new_mass(k);
+			}
     }); // k loop
   }
 
@@ -694,6 +655,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   ExecViewManaged<Real * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]> dma;
   ExecViewManaged<Real * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]> ai;
   ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]> parabola_coeffs;
+  ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> final_mass;
 };
 
 } // namespace Ppm
