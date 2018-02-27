@@ -386,8 +386,6 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV
 
   // Sanity checks
   assert(m_registration_started && !m_registration_completed);
-  assert(ie < m_1d_fields.extent_int(0));
-  assert(iq < m_1d_fields.extent_int(1));
   assert(m_num_2d_fields == 0 && m_num_3d_fields == 0);
 
   {
