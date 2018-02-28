@@ -207,6 +207,12 @@ contains
        qvsum_p(q) = global_shared_sum(1)
     enddo
 
+#ifdef USE_KOKKOS_KERNELS
+    fqmax_local(:) = 0_real_kind
+    fqmin_local(:) = 0_real_kind
+    fqsum_local(:) = 0_real_kind
+#endif
+
     !
     do ie=nets,nete
 
