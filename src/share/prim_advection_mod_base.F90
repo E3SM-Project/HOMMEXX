@@ -307,9 +307,11 @@ contains
 
     allocate(deriv(0:n_domains-1))
 
+#ifndef USE_KOKKOS_KERNELS
     ! this static array is shared by all threads, so dimension for all threads (nelemd), not nets:nete:
     allocate (qmin(nlev,qsize,nelemd))
     allocate (qmax(nlev,qsize,nelemd))
+#endif
 
     if  (use_semi_lagrange_transport) then
        call initghostbuffer3D(ghostbuf_tr,nlev*qsize,np)

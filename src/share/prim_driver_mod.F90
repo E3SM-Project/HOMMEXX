@@ -463,13 +463,17 @@ contains
 
     do ie=1,nelemd
        elem(ie)%derived%FM=0.0
+#ifndef USE_KOKKOS_KERNELS
        elem(ie)%derived%FQ=0.0
+#endif
        elem(ie)%derived%FQps=0.0
        elem(ie)%derived%FT=0.0
 
+#ifndef USE_KOKKOS_KERNELS
        elem(ie)%accum%Qvar=0
        elem(ie)%accum%Qmass=0
        elem(ie)%accum%Q1mass=0
+#endif
 
        elem(ie)%derived%Omega_p=0
        elem(ie)%state%dp3d=0
