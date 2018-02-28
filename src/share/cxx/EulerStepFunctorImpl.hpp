@@ -525,15 +525,16 @@ private:
       kv, -m_data.dt, m_data.rhs_viss != 0.0,
       Homme::subview(m_elements.buffers.vstar, kv.ie),
       Homme::subview(m_tracers.qdp, kv.ie, m_data.n0_qdp, kv.iq),
-      Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq),
-      Homme::subview(m_tracers.qtens, kv.ie, kv.iq));
+      // On input, qtens_biharmonic if add_hyperviscosity, undefined
+      // if not; on output, qtens.
+      Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq));
   }
 
   KOKKOS_INLINE_FUNCTION
   void limiter_optim_iter_full (const KernelVariables& kv) const {
     const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
-    const auto ptens = Homme::subview(m_tracers.qtens, kv.ie, kv.iq);
+    const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
 
     limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
@@ -545,7 +546,7 @@ private:
   KOKKOS_INLINE_FUNCTION
   void apply_spheremp (const KernelVariables& kv) const {
     const auto qdp = Homme::subview(m_tracers.qdp, kv.ie, m_data.np1_qdp, kv.iq);
-    const auto qtens = Homme::subview(m_tracers.qtens, kv.ie, kv.iq);
+    const auto qtens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
     Kokkos::parallel_for (
       Kokkos::TeamThreadRange(kv.team, NP * NP),

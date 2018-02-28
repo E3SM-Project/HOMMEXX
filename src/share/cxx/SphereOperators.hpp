@@ -422,7 +422,8 @@ public:
                             const Real alpha, const bool add_hyperviscosity,
                             const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> vstar,
                             const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qdp,
-                            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qtens_biharmonic,
+                            // On input, qtens_biharmonic if add_hyperviscosity, undefined
+                            // if not; on output, qtens.
                             const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> qtens) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
@@ -439,7 +440,6 @@ public:
         const auto& qdpijk = qdp(igp, jgp, ilev);
         const auto v0 = vstar(0, igp, jgp, ilev) * qdpijk;
         const auto v1 = vstar(1, igp, jgp, ilev) * qdpijk;
-        qtens(igp,jgp,ilev) = qdpijk;
         gv(0,igp,jgp,ilev) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
         gv(1,igp,jgp,ilev) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
       });
@@ -457,10 +457,10 @@ public:
           dudx += dvv(jgp, kgp) * gv(0, igp, kgp, ilev);
           dvdy += dvv(igp, kgp) * gv(1, kgp, jgp, ilev);
         }
-
-        qtens(igp,jgp,ilev) += alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth));
-        if (add_hyperviscosity)
-          qtens(igp,jgp,ilev) += qtens_biharmonic(igp,jgp,ilev);
+        const Scalar qtensijk0 = add_hyperviscosity ? qtens(igp,jgp,ilev) : 0;
+        qtens(igp,jgp,ilev) = (qdp(igp,jgp,ilev) +
+                               alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth)) +
+                               qtensijk0);
       });
     });
     kv.team_barrier();
