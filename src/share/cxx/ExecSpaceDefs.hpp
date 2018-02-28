@@ -173,6 +173,12 @@ get_num_concurrent_teams (const Kokkos::TeamPolicy<ExecSpaceType,Tags...>& polic
   return (concurrency + team_size - 1) / team_size;
 }
 
+template <typename ExecSpace, typename Tag=void>
+static int get_num_concurrent_teams(const int num_parallel_iterations) {
+  return get_num_concurrent_teams(
+      get_default_team_policy<ExecSpace>(num_parallel_iterations));
+}
+
 // A templated typedef for MD range policy (used in RK stages)
 template<typename ExecutionSpace, int Rank>
 using MDRangePolicy = Kokkos::Experimental::MDRangePolicy

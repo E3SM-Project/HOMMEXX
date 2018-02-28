@@ -91,7 +91,8 @@ public:
     team.team_barrier();
   }
 
-  int ie, iq, team_idx;
+  int ie, iq;
+  const int team_idx;
 }; // KernelVariables
 
 } // Homme

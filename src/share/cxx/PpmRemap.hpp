@@ -172,10 +172,14 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   explicit PpmVertRemap(const int num_elems, const int num_remap)
       : dpo("dpo", num_elems), pio("pio", num_elems), pin("pin", num_elems),
         ppmdx("ppmdx", num_elems), z2("z2", num_elems), kid("kid", num_elems),
-        ao("a0", num_elems, num_remap), mass_o("mass_o", num_elems, num_remap),
-        dma("dma", num_elems, num_remap), ai("ai", num_elems, num_remap),
-        parabola_coeffs("Coefficients for the interpolating parabola",
-                        num_elems, num_remap) {}
+        ao("a0", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        mass_o("mass_o",
+               get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        dma("dma", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        ai("ai", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        parabola_coeffs(
+            "Coefficients for the interpolating parabola",
+            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
@@ -188,7 +192,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void compute_remap_phase(KernelVariables &kv, const int remap_idx,
+  void compute_remap_phase(KernelVariables &kv,
                            ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> remap_var)
       const {
     // From here, we loop over tracers for only those portions which depend on
@@ -203,7 +207,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                            [&](const int k) {
         const int ilevel = k / VECTOR_SIZE;
         const int ivector = k % VECTOR_SIZE;
-        ao(kv.ie, remap_idx, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
+        ao(kv.team_idx, igp, jgp, k + _ppm_consts::INITIAL_PADDING) =
             remap_var(igp, jgp, ilevel)[ivector] /
             dpo(kv.ie, igp, jgp, k + _ppm_consts::INITIAL_PADDING);
       });
@@ -214,13 +218,13 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // to simplify integration during remapping. Also, divide out the
         // grid spacing so we're working with actual tracer values and can
         // conserve mass.
-        mass_o(kv.ie, remap_idx, igp, jgp, 0) = 0.0;
+        mass_o(kv.team_idx, igp, jgp, 0) = 0.0;
         for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
           const int ilevel = k / VECTOR_SIZE;
           const int ivector = k % VECTOR_SIZE;
 
-          mass_o(kv.ie, remap_idx, igp, jgp, k + 1) =
-              mass_o(kv.ie, remap_idx, igp, jgp, k) +
+          mass_o(kv.team_idx, igp, jgp, k + 1) =
+              mass_o(kv.team_idx, igp, jgp, k) +
               remap_var(igp, jgp, ilevel)[ivector];
         } // end k loop
       });
@@ -229,30 +233,31 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       // the ghost cells
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, gs),
                            [&](const int &k_0) {
-        ao(kv.ie, remap_idx, igp, jgp,
+        ao(kv.team_idx, igp, jgp,
            _ppm_consts::INITIAL_PADDING - 1 - k_0 - 1 + 1) =
-            ao(kv.ie, remap_idx, igp, jgp, k_0 + _ppm_consts::INITIAL_PADDING);
+            ao(kv.team_idx, igp, jgp, k_0 + _ppm_consts::INITIAL_PADDING);
 
-        ao(kv.ie, remap_idx, igp, jgp, NUM_PHYSICAL_LEV +
-                                           _ppm_consts::INITIAL_PADDING -
-                                           _ppm_consts::gs + k_0 + 1 + 1) =
-            ao(kv.ie, remap_idx, igp, jgp,
+        ao(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV +
+                                            _ppm_consts::INITIAL_PADDING -
+                                            _ppm_consts::gs + k_0 + 1 + 1) =
+            ao(kv.team_idx, igp, jgp,
                NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING -
                    _ppm_consts::gs + 1 - k_0 - 1 + 1);
       }); // end ghost cell loop
 
       // Computes a monotonic and conservative PPM reconstruction
-      compute_ppm(kv, Homme::subview(ao, kv.ie, remap_idx, igp, jgp),
+      compute_ppm(kv, Homme::subview(ao, kv.team_idx, igp, jgp),
                   Homme::subview(ppmdx, kv.ie, igp, jgp),
-                  Homme::subview(dma, kv.ie, remap_idx, igp, jgp),
-                  Homme::subview(ai, kv.ie, remap_idx, igp, jgp),
-                  Homme::subview(parabola_coeffs, kv.ie, remap_idx, igp, jgp));
-      compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
-                    Homme::subview(z2, kv.ie, igp, jgp),
-                    Homme::subview(parabola_coeffs, kv.ie, remap_idx, igp, jgp),
-                    Homme::subview(mass_o, kv.ie, remap_idx, igp, jgp),
-                    Homme::subview(dpo, kv.ie, igp, jgp),
-                    Homme::subview(remap_var, igp, jgp));
+                  Homme::subview(dma, kv.team_idx, igp, jgp),
+                  Homme::subview(ai, kv.team_idx, igp, jgp),
+                  Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp));
+      compute_remap(
+          kv, Homme::subview(kid, kv.ie, igp, jgp),
+          Homme::subview(z2, kv.ie, igp, jgp),
+          Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
+          Homme::subview(mass_o, kv.team_idx, igp, jgp),
+          Homme::subview(dpo, kv.ie, igp, jgp),
+          Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
     kv.team_barrier();
   }
@@ -685,11 +690,11 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> z2;
   ExecViewManaged<int * [NP][NP][NUM_PHYSICAL_LEV]> kid;
 
-  ExecViewManaged<Real * * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> ao;
-  ExecViewManaged<Real * * [NP][NP][_ppm_consts::MASS_O_PHYSICAL_LEV]> mass_o;
-  ExecViewManaged<Real * * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]> dma;
-  ExecViewManaged<Real * * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]> ai;
-  ExecViewManaged<Real * * [NP][NP][3][NUM_PHYSICAL_LEV]> parabola_coeffs;
+  ExecViewManaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> ao;
+  ExecViewManaged<Real * [NP][NP][_ppm_consts::MASS_O_PHYSICAL_LEV]> mass_o;
+  ExecViewManaged<Real * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]> dma;
+  ExecViewManaged<Real * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]> ai;
+  ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]> parabola_coeffs;
 };
 
 } // namespace Ppm
