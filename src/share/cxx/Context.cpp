@@ -120,6 +120,7 @@ EulerStepFunctor& Context::get_euler_step_functor() {
 void Context::clear() {
   comm_ = nullptr;
   elements_ = nullptr;
+  tracers_ = nullptr;
   derivative_ = nullptr;
   hvcoord_ = nullptr;
   hyperviscosity_functor_ = nullptr;
