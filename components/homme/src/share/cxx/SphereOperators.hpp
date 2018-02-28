@@ -698,36 +698,21 @@ public:
 
     const auto& D = Homme::subview(m_d, kv.ie);
     const auto& mp = Homme::subview(m_mp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
       const int mgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        auto& sb0 = sphere_buf(0, ngp, mgp, ilev);
-        auto& sb1 = sphere_buf(1, ngp, mgp, ilev);
-        sb0 = 0;
-        sb1 = 0;
+        Scalar sb0, sb1;
         for (int jgp = 0; jgp < NP; ++jgp) {
           sb0 -= mp(jgp,mgp)*scalar(jgp,mgp,ilev)*dvv(jgp,ngp);
           sb1 += mp(ngp,jgp)*scalar(ngp,jgp,ilev)*dvv(jgp,mgp);
         }
-      });
-    });
-    kv.team_barrier();
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
-                         [&](const int loop_idx) {
-      const int igp = loop_idx / NP; //slowest
-      const int jgp = loop_idx % NP; //fastest
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
-        const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
-        curls(0,igp,jgp,ilev) = beta*curls(0,igp,jgp,ilev) + alpha *
-                                ( D(0,0,igp,jgp)*sb0 + D(1,0,igp,jgp)*sb1 )
+        curls(0,ngp,mgp,ilev) = beta*curls(0,ngp,mgp,ilev) + alpha *
+                                ( D(0,0,ngp,mgp)*sb0 + D(1,0,ngp,mgp)*sb1 )
                                 * PhysicalConstants::rrearth;
-        curls(1,igp,jgp,ilev) = beta*curls(1,igp,jgp,ilev) + alpha *
-                                ( D(0,1,igp,jgp)*sb0 + D(1,1,igp,jgp)*sb1 )
+        curls(1,ngp,mgp,ilev) = beta*curls(1,ngp,mgp,ilev) + alpha *
+                                ( D(0,1,ngp,mgp)*sb0 + D(1,1,ngp,mgp)*sb1 )
                               * PhysicalConstants::rrearth;
       });
     });
