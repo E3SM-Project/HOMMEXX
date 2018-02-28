@@ -292,7 +292,6 @@ public:
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& v_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
 
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -300,28 +299,15 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        Scalar dsdx, dsdy;
+        Scalar v0, v1;
         for (int kgp = 0; kgp < NP; ++kgp) {
-          dsdx += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
-          dsdy += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
+          v0 += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
+          v1 += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
         }
-        v_buf(0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
-        v_buf(1, igp, jgp, ilev) = dsdy * PhysicalConstants::rrearth;
-      });
-    });
-    kv.team_barrier();
-
-    // TODO: merge the two parallel for's
-    constexpr int grad_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, grad_iters),
-                         [&](const int loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v_buf0 = v_buf(0, igp, jgp, ilev);
-        const auto& v_buf1 = v_buf(1, igp, jgp, ilev);
-        grad_s(0,igp,jgp,ilev) = D_inv(0,0,igp,jgp) * v_buf0 + D_inv(0,1,igp,jgp) * v_buf1;
-        grad_s(1,igp,jgp,ilev) = D_inv(1,0,igp,jgp) * v_buf0 + D_inv(1,1,igp,jgp) * v_buf1;
+        v0 *= PhysicalConstants::rrearth;
+        v1 *= PhysicalConstants::rrearth;
+        grad_s(0,igp,jgp,ilev) = D_inv(0,0,igp,jgp) * v0 + D_inv(0,1,igp,jgp) * v1;
+        grad_s(1,igp,jgp,ilev) = D_inv(1,0,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1;
       });
     });
     kv.team_barrier();
