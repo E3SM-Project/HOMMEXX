@@ -10,10 +10,10 @@ namespace Homme {
 Tracers::Tracers(const int num_elems, const int num_tracers)
   : nt(num_tracers)
 {
-  q = decltype(q)("", num_elems);
   qdp = decltype(qdp)("tracers", num_elems);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens(_biharmonic)", num_elems);
   qlim = decltype(qlim)("qlim", num_elems);
+  q = decltype(q)("", num_elems);
 }
 
 void Tracers::random_init() {
