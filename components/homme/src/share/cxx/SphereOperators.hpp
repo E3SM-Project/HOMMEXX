@@ -292,7 +292,6 @@ public:
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
-    const auto& v_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
 
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
@@ -300,28 +299,15 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        Scalar dsdx, dsdy;
+        Scalar v0, v1;
         for (int kgp = 0; kgp < NP; ++kgp) {
-          dsdx += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
-          dsdy += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
+          v0 += dvv(jgp, kgp) * scalar(igp, kgp, ilev);
+          v1 += dvv(igp, kgp) * scalar(kgp, jgp, ilev);
         }
-        v_buf(0, igp, jgp, ilev) = dsdx * PhysicalConstants::rrearth;
-        v_buf(1, igp, jgp, ilev) = dsdy * PhysicalConstants::rrearth;
-      });
-    });
-    kv.team_barrier();
-
-    // TODO: merge the two parallel for's
-    constexpr int grad_iters = NP * NP;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, grad_iters),
-                         [&](const int loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v_buf0 = v_buf(0, igp, jgp, ilev);
-        const auto& v_buf1 = v_buf(1, igp, jgp, ilev);
-        grad_s(0,igp,jgp,ilev) = D_inv(0,0,igp,jgp) * v_buf0 + D_inv(0,1,igp,jgp) * v_buf1;
-        grad_s(1,igp,jgp,ilev) = D_inv(1,0,igp,jgp) * v_buf0 + D_inv(1,1,igp,jgp) * v_buf1;
+        v0 *= PhysicalConstants::rrearth;
+        v1 *= PhysicalConstants::rrearth;
+        grad_s(0,igp,jgp,ilev) = D_inv(0,0,igp,jgp) * v0 + D_inv(0,1,igp,jgp) * v1;
+        grad_s(1,igp,jgp,ilev) = D_inv(1,0,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1;
       });
     });
     kv.team_barrier();
@@ -420,9 +406,11 @@ public:
   KOKKOS_INLINE_FUNCTION void
   divergence_sphere_update (const KernelVariables &kv,
                             const Real alpha, const bool add_hyperviscosity,
-                            const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qtens_biharmonic,
-                            const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
+                            const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> vstar,
+                            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qdp,
+                            // On input, qtens_biharmonic if add_hyperviscosity, undefined
+                            // if not; on output, qtens.
+                            const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> qtens) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
@@ -435,8 +423,9 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v0 = v(0, igp, jgp, ilev);
-        const auto& v1 = v(1, igp, jgp, ilev);
+        const auto& qdpijk = qdp(igp, jgp, ilev);
+        const auto v0 = vstar(0, igp, jgp, ilev) * qdpijk;
+        const auto v1 = vstar(1, igp, jgp, ilev) * qdpijk;
         gv(0,igp,jgp,ilev) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
         gv(1,igp,jgp,ilev) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
       });
@@ -454,10 +443,10 @@ public:
           dudx += dvv(jgp, kgp) * gv(0, igp, kgp, ilev);
           dvdy += dvv(igp, kgp) * gv(1, kgp, jgp, ilev);
         }
-
-        div_v(igp,jgp,ilev) += alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth));
-        if (add_hyperviscosity)
-          div_v(igp,jgp,ilev) += qtens_biharmonic(igp,jgp,ilev);
+        const Scalar qtensijk0 = add_hyperviscosity ? qtens(igp,jgp,ilev) : 0;
+        qtens(igp,jgp,ilev) = (qdp(igp,jgp,ilev) +
+                               alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth)) +
+                               qtensijk0);
       });
     });
     kv.team_barrier();
@@ -556,24 +545,25 @@ public:
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
   divergence_sphere_wk (const KernelVariables &kv,
-                        const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                        const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
+                        // On input, a field whose divergence is sought; on
+                        // output, the view's data are invalid.
+                        const ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> v,
+                        const ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v0 = v(0,igp,jgp,ilev);
-        const auto& v1 = v(1,igp,jgp,ilev);
-        sphere_buf(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0 + D_inv(1, 0, igp, jgp) * v1;
-        sphere_buf(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0 + D_inv(1, 1, igp, jgp) * v1;
+        const auto v0 = v(0,igp,jgp,ilev);
+        const auto v1 = v(1,igp,jgp,ilev);
+        v(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0 + D_inv(1, 0, igp, jgp) * v1;
+        v(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0 + D_inv(1, 1, igp, jgp) * v1;
       });
     });
     kv.team_barrier();
@@ -589,8 +579,9 @@ public:
         Scalar dd;
         // TODO: move multiplication by rrearth outside the loop
         for (int jgp = 0; jgp < NP; ++jgp) {
-          dd -= (spheremp(ngp, jgp) * sphere_buf(0, ngp, jgp, ilev) * dvv(jgp, mgp) +
-                 spheremp(jgp, mgp) * sphere_buf(1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
+          // Here, v is the temporary buffer, aliased on the input v.
+          dd -= (spheremp(ngp, jgp) * v(0, ngp, jgp, ilev) * dvv(jgp, mgp) +
+                 spheremp(jgp, mgp) * v(1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
                 PhysicalConstants::rrearth;
         }
         div_v(ngp, mgp, ilev) = dd;

@@ -1,5 +1,6 @@
 #include "Derivative.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "Context.hpp"
 #include "HybridVCoord.hpp"
 #include "SimulationParams.hpp"
@@ -93,7 +94,9 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
 {
   Elements& elements = Context::singleton().get_elements ();
   elements.push_4d(elem_state_v_ptr,elem_state_temp_ptr,elem_state_dp3d_ptr);
-  elements.push_qdp(elem_state_Qdp_ptr);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.push_qdp(elem_state_Qdp_ptr);
 
   // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly in an unmanaged view
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)
@@ -105,7 +108,7 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
 
   sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
-  sync_to_host(elements.m_Q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
+  sync_to_host(tracers.q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -139,7 +142,8 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
 {
   Elements& elements = Context::singleton().get_elements ();
   elements.pull_4d(elem_state_v_ptr,elem_state_temp_ptr,elem_state_dp3d_ptr);
-  elements.pull_qdp(elem_state_Qdp_ptr);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.pull_qdp(elem_state_Qdp_ptr);
 
   // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly in an unmanaged view
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)

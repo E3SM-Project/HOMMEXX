@@ -197,6 +197,11 @@ void BoundaryExchange::registration_completed()
   // Prohibit further registration of fields, and allow exchange
   m_registration_started   = false;
   m_registration_completed = true;
+
+  // Optimistically build buffers here. If registration is called with largest
+  // BufferManager user first, then building will occur just once, in the
+  // prim_init2 call.
+  build_buffer_views_and_requests();
 }
 
 void BoundaryExchange::exchange () {

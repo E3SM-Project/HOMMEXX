@@ -41,9 +41,6 @@ public:
 
   ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> m_ps_v;
 
-  // q is tracer ratio, qdp is tracer mass
-  ExecViewManaged<Scalar *                    [QSIZE_D][NP][NP][NUM_LEV]> m_Q;
-  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> m_qdp;
   // eta=$\eta$ is the vertical coordinate
   // eta_dot_dpdn = $\dot{eta}\frac{dp}{d\eta}$
   //    (note there are NUM_PHYSICAL_LEV+1 of them)
@@ -78,12 +75,7 @@ public:
 
     // Buffers for EulerStepFunctor
     ExecViewManaged<Scalar*          [2][NP][NP][NUM_LEV]>  vstar;
-    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens;
-    ExecViewManaged<Scalar* [QSIZE_D]   [NP][NP][NUM_LEV]>  qtens_biharmonic;
-    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  qwrk;
-    ExecViewManaged<Scalar* [QSIZE_D][2][NP][NP][NUM_LEV]>  vstar_qdp;
     ExecViewManaged<Scalar*             [NP][NP][NUM_LEV]>  dpdissk;
-    ExecViewManaged<Scalar* [QSIZE_D][2]        [NUM_LEV]>  qlim; // qmin, qmax
 
     ExecViewManaged<Real* [NP][NP]> preq_buf;
     // sdot_sum is used in case rsplit=0 and in energy diagnostics
@@ -133,25 +125,21 @@ public:
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,
                               CF90Ptr &state_dp3d, CF90Ptr &derived_phi,
                               CF90Ptr &derived_omega_p,
-                              CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn,
-                              CF90Ptr &state_qdp);
+                              CF90Ptr &derived_v, CF90Ptr &derived_eta_dot_dpdn);
   void pull_3d(CF90Ptr &derived_phi,
                CF90Ptr &derived_omega_p, CF90Ptr &derived_v);
   void pull_4d(CF90Ptr &state_v, CF90Ptr &state_t, CF90Ptr &state_dp3d);
   void pull_eta_dot(CF90Ptr &derived_eta_dot_dpdn);
-  void pull_qdp(CF90Ptr &state_qdp);
 
   // Push the results from the exec space views to the F90 pointers
   void push_to_f90_pointers(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp,
                             F90Ptr &derived_phi,
                             F90Ptr &derived_omega_p, F90Ptr &derived_v,
-                            F90Ptr &derived_eta_dot_dpdn,
-                            F90Ptr &state_qdp) const;
+                            F90Ptr &derived_eta_dot_dpdn) const;
   void push_3d(F90Ptr &derived_phi,
                F90Ptr &derived_omega_p, F90Ptr &derived_v) const;
   void push_4d(F90Ptr &state_v, F90Ptr &state_t, F90Ptr &state_dp3d) const;
   void push_eta_dot(F90Ptr &derived_eta_dot_dpdn) const;
-  void push_qdp(F90Ptr &state_qdp) const;
 
   void d(Real *d_ptr, int ie) const;
   void dinv(Real *dinv_ptr, int ie) const;

@@ -463,13 +463,17 @@ contains
 
     do ie=1,nelemd
        elem(ie)%derived%FM=0.0
+#ifndef USE_KOKKOS_KERNELS
        elem(ie)%derived%FQ=0.0
+#endif
        elem(ie)%derived%FQps=0.0
        elem(ie)%derived%FT=0.0
 
+#ifndef USE_KOKKOS_KERNELS
        elem(ie)%accum%Qvar=0
        elem(ie)%accum%Qmass=0
        elem(ie)%accum%Q1mass=0
+#endif
 
        elem(ie)%derived%Omega_p=0
        elem(ie)%state%dp3d=0
@@ -1182,7 +1186,9 @@ contains
     if (ftype == -1) then
        ! disable all forcing, but allow moisture:
        do ie=nets,nete
+#ifndef USE_KOKKOS_KERNELS
           elem(ie)%derived%FQ = 0
+#endif
           elem(ie)%derived%FM = 0
           elem(ie)%derived%FT = 0
        enddo
@@ -1192,7 +1198,9 @@ contains
        do ie=nets,nete
           elem(ie)%state%Q = 0
           elem(ie)%state%Qdp = 0
+#ifndef USE_KOKKOS_KERNELS
           elem(ie)%derived%FQ = 0
+#endif
        enddo
     endif
     if (ftype == -3) then
@@ -1200,7 +1208,9 @@ contains
        do ie=nets,nete
           elem(ie)%state%Q = 0
           elem(ie)%state%Qdp = 0
+#ifndef USE_KOKKOS_KERNELS
           elem(ie)%derived%FQ = 0
+#endif
           elem(ie)%derived%FM = 0
           elem(ie)%derived%FT = 0
        enddo
