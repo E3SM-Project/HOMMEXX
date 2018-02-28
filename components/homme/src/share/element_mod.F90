@@ -854,7 +854,9 @@ contains
     allocate( elem_derived_dp               (np,np,nlev,nelemd)                    )
     allocate( elem_derived_divdp            (np,np,nlev,nelemd)                    )
     allocate( elem_derived_divdp_proj       (np,np,nlev,nelemd)                    )
+#ifndef USE_KOKKOS_KERNELS
     allocate( elem_derived_FQ               (np,np,nlev,qsize_d,timelevels,nelemd) )
+#endif
     allocate( elem_derived_FM               (np,np,2,nlev,timelevels,nelemd)       )
     allocate( elem_derived_FT               (np,np,nlev,timelevels,nelemd)         )
     allocate( elem_derived_FQps             (np,np,timelevels,nelemd)              )
@@ -906,9 +908,11 @@ contains
     allocate( elem_accum_PEner      (np,np,4,nelemd)         )
     allocate( elem_accum_IEner      (np,np,4,nelemd)         )
     allocate( elem_accum_IEner_wet  (np,np,4,nelemd)         )
+#ifndef USE_KOKKOS_KERNELS
     allocate( elem_accum_Qvar       (np,np,qsize_d,4,nelemd) )
     allocate( elem_accum_Qmass      (np,np,qsize_d,4,nelemd) )
     allocate( elem_accum_Q1mass     (np,np,qsize_d,nelemd)   )
+#endif
 
     do ie = 1 , nelemd
 #ifdef ENERGY_DIAGNOSTICS
