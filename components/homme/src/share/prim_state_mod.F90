@@ -270,7 +270,9 @@ contains
        end if
 
        Ftsum_local(ie)    = SUM(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        FQsum_local(ie) = SUM(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        Omegasum_local(ie) = SUM(elem(ie)%derived%Omega_p(:,:,:))
 
        pssum_local(ie) = SUM(tmp(:,:,ie))
