@@ -14,7 +14,6 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
   qdp = decltype(qdp)("tracers", num_elems);
   qtens = decltype(qtens)("", num_elems);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens_biharmonic", num_elems);
-  vstar_qdp = decltype(vstar_qdp)("", num_elems);
   qlim = decltype(qlim)("qlim", num_elems);
 }
 
@@ -28,7 +27,6 @@ void Tracers::random_init() {
   genRandArray(qdp, engine, random_dist);
   genRandArray(qtens, engine, random_dist);
   genRandArray(qtens_biharmonic, engine, random_dist);
-  genRandArray(vstar_qdp, engine, random_dist);
   genRandArray(qlim, engine, random_dist);
 }
 

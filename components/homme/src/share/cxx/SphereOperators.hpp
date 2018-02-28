@@ -420,9 +420,10 @@ public:
   KOKKOS_INLINE_FUNCTION void
   divergence_sphere_update (const KernelVariables &kv,
                             const Real alpha, const bool add_hyperviscosity,
-                            const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
+                            const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> vstar,
+                            const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qdp,
                             const ExecViewUnmanaged<const Scalar    [NP][NP][NUM_LEV]> qtens_biharmonic,
-                            const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
+                            const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> qtens) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
@@ -435,8 +436,10 @@ public:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v0 = v(0, igp, jgp, ilev);
-        const auto& v1 = v(1, igp, jgp, ilev);
+        const auto& qdpijk = qdp(igp, jgp, ilev);
+        const auto v0 = vstar(0, igp, jgp, ilev) * qdpijk;
+        const auto v1 = vstar(1, igp, jgp, ilev) * qdpijk;
+        qtens(igp,jgp,ilev) = qdpijk;
         gv(0,igp,jgp,ilev) = (D_inv(0,0,igp,jgp) * v0 + D_inv(1,0,igp,jgp) * v1) * metdet(igp,jgp);
         gv(1,igp,jgp,ilev) = (D_inv(0,1,igp,jgp) * v0 + D_inv(1,1,igp,jgp) * v1) * metdet(igp,jgp);
       });
@@ -455,9 +458,9 @@ public:
           dvdy += dvv(igp, kgp) * gv(1, kgp, jgp, ilev);
         }
 
-        div_v(igp,jgp,ilev) += alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth));
+        qtens(igp,jgp,ilev) += alpha*((dudx + dvdy) * (1.0 / metdet(igp,jgp) * PhysicalConstants::rrearth));
         if (add_hyperviscosity)
-          div_v(igp,jgp,ilev) += qtens_biharmonic(igp,jgp,ilev);
+          qtens(igp,jgp,ilev) += qtens_biharmonic(igp,jgp,ilev);
       });
     });
     kv.team_barrier();
