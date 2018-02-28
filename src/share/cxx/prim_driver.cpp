@@ -1,5 +1,7 @@
+
 #include "Context.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
@@ -92,6 +94,7 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   // Initialize dp3d from ps
   GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
+  Tracers& tracers = Context::singleton().get_tracers();
   HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
   const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
   const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
@@ -140,23 +143,24 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   ////////////////////////////////////////////////////////////////////////
   GPTLstart("tl-sc Q-from-qdp");
   {
-    const auto Q = elements.m_Q;
-    const auto qdp = elements.m_qdp;
+    const auto qdp = tracers.qdp;
     const auto np1_qdp = tl.np1_qdp;
     const auto np1 = tl.np1;
     const auto qsize = params.qsize;
-    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,elements.num_elems()*params.qsize*NP*NP*NUM_LEV),
-                         KOKKOS_LAMBDA(const int idx) {
-      const int ie   = (((idx / NUM_LEV) / NP) / NP) / qsize;
-      const int iq   = (((idx / NUM_LEV) / NP) / NP) % qsize;
-      const int igp  =  ((idx / NUM_LEV) / NP) % NP;
-      const int jgp  =   (idx / NUM_LEV) % NP;
-      const int ilev =    idx % NUM_LEV;
+    Kokkos::parallel_for(
+        Kokkos::RangePolicy<ExecSpace>(0, elements.num_elems() * params.qsize *
+                                              NP * NP * NUM_LEV),
+        KOKKOS_LAMBDA(const int idx) {
+          const int ie = (((idx / NUM_LEV) / NP) / NP) / qsize;
+          const int iq = (((idx / NUM_LEV) / NP) / NP) % qsize;
+          const int igp = ((idx / NUM_LEV) / NP) % NP;
+          const int jgp = (idx / NUM_LEV) % NP;
+          const int ilev = idx % NUM_LEV;
 
-      Q(ie,iq,igp,jgp,ilev) = qdp(ie,np1_qdp,iq,igp,jgp,ilev) /
-                              ( hybrid_ai_delta[ilev]*ps0 +
-                                hybrid_bi_delta[ilev]*ps_v(ie,np1,igp,jgp));
-    });
+          tracers.q(ie, iq, igp, jgp, ilev) = qdp(ie, np1_qdp, iq, igp, jgp, ilev) /
+                              (hybrid_ai_delta[ilev] * ps0 +
+                               hybrid_bi_delta[ilev] * ps_v(ie, np1, igp, jgp));
+        });
   }
   ExecSpace::fence();
   GPTLstop("tl-sc Q-from-qdp");

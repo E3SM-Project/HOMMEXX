@@ -5,7 +5,7 @@ SET (HOMME_USE_FLAT_ARRAYS TRUE)
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
-createTestExec(prtcB_flat_c preqx_flat 4 4 72 FALSE FALSE 35 Fortran)
+createTestExec(prtcB_flat_c preqx_flat 4 4 72 FALSE FALSE 40 Fortran)
 
 INCLUDE_DIRECTORIES(${PREQX_FLAT_INCLUDE_DIRS})
 

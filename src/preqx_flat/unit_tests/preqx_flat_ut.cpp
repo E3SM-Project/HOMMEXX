@@ -9,6 +9,7 @@
 #include "CaarFunctorImpl.hpp"
 #include "EulerStepFunctorImpl.hpp"
 #include "Elements.hpp"
+#include "Tracers.hpp"
 #include "HybridVCoord.hpp"
 #include "Dimensions.hpp"
 #include "KernelVariables.hpp"
@@ -97,9 +98,13 @@ void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
  */
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
-  compute_subfunctor_test(Elements &elements, const int rsplit_in = 0)
-      : functor(elements, Context::singleton().get_derivative(),
-        Context::singleton().get_hvcoord(),SphereOperators(elements,Context::singleton().get_derivative()),rsplit_in),
+  compute_subfunctor_test(Elements &elements, Tracers &tracers,
+                          const int rsplit_in = 0)
+      : functor(
+            elements, tracers, Context::singleton().get_derivative(),
+            Context::singleton().get_hvcoord(),
+            SphereOperators(elements, Context::singleton().get_derivative()),
+            rsplit_in),
         policy(functor.m_elements.num_elems(), 16, 4),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
@@ -125,7 +130,8 @@ public:
     elements.push_to_f90_pointers(velocity.data(), temperature.data(),
                                 dp3d.data(), phi.data(),
                                 omega_p.data(), derived_v.data(),
-                                eta_dpdn.data(), qdp.data());
+                                  eta_dpdn.data());
+    tracers.push_qdp(qdp.data());
 
     Kokkos::deep_copy(spheremp, elements.m_spheremp);
     Kokkos::deep_copy(metdet, elements.m_metdet);
@@ -200,7 +206,7 @@ public:
 TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 64.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -209,6 +215,10 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   // initialized in the singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> temperature_virt_in("temperature_virt input", num_elems);
@@ -223,7 +233,7 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   Kokkos::deep_copy(elements.buffers.pressure, pressure_in);
   Kokkos::deep_copy(elements.buffers.pressure_grad, pressure_grad_in);
 
-  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements);
+  compute_subfunctor_test<compute_energy_grad_test> test_functor(elements, tracers);
   test_functor.run_functor();
 
   HostViewManaged<Scalar * [2][NP][NP][NUM_LEV]> energy_grad_out(
@@ -289,7 +299,7 @@ public:
 TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 256.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -298,6 +308,10 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> pressure("host pressure",
@@ -311,7 +325,7 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   sync_to_device(div_vdp, elements.buffers.div_vdp);
 
-  compute_subfunctor_test<preq_omega_ps_test> test_functor(elements);
+  compute_subfunctor_test<preq_omega_ps_test> test_functor(elements, tracers);
   test_functor.run_functor();
   // Results of the computation
   HostViewManaged<Scalar * [NP][NP][NUM_LEV]> omega_p("omega_p", num_elems);
@@ -355,7 +369,7 @@ public:
 TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -366,6 +380,9 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> temperature_virt(
       "host virtual temperature", num_elems);
@@ -378,7 +395,7 @@ TEST_CASE("preq_hydrostatic", "monolithic compute_and_apply_rhs") {
                std::uniform_real_distribution<Real>(0.0125, 1.0));
   sync_to_device(pressure, elements.buffers.pressure);
 
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
   Kokkos::deep_copy(test_functor.phis, elements.m_phis);
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
   test_functor.run_functor();
@@ -419,7 +436,7 @@ public:
 TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 128.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -428,6 +445,10 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_vdp",
@@ -440,7 +461,7 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
   sync_to_device(div_vdp, elements.buffers.div_vdp);
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
 
-  compute_subfunctor_test<dp3d_test> test_functor(elements);
+  compute_subfunctor_test<dp3d_test> test_functor(elements, tracers);
 
   // To ensure the Fortran doesn't pass without doing anything,
   // copy the initial state before running any of the test
@@ -489,7 +510,7 @@ public:
 TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 512.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -498,13 +519,17 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> vn0_f90(
       "vn0 f90 results", num_elems);
   sync_to_host(elements.m_derived_vn0, vn0_f90);
 
-  compute_subfunctor_test<vdp_vn0_test> test_functor(elements);
+  compute_subfunctor_test<vdp_vn0_test> test_functor(elements, tracers);
   test_functor.run_functor();
 
   sync_to_host(elements.m_derived_vn0, test_functor.derived_v);
@@ -586,7 +611,7 @@ public:
 TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -597,6 +622,10 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real[NUM_PHYSICAL_LEV]>::HostMirror hybrid_am_mirror("hybrid_am_host");
@@ -626,7 +655,7 @@ TEST_CASE("pressure", "monolithic compute_and_apply_rhs") {
 
 //OG does init use any of hybrid coefficients? do they need to be generated?
 //init makes device copies
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
   test_functor.functor.set_rk_stage_data(TestType::nm1, TestType::n0, TestType::np1,
@@ -676,7 +705,7 @@ public:
 TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 2.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -687,6 +716,10 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   Context::singleton().get_derivative().random_init();
 
   ExecViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>::HostMirror
@@ -703,7 +736,7 @@ TEST_CASE("temperature", "monolithic compute_and_apply_rhs") {
   genRandArray(t_vadv_f90, engine, std::uniform_real_distribution<Real>(-100, 100));
   sync_to_device(t_vadv_f90, elements.buffers.t_vadv_buf);
 
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
   test_functor.run_functor();
 
   sync_to_host(elements.m_t, test_functor.temperature);
@@ -753,7 +786,7 @@ TEST_CASE("virtual temperature no tracers",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 1.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -765,7 +798,10 @@ TEST_CASE("virtual temperature no tracers",
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  TestType test_functor(elements);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
+  TestType test_functor(elements, tracers);
   sync_to_host(elements.m_t, test_functor.temperature);
   test_functor.run_functor();
 
@@ -805,11 +841,11 @@ public:
 };
 
 
-TEST_CASE("moist virtual temperature",
+TEST_CASE("moist_virtual_temperature",
           "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 4.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -822,8 +858,11 @@ TEST_CASE("moist virtual temperature",
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
 
-  TestType test_functor(elements);
-  sync_to_host(elements.m_qdp, test_functor.qdp);
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
+  TestType test_functor(elements, tracers);
+  sync_to_host(tracers.qdp, test_functor.qdp);
   sync_to_host(elements.m_dp3d, test_functor.dp3d);
   sync_to_host(elements.m_t, test_functor.temperature);
   test_functor.run_functor();
@@ -868,7 +907,7 @@ public:
 TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
 
   std::random_device rd;
   rngAlg engine(rd());
@@ -879,6 +918,9 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   // singleton
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
 //which omega_p should survive? buffers or m_omega_p?
 //sort it out
@@ -891,7 +933,7 @@ TEST_CASE("omega_p", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> omega_p_f90("omega p f90",
                                                                  num_elems);
 
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
   sync_to_host(elements.m_omega_p, omega_p_f90);
   test_functor.run_functor();
   sync_to_host(elements.m_omega_p, test_functor.omega_p);
@@ -935,13 +977,16 @@ public:
 TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<accumulate_eta_dot_dpdn_test>;
 
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("eta dot", num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_total_f90("total eta dot", num_elems);
@@ -964,7 +1009,7 @@ TEST_CASE("accumulate eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bi_mirror.data());
 
   constexpr int rsplit = 0;
-  TestType test_functor(elements,rsplit);
+  TestType test_functor(elements, tracers, rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
 
@@ -1012,7 +1057,7 @@ public:
 TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
   using TestType = compute_subfunctor_test<eta_dot_dpdn_vertadv_euler_test>;
@@ -1021,6 +1066,10 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
   // on host first
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
+
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> div_vdp("host div_dp", num_elems);
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host div_dp", num_elems);
   HostViewManaged<Real * [NP][NP]> sdot_sum("host sdot_sum", num_elems);
@@ -1056,7 +1105,7 @@ TEST_CASE("eta_dot_dpdn", "monolithic compute_and_apply_rhs") {
            hybrid_bi_mirror.data());
 
   constexpr int rsplit = 0;
-  TestType test_functor(elements,rsplit);
+  TestType test_functor(elements, tracers, rsplit);
 
   test_functor.functor.set_n0_qdp(TestType::n0_qdp);
 
@@ -1120,7 +1169,7 @@ public:
 TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   constexpr const Real rel_threshold =
       std::numeric_limits<Real>::epsilon() * 0.0;
-  constexpr const int num_elems = 10;
+  constexpr const int num_elems = 2;
   std::random_device rd;
   rngAlg engine(rd());
 
@@ -1130,6 +1179,9 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   // on host first
   Elements &elements = Context::singleton().get_elements();
   elements.random_init(num_elems);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  tracers.random_init();
 
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot("host t_vadv", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv("host t_vadv", num_elems);
@@ -1156,7 +1208,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   deep_copy(t_vadv_f90, t_vadv);
   deep_copy(v_vadv_f90, v_vadv);
 
-  TestType test_functor(elements);
+  TestType test_functor(elements, tracers);
   test_functor.run_functor();
 
   const int n0 = test_functor.n0;

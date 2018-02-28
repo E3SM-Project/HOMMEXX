@@ -4,6 +4,8 @@
 #include "BuffersManager.hpp"
 #include "BoundaryExchange.hpp"
 #include "Connectivity.hpp"
+#include "utilities/SubviewUtils.hpp"
+#include "utilities/SyncUtils.hpp"
 #include "utilities/TestUtils.hpp"
 #include "Types.hpp"
 
@@ -43,8 +45,6 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
   std::uniform_int_distribution<int>   dint(0,1);
 
   constexpr int ne        = 2;
-  //constexpr int nfaces    = 6;
-  //constexpr int num_elems = nfaces*ne*ne;
   constexpr int num_tests = 1;
   constexpr int DIM       = 2;
   constexpr double test_tolerance = 1e-13;

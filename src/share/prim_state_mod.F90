@@ -207,6 +207,12 @@ contains
        qvsum_p(q) = global_shared_sum(1)
     enddo
 
+#ifdef USE_KOKKOS_KERNELS
+    fqmax_local(:) = 0_real_kind
+    fqmin_local(:) = 0_real_kind
+    fqsum_local(:) = 0_real_kind
+#endif
+
     !
     do ie=nets,nete
 
@@ -228,7 +234,9 @@ contains
 
        psmax_local(ie) = MAXVAL(tmp(:,:,ie))
        ftmax_local(ie)    = MAXVAL(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        fqmax_local(ie)    = MAXVAL(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        omegamax_local(ie)    = MAXVAL(elem(ie)%derived%Omega_p(:,:,:))
        !======================================================
 
@@ -244,7 +252,9 @@ contains
             dpmin_local(ie)    = MINVAL(elem(ie)%state%dp3d(:,:,:,n0))
 
        Ftmin_local(ie)    = MINVAL(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        Fqmin_local(ie) = MINVAL(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        Omegamin_local(ie) = MINVAL(elem(ie)%derived%Omega_p(:,:,:))
 
 
@@ -266,7 +276,9 @@ contains
        end if
 
        Ftsum_local(ie)    = SUM(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        FQsum_local(ie) = SUM(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        Omegasum_local(ie) = SUM(elem(ie)%derived%Omega_p(:,:,:))
 
        pssum_local(ie) = SUM(tmp(:,:,ie))
@@ -544,7 +556,7 @@ contains
        PEner(n) = PEner(n)*scale
        TOTE(n)=IEner(n)+PEner(n)+KEner(n)
        
-       
+#ifndef USE_KOKKOS_KERNELS
        do q=1,qsize
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qvar(:,:,q,n)
@@ -566,7 +578,7 @@ contains
              Q1mass(q) = Q1mass(q)*scale
           endif
        enddo
-       
+#endif
     enddo
     
 
@@ -1083,7 +1095,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     !  (used by CAM)
     !   Q has only one time dimension
     if (tstep_type>0) then
-
+#ifndef USE_KOKKOS_KERNELS
        do ie=nets,nete
 #if (defined COLUMN_OPENMP)
           !$omp parallel do private(q,k,suml)
@@ -1110,6 +1122,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
              elem(ie)%accum%Qmass(:,:,q,n)=suml(:,:)
           enddo
        enddo
+#endif
     endif
 
 
