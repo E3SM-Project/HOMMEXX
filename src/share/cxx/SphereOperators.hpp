@@ -545,24 +545,25 @@ public:
   template<int NUM_LEV_REQUEST = NUM_LEV>
   KOKKOS_INLINE_FUNCTION void
   divergence_sphere_wk (const KernelVariables &kv,
-                        const ExecViewUnmanaged<const Scalar [2][NP][NP][NUM_LEV]> v,
-                        const ExecViewUnmanaged<      Scalar    [NP][NP][NUM_LEV]> div_v) const
+                        // On input, a field whose divergence is sought; on
+                        // output, the view's data are invalid.
+                        const ExecViewUnmanaged<Scalar [2][NP][NP][NUM_LEV]> v,
+                        const ExecViewUnmanaged<Scalar    [NP][NP][NUM_LEV]> div_v) const
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& D_inv = Homme::subview(m_dinv, kv.ie);
     const auto& spheremp = Homme::subview(m_spheremp, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
                          [&](const int loop_idx) {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& v0 = v(0,igp,jgp,ilev);
-        const auto& v1 = v(1,igp,jgp,ilev);
-        sphere_buf(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0 + D_inv(1, 0, igp, jgp) * v1;
-        sphere_buf(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0 + D_inv(1, 1, igp, jgp) * v1;
+        const auto v0 = v(0,igp,jgp,ilev);
+        const auto v1 = v(1,igp,jgp,ilev);
+        v(0,igp,jgp,ilev) = D_inv(0, 0, igp, jgp) * v0 + D_inv(1, 0, igp, jgp) * v1;
+        v(1,igp,jgp,ilev) = D_inv(0, 1, igp, jgp) * v0 + D_inv(1, 1, igp, jgp) * v1;
       });
     });
     kv.team_barrier();
@@ -578,8 +579,9 @@ public:
         Scalar dd;
         // TODO: move multiplication by rrearth outside the loop
         for (int jgp = 0; jgp < NP; ++jgp) {
-          dd -= (spheremp(ngp, jgp) * sphere_buf(0, ngp, jgp, ilev) * dvv(jgp, mgp) +
-                 spheremp(jgp, mgp) * sphere_buf(1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
+          // Here, v is the temporary buffer, aliased on the input v.
+          dd -= (spheremp(ngp, jgp) * v(0, ngp, jgp, ilev) * dvv(jgp, mgp) +
+                 spheremp(jgp, mgp) * v(1, jgp, mgp, ilev) * dvv(jgp, ngp)) *
                 PhysicalConstants::rrearth;
         }
         div_v(ngp, mgp, ilev) = dd;
