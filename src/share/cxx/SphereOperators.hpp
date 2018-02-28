@@ -746,17 +746,13 @@ public:
     const auto& mp = Homme::subview(m_mp, kv.ie);
     const auto& metinv = Homme::subview(m_metinv, kv.ie);
     const auto& metdet = Homme::subview(m_metdet, kv.ie);
-    const auto& sphere_buf = Homme::subview(vector_buf_ml,kv.team_idx,0);
     constexpr int np_squared = NP * NP;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared), [&](const int loop_idx) {
       const int ngp = loop_idx / NP;
       const int mgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        sphere_buf(0, ngp, mgp, ilev) = 0;
-        sphere_buf(1, ngp, mgp, ilev) = 0;
-      });
-      for (int jgp = 0; jgp < NP; ++jgp) {
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
+        Scalar b0, b1;
+        for (int jgp = 0; jgp < NP; ++jgp) {
           const auto& mpnj = mp(ngp,jgp);
           const auto& mpjm = mp(jgp,mgp);
           const auto& md = metdet(ngp,mgp);
@@ -764,45 +760,13 @@ public:
           const auto& sjm = scalar(jgp,mgp,ilev);
           const auto& djm = dvv(jgp,mgp);
           const auto& djn = dvv(jgp,ngp);
-          sphere_buf(0, ngp, mgp, ilev) -= (
-            mpnj*
-            metinv(0,0,ngp,mgp)*
-            md*
-            snj*
-            djm
-            +
-            mpjm*
-            metinv(0,1,ngp,mgp)*
-            md*
-            sjm*
-            djn);
-
-          sphere_buf(1, ngp, mgp, ilev) -= (
-            mpnj*
-            metinv(1,0,ngp,mgp)*
-            md*
-            snj*
-            djm
-            +
-            mpjm*
-            metinv(1,1,ngp,mgp)*
-            md*
-            sjm*
-            djn);
-        });
-      }
-    });
-    kv.team_barrier();
-
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, np_squared),
-                         [&](const int loop_idx) {
-      const int igp = loop_idx / NP; //slowest
-      const int jgp = loop_idx % NP; //fastest
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-        const auto& sb0 = sphere_buf(0, igp, jgp, ilev);
-        const auto& sb1 = sphere_buf(1, igp, jgp, ilev);
-        grads(0,igp,jgp,ilev) = (D(0,0,igp,jgp) * sb0 + D(1,0,igp,jgp) * sb1) * PhysicalConstants::rrearth;
-        grads(1,igp,jgp,ilev) = (D(0,1,igp,jgp) * sb0 + D(1,1,igp,jgp) * sb1) * PhysicalConstants::rrearth;
+          b0 -= (mpnj * metinv(0,0,ngp,mgp) * md * snj * djm +
+                 mpjm * metinv(0,1,ngp,mgp) * md * sjm * djn);
+          b1 -= (mpnj * metinv(1,0,ngp,mgp) * md * snj * djm +
+                 mpjm * metinv(1,1,ngp,mgp) * md * sjm * djn);
+        }
+        grads(0,ngp,mgp,ilev) = (D(0,0,ngp,mgp) * b0 + D(1,0,ngp,mgp) * b1) * PhysicalConstants::rrearth;
+        grads(1,ngp,mgp,ilev) = (D(0,1,ngp,mgp) * b0 + D(1,1,ngp,mgp) * b1) * PhysicalConstants::rrearth;
       });
     });
     kv.team_barrier();
