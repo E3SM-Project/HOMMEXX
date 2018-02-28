@@ -228,7 +228,9 @@ contains
 
        psmax_local(ie) = MAXVAL(tmp(:,:,ie))
        ftmax_local(ie)    = MAXVAL(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        fqmax_local(ie)    = MAXVAL(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        omegamax_local(ie)    = MAXVAL(elem(ie)%derived%Omega_p(:,:,:))
        !======================================================
 
@@ -244,7 +246,9 @@ contains
             dpmin_local(ie)    = MINVAL(elem(ie)%state%dp3d(:,:,:,n0))
 
        Ftmin_local(ie)    = MINVAL(elem(ie)%derived%FT(:,:,:,pnm1))
+#ifndef USE_KOKKOS_KERNELS
        Fqmin_local(ie) = MINVAL(elem(ie)%derived%FQ(:,:,:,1,pnm1))
+#endif
        Omegamin_local(ie) = MINVAL(elem(ie)%derived%Omega_p(:,:,:))
 
 
