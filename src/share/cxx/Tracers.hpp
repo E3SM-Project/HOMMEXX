@@ -23,7 +23,6 @@ struct Tracers {
   ExecViewManaged<Scalar*[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> qdp;
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> qtens;
   ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]> qtens_biharmonic;
-  ExecViewManaged<Scalar*[QSIZE_D][2][NP][NP][NUM_LEV]> vstar_qdp;
   ExecViewManaged<Scalar*[QSIZE_D][2][NUM_LEV]> qlim;
 
 private:
