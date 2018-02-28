@@ -550,7 +550,7 @@ contains
        PEner(n) = PEner(n)*scale
        TOTE(n)=IEner(n)+PEner(n)+KEner(n)
        
-       
+#ifndef USE_KOKKOS_KERNELS
        do q=1,qsize
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qvar(:,:,q,n)
@@ -572,7 +572,7 @@ contains
              Q1mass(q) = Q1mass(q)*scale
           endif
        enddo
-       
+#endif
     enddo
     
 
@@ -1089,7 +1089,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     !  (used by CAM)
     !   Q has only one time dimension
     if (tstep_type>0) then
-
+#ifndef USE_KOKKOS_KERNELS
        do ie=nets,nete
 #if (defined COLUMN_OPENMP)
           !$omp parallel do private(q,k,suml)
@@ -1116,6 +1116,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
              elem(ie)%accum%Qmass(:,:,q,n)=suml(:,:)
           enddo
        enddo
+#endif
     endif
 
 

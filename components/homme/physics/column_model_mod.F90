@@ -115,7 +115,9 @@ contains
        do k=1,nlev
           do j=1,np
              do i=1,np
+#ifdef USE_KOKKOS_KERNELS
                 elem(ie)%derived%FQ(i,j,k,:,nm1) = 0_real_kind
+#endif
                 elem(ie)%derived%FM(i,j,1:2,k,nm1)     = 0_real_kind
                 elem(ie)%derived%FT(i,j,k,nm1)         = 0_real_kind
              enddo
