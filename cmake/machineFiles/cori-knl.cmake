@@ -6,7 +6,7 @@
 #module load PrgEnv-intel ; module unload craype-haswell ; module load craype-mic-knl
 
 ###build kokkos
-#../generate_makefile.bash --prefix=~/kokkos/build-omp-nodebug/ --with-options=aggressive_vectorization --with-options=disable_profiling --arch=KNL --with-openmp --compiler=icpc
+#../generate_makefile.bash --prefix=~/kokkos/build-omp-nodebug/ --with-options=aggressive_vectorization,disable_profiling --arch=KNL --with-openmp --compiler=icpc
 #make; make install
 
 ###config hommexx
