@@ -172,14 +172,17 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   explicit PpmVertRemap(const int num_elems, const int num_remap)
       : dpo("dpo", num_elems), pio("pio", num_elems), pin("pin", num_elems),
         ppmdx("ppmdx", num_elems), z2("z2", num_elems), kid("kid", num_elems),
-        ao("a0", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
-        mass_o("mass_o",
-               get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
-        dma("dma", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
-        ai("ai", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
-        parabola_coeffs(
-            "Coefficients for the interpolating parabola",
-            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)) {}
+        ao("a0", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
+                                                     num_elems)),
+        mass_o("mass_o", get_num_concurrent_elems<ExecSpace>(
+                             num_elems * num_remap, num_elems)),
+        dma("dma", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
+                                                       num_elems)),
+        ai("ai", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
+                                                     num_elems)),
+        parabola_coeffs("Coefficients for the interpolating parabola",
+                        get_num_concurrent_elems<ExecSpace>(
+                            num_elems * num_remap, num_elems)) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
@@ -238,11 +241,11 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
             ao(kv.team_idx, igp, jgp, k_0 + _ppm_consts::INITIAL_PADDING);
 
         ao(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV +
-                                            _ppm_consts::INITIAL_PADDING -
-                                            _ppm_consts::gs + k_0 + 1 + 1) =
-            ao(kv.team_idx, igp, jgp,
-               NUM_PHYSICAL_LEV + _ppm_consts::INITIAL_PADDING -
-                   _ppm_consts::gs + 1 - k_0 - 1 + 1);
+                                      _ppm_consts::INITIAL_PADDING -
+                                      _ppm_consts::gs + k_0 + 1 + 1) =
+            ao(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV +
+                                          _ppm_consts::INITIAL_PADDING -
+                                          _ppm_consts::gs + 1 - k_0 - 1 + 1);
       }); // end ghost cell loop
 
       // Computes a monotonic and conservative PPM reconstruction
@@ -251,13 +254,12 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                   Homme::subview(dma, kv.team_idx, igp, jgp),
                   Homme::subview(ai, kv.team_idx, igp, jgp),
                   Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp));
-      compute_remap(
-          kv, Homme::subview(kid, kv.ie, igp, jgp),
-          Homme::subview(z2, kv.ie, igp, jgp),
-          Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
-          Homme::subview(mass_o, kv.team_idx, igp, jgp),
-          Homme::subview(dpo, kv.ie, igp, jgp),
-          Homme::subview(remap_var, igp, jgp));
+      compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
+                    Homme::subview(z2, kv.ie, igp, jgp),
+                    Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
+                    Homme::subview(mass_o, kv.team_idx, igp, jgp),
+                    Homme::subview(dpo, kv.ie, igp, jgp),
+                    Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
     kv.team_barrier();
   }
