@@ -26,8 +26,8 @@ private:
     template <typename ExecSpaceType>
     static KOKKOS_INLINE_FUNCTION typename std::enable_if<
         OnGpu<ExecSpaceType>::value, int>::type
-    get_team_idx(const int /*team_size*/, const int /*league_rank*/) {
-      return (blockDim.y * blockIdx.x + blockIdx.y) * gridDim.z + threadIdx.z;
+    get_team_idx(const int /*team_size*/, const int league_rank) {
+      return league_rank;
     }
 #else
     template <typename ExecSpaceType>

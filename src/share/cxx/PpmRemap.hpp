@@ -172,17 +172,14 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   explicit PpmVertRemap(const int num_elems, const int num_remap)
       : dpo("dpo", num_elems), pio("pio", num_elems), pin("pin", num_elems),
         ppmdx("ppmdx", num_elems), z2("z2", num_elems), kid("kid", num_elems),
-        ao("a0", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
-                                                     num_elems)),
-        mass_o("mass_o", get_num_concurrent_elems<ExecSpace>(
-                             num_elems * num_remap, num_elems)),
-        dma("dma", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
-                                                       num_elems)),
-        ai("ai", get_num_concurrent_elems<ExecSpace>(num_elems * num_remap,
-                                                     num_elems)),
-        parabola_coeffs("Coefficients for the interpolating parabola",
-                        get_num_concurrent_elems<ExecSpace>(
-                            num_elems * num_remap, num_elems)) {}
+        ao("a0", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        mass_o("mass_o",
+               get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        dma("dma", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        ai("ai", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
+        parabola_coeffs(
+            "Coefficients for the interpolating parabola",
+            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
