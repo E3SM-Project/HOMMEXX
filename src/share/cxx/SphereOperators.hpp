@@ -586,7 +586,7 @@ public:
   {
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
-    const auto& grad_s = Homme::subview(vector_buf_ml, kv.team_idx, 1);
+    const auto& grad_s = Homme::subview(vector_buf_ml, kv.team_idx, 0);
       // let's ignore var coef and tensor hv
     gradient_sphere<NUM_LEV_REQUEST>(kv, field, grad_s);
     divergence_sphere_wk<NUM_LEV_REQUEST>(kv, grad_s, laplace);
