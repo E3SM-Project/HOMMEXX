@@ -1,6 +1,6 @@
 #ifndef HOMMEXX_EULER_STEP_FUNCTOR_IMPL_HPP
 #define HOMMEXX_EULER_STEP_FUNCTOR_IMPL_HPP
-#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
+
 #include "EulerStepFunctor.hpp"
 #include "Context.hpp"
 #include "Elements.hpp"
@@ -77,8 +77,9 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
 
   static const int maxiter = NP*NP - 1;
   static const Real tol_limiter = 5e-14;
-  int done = 0;
+  int donecnt = 0;
   int iter;
+  char done[NUM_PHYSICAL_LEV] = {0};
   for (iter = 0; iter < maxiter; ++iter) {
     Real addmass[NUM_PHYSICAL_LEV] = {0};
 
@@ -100,21 +101,20 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
     }
 
     forlev {
-      if (addmass[lev] <= tol_limiter*std::abs(mass[lev]) &&
-          sumc[lev] >= 0) {
-        sumc[lev] = -1;
-        ++done;
+      if (std::abs(addmass[lev]) <= tol_limiter*std::abs(mass[lev]) &&
+          ! done[lev]) {
+        done[lev] = 1;
+        ++donecnt;
       }
     }
-    if (done == NUM_PHYSICAL_LEV) break;
+    if (donecnt == NUM_PHYSICAL_LEV) break;
 
     Real f[NUM_PHYSICAL_LEV] = {0};
     forij {
 #     pragma ivdep
 #     pragma simd
       forlev {
-        if (addmass[lev] <= tol_limiter*std::abs(mass[lev]))
-          continue;
+        if (done[lev]) continue;
         if (addmass[lev] <= 0) {
           if (x(i,j,lev) > qlim(0,lev))
             f[lev] += c(i,j,lev);
@@ -136,8 +136,7 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
 #     pragma ivdep
 #     pragma simd
       forlev {
-        if (addmass[lev] <= tol_limiter*std::abs(mass[lev]))
-          continue;
+        if (done[lev]) continue;
         if (addmass[lev] <= 0) {
           if (x(i,j,lev) > qlim(0,lev))
             x(i,j,lev) += f[lev];
