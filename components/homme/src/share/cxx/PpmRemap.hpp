@@ -283,35 +283,41 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
-      ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
+      ExecViewUnmanaged<Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> mass,
       ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
       ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
     // Compute tracer values on the new grid by integrating from the old cell
     // bottom to the new cell interface to form a new grid mass accumulation.
-    // Taking the difference between accumulation at successive interfaces
+    // Store the mass in the integral bounds for that level
+    // Then take the difference between accumulation at successive interfaces
     // gives the mass inside each cell. Since Qdp is supposed to hold the full
     // mass this needs no normalization.
-    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-      Real mass_1 = 0.0;
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                         [&](const int k) {
+      const int kk_cur_lev = k_id(k);
+      assert(kk_cur_lev >= k);
+      assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
-      for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
-        const Real x2_cur_lev = integral_bounds(k);
-
-        const int kk_cur_lev = k_id(k);
-        assert(kk_cur_lev >= 0);
-        assert(kk_cur_lev < parabola_coeffs.extent_int(1));
-
-        const Real mass_2 = compute_mass(
-            parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-            parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
-            prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
-
-        const int ilevel = k / VECTOR_SIZE;
-        const int ivector = k % VECTOR_SIZE;
-        remap_var(ilevel)[ivector] = mass_2 - mass_1;
-        mass_1 = mass_2;
-      }
+      const Real x2_cur_lev = integral_bounds(k);
+      // Repurpose the mass buffer to store the new mass.
+      // WARNING: This may not be thread safe in future architectures which
+      //          use this level of parallelism!!!
+      mass(k) = compute_mass(
+          parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), mass(kk_cur_lev),
+          prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
     });
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                         [&](const int k) {
+      const int ilevel = k / VECTOR_SIZE;
+      const int ivector = k % VECTOR_SIZE;
+			if(k > 0) {
+				remap_var(ilevel)[ivector] = mass(k) - mass(k - 1);
+			}
+			else {
+				remap_var(ilevel)[ivector] = mass(k);
+			}
+    }); // k loop
   }
 
   template <typename ExecSpaceType = ExecSpace>
@@ -321,14 +327,9 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
-      ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
+      ExecViewUnmanaged<Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
       ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
       ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
-    // Compute tracer values on the new grid by integrating from the old cell
-    // bottom to the new cell interface to form a new grid mass accumulation.
-    // Taking the difference between accumulation at successive interfaces
-    // gives the mass inside each cell. Since Qdp is supposed to hold the full
-    // mass this needs no normalization.
     // This duplicates work, but the parallel gain on CUDA is >> 2
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
@@ -344,14 +345,14 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       const Real x2_cur_lev = integral_bounds(k);
 
       const int kk_cur_lev = k_id(k);
-      assert(kk_cur_lev >= 0);
+      assert(kk_cur_lev >= k);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
-
+ 
       const Real mass_2 = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
           parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
-
+ 
       const int ilevel = k / VECTOR_SIZE;
       const int ivector = k % VECTOR_SIZE;
       remap_var(ilevel)[ivector] = mass_2 - mass_1;
@@ -657,7 +658,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // PPM interpolants are normalized to an independent coordinate
         // domain
         // [-0.5, 0.5].
-        assert(kk - 1 >= 0);
+        assert(kk - 1 >= k);
         assert(kk < pio.extent_int(3));
         z2(kv.ie, igp, jgp, k) =
             (pin(kv.ie, igp, jgp, k + 1) -
