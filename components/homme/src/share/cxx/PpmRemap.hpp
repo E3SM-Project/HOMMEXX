@@ -179,9 +179,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         ai("ai", get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
         parabola_coeffs(
             "Coefficients for the interpolating parabola",
-            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)),
-        final_mass(
-            "final masses for overlapping regions", num_elems * num_remap) {}
+            get_num_concurrent_teams<ExecSpace>(num_elems * num_remap)) {}
 
   KOKKOS_INLINE_FUNCTION
   void compute_grids_phase(
@@ -258,7 +256,6 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                     Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
                     Homme::subview(mass_o, kv.team_idx, igp, jgp),
                     Homme::subview(dpo, kv.ie, igp, jgp),
-                    Homme::subview(final_mass, kv.team_idx, igp, jgp),
                     Homme::subview(remap_var, igp, jgp));
     }); // End team thread range
     kv.team_barrier();
@@ -283,9 +280,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
-      ExecViewUnmanaged<const Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
+      ExecViewUnmanaged<Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> mass,
       ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
-			ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> new_mass,
       ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
     // Compute tracer values on the new grid by integrating from the old cell
     // bottom to the new cell interface to form a new grid mass accumulation.
@@ -296,14 +292,18 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
       const int kk_cur_lev = k_id(k);
-      assert(kk_cur_lev >= 0);
+      assert(kk_cur_lev >= k);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
       const Real x2_cur_lev = integral_bounds(k);
-			// Repurpose the parabola_coeffs buffer to store the mass
-      new_mass(k) = compute_mass(
+      // Repurpose the mass buffer to store the new mass.
+      // This is safe on CUDA and OpenMP because kk >= k,
+      // and because neither thread model can have a race condition
+      // in a ThreadVectorRange
+      // WARNING: This may change in future architectures!!!
+      mass(k) = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), mass(kk_cur_lev),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
     });
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
@@ -311,10 +311,10 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       const int ilevel = k / VECTOR_SIZE;
       const int ivector = k % VECTOR_SIZE;
 			if(k > 0) {
-				remap_var(ilevel)[ivector] = new_mass(k) - new_mass(k - 1);
+				remap_var(ilevel)[ivector] = mass(k) - mass(k - 1);
 			}
 			else {
-				remap_var(ilevel)[ivector] = new_mass(k);
+				remap_var(ilevel)[ivector] = mass(k);
 			}
     }); // k loop
   }
@@ -618,7 +618,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // PPM interpolants are normalized to an independent coordinate
         // domain
         // [-0.5, 0.5].
-        assert(kk - 1 >= 0);
+        assert(kk - 1 >= k);
         assert(kk < pio.extent_int(3));
         z2(kv.ie, igp, jgp, k) =
             (pin(kv.ie, igp, jgp, k + 1) -
@@ -655,7 +655,6 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   ExecViewManaged<Real * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]> dma;
   ExecViewManaged<Real * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]> ai;
   ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]> parabola_coeffs;
-  ExecViewManaged<Real * [NP][NP][NUM_PHYSICAL_LEV]> final_mass;
 };
 
 } // namespace Ppm
