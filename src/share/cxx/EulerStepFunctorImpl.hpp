@@ -446,15 +446,44 @@ public:
       });
   }
 
+  // TODO make GPUable.
+  void compute_dp () {
+    const auto& e = m_elements;
+    const auto& c = m_data;
+    const auto dp = e.m_derived_dp;
+    const auto divdp_proj = e.m_derived_divdp_proj;
+    const auto rhsmdt = c.rhs_multiplier * c.dt;
+    const auto buf = e.buffers.pressure;
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()),
+      KOKKOS_LAMBDA (const TeamMember& team) {
+        KernelVariables kv(team);
+        Kokkos::parallel_for (
+          Kokkos::TeamThreadRange(kv.team, NP*NP),
+          [&] (const int loop_idx) {
+            const int i = loop_idx / NP;
+            const int j = loop_idx % NP;
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& k) {
+                //! derived variable divdp_proj() (DSS'd version of divdp) will only
+                //! be correct on 2nd and 3rd stage but that's ok because
+                //! rhs_multiplier=0 on the first stage:
+                // Store this in unused buffer.
+                buf(kv.ie,i,j,k) =
+                  dp(kv.ie,i,j,k) - rhsmdt * divdp_proj(kv.ie,i,j,k);
+              });
+          });
+      });
+  }
+
   void compute_qmin_qmax() {
     // Temporaries, due to issues capturing *this on device
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
-    const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_tracers.qdp;
-    const auto derived_dp = m_elements.m_derived_dp;
-    const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
+    const auto dp = m_elements.buffers.pressure;
     const auto qtens_biharmonic = m_tracers.qtens_biharmonic;
     const auto qlim = m_tracers.qlim;
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
@@ -470,8 +499,7 @@ public:
       policy,
       KOKKOS_LAMBDA (const TeamMember& team) {
         KernelVariables kv(team, qsize);
-        const auto dp_t = Homme::subview(derived_dp, kv.ie);
-        const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
+        const auto dp_t = Homme::subview(dp, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
         const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
@@ -481,8 +509,7 @@ public:
               Kokkos::parallel_for(
                 Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                 [&] (const int& k) {
-                  const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
+                  const auto v = qdp_t(i,j,k) / dp_t(i,j,k);
                   qtens_biharmonic_t(i,j,k) = v;
                   qlim_t(0,k) = v;
                   qlim_t(1,k) = v;
@@ -491,8 +518,7 @@ public:
               Kokkos::parallel_for(
                 Kokkos::TeamThreadRange(kv.team, NUM_LEV),
                 [&] (const int& k) {
-                  const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
+                  const auto v = qdp_t(i,j,k) / dp_t(i,j,k);
                   qtens_biharmonic_t(i,j,k) = v;
                   qlim_t(0,k) = min(qlim_t(0,k), v);
                   qlim_t(1,k) = max(qlim_t(1,k), v);
@@ -567,8 +593,8 @@ public:
 
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
 
+      compute_dp();
       compute_qmin_qmax();
-
       if (m_data.rhs_multiplier == 0.0) {
         neighbor_minmax();
       } else if (m_data.rhs_multiplier == 2.0) {
@@ -617,11 +643,7 @@ private:
         Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
           [&] (const int& k) {
-            //! derived variable divdp_proj() (DSS'd version of divdp) will only
-            //! be correct on 2nd and 3rd stage but that's ok because
-            //! rhs_multiplier=0 on the first stage:
-            const auto dp = e.m_derived_dp(kv.ie,i,j,k) -
-              c.rhs_multiplier * c.dt * e.m_derived_divdp_proj(kv.ie,i,j,k);
+            const auto dp = e.buffers.pressure(kv.ie,i,j,k);
             e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
             e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
             if (lim8) {
