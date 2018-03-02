@@ -140,6 +140,16 @@ public:
   }
 
   void test_ppm() {
+		// Hack to get the right number of outputs
+    remap.ao = ExecViewManaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]>(
+        "ao", num_remap * ne);
+    remap.dma = ExecViewManaged<Real * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]>(
+        "dma", num_remap * ne);
+    remap.ai = ExecViewManaged<Real * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]>(
+        "ai", num_remap * ne);
+    remap.parabola_coeffs = ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]>(
+        "parabola coeffs", num_remap * ne);
+
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
@@ -159,7 +169,7 @@ public:
         "fortran cell means");
     HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_dx_input(
         "fortran ppmdx");
-    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortran result");
     auto kokkos_result = Kokkos::create_mirror_view(remap.parabola_coeffs);
     Kokkos::deep_copy(kokkos_result, remap.parabola_coeffs);
     for (int var = 0; var < num_remap; ++var) {
@@ -191,11 +201,12 @@ public:
               for (int parabola_coeff = 0;
                    parabola_coeff < f90_result.extent_int(1);
                    ++parabola_coeff) {
-                REQUIRE(!std::isnan(f90_result(k, parabola_coeff)));
-                REQUIRE(!std::isnan(kokkos_result(ie, var, igp, jgp,
-                                                  parabola_coeff, k)));
-                REQUIRE(f90_result(k, parabola_coeff) ==
-                        kokkos_result(ie, var, igp, jgp, parabola_coeff, k));
+                const auto f90 = f90_result(k, parabola_coeff);
+                const auto cxx = kokkos_result(ie * num_remap + var, igp, jgp,
+																							 parabola_coeff, k);
+                REQUIRE(!std::isnan(f90));
+                REQUIRE(!std::isnan(cxx));
+                REQUIRE(f90 == cxx);
               }
             }
           }
