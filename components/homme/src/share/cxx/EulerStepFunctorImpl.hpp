@@ -502,26 +502,13 @@ public:
         const auto dp_t = Homme::subview(dp, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
-        for (int i = 0; i < NP; ++i)
-          for (int j = 0; j < NP; ++j) {
-            Kokkos::parallel_for(
-              Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-              [&] (const int& k) {
-                qtens_biharmonic_t(i,j,k) = qdp_t(i,j,k) / dp_t(i,j,k);
-              });
-          }
-      });
-    Kokkos::parallel_for(
-      policy,
-      KOKKOS_LAMBDA (const TeamMember& team) {
-        KernelVariables kv(team, qsize);
-        const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
         const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
         if (rhs_multiplier != 1.0) {
           Kokkos::parallel_for(
             Kokkos::TeamThreadRange(kv.team, NUM_LEV),
             [&] (const int& k) {
-              const auto& v = qtens_biharmonic_t(0,0,k);
+              const auto v = qdp_t(0,0,k) / dp_t(0,0,k);
+              qtens_biharmonic_t(0,0,k) = v;
               qlim_t(0,k) = v;
               qlim_t(1,k) = v;
             });
@@ -531,7 +518,8 @@ public:
             Kokkos::parallel_for(
               Kokkos::TeamThreadRange(kv.team, NUM_LEV),
               [&] (const int& k) {
-                const auto& v = qtens_biharmonic_t(i,j,k);
+                const auto v = qdp_t(i,j,k) / dp_t(i,j,k);
+                qtens_biharmonic_t(i,j,k) = v;
                 qlim_t(0,k) = min(qlim_t(0,k), v);
                 qlim_t(1,k) = max(qlim_t(1,k), v);
               });
