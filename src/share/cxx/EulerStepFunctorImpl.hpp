@@ -338,6 +338,7 @@ public:
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
+      const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
       const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
@@ -347,8 +348,7 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
-                                         m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
+              qtens_biharmonic(i,j,k) = (f * m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
         });
