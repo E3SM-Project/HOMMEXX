@@ -276,7 +276,10 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     return mass;
   }
 
-  void compute_remap(
+  template <typename ExecSpaceType = ExecSpace>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<
+      !Homme::OnGpu<ExecSpaceType>::value, void>::type
+  compute_remap(
       KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
       ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
@@ -297,10 +300,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
 
       const Real x2_cur_lev = integral_bounds(k);
       // Repurpose the mass buffer to store the new mass.
-      // This is safe on CUDA and OpenMP because kk >= k,
-      // and because neither thread model can have a race condition
-      // in a ThreadVectorRange
-      // WARNING: This may change in future architectures!!!
+      // WARNING: This may not be thread safe in future architectures which
+      //          use this level of parallelism!!!
       mass(k) = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
           parabola_coeffs(0, kk_cur_lev), mass(kk_cur_lev),
@@ -316,6 +317,45 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
 			else {
 				remap_var(ilevel)[ivector] = mass(k);
 			}
+    }); // k loop
+  }
+
+  template <typename ExecSpaceType = ExecSpace>
+  KOKKOS_INLINE_FUNCTION typename std::enable_if<
+      Homme::OnGpu<ExecSpaceType>::value, void>::type
+  compute_remap(
+      KernelVariables &kv, ExecViewUnmanaged<const int[NUM_PHYSICAL_LEV]> k_id,
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> integral_bounds,
+      ExecViewUnmanaged<const Real[3][NUM_PHYSICAL_LEV]> parabola_coeffs,
+      ExecViewUnmanaged<Real[_ppm_consts::MASS_O_PHYSICAL_LEV]> prev_mass,
+      ExecViewUnmanaged<const Real[_ppm_consts::DPO_PHYSICAL_LEV]> prev_dp,
+      ExecViewUnmanaged<Scalar[NUM_LEV]> remap_var) const {
+    // This duplicates work, but the parallel gain on CUDA is >> 2
+    Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                         [&](const int k) {
+      const Real mass_1 =
+          (k > 0) ? compute_mass(
+                        parabola_coeffs(2, k_id(k - 1)),
+                        parabola_coeffs(1, k_id(k - 1)),
+                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1)),
+                        prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
+                        integral_bounds(k - 1))
+                  : 0.0;
+
+      const Real x2_cur_lev = integral_bounds(k);
+
+      const int kk_cur_lev = k_id(k);
+      assert(kk_cur_lev >= k);
+      assert(kk_cur_lev < parabola_coeffs.extent_int(1));
+ 
+      const Real mass_2 = compute_mass(
+          parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
+          prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
+ 
+      const int ilevel = k / VECTOR_SIZE;
+      const int ivector = k % VECTOR_SIZE;
+      remap_var(ilevel)[ivector] = mass_2 - mass_1;
     }); // k loop
   }
 
