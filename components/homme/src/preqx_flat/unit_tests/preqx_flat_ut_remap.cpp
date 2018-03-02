@@ -60,31 +60,7 @@ public:
   struct TagPPMTest {};
   struct TagRemapTest {};
 
-  static bool nan_ao_boundaries(
-      HostViewUnmanaged<Real * * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]> host) {
-    for (int ie = 0; ie < host.extent_int(0); ++ie) {
-      for (int var = 0; var < host.extent_int(1); ++var) {
-        for (int igp = 0; igp < host.extent_int(2); ++igp) {
-          for (int jgp = 0; jgp < host.extent_int(3); ++jgp) {
-            for (int k = 0; k < _ppm_consts::INITIAL_PADDING - _ppm_consts::gs;
-                 ++k) {
-              host(ie, var, igp, jgp, k) =
-                  std::numeric_limits<Real>::quiet_NaN();
-            }
-            for (int k = _ppm_consts::INITIAL_PADDING + NUM_PHYSICAL_LEV +
-                         _ppm_consts::gs;
-                 k < _ppm_consts::AO_PHYSICAL_LEV; ++k) {
-              host(ie, var, igp, jgp, k) =
-                  std::numeric_limits<Real>::quiet_NaN();
-            }
-          }
-        }
-      }
-    }
-    return true;
-  }
-
-  static bool nan_dpo_boundaries(
+  static bool nan_boundaries(
       HostViewUnmanaged<Real * [NP][NP][_ppm_consts::DPO_PHYSICAL_LEV]> host) {
     for (int ie = 0; ie < host.extent_int(0); ++ie) {
       for (int igp = 0; igp < host.extent_int(1); ++igp) {
@@ -109,7 +85,7 @@ public:
     rngAlg engine(rd());
     genRandArray(remap.dpo, engine,
                  std::uniform_real_distribution<Real>(0.125, 1000),
-                 nan_dpo_boundaries);
+                 nan_boundaries);
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagGridTest>(ne), *this);
     ExecSpace::fence();
@@ -164,6 +140,16 @@ public:
   }
 
   void test_ppm() {
+		// Hack to get the right number of outputs
+    remap.ao = ExecViewManaged<Real * [NP][NP][_ppm_consts::AO_PHYSICAL_LEV]>(
+        "ao", num_remap * ne);
+    remap.dma = ExecViewManaged<Real * [NP][NP][_ppm_consts::DMA_PHYSICAL_LEV]>(
+        "dma", num_remap * ne);
+    remap.ai = ExecViewManaged<Real * [NP][NP][_ppm_consts::AI_PHYSICAL_LEV]>(
+        "ai", num_remap * ne);
+    remap.parabola_coeffs = ExecViewManaged<Real * [NP][NP][3][NUM_PHYSICAL_LEV]>(
+        "parabola coeffs", num_remap * ne);
+
     std::random_device rd;
     rngAlg engine(rd());
     genRandArray(remap.ppmdx, engine,
@@ -171,7 +157,7 @@ public:
     for (int i = 0; i < num_remap; ++i) {
       genRandArray(remap.ao, engine,
                    std::uniform_real_distribution<Real>(0.125, 1000),
-                   nan_ao_boundaries);
+                   nan_boundaries);
     }
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, TagPPMTest>(ne), *this);
@@ -183,15 +169,16 @@ public:
         "fortran cell means");
     HostViewManaged<Real[_ppm_consts::PPMDX_PHYSICAL_LEV][10]> f90_dx_input(
         "fortran ppmdx");
-    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortra result");
+    HostViewManaged<Real[NUM_PHYSICAL_LEV][3]> f90_result("fortran result");
     auto kokkos_result = Kokkos::create_mirror_view(remap.parabola_coeffs);
     Kokkos::deep_copy(kokkos_result, remap.parabola_coeffs);
     for (int var = 0; var < num_remap; ++var) {
       for (int ie = 0; ie < ne; ++ie) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
-            Kokkos::deep_copy(f90_cellmeans_input,
-                              Homme::subview(remap.ao, ie, var, igp, jgp));
+            Kokkos::deep_copy(
+                f90_cellmeans_input,
+                Homme::subview(remap.ao, ie * num_remap + var, igp, jgp));
             sync_to_host(Homme::subview(remap.ppmdx, ie, igp, jgp),
                          f90_dx_input);
             // Fix the Fortran input to be 0 offset
@@ -214,11 +201,12 @@ public:
               for (int parabola_coeff = 0;
                    parabola_coeff < f90_result.extent_int(1);
                    ++parabola_coeff) {
-                REQUIRE(!std::isnan(f90_result(k, parabola_coeff)));
-                REQUIRE(!std::isnan(kokkos_result(ie, var, igp, jgp,
-                                                  parabola_coeff, k)));
-                REQUIRE(f90_result(k, parabola_coeff) ==
-                        kokkos_result(ie, var, igp, jgp, parabola_coeff, k));
+                const auto f90 = f90_result(k, parabola_coeff);
+                const auto cxx = kokkos_result(ie * num_remap + var, igp, jgp,
+																							 parabola_coeff, k);
+                REQUIRE(!std::isnan(f90));
+                REQUIRE(!std::isnan(cxx));
+                REQUIRE(f90 == cxx);
               }
             }
           }
@@ -236,11 +224,12 @@ public:
       const int igp = (loop_idx / NP) % NP;
       const int jgp = loop_idx % NP;
       remap.compute_ppm(
-          kv, Homme::subview(remap.ao, kv.ie, var, igp, jgp),
+          kv, Homme::subview(remap.ao, kv.ie * num_remap + var, igp, jgp),
           Homme::subview(remap.ppmdx, kv.ie, igp, jgp),
-          Homme::subview(remap.dma, kv.ie, var, igp, jgp),
-          Homme::subview(remap.ai, kv.ie, var, igp, jgp),
-          Homme::subview(remap.parabola_coeffs, kv.ie, var, igp, jgp));
+          Homme::subview(remap.dma, kv.ie * num_remap + var, igp, jgp),
+          Homme::subview(remap.ai, kv.ie * num_remap + var, igp, jgp),
+          Homme::subview(remap.parabola_coeffs, kv.ie * num_remap + var, igp,
+                         jgp));
     });
   }
 
@@ -383,8 +372,7 @@ public:
         kv, Homme::subview(src_layer_thickness_kokkos, kv.ie),
         Homme::subview(tgt_layer_thickness_kokkos, kv.ie));
     for (int var = 0; var < num_remap; ++var) {
-      remap.compute_remap_phase(kv, var,
-                                Homme::subview(remap_vals, kv.ie, var));
+      remap.compute_remap_phase(kv, Homme::subview(remap_vals, kv.ie, var));
     }
   }
 

@@ -22,15 +22,23 @@ private:
     }
 
 #ifdef KOKKOS_HAVE_CUDA
-    template<typename ExecSpaceType>
-    static
-    KOKKOS_INLINE_FUNCTION
-    typename std::enable_if<std::is_same<ExecSpaceType,Kokkos::Cuda>::value,int>::type
-    get_team_idx (const int /*team_size*/, const int league_rank)
-    {
+#ifdef __CUDA_ARCH__
+    template <typename ExecSpaceType>
+    static KOKKOS_INLINE_FUNCTION typename std::enable_if<
+        OnGpu<ExecSpaceType>::value, int>::type
+    get_team_idx(const int /*team_size*/, const int league_rank) {
       return league_rank;
     }
-#endif
+#else
+    template <typename ExecSpaceType>
+    static KOKKOS_INLINE_FUNCTION typename std::enable_if<
+        OnGpu<ExecSpaceType>::value, int>::type
+    get_team_idx(const int /*team_size*/, const int /*league_rank*/) {
+      assert(false); // should never happen
+      return -1;
+    }
+#endif // __CUDA_ARCH__
+#endif // KOKKOS_HAVE_CUDA
 
 #ifdef KOKKOS_HAVE_OPENMP
     template<typename ExecSpaceType>
@@ -91,7 +99,8 @@ public:
     team.team_barrier();
   }
 
-  int ie, iq, team_idx;
+  int ie, iq;
+  const int team_idx;
 }; // KernelVariables
 
 } // Homme

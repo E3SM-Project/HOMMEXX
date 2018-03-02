@@ -272,7 +272,7 @@ struct RemapFunctor : public Remapper,
     ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
         this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d);
 
-    this->m_remap.compute_remap_phase(kv, var, get_remap_val(kv, var));
+    this->m_remap.compute_remap_phase(kv, get_remap_val(kv, var));
   }
 
   KOKKOS_INLINE_FUNCTION
