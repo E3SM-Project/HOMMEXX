@@ -684,8 +684,8 @@ private:
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
     if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
       serial_limiter_optim_iter_full(sphweights, dpmass, qlim, ptens,
-                                     Homme::subview(m_elements.buffers.temperature_virt,
-                                                    kv.team_idx));
+                                     Homme::subview(m_sphere_ops.scalar_buf_ml,
+                                                    kv.team_idx, 0));
     else
       limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }
