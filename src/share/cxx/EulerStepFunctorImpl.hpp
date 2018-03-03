@@ -69,11 +69,10 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
   forlev {
     if (qlim(0,lev) < 0)
       qlim(0,lev) = 0;
-    const bool mask0 = mass[lev] < qlim(0,lev)*sumc[lev];
-    const bool mask1 = mass[lev] > qlim(1,lev)*sumc[lev];
-    const auto qavg = mass[lev]/sumc[lev];
-    qlim(0,lev) = mask0 ? qavg : qlim(0,lev);
-    qlim(1,lev) = mask1 ? qavg : qlim(1,lev);
+    if (mass[lev] < qlim(0,lev)*sumc[lev])
+      qlim(0,lev) = mass[lev]/sumc[lev];
+    if (mass[lev] > qlim(1,lev)*sumc[lev])
+      qlim(1,lev) = mass[lev]/sumc[lev];
   }
 
   static const int maxiter = NP*NP - 1;
@@ -89,14 +88,15 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
 #     pragma simd
       forlev {
         auto& xij = x(i,j,lev);
-        const int mask0 = xij < qlim(0,lev);
-        const int mask1 = xij > qlim(1,lev);
-        const Real delta0 = mask0*(xij - qlim(0,lev));
-        const Real delta1 = mask1*(xij - qlim(1,lev));
-        const Real delta = (delta0 + delta1)*c(i,j,lev);
-        addmass[lev] += delta;
-        xij = mask0 ? qlim(0,lev) : xij;
-        xij = mask1 ? qlim(1,lev) : xij;
+        Real delta = 0;
+        if (xij < qlim(0,lev)) {
+          delta = xij - qlim(0,lev);
+          xij = qlim(0,lev);
+        } else if (xij > qlim(1,lev)) {
+          delta = xij - qlim(1,lev);
+          xij = qlim(1,lev);
+        }
+        addmass[lev] += delta*c(i,j,lev);
       }
     }
 
@@ -114,33 +114,36 @@ serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& i
 #     pragma ivdep
 #     pragma simd
       forlev {
-        const auto& xij = x(i,j,lev);
-        const auto& am = addmass[lev];
-        const int mask0a = am <= 0;
-        const int mask0b = xij > qlim(0,lev);
-        const int mask1a = am >  0;
-        const int mask1b = xij < qlim(1,lev);
-        f[lev] += (mask0a*mask0b + mask1a*mask1b)*c(i,j,lev);
+        if (done[lev]) continue;
+        if (addmass[lev] <= 0) {
+          if (x(i,j,lev) > qlim(0,lev))
+            f[lev] += c(i,j,lev);
+        } else {
+          if (x(i,j,lev) < qlim(1,lev))
+            f[lev] += c(i,j,lev);
+        }
       }
     }
 
 #   pragma ivdep
 #   pragma simd
     forlev {
-      f[lev] = addmass[lev] / f[lev];
+      if (f[lev] != 0)
+        f[lev] = addmass[lev] / f[lev];
     }
 
     forij {
 #     pragma ivdep
 #     pragma simd
       forlev {
-        const auto& xij = x(i,j,lev);
-        const auto& am = addmass[lev];
-        const int mask0a = am <= 0;
-        const int mask0b = xij > qlim(0,lev);
-        const int mask1a = am >  0;
-        const int mask1b = xij < qlim(1,lev);
-        x(i,j,lev) += ( ! done[lev])*(mask0a*mask0b + mask1a*mask1b)*f[lev];
+        if (done[lev]) continue;
+        if (addmass[lev] <= 0) {
+          if (x(i,j,lev) > qlim(0,lev))
+            x(i,j,lev) += f[lev];
+        } else {
+          if (x(i,j,lev) < qlim(1,lev))
+            x(i,j,lev) += f[lev];
+        }
       }
     }
   }
