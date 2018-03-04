@@ -10,7 +10,7 @@
 #make; make install
 
 ###config hommexx
-#~/runhomme/bxx-master> cmake -C ~/acmexx/components/homme/cmake/machineFiles/cori-knl.cmake -DUSE_TRILINOS=OFF ~/acmexx/components/homme/
+#~/runhomme/bxx-master> cmake -C ~/acmexx/components/homme/cmake/machineFiles/cori-knl.cmake ADD FPMODEL FAST -DUSE_TRILINOS=OFF ~/acmexx/components/homme/
 
 ###make allocation
 #salloc --account=m2664 --qos=interactive -t 10 -C knl -N 1
