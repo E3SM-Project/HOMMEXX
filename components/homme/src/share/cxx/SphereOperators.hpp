@@ -857,13 +857,17 @@ public:
      kv.team_barrier();
   }//end of vlaplace_sphere_wk_contra
 
-private:
-
-  // These buffers should be enough to handle any single call to any single sphere operator
+  // These buffers should be enough to handle any single call to any
+  // single sphere operator.
+  //   One might prefer them to be private, but they are handy for
+  // users of SphereOperators for other things, and using the same
+  // memory buffers for multiple things gives performance in mem
+  // b/w-limited computations.
   ExecViewManaged<Real   * [NUM_2D_VECTOR_BUFFERS][2][NP][NP]>           vector_buf_sl;
   ExecViewManaged<Scalar * [NUM_3D_SCALAR_BUFFERS][NP][NP][NUM_LEV]>     scalar_buf_ml;
   ExecViewManaged<Scalar * [NUM_3D_VECTOR_BUFFERS][2][NP][NP][NUM_LEV]>  vector_buf_ml;
 
+private:
   ExecViewManaged<const Real [NP][NP]>          dvv;
 
   ExecViewManaged<const Real * [NP][NP]>        m_mp;

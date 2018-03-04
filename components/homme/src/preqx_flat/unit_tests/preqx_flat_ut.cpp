@@ -1277,7 +1277,7 @@ struct LimiterTester {
   using Dev2Lvl = ExecViewManaged<Scalar[2][NUM_LEV]>;
 
   DevGll sphweights_d;
-  DevGllLvl dpmass_d, ptens_d;
+  DevGllLvl dpmass_d, ptens_d, rwrk_d;
   Dev2Lvl qlim_d;
 
   // For correctness checking.
@@ -1293,7 +1293,7 @@ struct LimiterTester {
 
   LimiterTester ()
     : sphweights_d("sphweights"), dpmass_d("dpmass"),
-      ptens_d("ptens"), qlim_d("qlim"),
+      ptens_d("ptens"), rwrk_d("rwrk"), qlim_d("qlim"),
       ptens_orig("ptens_orig"), Qmass("Qmass")
   { init(); }
 
@@ -1398,6 +1398,18 @@ struct LimiterTester {
       ::limiter_clip_and_sum(team, sphweights_d, dpmass_d, qlim_d, ptens_d);
   }
 
+  struct SerLim8 {};
+  KOKKOS_INLINE_FUNCTION void operator() (const SerLim8&, const Homme::TeamMember& team) const {
+    Homme::SerialLimiter<ExecSpace>
+      ::run(sphweights_d, dpmass_d, qlim_d, ptens_d, rwrk_d, 8);
+  }
+
+  struct SerCAAS {};
+  KOKKOS_INLINE_FUNCTION void operator() (const SerCAAS&, const Homme::TeamMember& team) const {
+    Homme::SerialLimiter<ExecSpace>
+      ::run(sphweights_d, dpmass_d, qlim_d, ptens_d, rwrk_d, 9);
+  }
+
   void check () {
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
@@ -1413,6 +1425,18 @@ struct LimiterTester {
         }
       // Check mass conservation.
       REQUIRE(std::abs(m - Qmass(k)) <= 1e2*eps*Qmass(k));
+    }
+  }
+
+  void check_same (const LimiterTester& ref) {
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      Real m = 0;
+      for (int i = 0; i < NP; ++i)
+        for (int j = 0; j < NP; ++j) {
+          // Check BFB.
+          REQUIRE(ptens(i,j,vi)[si] == ref.ptens(i,j,vi)[si]);
+        }
     }
   }
 };
@@ -1433,6 +1457,24 @@ TEST_CASE("CAAS math correctness", "limiter") {
   lv.check();
 }
 
+TEST_CASE("serial lim=8 math correctness", "limiter") {
+  if (OnGpu<ExecSpace>::value) return;
+  LimiterTester lv;
+  lv.init_feasible();
+  Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);
+  lv.fromdevice();
+  lv.check();
+}
+
+TEST_CASE("serial CAAS math correctness", "limiter") {
+  if (OnGpu<ExecSpace>::value) return;
+  LimiterTester lv;
+  lv.init_feasible();
+  Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
+  lv.fromdevice();
+  lv.check();
+}
+
 // The best thing to do here would be to check the KKT conditions for the
 // 1-norm-minimization problem. That's a fair bit of programming. Instead, check
 // that two very different methods that ought to provide 1-norm-minimal
@@ -1442,7 +1484,7 @@ TEST_CASE("1-norm minimal", "limiters") {
   lv.init_feasible();
   LimiterTester lv_deepcopy;
   lv_deepcopy.deep_copy(lv);
-  std::vector<Real> lim8norm1(NUM_PHYSICAL_LEV), caasnorm1(NUM_PHYSICAL_LEV);
+  std::vector<Real> lim8norm1(NUM_PHYSICAL_LEV), othernorm1(NUM_PHYSICAL_LEV);
 
   auto get_norm1 = [&] (const LimiterTester& lv, std::vector<Real>& n1s) {
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
@@ -1459,10 +1501,31 @@ TEST_CASE("1-norm minimal", "limiters") {
   lv.fromdevice();
   get_norm1(lv, lim8norm1);
 
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv_deepcopy);
-  lv_deepcopy.fromdevice();
-  get_norm1(lv_deepcopy, caasnorm1);
+  std::vector<LimiterTester> lts;
+  lts.push_back(lv);
+  for (int other = 0; other < (OnGpu<ExecSpace>::value ? 1 : 3); ++other) {
+    lts.push_back(LimiterTester());
+    auto& lv_other = lts.back();
+    lv_other.deep_copy(lv_deepcopy);
+    switch (other) {
+    case 0:
+      Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv_other);
+      break;
+    case 1:
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv_other);
+      break;
+    case 2:
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv_other);
+      break;
+    }
+    lv_other.fromdevice();
+    get_norm1(lv_other, othernorm1);
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k)
+      REQUIRE(std::abs(lim8norm1[k] - othernorm1[k]) <= 1e3*LimiterTester::eps*othernorm1[k]);
+  }
 
-  for (int k = 0; k < NUM_PHYSICAL_LEV; ++k)
-    REQUIRE(std::abs(lim8norm1[k] - caasnorm1[k]) <= 1e3*LimiterTester::eps*caasnorm1[k]);
+  if ( ! OnGpu<ExecSpace>::value) {
+    lts[2].check_same(lts[0]);
+    lts[3].check_same(lts[1]);
+  }
 }

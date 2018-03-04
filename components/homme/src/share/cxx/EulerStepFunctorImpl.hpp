@@ -35,6 +35,31 @@ template<> struct reduction_identity<Real2> {
 
 namespace Homme {
 
+// On older machines, low memory b/w is the most important performance-influence
+// characteristic. On these machines, a tracer will be processed in serial. Take
+// advantage of this to optimize memory access.
+template <typename ExecSpace>
+struct SerialLimiter {
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  run(const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
+      const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
+      const ArrayGllLvl& irwrk, const int limiter_option);
+};
+// GPU doesn't have a serial impl.
+#if defined KOKKOS_HAVE_CUDA
+template <>
+struct SerialLimiter<Kokkos::Cuda> {
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
+       const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
+       const ArrayGllLvl& irwrk, const int limiter_option) {
+    Kokkos::abort("SerialLimiter::run: Should not be called on GPU.");
+  }
+};
+#endif
+
 class EulerStepFunctorImpl {
   struct EulerStepData {
     EulerStepData ()
@@ -213,6 +238,7 @@ public:
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
     {
+      const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
       const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
@@ -222,8 +248,7 @@ public:
           Kokkos::parallel_for(
             Kokkos::ThreadVectorRange(team, NUM_LEV),
             [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = (-m_data.rhs_viss * m_data.dt * m_data.nu_q *
-                                         m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
+              qtens_biharmonic(i,j,k) = (f * m_hvcoord.dp0(k) * qtens_biharmonic(i,j,k) /
                                          spheremp(i,j));
             });
         });
@@ -321,15 +346,44 @@ public:
       });
   }
 
+  // TODO make GPUable.
+  void compute_dp () {
+    const auto& e = m_elements;
+    const auto& c = m_data;
+    const auto dp = e.m_derived_dp;
+    const auto divdp_proj = e.m_derived_divdp_proj;
+    const auto rhsmdt = c.rhs_multiplier * c.dt;
+    const auto buf = e.buffers.pressure;
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()),
+      KOKKOS_LAMBDA (const TeamMember& team) {
+        KernelVariables kv(team);
+        Kokkos::parallel_for (
+          Kokkos::TeamThreadRange(kv.team, NP*NP),
+          [&] (const int loop_idx) {
+            const int i = loop_idx / NP;
+            const int j = loop_idx % NP;
+            Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
+              [&] (const int& k) {
+                //! derived variable divdp_proj() (DSS'd version of divdp) will only
+                //! be correct on 2nd and 3rd stage but that's ok because
+                //! rhs_multiplier=0 on the first stage:
+                // Store this in unused buffer.
+                buf(kv.ie,i,j,k) =
+                  dp(kv.ie,i,j,k) - rhsmdt * divdp_proj(kv.ie,i,j,k);
+              });
+          });
+      });
+  }
+
   void compute_qmin_qmax() {
     // Temporaries, due to issues capturing *this on device
     const int qsize = m_data.qsize;
     const Real rhs_multiplier = m_data.rhs_multiplier;
     const int n0_qdp = m_data.n0_qdp;
-    const Real rhsm_dt = rhs_multiplier * m_data.dt;
     const auto qdp = m_tracers.qdp;
-    const auto derived_dp = m_elements.m_derived_dp;
-    const auto derived_divdp_proj= m_elements.m_derived_divdp_proj;
+    const auto dp = m_elements.buffers.pressure;
     const auto qtens_biharmonic = m_tracers.qtens_biharmonic;
     const auto qlim = m_tracers.qlim;
     const auto num_parallel_iterations = m_elements.num_elems() * m_data.qsize;
@@ -345,34 +399,30 @@ public:
       policy,
       KOKKOS_LAMBDA (const TeamMember& team) {
         KernelVariables kv(team, qsize);
-        const auto dp_t = Homme::subview(derived_dp, kv.ie);
-        const auto divdp_proj_t = Homme::subview(derived_divdp_proj, kv.ie);
+        const auto dp_t = Homme::subview(dp, kv.ie);
         const auto qdp_t = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qtens_biharmonic_t = Homme::subview(qtens_biharmonic, kv.ie, kv.iq);
         const auto qlim_t = Homme::subview(qlim, kv.ie, kv.iq);
+        if (rhs_multiplier != 1.0) {
+          Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+            [&] (const int& k) {
+              const auto v = qdp_t(0,0,k) / dp_t(0,0,k);
+              qtens_biharmonic_t(0,0,k) = v;
+              qlim_t(0,k) = v;
+              qlim_t(1,k) = v;
+            });
+        }
         for (int i = 0; i < NP; ++i)
           for (int j = 0; j < NP; ++j) {
-            if (rhs_multiplier != 1.0 && i == 0 && j == 0) {
-              Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                [&] (const int& k) {
-                  const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
-                  qtens_biharmonic_t(i,j,k) = v;
-                  qlim_t(0,k) = v;
-                  qlim_t(1,k) = v;
-                });
-            } else {
-              Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(kv.team, NUM_LEV),
-                [&] (const int& k) {
-                  const auto v = qdp_t(i,j,k) /
-                    (dp_t(i,j,k) - rhsm_dt * divdp_proj_t(i,j,k));
-                  qtens_biharmonic_t(i,j,k) = v;
-                  qlim_t(0,k) = min(qlim_t(0,k), v);
-                  qlim_t(1,k) = max(qlim_t(1,k), v);
-                });
-            }
+            Kokkos::parallel_for(
+              Kokkos::TeamThreadRange(kv.team, NUM_LEV),
+              [&] (const int& k) {
+                const auto v = qdp_t(i,j,k) / dp_t(i,j,k);
+                qtens_biharmonic_t(i,j,k) = v;
+                qlim_t(0,k) = min(qlim_t(0,k), v);
+                qlim_t(1,k) = max(qlim_t(1,k), v);
+              });
           }
       });
     ExecSpace::fence();
@@ -442,8 +492,8 @@ public:
 
       // initialize dp, and compute Q from Qdp(and store Q in Qtens_biharmonic)
 
+      compute_dp();
       compute_qmin_qmax();
-
       if (m_data.rhs_multiplier == 0.0) {
         neighbor_minmax();
       } else if (m_data.rhs_multiplier == 2.0) {
@@ -492,11 +542,7 @@ private:
         Kokkos::parallel_for(
           Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
           [&] (const int& k) {
-            //! derived variable divdp_proj() (DSS'd version of divdp) will only
-            //! be correct on 2nd and 3rd stage but that's ok because
-            //! rhs_multiplier=0 on the first stage:
-            const auto dp = e.m_derived_dp(kv.ie,i,j,k) -
-              c.rhs_multiplier * c.dt * e.m_derived_divdp_proj(kv.ie,i,j,k);
+            const auto dp = e.buffers.pressure(kv.ie,i,j,k);
             e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
             e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
             if (lim8) {
@@ -536,8 +582,13 @@ private:
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
     const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
-
-    limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
+    if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
+      SerialLimiter<ExecSpace>::run(
+        sphweights, dpmass, qlim, ptens,
+        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0),
+        8);
+    else
+      limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }
 
   //! apply mass matrix, overwrite np1 with solution:
@@ -672,9 +723,9 @@ public: // Expose for unit testing.
 
           if (addmass > 0) {
             Real weightssum = 0;
-            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& iweightssum) {
+            Dispatch<>::parallel_reduce_NP2(team, [&] (const int& k, Real& weightssum) {
                 if (x[k] < maxp)
-                  iweightssum += c[k];
+                  weightssum += c[k];
               }, weightssum);
             const auto adw = addmass/weightssum;
             Dispatch<>::parallel_for_NP2(team, [&] (const int& k) {
@@ -759,6 +810,192 @@ public: // Expose for unit testing.
     with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
   }
 };
+
+template <typename ExecSpace>
+template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
+::run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
+       const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
+       const ArrayGllLvl& irwrk, const int limiter_option) {
+# define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
+# define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
+
+  ViewUnmanaged<const Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
+    dpmass(&idpmass(0,0,0)[0]);
+  ViewUnmanaged<Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
+    x(&iptens(0,0,0)[0]), c(&irwrk(0,0,0)[0]);
+  ViewUnmanaged<Real[2][NUM_LEV*VECTOR_SIZE]>
+    qlim(&iqlim(0,0)[0]);
+
+  Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
+  forij {
+    const auto& sphij = sphweights(i,j);
+#   pragma ivdep
+#   pragma simd
+    forlev {
+      const auto& dpm = dpmass(i,j,lev);
+      c(i,j,lev) = sphij*dpm;
+      x(i,j,lev) /= dpm;
+      mass[lev] += c(i,j,lev)*x(i,j,lev);
+      sumc[lev] += c(i,j,lev);
+    }
+  }
+
+# pragma ivdep
+# pragma simd
+  forlev {
+    if (qlim(0,lev) < 0)
+      qlim(0,lev) = 0;
+    if (mass[lev] < qlim(0,lev)*sumc[lev])
+      qlim(0,lev) = mass[lev]/sumc[lev];
+    if (mass[lev] > qlim(1,lev)*sumc[lev])
+      qlim(1,lev) = mass[lev]/sumc[lev];
+  }
+
+  if (limiter_option == 8) {
+    static const int maxiter = NP*NP - 1;
+    static const Real tol_limiter = 5e-14;
+    int donecnt = 0;
+    char done[NUM_PHYSICAL_LEV] = {0};
+    for (int iter = 0; iter < maxiter; ++iter) {
+      Real addmass[NUM_PHYSICAL_LEV] = {0};
+
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          auto& xij = x(i,j,lev);
+          Real delta = 0;
+          if (xij < qlim(0,lev)) {
+            delta = xij - qlim(0,lev);
+            xij = qlim(0,lev);
+          } else if (xij > qlim(1,lev)) {
+            delta = xij - qlim(1,lev);
+            xij = qlim(1,lev);
+          }
+          addmass[lev] += delta*c(i,j,lev);
+        }
+      }
+
+      forlev {
+        if (std::abs(addmass[lev]) <= tol_limiter*std::abs(mass[lev]) &&
+            ! done[lev]) {
+          done[lev] = 1;
+          ++donecnt;
+        }
+      }
+      if (donecnt == NUM_PHYSICAL_LEV) break;
+
+      Real f[NUM_PHYSICAL_LEV] = {0};
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          if (done[lev]) continue;
+          if (addmass[lev] <= 0) {
+            if (x(i,j,lev) > qlim(0,lev))
+              f[lev] += c(i,j,lev);
+          } else {
+            if (x(i,j,lev) < qlim(1,lev))
+              f[lev] += c(i,j,lev);
+          }
+        }
+      }
+
+#     pragma ivdep
+#     pragma simd
+      forlev {
+        if (f[lev] != 0)
+          f[lev] = addmass[lev] / f[lev];
+      }
+
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          if (done[lev]) continue;
+          if (addmass[lev] <= 0) {
+            if (x(i,j,lev) > qlim(0,lev))
+              x(i,j,lev) += f[lev];
+          } else {
+            if (x(i,j,lev) < qlim(1,lev))
+              x(i,j,lev) += f[lev];
+          }
+        }
+      }
+    }
+  } else if (limiter_option == 9) {
+    Real addmass[NUM_PHYSICAL_LEV] = {0};
+
+    forij {
+#     pragma ivdep
+#     pragma simd
+      forlev {
+        auto& xij = x(i,j,lev);
+        Real delta = 0;
+        if (xij < qlim(0,lev)) {
+          delta = xij - qlim(0,lev);
+          xij = qlim(0,lev);
+        } else if (xij > qlim(1,lev)) {
+          delta = xij - qlim(1,lev);
+          xij = qlim(1,lev);
+        }
+        addmass[lev] += delta*c(i,j,lev);
+      }
+    }
+
+    Real f[NUM_PHYSICAL_LEV] = {0};
+    forij {
+#     pragma ivdep
+#     pragma simd
+      forlev {
+        auto& xij = x(i,j,lev);
+        if (addmass[lev] <= 0) {
+          if (xij > qlim(0,lev))
+            f[lev] += c(i,j,lev)*(xij - qlim(0,lev));
+        } else {
+          if (xij < qlim(1,lev))
+            f[lev] += c(i,j,lev)*(qlim(1,lev) - xij);
+        }
+      }
+    }
+
+#   pragma ivdep
+#   pragma simd
+    forlev {
+      if (f[lev] != 0)
+        f[lev] = addmass[lev] / f[lev];
+    }
+
+    forij {
+#     pragma ivdep
+#     pragma simd
+      forlev {
+        auto& xij = x(i,j,lev);
+        if (addmass[lev] <= 0) {
+          if (xij > qlim(0,lev))
+            xij += f[lev]*(xij - qlim(0,lev));
+        } else {
+          if (xij < qlim(1,lev))
+            xij += f[lev]*(qlim(1,lev) - xij);
+        }
+      }
+    }      
+  } else {
+    Kokkos::abort("Only limiter_option 8 and 9 is impl'ed.");
+  }
+
+  forij {
+#   pragma ivdep
+#   pragma simd
+    forlev {
+      x(i,j,lev) *= dpmass(i,j,lev);
+    }
+  }
+  
+# undef forlev
+# undef forij
+}
 
 }
 

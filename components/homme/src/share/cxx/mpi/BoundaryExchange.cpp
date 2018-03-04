@@ -687,8 +687,8 @@ void BoundaryExchange::pack_and_send_min_max ()
       KOKKOS_LAMBDA(const TeamMember& team) {
         Homme::KernelVariables kv(team, num_1d_fields*NUM_CONNECTIONS);
         const int ie = kv.ie;
-        const int ifield = kv.iq / NUM_CONNECTIONS;
-        const int iconn = kv.iq % NUM_CONNECTIONS;
+        const int iconn = kv.iq / num_1d_fields;
+        const int ifield = kv.iq % num_1d_fields;
         const ConnectionInfo& info = connections(ie, iconn);
         if (info.kind == etoi(ConnectionSharing::MISSING)) return;
         const LidGidPos& field_lidpos = info.local;
