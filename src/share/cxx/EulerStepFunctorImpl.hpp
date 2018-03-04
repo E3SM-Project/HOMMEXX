@@ -35,130 +35,209 @@ template<> struct reduction_identity<Real2> {
 
 namespace Homme {
 
-template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
-KOKKOS_INLINE_FUNCTION static void
-serial_limiter_optim_iter_full (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
-                                const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
-                                const ArrayGllLvl& irwrk) {
-#define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
-#define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
+// On older machines, low memory b/w is the most important performance-influence
+// characteristic. On these machines, a tracer will be processed in serial. Take
+// advantage of this to optimize memory access.
+template <typename ExecSpace>
+struct SerialLimiter {
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
+       const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
+       const ArrayGllLvl& irwrk, const int limiter_option) {
+#   define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
+#   define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
-  ViewUnmanaged<const Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
-    dpmass(&idpmass(0,0,0)[0]);
-  ViewUnmanaged<Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
-    x(&iptens(0,0,0)[0]), c(&irwrk(0,0,0)[0]);
-  ViewUnmanaged<Real[2][NUM_LEV*VECTOR_SIZE]>
-    qlim(&iqlim(0,0)[0]);
+    ViewUnmanaged<const Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
+      dpmass(&idpmass(0,0,0)[0]);
+    ViewUnmanaged<Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
+      x(&iptens(0,0,0)[0]), c(&irwrk(0,0,0)[0]);
+    ViewUnmanaged<Real[2][NUM_LEV*VECTOR_SIZE]>
+      qlim(&iqlim(0,0)[0]);
 
-  Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
-  forij {
-    const auto& sphij = sphweights(i,j);
-#   pragma ivdep
-#   pragma simd
-    forlev {
-      const auto& dpm = dpmass(i,j,lev);
-      c(i,j,lev) = sphij*dpm;
-      x(i,j,lev) /= dpm;
-      mass[lev] += c(i,j,lev)*x(i,j,lev);
-      sumc[lev] += c(i,j,lev);
-    }
-  }
-
-# pragma ivdep
-# pragma simd
-  forlev {
-    if (qlim(0,lev) < 0)
-      qlim(0,lev) = 0;
-    if (mass[lev] < qlim(0,lev)*sumc[lev])
-      qlim(0,lev) = mass[lev]/sumc[lev];
-    if (mass[lev] > qlim(1,lev)*sumc[lev])
-      qlim(1,lev) = mass[lev]/sumc[lev];
-  }
-
-  static const int maxiter = NP*NP - 1;
-  static const Real tol_limiter = 5e-14;
-  int donecnt = 0;
-  int iter;
-  char done[NUM_PHYSICAL_LEV] = {0};
-  for (iter = 0; iter < maxiter; ++iter) {
-    Real addmass[NUM_PHYSICAL_LEV] = {0};
-
+    Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
     forij {
+      const auto& sphij = sphweights(i,j);
 #     pragma ivdep
 #     pragma simd
       forlev {
-        auto& xij = x(i,j,lev);
-        Real delta = 0;
-        if (xij < qlim(0,lev)) {
-          delta = xij - qlim(0,lev);
-          xij = qlim(0,lev);
-        } else if (xij > qlim(1,lev)) {
-          delta = xij - qlim(1,lev);
-          xij = qlim(1,lev);
-        }
-        addmass[lev] += delta*c(i,j,lev);
-      }
-    }
-
-    forlev {
-      if (std::abs(addmass[lev]) <= tol_limiter*std::abs(mass[lev]) &&
-          ! done[lev]) {
-        done[lev] = 1;
-        ++donecnt;
-      }
-    }
-    if (donecnt == NUM_PHYSICAL_LEV) break;
-
-    Real f[NUM_PHYSICAL_LEV] = {0};
-    forij {
-#     pragma ivdep
-#     pragma simd
-      forlev {
-        if (done[lev]) continue;
-        if (addmass[lev] <= 0) {
-          if (x(i,j,lev) > qlim(0,lev))
-            f[lev] += c(i,j,lev);
-        } else {
-          if (x(i,j,lev) < qlim(1,lev))
-            f[lev] += c(i,j,lev);
-        }
+        const auto& dpm = dpmass(i,j,lev);
+        c(i,j,lev) = sphij*dpm;
+        x(i,j,lev) /= dpm;
+        mass[lev] += c(i,j,lev)*x(i,j,lev);
+        sumc[lev] += c(i,j,lev);
       }
     }
 
 #   pragma ivdep
 #   pragma simd
     forlev {
-      if (f[lev] != 0)
-        f[lev] = addmass[lev] / f[lev];
+      if (qlim(0,lev) < 0)
+        qlim(0,lev) = 0;
+      if (mass[lev] < qlim(0,lev)*sumc[lev])
+        qlim(0,lev) = mass[lev]/sumc[lev];
+      if (mass[lev] > qlim(1,lev)*sumc[lev])
+        qlim(1,lev) = mass[lev]/sumc[lev];
+    }
+
+    if (limiter_option == 8) {
+      static const int maxiter = NP*NP - 1;
+      static const Real tol_limiter = 5e-14;
+      int donecnt = 0;
+      char done[NUM_PHYSICAL_LEV] = {0};
+      for (int iter = 0; iter < maxiter; ++iter) {
+        Real addmass[NUM_PHYSICAL_LEV] = {0};
+
+        forij {
+#         pragma ivdep
+#         pragma simd
+          forlev {
+            auto& xij = x(i,j,lev);
+            Real delta = 0;
+            if (xij < qlim(0,lev)) {
+              delta = xij - qlim(0,lev);
+              xij = qlim(0,lev);
+            } else if (xij > qlim(1,lev)) {
+              delta = xij - qlim(1,lev);
+              xij = qlim(1,lev);
+            }
+            addmass[lev] += delta*c(i,j,lev);
+          }
+        }
+
+        forlev {
+          if (std::abs(addmass[lev]) <= tol_limiter*std::abs(mass[lev]) &&
+              ! done[lev]) {
+            done[lev] = 1;
+            ++donecnt;
+          }
+        }
+        if (donecnt == NUM_PHYSICAL_LEV) break;
+
+        Real f[NUM_PHYSICAL_LEV] = {0};
+        forij {
+#         pragma ivdep
+#         pragma simd
+          forlev {
+            if (done[lev]) continue;
+            if (addmass[lev] <= 0) {
+              if (x(i,j,lev) > qlim(0,lev))
+                f[lev] += c(i,j,lev);
+            } else {
+              if (x(i,j,lev) < qlim(1,lev))
+                f[lev] += c(i,j,lev);
+            }
+          }
+        }
+
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          if (f[lev] != 0)
+            f[lev] = addmass[lev] / f[lev];
+        }
+
+        forij {
+#         pragma ivdep
+#         pragma simd
+          forlev {
+            if (done[lev]) continue;
+            if (addmass[lev] <= 0) {
+              if (x(i,j,lev) > qlim(0,lev))
+                x(i,j,lev) += f[lev];
+            } else {
+              if (x(i,j,lev) < qlim(1,lev))
+                x(i,j,lev) += f[lev];
+            }
+          }
+        }
+      }
+    } else if (limiter_option == 9) {
+      Real addmass[NUM_PHYSICAL_LEV] = {0};
+
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          auto& xij = x(i,j,lev);
+          Real delta = 0;
+          if (xij < qlim(0,lev)) {
+            delta = xij - qlim(0,lev);
+            xij = qlim(0,lev);
+          } else if (xij > qlim(1,lev)) {
+            delta = xij - qlim(1,lev);
+            xij = qlim(1,lev);
+          }
+          addmass[lev] += delta*c(i,j,lev);
+        }
+      }
+
+      Real f[NUM_PHYSICAL_LEV] = {0};
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          auto& xij = x(i,j,lev);
+          if (addmass[lev] <= 0) {
+            if (xij > qlim(0,lev))
+              f[lev] += c(i,j,lev)*(xij - qlim(0,lev));
+          } else {
+            if (xij < qlim(1,lev))
+              f[lev] += c(i,j,lev)*(qlim(1,lev) - xij);
+          }
+        }
+      }
+
+#     pragma ivdep
+#     pragma simd
+      forlev {
+        if (f[lev] != 0)
+          f[lev] = addmass[lev] / f[lev];
+      }
+
+      forij {
+#       pragma ivdep
+#       pragma simd
+        forlev {
+          auto& xij = x(i,j,lev);
+          if (addmass[lev] <= 0) {
+            if (xij > qlim(0,lev))
+              xij += f[lev]*(xij - qlim(0,lev));
+          } else {
+            if (xij < qlim(1,lev))
+              xij += f[lev]*(qlim(1,lev) - xij);
+          }
+        }
+      }      
+    } else {
+      Kokkos::abort("Only limiter_option 8 and 9 is impl'ed.");
     }
 
     forij {
 #     pragma ivdep
 #     pragma simd
       forlev {
-        if (done[lev]) continue;
-        if (addmass[lev] <= 0) {
-          if (x(i,j,lev) > qlim(0,lev))
-            x(i,j,lev) += f[lev];
-        } else {
-          if (x(i,j,lev) < qlim(1,lev))
-            x(i,j,lev) += f[lev];
-        }
+        x(i,j,lev) *= dpmass(i,j,lev);
       }
     }
-  }
-
-  forij {
-#   pragma ivdep
-#   pragma simd
-    forlev {
-      x(i,j,lev) *= dpmass(i,j,lev);
-    }
-  }
   
-#undef forlev
-#undef forij
-}
+#   undef forlev
+#   undef forij
+  }
+};
+
+#if defined KOKKOS_HAVE_CUDA
+template <>
+struct SerialLimiter<Kokkos::Cuda> {
+  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  KOKKOS_INLINE_FUNCTION static void
+  run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
+       const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
+       const ArrayGllLvl& irwrk) {
+    Kokkos::abort("SerialLimiter::run: Should not be called on GPU.");
+  }
+};
+#endif
 
 class EulerStepFunctorImpl {
   struct EulerStepData {
@@ -683,9 +762,10 @@ private:
     const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
     if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
-      serial_limiter_optim_iter_full(sphweights, dpmass, qlim, ptens,
-                                     Homme::subview(m_sphere_ops.scalar_buf_ml,
-                                                    kv.team_idx, 0));
+      SerialLimiter<ExecSpace>::run(
+        sphweights, dpmass, qlim, ptens,
+        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0),
+        8);
     else
       limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }
