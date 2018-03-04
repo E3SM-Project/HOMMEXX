@@ -54,7 +54,7 @@ struct SerialLimiter<Kokkos::Cuda> {
   KOKKOS_INLINE_FUNCTION static void
   run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
-       const ArrayGllLvl& irwrk) {
+       const ArrayGllLvl& irwrk, const int limiter_option) {
     Kokkos::abort("SerialLimiter::run: Should not be called on GPU.");
   }
 };
