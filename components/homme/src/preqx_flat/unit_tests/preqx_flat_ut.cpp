@@ -1277,7 +1277,7 @@ struct LimiterTester {
   using Dev2Lvl = ExecViewManaged<Scalar[2][NUM_LEV]>;
 
   DevGll sphweights_d;
-  DevGllLvl dpmass_d, ptens_d, rwrk_d;
+  DevGllLvl dpmass_d, ptens_d;
   Dev2Lvl qlim_d;
 
   // For correctness checking.
@@ -1293,7 +1293,7 @@ struct LimiterTester {
 
   LimiterTester ()
     : sphweights_d("sphweights"), dpmass_d("dpmass"),
-      ptens_d("ptens"), rwrk_d("rwrk"), qlim_d("qlim"),
+      ptens_d("ptens"), qlim_d("qlim"),
       ptens_orig("ptens_orig"), Qmass("Qmass")
   { init(); }
 
@@ -1401,13 +1401,13 @@ struct LimiterTester {
   struct SerLim8 {};
   KOKKOS_INLINE_FUNCTION void operator() (const SerLim8&, const Homme::TeamMember& team) const {
     Homme::SerialLimiter<ExecSpace>
-      ::run(sphweights_d, dpmass_d, qlim_d, ptens_d, rwrk_d, 8);
+      ::run<8>(sphweights_d, dpmass_d, qlim_d, ptens_d);
   }
 
   struct SerCAAS {};
   KOKKOS_INLINE_FUNCTION void operator() (const SerCAAS&, const Homme::TeamMember& team) const {
     Homme::SerialLimiter<ExecSpace>
-      ::run(sphweights_d, dpmass_d, qlim_d, ptens_d, rwrk_d, 9);
+      ::run<9>(sphweights_d, dpmass_d, qlim_d, ptens_d);
   }
 
   void check () {
