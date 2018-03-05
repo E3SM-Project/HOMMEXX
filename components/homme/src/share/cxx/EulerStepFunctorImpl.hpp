@@ -826,7 +826,6 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     qlim(&iqlim(0,0)[0]);
 
   const int NP2 = NP * NP;
-# define fork for (int k = 0; k < NP2; ++k)
 
 # pragma ivdep
 # pragma simd
@@ -835,7 +834,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
 #   pragma ivdep
 #   pragma simd
-    fork {
+    for (int k = 0; k < NP2; ++k) {
       const int i = k / NP, j = k % NP;
       const auto& dpm = dpmass(i,j,ilev);
       c[k] = sphweights(i,j)*dpm;
@@ -845,7 +844,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     Real sumc = 0, mass = 0;
 #   pragma ivdep
 #   pragma simd
-    fork { sumc += c[k]; mass += x[k]*c[k]; }
+    for (int k = 0; k < NP2; ++k) { sumc += c[k]; mass += x[k]*c[k]; }
     if (sumc <= 0) continue;
     Real minp = qlim(0,ilev), maxp = qlim(1,ilev);
     if (minp < 0)
@@ -860,7 +859,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         Real addmass = 0;
 #       pragma ivdep
 #       pragma simd
-        fork {
+        for (int k = 0; k < NP2; ++k) {
           Real delta = 0;
           if (x[k] > maxp) {
             delta = x[k] - maxp;
@@ -877,28 +876,28 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         if (addmass > 0) {
 #         pragma ivdep
 #         pragma simd
-          fork {
+          for (int k = 0; k < NP2; ++k) {
             if (x[k] < maxp)
               weightssum += c[k];
           }
           const auto adw = addmass/weightssum;
 #         pragma ivdep
 #         pragma simd
-          fork {
+          for (int k = 0; k < NP2; ++k) {
             if (x[k] < maxp)
               x[k] += adw;
           }
         } else {
 #         pragma ivdep
 #         pragma simd
-          fork {
+          for (int k = 0; k < NP2; ++k) {
             if (x[k] > minp)
               weightssum += c[k];
           }
           const auto adw = addmass/weightssum;
 #         pragma ivdep
 #         pragma simd
-          fork {
+          for (int k = 0; k < NP2; ++k) {
             if (x[k] > minp)
               x[k] += adw;
           }
@@ -908,7 +907,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       Real addmass = 0;
 #     pragma ivdep
 #     pragma simd
-      fork {
+      for (int k = 0; k < NP2; ++k) {
         Real delta = 0;
         if (x[k] > maxp) {
           delta = x[k] - maxp;
@@ -925,7 +924,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       if (addmass > 0) {
 #       pragma ivdep
 #       pragma simd
-        fork {
+        for (int k = 0; k < NP2; ++k) {
           fac += c[k]*(maxp - x[k]);
         }
         if (fac > 0) {
@@ -933,20 +932,20 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
           fac = addmass/fac;
 #         pragma ivdep
 #         pragma simd
-          fork {
+          for (int k = 0; k < NP2; ++k) {
             x[k] += fac*(maxp - x[k]);
           }
         }
       } else {
 #       pragma ivdep
 #       pragma simd
-        fork {
+        for (int k = 0; k < NP2; ++k) {
           fac += c[k]*(x[k] - minp);
         }
         fac = addmass/fac;
 #       pragma ivdep
 #       pragma simd
-        fork {
+        for (int k = 0; k < NP2; ++k) {
           x[k] += fac*(x[k] - minp);
         }
       }     
@@ -956,12 +955,11 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
 #   pragma ivdep
 #   pragma simd
-    fork {
+    for (int k = 0; k < NP2; ++k) {
       const int i = k / NP, j = k % NP;
       ptens(i,j,ilev) = x[k]*dpmass(i,j,ilev);
     }
   }
-# undef fork
 }
 
 }
