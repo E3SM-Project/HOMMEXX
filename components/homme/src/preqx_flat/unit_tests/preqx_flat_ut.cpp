@@ -1431,7 +1431,6 @@ struct LimiterTester {
   void check_same (const LimiterTester& ref) {
     for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
       const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
-      Real m = 0;
       for (int i = 0; i < NP; ++i)
         for (int j = 0; j < NP; ++j) {
           // Check BFB.
@@ -1458,21 +1457,23 @@ TEST_CASE("CAAS math correctness", "limiter") {
 }
 
 TEST_CASE("serial lim=8 math correctness", "limiter") {
-  if (OnGpu<ExecSpace>::value) return;
-  LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);
-  lv.fromdevice();
-  lv.check();
+  if (!OnGpu<ExecSpace>::value) {
+    LimiterTester lv;
+    lv.init_feasible();
+    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);
+    lv.fromdevice();
+    lv.check();
+  }
 }
 
 TEST_CASE("serial CAAS math correctness", "limiter") {
-  if (OnGpu<ExecSpace>::value) return;
-  LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
-  lv.fromdevice();
-  lv.check();
+  if (!OnGpu<ExecSpace>::value) {
+    LimiterTester lv;
+    lv.init_feasible();
+    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
+    lv.fromdevice();
+    lv.check();
+  }
 }
 
 // The best thing to do here would be to check the KKT conditions for the

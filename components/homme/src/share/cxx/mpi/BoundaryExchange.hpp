@@ -253,13 +253,12 @@ void BoundaryExchange::register_field(
   assert(m_num_1d_fields == 0);
 
   {
-    auto l_num_3d_fields = m_num_3d_fields;
     auto l_3d_fields = m_3d_fields;
     Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int) {
       l_3d_fields(ie, iq) = field;
     });
   }
-	// Temporary hack
+  // Temporary hack
   m_num_3d_fields = iq + 1;
 }
 
@@ -397,7 +396,6 @@ void BoundaryExchange::register_min_max_fields (ExecView<Scalar*[DIM][2][NUM_LEV
     });
   }
 
-  // TODO Cleanup BoundaryExchange so this isn't needed
   m_num_1d_fields += num_dims;
 }
 
