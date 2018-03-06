@@ -86,6 +86,11 @@ program prim_main
       real (kind=c_double), intent(in) :: tstep
     end subroutine prim_run_subcycle_c
 
+    subroutine main_loop_start() bind(c)
+    end subroutine main_loop_start
+
+    subroutine main_loop_stop() bind(c)
+    end subroutine main_loop_stop
 
     subroutine cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
                                        elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,  &

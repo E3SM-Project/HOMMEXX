@@ -261,7 +261,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     kv.team_barrier();
   }
 
-  KOKKOS_FORCEINLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION
   Real compute_mass(const Real sq_coeff, const Real lin_coeff,
                     const Real const_coeff, const Real prev_mass,
                     const Real prev_dp, const Real x2) const {

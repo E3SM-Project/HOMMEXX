@@ -14,7 +14,6 @@
 #include "utilities/VectorUtils.hpp"
 #include "ErrorDefs.hpp"
 #include "BoundaryExchange.hpp"
-#include "profiling.hpp"
 
 namespace Kokkos {
 struct Real2 {
@@ -181,7 +180,6 @@ public:
     ! nu_p>0):   qtens_biharmonc *= elem()%psdiss_ave      (for consistency, if nu_p=nu_q)
    */
   void compute_biharmonic_pre() {
-    profiling_resume();
     assert(m_data.rhs_multiplier == 2.0);
     m_data.rhs_viss = 3.0;
 
@@ -190,11 +188,9 @@ public:
                          *this);
 
     ExecSpace::fence();
-    profiling_pause();
   }
 
   void compute_biharmonic_post() {
-    profiling_resume();
     assert(m_data.rhs_multiplier == 2.0);
 
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
@@ -202,7 +198,6 @@ public:
                          *this);
 
     ExecSpace::fence();
-    profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -258,7 +253,6 @@ public:
   struct AALTracerPhase {};
 
   void advect_and_limit() {
-    profiling_resume();
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
         m_elements.num_elems()),
@@ -271,7 +265,6 @@ public:
       *this);
     ExecSpace::fence();
     m_kernel_will_run_limiters = false;
-    profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -290,15 +283,12 @@ public:
 
   void precompute_divdp() {
     assert(m_data.qsize >= 0); // reset() already called
-    profiling_resume();
-
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
             m_elements.num_elems()),
         *this);
 
     ExecSpace::fence();
-    profiling_pause();
   }
 
   KOKKOS_INLINE_FUNCTION

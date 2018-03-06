@@ -15,8 +15,6 @@
 
 #include "utilities/SyncUtils.hpp"
 
-#include "profiling.hpp"
-
 namespace Homme
 {
 

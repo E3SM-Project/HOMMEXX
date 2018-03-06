@@ -2,12 +2,10 @@
 #include "CaarFunctorImpl.hpp"
 #include "Context.hpp"
 #include "SimulationParams.hpp"
-
 #include "profiling.hpp"
 
 #include <assert.h>
 #include <type_traits>
-
 
 namespace Homme {
 
@@ -78,12 +76,10 @@ void CaarFunctor::run ()
   assert (m_caar_impl);
 
   // Run functor
-  profiling_resume();
   GPTLstart("caar compute");
   Kokkos::parallel_for("caar loop pre-boundary exchange", m_policy, *m_caar_impl);
   ExecSpace::fence();
   GPTLstop("caar compute");
-  profiling_pause();
 }
 
 void CaarFunctor::run (const int nm1, const int n0,   const int np1,
@@ -97,7 +93,6 @@ void CaarFunctor::run (const int nm1, const int n0,   const int np1,
   m_caar_impl->set_rk_stage_data(nm1,n0,np1,dt,eta_ave_w,compute_diagnostics);
 
   // Run functor
-  profiling_resume();
   GPTLstart("caar compute");
   Kokkos::parallel_for("caar loop pre-boundary exchange", m_policy, *m_caar_impl);
   ExecSpace::fence();
@@ -105,7 +100,6 @@ void CaarFunctor::run (const int nm1, const int n0,   const int np1,
   start_timer("caar_bexchV");
   m_caar_impl->m_bes[np1]->exchange(m_caar_impl->m_elements.m_rspheremp);
   stop_timer("caar_bexchV");
-  profiling_pause();
 }
 
 } // Namespace Homme

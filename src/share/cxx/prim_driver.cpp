@@ -19,6 +19,14 @@ void apply_test_forcing ();
 
 extern "C" {
 
+void main_loop_start() {
+  profiling_resume();
+}
+
+void main_loop_stop() {
+  profiling_pause();
+}
+
 void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1)
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
