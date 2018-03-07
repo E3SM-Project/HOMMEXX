@@ -40,21 +40,21 @@ namespace Homme {
 // advantage of this to optimize memory access.
 template <typename ExecSpace>
 struct SerialLimiter {
-  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
   KOKKOS_INLINE_FUNCTION static void
   run(const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
       const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
-      const ArrayGllLvl& irwrk, const int limiter_option);
+      const ArrayGllLvl& irwrk);
 };
 // GPU doesn't have a serial impl.
 #if defined KOKKOS_HAVE_CUDA
 template <>
 struct SerialLimiter<Kokkos::Cuda> {
-  template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+  template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
   KOKKOS_INLINE_FUNCTION static void
   run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
-       const ArrayGllLvl& irwrk, const int limiter_option) {
+       const ArrayGllLvl& irwrk) {
     Kokkos::abort("SerialLimiter::run: Should not be called on GPU.");
   }
 };
@@ -583,10 +583,9 @@ private:
     const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
     if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
-      SerialLimiter<ExecSpace>::run(
+      SerialLimiter<ExecSpace>::run<8>(
         sphweights, dpmass, qlim, ptens,
-        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0),
-        8);
+        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0));
     else
       limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
   }
@@ -812,11 +811,11 @@ public: // Expose for unit testing.
 };
 
 template <typename ExecSpace>
-template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
+template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
 KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 ::run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
-       const ArrayGllLvl& irwrk, const int limiter_option) {
+       const ArrayGllLvl& irwrk) {
 # define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
 # define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
