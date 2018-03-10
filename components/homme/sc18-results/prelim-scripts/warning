@@ -1,0 +1,4 @@
+
+Scripts in this folder do not take into account that for vertical threads
+homme needs a change of value vthreads in the namelist.
+
