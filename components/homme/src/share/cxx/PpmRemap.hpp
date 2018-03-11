@@ -55,7 +55,7 @@ static constexpr int PPMDX_LEV = PPMDX_PHYSICAL_LEV / VECTOR_SIZE;
 static constexpr int AO_PHYSICAL_LEV = NUM_PHYSICAL_LEV + INITIAL_PADDING + gs;
 static constexpr int AO_LEV = AO_PHYSICAL_LEV / VECTOR_SIZE;
 
-static constexpr int MASS_O_PHYSICAL_LEV = NUM_PHYSICAL_LEV + 1;
+static constexpr int MASS_O_PHYSICAL_LEV = NUM_PHYSICAL_LEV + 2;
 static constexpr int MASS_O_LEV = MASS_O_PHYSICAL_LEV / VECTOR_SIZE;
 
 static constexpr int DMA_PHYSICAL_LEV = NUM_PHYSICAL_LEV + 2;
@@ -218,13 +218,13 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // to simplify integration during remapping. Also, divide out the
         // grid spacing so we're working with actual tracer values and can
         // conserve mass.
-        mass_o(kv.team_idx, igp, jgp, 0) = 0.0;
+        mass_o(kv.team_idx, igp, jgp, 1) = 0.0;
         for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
           const int ilevel = k / VECTOR_SIZE;
           const int ivector = k % VECTOR_SIZE;
 
-          mass_o(kv.team_idx, igp, jgp, k + 1) =
-              mass_o(kv.team_idx, igp, jgp, k) +
+          mass_o(kv.team_idx, igp, jgp, k + 2) =
+              mass_o(kv.team_idx, igp, jgp, k + 1) +
               remap_var(igp, jgp, ilevel)[ivector];
         } // end k loop
       });
@@ -295,7 +295,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
       const int kk_cur_lev = k_id(k);
-      assert(kk_cur_lev >= k);
+      assert(kk_cur_lev + 1 >= k);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
 
       const Real x2_cur_lev = integral_bounds(k);
@@ -304,7 +304,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       //          use this level of parallelism!!!
       mass(k) = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-          parabola_coeffs(0, kk_cur_lev), mass(kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), mass(kk_cur_lev + 1),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
     });
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
@@ -337,7 +337,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
           (k > 0) ? compute_mass(
                         parabola_coeffs(2, k_id(k - 1)),
                         parabola_coeffs(1, k_id(k - 1)),
-                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1)),
+                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1) + 1),
                         prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
                         integral_bounds(k - 1))
                   : 0.0;
@@ -345,12 +345,12 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       const Real x2_cur_lev = integral_bounds(k);
 
       const int kk_cur_lev = k_id(k);
-      assert(kk_cur_lev >= k);
+      assert(kk_cur_lev + 1 >= k);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
  
       const Real mass_2 = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
-          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev),
+          parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev + 1),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
  
       const int ilevel = k / VECTOR_SIZE;
@@ -658,7 +658,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // PPM interpolants are normalized to an independent coordinate
         // domain
         // [-0.5, 0.5].
-        assert(kk - 1 >= k);
+        assert(kk >= k);
         assert(kk < pio.extent_int(3));
         z2(kv.ie, igp, jgp, k) =
             (pin(kv.ie, igp, jgp, k + 1) -
