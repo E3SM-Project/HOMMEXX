@@ -194,8 +194,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void compute_remap_phase(KernelVariables &kv,
-                           ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> remap_var)
+  void compute_cell_means(KernelVariables &kv,
+                          ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> remap_var)
       const {
     // From here, we loop over tracers for only those portions which depend on
     // tracer data, which includes PPM limiting and mass accumulation
@@ -239,10 +239,18 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
             mass_o(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV) +
             remap_var(igp, jgp, ilast)[vlast];
       });
+    }); // End team thread range
+  }
 
-      // Reflect the real values across the top and bottom boundaries into
-      // the ghost cells
-
+  KOKKOS_INLINE_FUNCTION
+  void compute_remap_phase(KernelVariables &kv,
+                           ExecViewUnmanaged<Scalar[NP][NP][NUM_LEV]> remap_var)
+      const {
+    compute_cell_means(kv, remap_var);
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
       // Computes a monotonic and conservative PPM reconstruction
       compute_ppm(kv, Homme::subview(ao, kv.team_idx, igp, jgp),
                   Homme::subview(ppmdx, kv.ie, igp, jgp),

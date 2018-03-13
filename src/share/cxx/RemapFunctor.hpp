@@ -216,6 +216,13 @@ struct RemapFunctor : public Remapper,
   // i.e. momentum -> velocity
   struct ComputeIntrinsicsTag {};
 
+  struct ComputePartitionsTag {};
+  struct ComputeIntegralBoundsTag {};
+
+  struct ComputeCellMeansTag {};
+  struct ComputePpmTag {};
+  struct ComputeIndvRemapTag {};
+
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeThicknessTag, const TeamMember &team) const {
     KernelVariables kv(team);
@@ -259,6 +266,20 @@ struct RemapFunctor : public Remapper,
         Homme::subview(m_tgt_layer_thickness, kv.ie));
   }
 
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputePartitionsTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    m_remap.compute_partitions(
+        kv, this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d),
+        Homme::subview(m_tgt_layer_thickness, kv.ie));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeIntegralBoundsTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    m_remap.compute_integral_bounds(kv);
+  }
+
   // This asserts if num_to_remap() == 0
   KOKKOS_INLINE_FUNCTION
   void operator()(ComputeRemapTag, const TeamMember &team) const {
@@ -268,11 +289,61 @@ struct RemapFunctor : public Remapper,
     kv.ie /= num_to_remap();
     assert(kv.ie < m_elements.num_elems());
 
-    auto tgt_layer_thickness = Homme::subview(m_tgt_layer_thickness, kv.ie);
-    ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness =
-        this->get_source_thickness(kv.ie, m_data.np1, m_elements.m_dp3d);
-
     this->m_remap.compute_remap_phase(kv, get_remap_val(kv, var));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeCellMeansTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    assert(num_to_remap() != 0);
+    const int var = kv.ie % num_to_remap();
+    kv.ie /= num_to_remap();
+    assert(kv.ie < m_elements.num_elems());
+
+    this->m_remap.compute_cell_means(kv, get_remap_val(kv, var));
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputePpmTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    assert(num_to_remap() != 0);
+    const int var = kv.ie % num_to_remap();
+    kv.ie /= num_to_remap();
+    assert(kv.ie < m_elements.num_elems());
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      this->m_remap.compute_ppm(
+          kv, Homme::subview(this->m_remap.ao, kv.team_idx, igp, jgp),
+          Homme::subview(this->m_remap.ppmdx, kv.ie, igp, jgp),
+          Homme::subview(this->m_remap.dma, kv.team_idx, igp, jgp),
+          Homme::subview(this->m_remap.ai, kv.team_idx, igp, jgp),
+          Homme::subview(this->m_remap.parabola_coeffs, kv.team_idx, igp, jgp));
+    });
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(ComputeIndvRemapTag, const TeamMember &team) const {
+    KernelVariables kv(team);
+    assert(num_to_remap() != 0);
+    const int var = kv.ie % num_to_remap();
+    kv.ie /= num_to_remap();
+    assert(kv.ie < m_elements.num_elems());
+
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
+                         [&](const int &loop_idx) {
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      this->m_remap.compute_remap(
+          kv, Homme::subview(this->m_remap.kid, kv.ie, igp, jgp),
+          Homme::subview(this->m_remap.z2, kv.ie, igp, jgp),
+          Homme::subview(this->m_remap.parabola_coeffs, kv.team_idx, igp, jgp),
+          Homme::subview(this->m_remap.mass_o, kv.team_idx, igp, jgp),
+          Homme::subview(this->m_remap.dpo, kv.ie, igp, jgp),
+          Homme::subview(get_remap_val(kv, var), igp, jgp));
+    });
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -310,11 +381,24 @@ struct RemapFunctor : public Remapper,
                                           m_elements.num_elems() *
                                               this->num_states_remap);
       }
-      run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
-                                   this->m_elements.num_elems());
-      run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                   this->m_elements.num_elems() *
-                                       num_to_remap());
+      // run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
+      //                              this->m_elements.num_elems());
+      run_functor<ComputePartitionsTag>("Remap Compute Partitions Functor",
+                                        this->m_elements.num_elems());
+      run_functor<ComputeIntegralBoundsTag>(
+          "Remap Compute Integral Bounds Functor",
+          this->m_elements.num_elems());
+      // run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
+      //                              this->m_elements.num_elems() *
+      //                                  num_to_remap());
+      run_functor<ComputeCellMeansTag>("Remap Compute Remap Functor",
+                                       this->m_elements.num_elems() *
+                                           num_to_remap());
+      run_functor<ComputePpmTag>("Remap Compute Ppm Functor",
+                                 this->m_elements.num_elems() * num_to_remap());
+      run_functor<ComputeIndvRemapTag>("Remap Compute Indv Remap Functor",
+                                       this->m_elements.num_elems() *
+                                           num_to_remap());
       if (nonzero_rsplit) {
         run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
                                           m_elements.num_elems() *
