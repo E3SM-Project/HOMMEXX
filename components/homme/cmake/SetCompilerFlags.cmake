@@ -124,10 +124,10 @@ ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "GPROF")
 ENDIF ()
 
 # Handle Cuda.
-find_package(CUDA QUIET)
-if (${CUDA_FOUND})
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD")
-endif ()
+#find_package(CUDA QUIET)
+#if (${CUDA_FOUND})
+#  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD")
+#endif ()
 
 ##############################################################################
 # Optimization flags
