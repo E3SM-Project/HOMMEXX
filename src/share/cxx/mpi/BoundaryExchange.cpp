@@ -276,6 +276,10 @@ void BoundaryExchange::exchange_min_max ()
   recv_and_unpack_min_max ();
 }
 
+struct BEPack2DTag {};
+struct BEPack3DTag {};
+struct BESend3DTag {};
+
 void BoundaryExchange::pack_and_send ()
 {
   tstart("be pack_and_send");
@@ -311,8 +315,11 @@ void BoundaryExchange::pack_and_send ()
     auto fields_2d = m_2d_fields;
     auto send_2d_buffers = m_send_2d_buffers;
     const ConnectionHelpers helpers;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 3>({0, 0, 0}, {m_num_elems, NUM_CONNECTIONS, m_num_2d_fields}, {1, 1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int iconn, const int ifield) {
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace, BEPack2DTag>(0, m_num_elems * NUM_CONNECTIONS * m_num_2d_fields),
+                         KOKKOS_LAMBDA(BEPack2DTag, const int loop_idx) {
+      const int ie = (loop_idx / m_num_2d_fields) / NUM_CONNECTIONS;
+      const int iconn = (loop_idx / m_num_2d_fields) % NUM_CONNECTIONS;
+      const int ifield = loop_idx % m_num_2d_fields;
       const ConnectionInfo& info = connections(ie, iconn);
       const LidGidPos& field_lidpos  = info.local;
       // For the buffer, in case of local connection, use remote info. In fact, while with shared connections the
@@ -335,8 +342,8 @@ void BoundaryExchange::pack_and_send ()
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
       Kokkos::parallel_for(
-        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
-        KOKKOS_LAMBDA(const int it) {
+        Kokkos::RangePolicy<ExecSpace, BEPack3DTag>(0, m_num_elems*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
+        KOKKOS_LAMBDA(BEPack3DTag, const int it) {
           const int ie = it / (num_3d_fields*NUM_CONNECTIONS*NUM_LEV);
           const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_3d_fields;
           const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
@@ -364,12 +371,12 @@ void BoundaryExchange::pack_and_send ()
       const auto threads_vectors =
         DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
           num_parallel_iterations, tp);
-      const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+      const auto policy = Kokkos::TeamPolicy<ExecSpace, BESend3DTag>(
         num_parallel_iterations, threads_vectors.first, threads_vectors.second);
       HOMMEXX_STATIC const ConnectionHelpers helpers;
       Kokkos::parallel_for(
         policy,
-        KOKKOS_LAMBDA(const TeamMember& team) {
+        KOKKOS_LAMBDA(BESend3DTag, const TeamMember& team) {
           Homme::KernelVariables kv(team, num_3d_fields);
           const int ie = kv.ie;
           const int ifield = kv.iq;
