@@ -1,5 +1,9 @@
 #!/bin/bash
 
+################# BUG BELOW !!!!! see march 13th script instead
+##### nmax is not calculated based on nnodes
+
+
 #partition=knl #knl haswell
 mach=haswell #knl haswell
 
