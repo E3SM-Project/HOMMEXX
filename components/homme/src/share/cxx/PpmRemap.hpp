@@ -478,40 +478,38 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                                                      bounds.iterations()),
                            [&](const int zoffset_j) {
         const int j = zoffset_j + *bounds.begin();
-        for (auto j : bounds) {
-          Real al = ai(j - 1);
-          Real ar = ai(j);
-          if ((ar - cell_means(j + INITIAL_PADDING - 1)) *
-                  (cell_means(j + INITIAL_PADDING - 1) - al) <=
-              0.) {
-            al = cell_means(j + INITIAL_PADDING - 1);
-            ar = cell_means(j + INITIAL_PADDING - 1);
-          }
-          if ((ar - al) *
-                  (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) >
-              (ar - al) * (ar - al) / 6.0) {
-            al = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * ar;
-          }
-          if ((ar - al) *
-                  (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) <
-              -(ar - al) * (ar - al) / 6.0) {
-            ar = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * al;
-          }
-
-          // Computed these coefficients from the edge values
-          // and cell mean in Maple. Assumes normalized
-          // coordinates: xi=(x-x0)/dx
-
-          assert(parabola_coeffs.data() != nullptr);
-          assert(j - 1 < parabola_coeffs.extent_int(1));
-          assert(2 < parabola_coeffs.extent_int(0));
-
-          parabola_coeffs(0, j - 1) =
-              1.5 * cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 4.0;
-          parabola_coeffs(1, j - 1) = ar - al;
-          parabola_coeffs(2, j - 1) =
-              3.0 * (-2.0 * cell_means(j + INITIAL_PADDING - 1) + (al + ar));
+        Real al = ai(j - 1);
+        Real ar = ai(j);
+        if ((ar - cell_means(j + INITIAL_PADDING - 1)) *
+                (cell_means(j + INITIAL_PADDING - 1) - al) <=
+            0.) {
+          al = cell_means(j + INITIAL_PADDING - 1);
+          ar = cell_means(j + INITIAL_PADDING - 1);
         }
+        if ((ar - al) *
+                (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) >
+            (ar - al) * (ar - al) / 6.0) {
+          al = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * ar;
+        }
+        if ((ar - al) *
+                (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) <
+            -(ar - al) * (ar - al) / 6.0) {
+          ar = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * al;
+        }
+
+        // Computed these coefficients from the edge values
+        // and cell mean in Maple. Assumes normalized
+        // coordinates: xi=(x-x0)/dx
+
+        assert(parabola_coeffs.data() != nullptr);
+        assert(j - 1 < parabola_coeffs.extent_int(1));
+        assert(2 < parabola_coeffs.extent_int(0));
+
+        parabola_coeffs(0, j - 1) =
+            1.5 * cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 4.0;
+        parabola_coeffs(1, j - 1) = ar - al;
+        parabola_coeffs(2, j - 1) =
+            3.0 * (-2.0 * cell_means(j + INITIAL_PADDING - 1) + (al + ar));
       });
     }
     Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
