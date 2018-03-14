@@ -472,16 +472,12 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                                 dx(8, j) * dma(j + 1) + dx(9, j) * dma(j));
           });
     }
-    // TODO: Figure out and fix the issue which needs the Kokkos::single,
-    // and parallelize over the bounds provided
-    // This costs about 15-20% more on GPU than a fully parallel ppm remap
-    Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-      {
-        auto bounds = boundaries::ppm_indices_3();
-        // Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
-        //                                                bounds.iterations()),
-        //                      [&](const int zoffset_j) {
-        //   const int j = zoffset_j + *bounds.begin();
+    {
+      auto bounds = boundaries::ppm_indices_3();
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
+                                                     bounds.iterations()),
+                           [&](const int zoffset_j) {
+        const int j = zoffset_j + *bounds.begin();
         for (auto j : bounds) {
           Real al = ai(j - 1);
           Real ar = ai(j);
@@ -516,8 +512,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
           parabola_coeffs(2, j - 1) =
               3.0 * (-2.0 * cell_means(j + INITIAL_PADDING - 1) + (al + ar));
         }
-      }
-    });
+      });
+    }
     Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
       boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
     });
