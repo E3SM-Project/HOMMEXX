@@ -42,7 +42,7 @@ srun -N NNODE \
      < xxinput.nl
 
 grep COMMIT ${xxdir}/../../CMakeCache.txt > time-xx-NAME
-echo ${SLURM_JOBID} >> time-homme-NAME
+echo ${SLURM_JOBID} >> time-xx-NAME
 head -n 50 HommeTime_stats >> time-xx-NAME
 
 rm HommeTime_stats
