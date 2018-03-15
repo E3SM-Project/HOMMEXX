@@ -326,12 +326,25 @@ struct RemapFunctor : public Remapper,
 
 private:
   template <typename FunctorTag>
-  void run_functor(const std::string functor_name, int num_exec) {
+  typename std::enable_if<OnGpu<ExecSpace>::value == false,
+                          Kokkos::TeamPolicy<ExecSpace, FunctorTag> >::type
+  remap_team_policy(int num_exec) {
+    return Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
+  }
+
+  template <typename FunctorTag>
+  typename std::enable_if<OnGpu<ExecSpace>::value == true,
+                          Kokkos::TeamPolicy<ExecSpace, FunctorTag> >::type
+  remap_team_policy(int num_exec) {
     constexpr int num_threads = 16;
     constexpr int num_vectors = 32;
-    Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy(num_exec, num_threads, num_vectors);
-    // Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
-    //     Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
+    return Kokkos::TeamPolicy<ExecSpace, FunctorTag>(num_exec, num_threads,
+                                                     num_vectors);
+  }
+
+  template <typename FunctorTag>
+  void run_functor(const std::string functor_name, int num_exec) {
+    const auto policy = remap_team_policy<FunctorTag>(num_exec);
     // Timers don't work on CUDA, so place them here
     GPTLstart(functor_name.c_str());
     profiling_resume();
