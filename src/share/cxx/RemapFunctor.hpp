@@ -328,7 +328,7 @@ private:
   template <typename FunctorTag>
   void run_functor(const std::string functor_name, int num_exec) {
     constexpr int num_threads = 16;
-    constexpr int num_vectors = 16;
+    constexpr int num_vectors = 32;
     Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy(num_exec, num_threads, num_vectors);
     // Kokkos::TeamPolicy<ExecSpace, FunctorTag> policy =
     //     Homme::get_default_team_policy<ExecSpace, FunctorTag>(num_exec);
