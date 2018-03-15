@@ -257,6 +257,9 @@ public:
 
   struct AALSetupPhase {};
   struct AALTracerPhase {};
+  struct AALQTensPhase {};
+  struct AALimitPhase {};
+  struct AALSphereMPPhase {};
 
   void advect_and_limit() {
     profiling_resume();
@@ -267,7 +270,19 @@ public:
     ExecSpace::fence();
     m_kernel_will_run_limiters = true;
     Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace, AALTracerPhase>(
+      Homme::get_default_team_policy<ExecSpace, AALQTensPhase>(
+        m_elements.num_elems() * m_data.qsize),
+      *this);
+    ExecSpace::fence();
+    if(m_data.limiter_option == 8) {
+      Kokkos::parallel_for(
+        Homme::get_default_team_policy<ExecSpace, AALimitPhase>(
+          m_elements.num_elems() * m_data.qsize),
+        *this);
+      ExecSpace::fence();
+    }
+    Kokkos::parallel_for(
+      Homme::get_default_team_policy<ExecSpace, AALSphereMPPhase>(
         m_elements.num_elems() * m_data.qsize),
       *this);
     ExecSpace::fence();
@@ -285,6 +300,24 @@ public:
   void operator() (const AALTracerPhase&, const TeamMember& team) const {
     KernelVariables kv(team, m_data.qsize);
     run_tracer_phase(kv);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALQTensPhase&, const TeamMember& team) const {
+    KernelVariables kv(team, m_data.qsize);
+    compute_qtens(kv);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALimitPhase&, const TeamMember& team) const {
+    KernelVariables kv(team, m_data.qsize);
+    limiter_optim_iter_full(kv);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const AALSphereMPPhase&, const TeamMember& team) const {
+    KernelVariables kv(team, m_data.qsize);
+    apply_spheremp(kv);
   }
 
   struct PrecomputeDivDp {};

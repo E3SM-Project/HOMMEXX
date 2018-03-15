@@ -427,6 +427,11 @@ void BoundaryExchange::recv_and_unpack () {
   recv_and_unpack(nullptr);
 }
 
+struct BEUnpack2DTag {};
+struct BEUnpack3DTag {};
+struct BEUnpackRSphereMPTag {};
+struct BEUnpackAllTag {};
+
 void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP][NP]>* rspheremp)
 {
   tstart("be recv_and_unpack");
@@ -478,22 +483,24 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
     auto fields_2d = m_2d_fields;
     auto recv_2d_buffers = m_recv_2d_buffers;
     const ConnectionHelpers helpers;
-    Kokkos::parallel_for(MDRangePolicy<ExecSpace, 2>({0, 0}, {m_num_elems, m_num_2d_fields}, {1, 1}),
-                         KOKKOS_LAMBDA(const int ie, const int ifield) {
-      for (int k=0; k<NP; ++k) {
-        for (int iedge : helpers.UNPACK_EDGES_ORDER) {
-          fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
-                                helpers.CONNECTION_PTS_FWD[iedge][k].jp)
-            += recv_2d_buffers(ie, ifield, iedge)[k];
+    Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace, BEUnpack2DTag>(0, m_num_elems * m_num_2d_fields),
+      KOKKOS_LAMBDA(BEUnpack2DTag, const int loop_idx) {
+        const int ie = loop_idx / m_num_2d_fields;
+        const int ifield = loop_idx % m_num_2d_fields;
+        for (int k=0; k<NP; ++k) {
+          for (int iedge : helpers.UNPACK_EDGES_ORDER) {
+            fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[iedge][k].ip,
+                                  helpers.CONNECTION_PTS_FWD[iedge][k].jp)
+              += recv_2d_buffers(ie, ifield, iedge)[k];
+          }
         }
-      }
-      for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
-        if (recv_2d_buffers(ie, ifield, icorner).size() > 0) {
-          fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
-                                helpers.CONNECTION_PTS_FWD[icorner][0].jp)
-            += recv_2d_buffers(ie, ifield, icorner)[0];
+        for (int icorner : helpers.UNPACK_CORNERS_ORDER) {
+          if (recv_2d_buffers(ie, ifield, icorner).size() > 0) {
+            fields_2d(ie, ifield)(helpers.CONNECTION_PTS_FWD[icorner][0].ip,
+                                  helpers.CONNECTION_PTS_FWD[icorner][0].jp)
+              += recv_2d_buffers(ie, ifield, icorner)[0];
+          }
         }
-      }
     });
   }
   // ...then unpack 3d fields.
@@ -504,8 +511,8 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
       Kokkos::parallel_for(
-        Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NUM_LEV),
-        KOKKOS_LAMBDA(const int it) {
+        Kokkos::RangePolicy<ExecSpace, BEUnpack3DTag>(0, m_num_elems*m_num_3d_fields*NUM_LEV),
+        KOKKOS_LAMBDA(BEUnpack3DTag, const int it) {
           const int ie = it / (num_3d_fields*NUM_LEV);
           const int ifield = (it / NUM_LEV) % num_3d_fields;
           const int ilev = it % NUM_LEV;
@@ -527,8 +534,8 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
       if (rspheremp) {
         const auto r = *rspheremp;
         Kokkos::parallel_for(
-          Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_3d_fields*NP*NP*NUM_LEV),
-          KOKKOS_LAMBDA(const int it) {
+          Kokkos::RangePolicy<ExecSpace, BEUnpackRSphereMPTag>(0, m_num_elems*m_num_3d_fields*NP*NP*NUM_LEV),
+          KOKKOS_LAMBDA(BEUnpackRSphereMPTag, const int it) {
             const int ie = it / (num_3d_fields*NUM_LEV*NP*NP);
             const int ifield = (it / (NP*NP*NUM_LEV)) % num_3d_fields;
             const int i = (it / (NP*NUM_LEV)) % NP;
@@ -540,8 +547,8 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
     } else {
       const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
       Kokkos::parallel_for(
-        Kokkos::TeamPolicy<ExecSpace>(num_parallel_iterations, 1, NUM_LEV),
-        KOKKOS_LAMBDA(const TeamMember& team) {
+        Kokkos::TeamPolicy<ExecSpace, BEUnpackAllTag>(num_parallel_iterations, 1, NUM_LEV),
+        KOKKOS_LAMBDA(BEUnpackAllTag, const TeamMember& team) {
           Homme::KernelVariables kv(team, num_3d_fields);
           const int ie = kv.ie;
           const int ifield = kv.iq;
@@ -618,6 +625,9 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
   tstop("be recv_and_unpack");
 }
 
+struct BEPackMinMaxTag {};
+struct BESendMinMaxTag {};
+
 void BoundaryExchange::pack_and_send_min_max ()
 {
   // The registration MUST be completed by now
@@ -659,8 +669,8 @@ void BoundaryExchange::pack_and_send_min_max ()
   const auto num_1d_fields = m_num_1d_fields;
   if (OnGpu<ExecSpace>::value) {
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
+      Kokkos::RangePolicy<ExecSpace, BEPackMinMaxTag>(0, m_num_elems*m_num_1d_fields*NUM_CONNECTIONS*NUM_LEV),
+      KOKKOS_LAMBDA(BEPackMinMaxTag, const int it) {
         const int ie = it / (num_1d_fields*NUM_CONNECTIONS*NUM_LEV);
         const int ifield = (it / (NUM_CONNECTIONS*NUM_LEV)) % num_1d_fields;
         const int iconn = (it / NUM_LEV) % NUM_CONNECTIONS;
@@ -687,11 +697,11 @@ void BoundaryExchange::pack_and_send_min_max ()
     const auto threads_vectors =
       DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
         num_parallel_iterations, tp);
-    const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+    const auto policy = Kokkos::TeamPolicy<ExecSpace, BESendMinMaxTag>(
       num_parallel_iterations, threads_vectors.first, threads_vectors.second);
     Kokkos::parallel_for(
       policy,
-      KOKKOS_LAMBDA(const TeamMember& team) {
+      KOKKOS_LAMBDA(BESendMinMaxTag, const TeamMember& team) {
         Homme::KernelVariables kv(team, num_1d_fields*NUM_CONNECTIONS);
         const int ie = kv.ie;
         const int iconn = kv.iq / num_1d_fields;
@@ -726,6 +736,9 @@ void BoundaryExchange::pack_and_send_min_max ()
   // Mark send buffer as busy
   m_send_pending = true;
 }
+
+struct BERecvMinMaxTag {};
+struct BEUnpackMinMaxTag {};
 
 void BoundaryExchange::recv_and_unpack_min_max ()
 {
@@ -772,8 +785,8 @@ void BoundaryExchange::recv_and_unpack_min_max ()
   const auto num_1d_fields = m_num_1d_fields;
   if (OnGpu<ExecSpace>::value) {
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
+      Kokkos::RangePolicy<ExecSpace, BERecvMinMaxTag>(0, m_num_elems*m_num_1d_fields*NUM_LEV),
+      KOKKOS_LAMBDA(BERecvMinMaxTag, const int it) {
         const int ie = it / (num_1d_fields*NUM_LEV);
         const int ifield = (it / NUM_LEV) % num_1d_fields;
         const int ilev = it % NUM_LEV;
@@ -799,11 +812,11 @@ void BoundaryExchange::recv_and_unpack_min_max ()
     const auto threads_vectors =
       DefaultThreadsDistribution<ExecSpace>::team_num_threads_vectors(
         num_parallel_iterations, tp);
-    const auto policy = Kokkos::TeamPolicy<ExecSpace>(
+    const auto policy = Kokkos::TeamPolicy<ExecSpace, BEUnpackMinMaxTag>(
       num_parallel_iterations, threads_vectors.first, threads_vectors.second);
     Kokkos::parallel_for(
       policy,
-      KOKKOS_LAMBDA(const TeamMember& team) {
+      KOKKOS_LAMBDA(BEUnpackMinMaxTag, const TeamMember& team) {
         Homme::KernelVariables kv(team, num_1d_fields);
         const int ie = kv.ie;
         const int ifield = kv.iq;
