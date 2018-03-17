@@ -48,7 +48,7 @@ find_program (CTEST_GIT_COMMAND NAMES git)
 set (HOMMEXX_REPOSITORY_LOCATION git@github.com:ACME-Climate/HOMMEXX.git)
 set (Trilinos_REPOSITORY_LOCATION git@github.com:trilinos/Trilinos.git)
 set (CUDA_ROOT /home/projects/pwr8-rhel73-lsf/cuda/8.0.44)
-set (NVCC_WRAPPER $ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper) 
+set (NVCC_WRAPPER $ENV{jenkins_trilinos_dir}/packages/kokkos/bin/nvcc_wrapper) 
 
 if (CLEAN_BUILD)
   # Initial cache info
@@ -231,7 +231,7 @@ if (BUILD_HOMMEXX_CUDA)
     "-DUSE_TRILINOS=FALSE"
     "-DHOMMEXX_FPMODEL=strict"
     "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline_P100/build" 
-    "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/config/nvcc_wrapper"
+    "-DCMAKE_CXX_COMPILER=$ENV{jenkins_trilinos_dir}/packages/kokkos/bin/nvcc_wrapper"
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
     )
   
