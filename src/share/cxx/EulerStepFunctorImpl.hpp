@@ -353,13 +353,15 @@ public:
     });
   }
 
+  struct QDPTimeAvg {};
+
   void qdp_time_avg (const int n0_qdp, const int np1_qdp) {
     const int qsize = m_data.qsize;
     const auto qdp = m_tracers.qdp;
     const Real rkstage = 3.0;
     Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()*m_data.qsize),
-      KOKKOS_LAMBDA(const TeamMember& team) {
+      Homme::get_default_team_policy<ExecSpace, QDPTimeAvg>(m_elements.num_elems()*m_data.qsize),
+      KOKKOS_LAMBDA(const QDPTimeAvg, const TeamMember& team) {
         KernelVariables kv(team, qsize);
         const auto qdp_n0 = Homme::subview(qdp, kv.ie, n0_qdp, kv.iq);
         const auto qdp_np1 = Homme::subview(qdp, kv.ie, np1_qdp, kv.iq);
@@ -379,6 +381,8 @@ public:
       });
   }
 
+  struct ComputeDP {};
+
   // TODO make GPUable.
   void compute_dp () {
     const auto& e = m_elements;
@@ -388,8 +392,8 @@ public:
     const auto rhsmdt = c.rhs_multiplier * c.dt;
     const auto buf = e.buffers.pressure;
     Kokkos::parallel_for(
-      Homme::get_default_team_policy<ExecSpace>(m_elements.num_elems()),
-      KOKKOS_LAMBDA (const TeamMember& team) {
+      Homme::get_default_team_policy<ExecSpace, ComputeDP>(m_elements.num_elems()),
+      KOKKOS_LAMBDA (const ComputeDP, const TeamMember& team) {
         KernelVariables kv(team);
         Kokkos::parallel_for (
           Kokkos::TeamThreadRange(kv.team, NP*NP),
