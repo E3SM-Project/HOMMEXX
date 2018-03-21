@@ -104,6 +104,8 @@ void prim_advance_exp (const int nm1, const int n0, const int np1,
   GPTLstop("tl-ae prim_advance_exp");
 }
 
+struct CaarFinalizeStateFunctorImpl {};
+
 void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0_qdp,
                         const Real dt, const Real eta_ave_w, const bool compute_diagnostics)
 {
@@ -135,8 +137,8 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
     const auto v = elements.m_v;
     const auto dp3d = elements.m_dp3d;
     Kokkos::parallel_for(
-      Kokkos::RangePolicy<ExecSpace>(0, elements.num_elems()*NP*NP*NUM_LEV),
-      KOKKOS_LAMBDA(const int it) {
+      Kokkos::RangePolicy<ExecSpace, CaarFinalizeStateFunctorImpl>(0, elements.num_elems()*NP*NP*NUM_LEV),
+      KOKKOS_LAMBDA(const CaarFinalizeStateFunctorImpl, const int it) {
          const int ie = it / (NP*NP*NUM_LEV);
          const int igp = (it / (NP*NUM_LEV)) % NP;
          const int jgp = (it / NUM_LEV) % NP;
