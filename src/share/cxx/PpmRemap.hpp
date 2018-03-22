@@ -189,8 +189,15 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> src_layer_thickness,
       ExecViewUnmanaged<const Scalar[NP][NP][NUM_LEV]> tgt_layer_thickness)
       const {
+    start_timer("Remap Compute Partitions");
     compute_partitions(kv, src_layer_thickness, tgt_layer_thickness);
+    kv.team_barrier();
+    stop_timer("Remap Compute Partitions");
+
+    start_timer("Remap Compute Integral Bounds");
     compute_integral_bounds(kv);
+    kv.team_barrier();
+    stop_timer("Remap Compute Integral Bounds");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -205,6 +212,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
 
+      start_timer("Remap Compute Remap");
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                            [&](const int k) {
         const int ilevel = k / VECTOR_SIZE;
@@ -240,21 +248,24 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
             remap_var(igp, jgp, ilast)[vlast];
       });
 
-      // Reflect the real values across the top and bottom boundaries into
-      // the ghost cells
+      stop_timer("Remap Compute Remap");
 
       // Computes a monotonic and conservative PPM reconstruction
+      start_timer("Remap Compute Ppm");
       compute_ppm(kv, Homme::subview(ao, kv.team_idx, igp, jgp),
                   Homme::subview(ppmdx, kv.ie, igp, jgp),
                   Homme::subview(dma, kv.team_idx, igp, jgp),
                   Homme::subview(ai, kv.team_idx, igp, jgp),
                   Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp));
+      stop_timer("Remap Compute Ppm");
+      start_timer("Remap Compute Indv Remap");
       compute_remap(kv, Homme::subview(kid, kv.ie, igp, jgp),
                     Homme::subview(z2, kv.ie, igp, jgp),
                     Homme::subview(parabola_coeffs, kv.team_idx, igp, jgp),
                     Homme::subview(mass_o, kv.team_idx, igp, jgp),
                     Homme::subview(dpo, kv.ie, igp, jgp),
                     Homme::subview(remap_var, igp, jgp));
+      stop_timer("Remap Compute Indv Remap");
     }); // End team thread range
     kv.team_barrier();
   }

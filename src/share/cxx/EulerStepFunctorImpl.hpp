@@ -297,7 +297,6 @@ public:
     //    m_elements.num_elems() * m_data.qsize),
     //  *this);
     ExecSpace::fence();
-    GPTLstop("esf-aalspheremp");
     m_kernel_will_run_limiters = false;
     profiling_pause();
   }
@@ -546,8 +545,11 @@ private:
 
   KOKKOS_INLINE_FUNCTION
   void run_tracer_phase (const KernelVariables& kv) const {
+    GPTLstart("esf-aalqtens");
     compute_qtens(kv);
     kv.team_barrier();
+    GPTLstop("esf-aalqtens");
+    GPTLstart("esf-aalimit");
     if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
       kv.team_barrier();
@@ -555,7 +557,11 @@ private:
       limiter_clip_and_sum(kv);
       kv.team_barrier();
     }
+    GPTLstop("esf-aalimit");
+    GPTLstart("esf-aalspheremp");
     apply_spheremp(kv);
+    kv.team_barrier();
+    GPTLstop("esf-aalspheremp");
   }
 
   KOKKOS_INLINE_FUNCTION
