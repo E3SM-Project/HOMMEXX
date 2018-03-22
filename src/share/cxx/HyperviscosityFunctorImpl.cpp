@@ -61,8 +61,10 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     biharmonic_wk_dp3d ();
     GPTLstop("hvf-bhwk");
     // dispatch parallel_for for first kernel
+    GPTLstart("hvf-prexchg");
     Kokkos::parallel_for(policy_pre_exchange, *this);
     Kokkos::fence();
+    GPTLstop("hvf-prexchg");
 
     // Exchange
     assert (m_be->is_registration_completed());
@@ -71,8 +73,10 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     GPTLstop("hvf-bexch");
 
     // Update states
+    GPTLstart("hvf-updatestates");
     Kokkos::parallel_for(policy_update_states, *this);
     Kokkos::fence();
+    GPTLstop("hvf-updatestates");
   }
 }
 
@@ -81,8 +85,10 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // For the first laplacian we use a differnt kernel, which uses directly the states
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
   auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_elements.num_elems());
+  GPTLstart("hvf-laplace1");
   Kokkos::parallel_for(policy_first_laplace, *this);
   Kokkos::fence();
+  GPTLstop("hvf-laplace1");
 
   // Exchange
   assert (m_be->is_registration_completed());
@@ -93,8 +99,10 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
   auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_elements.num_elems());
+  GPTLstart("hvf-laplace2");
   Kokkos::parallel_for(policy_second_laplace, *this);
   Kokkos::fence();
+  GPTLstop("hvf-laplace2");
 }
 
 } // namespace Homme

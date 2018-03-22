@@ -341,6 +341,7 @@ void BoundaryExchange::pack_and_send ()
     const auto num_3d_fields = m_num_3d_fields;
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
+      GPTLstart("be-pack3d");
       Kokkos::parallel_for(
         Kokkos::RangePolicy<ExecSpace, BEPack3DTag>(0, m_num_elems*m_num_3d_fields*NUM_CONNECTIONS*NUM_LEV),
         KOKKOS_LAMBDA(BEPack3DTag, const int it) {
@@ -363,6 +364,7 @@ void BoundaryExchange::pack_and_send ()
             sb(k, ilev) = f3(pts[k].ip, pts[k].jp, ilev);
           }
         });
+      GPTLstop("be-pack3d");
     } else {
       const auto num_parallel_iterations = m_num_elems*m_num_3d_fields;
       ThreadPreferences tp;
@@ -510,6 +512,7 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
     const auto num_3d_fields = m_num_3d_fields;
     if (OnGpu<ExecSpace>::value) {
       const ConnectionHelpers helpers;
+      GPTLstart("be-unpack3d");
       Kokkos::parallel_for(
         Kokkos::RangePolicy<ExecSpace, BEUnpack3DTag>(0, m_num_elems*m_num_3d_fields*NUM_LEV),
         KOKKOS_LAMBDA(BEUnpack3DTag, const int it) {
@@ -531,6 +534,7 @@ void BoundaryExchange::recv_and_unpack (const ExecViewUnmanaged<const Real * [NP
                 += recv_3d_buffers(ie, ifield, icorner)(0, ilev);
           }
         });
+      GPTLstop("be-unpack3d");
       if (rspheremp) {
         const auto r = *rspheremp;
         Kokkos::parallel_for(

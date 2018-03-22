@@ -186,11 +186,13 @@ public:
     assert(m_data.rhs_multiplier == 2.0);
     m_data.rhs_viss = 3.0;
 
+    GPTLstart("esf-prexchg");
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
+    GPTLstop("esf-prexchg");
     profiling_pause();
   }
 
@@ -198,12 +200,14 @@ public:
     profiling_resume();
     assert(m_data.rhs_multiplier == 2.0);
 
+    GPTLstart("esf-postxchg");
     Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
 
     ExecSpace::fence();
     profiling_pause();
+    GPTLstop("esf-postxchg");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -263,29 +267,37 @@ public:
 
   void advect_and_limit() {
     profiling_resume();
+    GPTLstart("esf-aalsetup");
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALSetupPhase>(
         m_elements.num_elems()),
       *this);
     ExecSpace::fence();
+    GPTLstop("esf-aalsetup");
     m_kernel_will_run_limiters = true;
+    GPTLstart("esf-aalqtens");
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALQTensPhase>(
         m_elements.num_elems() * m_data.qsize),
       *this);
     ExecSpace::fence();
+    GPTLstop("esf-aalqtens");
     if(m_data.limiter_option == 8) {
+      GPTLstart("esf-aalimit");
       Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, AALimitPhase>(
           m_elements.num_elems() * m_data.qsize),
         *this);
       ExecSpace::fence();
+      GPTLstop("esf-aalimit");
     }
+    GPTLstart("esf-aalspheremp");
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, AALSphereMPPhase>(
         m_elements.num_elems() * m_data.qsize),
       *this);
     ExecSpace::fence();
+    GPTLstop("esf-aalspheremp");
     m_kernel_will_run_limiters = false;
     profiling_pause();
   }
@@ -326,12 +338,14 @@ public:
     assert(m_data.qsize >= 0); // reset() already called
     profiling_resume();
 
+    GPTLstart("esf-divdp");
     Kokkos::parallel_for(
         Homme::get_default_team_policy<ExecSpace, PrecomputeDivDp>(
             m_elements.num_elems()),
         *this);
 
     ExecSpace::fence();
+    GPTLstop("esf-divdp");
     profiling_pause();
   }
 
@@ -359,6 +373,7 @@ public:
     const int qsize = m_data.qsize;
     const auto qdp = m_tracers.qdp;
     const Real rkstage = 3.0;
+    GPTLstart("esf-qdp_avg");
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, QDPTimeAvg>(m_elements.num_elems()*m_data.qsize),
       KOKKOS_LAMBDA(const QDPTimeAvg, const TeamMember& team) {
@@ -379,6 +394,7 @@ public:
             });
           });
       });
+    GPTLstop("esf-qdp_avg");
   }
 
   struct ComputeDP {};
@@ -391,6 +407,7 @@ public:
     const auto divdp_proj = e.m_derived_divdp_proj;
     const auto rhsmdt = c.rhs_multiplier * c.dt;
     const auto buf = e.buffers.pressure;
+    GPTLstart("esf-dp");
     Kokkos::parallel_for(
       Homme::get_default_team_policy<ExecSpace, ComputeDP>(m_elements.num_elems()),
       KOKKOS_LAMBDA (const ComputeDP, const TeamMember& team) {
@@ -412,6 +429,7 @@ public:
               });
           });
       });
+    GPTLstop("esf-dp");
   }
 
   void compute_qmin_qmax() {
