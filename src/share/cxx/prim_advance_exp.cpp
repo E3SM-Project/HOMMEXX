@@ -130,6 +130,7 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
   functor.run(n0,np1,np1,2.0*dt/3.0,0.0,false);
 
   // Compute (5u1-u0)/4 and store it in timelevel nm1
+  GPTLstart("caar finalize");
   {
     const auto t = elements.m_t;
     const auto v = elements.m_v;
@@ -148,6 +149,7 @@ void u3_5stage_timestep(const int nm1, const int n0, const int np1, const int n0
     });
   }
   ExecSpace::fence();
+  GPTLstop("caar finalize");
 
   // Stage 5: u5 = (5u1-u0)/4 + 3dt/4 RHS(u4), t_rhs = t + dt/5 + dt/5 + dt/3 + 2dt/3
   functor.run(nm1,np1,np1,3.0*dt/4.0,3.0*eta_ave_w/4.0,false);
