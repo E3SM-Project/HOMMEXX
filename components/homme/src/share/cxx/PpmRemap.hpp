@@ -311,12 +311,11 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
                          [&](const int k) {
       const int ilevel = k / VECTOR_SIZE;
       const int ivector = k % VECTOR_SIZE;
-			if(k > 0) {
-				remap_var(ilevel)[ivector] = mass(k) - mass(k - 1);
-			}
-			else {
-				remap_var(ilevel)[ivector] = mass(k);
-			}
+      if (k > 0) {
+        remap_var(ilevel)[ivector] = mass(k) - mass(k - 1);
+      } else {
+        remap_var(ilevel)[ivector] = mass(k);
+      }
     }); // k loop
   }
 
@@ -334,25 +333,26 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                          [&](const int k) {
       const Real mass_1 =
-          (k > 0) ? compute_mass(
-                        parabola_coeffs(2, k_id(k - 1)),
-                        parabola_coeffs(1, k_id(k - 1)),
-                        parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1) + 1),
-                        prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
-                        integral_bounds(k - 1))
-                  : 0.0;
+          (k > 0)
+              ? compute_mass(
+                    parabola_coeffs(2, k_id(k - 1)),
+                    parabola_coeffs(1, k_id(k - 1)),
+                    parabola_coeffs(0, k_id(k - 1)), prev_mass(k_id(k - 1) + 1),
+                    prev_dp(k_id(k - 1) + _ppm_consts::INITIAL_PADDING),
+                    integral_bounds(k - 1))
+              : 0.0;
 
       const Real x2_cur_lev = integral_bounds(k);
 
       const int kk_cur_lev = k_id(k);
       assert(kk_cur_lev + 1 >= k);
       assert(kk_cur_lev < parabola_coeffs.extent_int(1));
- 
+
       const Real mass_2 = compute_mass(
           parabola_coeffs(2, kk_cur_lev), parabola_coeffs(1, kk_cur_lev),
           parabola_coeffs(0, kk_cur_lev), prev_mass(kk_cur_lev + 1),
           prev_dp(kk_cur_lev + _ppm_consts::INITIAL_PADDING), x2_cur_lev);
- 
+
       const int ilevel = k / VECTOR_SIZE;
       const int ivector = k % VECTOR_SIZE;
       remap_var(ilevel)[ivector] = mass_2 - mass_1;
@@ -474,43 +474,43 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
     }
     {
       auto bounds = boundaries::ppm_indices_3();
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,
-                                                     bounds.iterations()),
-                           [&](const int zoffset_j) {
-        const int j = zoffset_j + *bounds.begin();
-        Real al = ai(j - 1);
-        Real ar = ai(j);
-        if ((ar - cell_means(j + INITIAL_PADDING - 1)) *
-                (cell_means(j + INITIAL_PADDING - 1) - al) <=
-            0.) {
-          al = cell_means(j + INITIAL_PADDING - 1);
-          ar = cell_means(j + INITIAL_PADDING - 1);
-        }
-        if ((ar - al) *
-                (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) >
-            (ar - al) * (ar - al) / 6.0) {
-          al = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * ar;
-        }
-        if ((ar - al) *
-                (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) <
-            -(ar - al) * (ar - al) / 6.0) {
-          ar = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * al;
-        }
+      Kokkos::parallel_for(
+          Kokkos::ThreadVectorRange(kv.team, bounds.iterations()),
+          [&](const int zoffset_j) {
+            const int j = zoffset_j + *bounds.begin();
+            Real al = ai(j - 1);
+            Real ar = ai(j);
+            if ((ar - cell_means(j + INITIAL_PADDING - 1)) *
+                    (cell_means(j + INITIAL_PADDING - 1) - al) <=
+                0.) {
+              al = cell_means(j + INITIAL_PADDING - 1);
+              ar = cell_means(j + INITIAL_PADDING - 1);
+            }
+            if ((ar - al) *
+                    (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) >
+                (ar - al) * (ar - al) / 6.0) {
+              al = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * ar;
+            }
+            if ((ar - al) *
+                    (cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 2.0) <
+                -(ar - al) * (ar - al) / 6.0) {
+              ar = 3.0 * cell_means(j + INITIAL_PADDING - 1) - 2.0 * al;
+            }
 
-        // Computed these coefficients from the edge values
-        // and cell mean in Maple. Assumes normalized
-        // coordinates: xi=(x-x0)/dx
+            // Computed these coefficients from the edge values
+            // and cell mean in Maple. Assumes normalized
+            // coordinates: xi=(x-x0)/dx
 
-        assert(parabola_coeffs.data() != nullptr);
-        assert(j - 1 < parabola_coeffs.extent_int(1));
-        assert(2 < parabola_coeffs.extent_int(0));
+            assert(parabola_coeffs.data() != nullptr);
+            assert(j - 1 < parabola_coeffs.extent_int(1));
+            assert(2 < parabola_coeffs.extent_int(0));
 
-        parabola_coeffs(0, j - 1) =
-            1.5 * cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 4.0;
-        parabola_coeffs(1, j - 1) = ar - al;
-        parabola_coeffs(2, j - 1) =
-            3.0 * (-2.0 * cell_means(j + INITIAL_PADDING - 1) + (al + ar));
-      });
+            parabola_coeffs(0, j - 1) =
+                1.5 * cell_means(j + INITIAL_PADDING - 1) - (al + ar) / 4.0;
+            parabola_coeffs(1, j - 1) = ar - al;
+            parabola_coeffs(2, j - 1) =
+                3.0 * (-2.0 * cell_means(j + INITIAL_PADDING - 1) + (al + ar));
+          });
     }
     Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
       boundaries::apply_ppm_boundary(cell_means, parabola_coeffs);
