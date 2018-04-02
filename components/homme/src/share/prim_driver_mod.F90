@@ -1362,7 +1362,7 @@ contains
     real(kind=real_kind) :: dp_np1(np,np)
     integer :: ie,i,j,k,n,q,t
     integer :: n0_qdp,np1_qdp,r,nstep_end
-    logical :: compute_diagnostics, compute_energy
+    logical :: compute_diagnostics
 
     ! compute timesteps for tracer transport and vertical remap
 
@@ -1374,14 +1374,10 @@ contains
        nstep_end = tl%nstep + qsplit*rsplit  ! nstep at end of this routine
     endif
 
-    ! activate energy diagnostics if using an energy fixer
-    compute_energy = energy_fixer > 0
-
     ! activate diagnostics periodically for display to stdout
     compute_diagnostics   = .false.
     if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0) then
        compute_diagnostics= .true.
-       compute_energy     = .true.
     endif
     if(disable_diagnostics) compute_diagnostics= .false.
 
@@ -1390,9 +1386,17 @@ contains
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
       call t_stopf("prim_diag_scalars")
+
+      call t_startf("prim_energy_halftimes")
+      call prim_energy_halftimes(elem,hvcoord,tl,3,.true.,nets,nete)
+      call t_stopf("prim_energy_halftimes")
     endif
 
-#ifdef CAM
+    call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
+#ifndef CAM
+    ! Apply HOMME test case forcing
+    call compute_test_forcing(elem,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete,tl)
+#endif
 
     ! Apply CAM Physics forcing
 
@@ -1400,9 +1404,6 @@ contains
     !   ftype= 1: forcing was applied time-split in CAM coupling layer
     !   ftype= 0: apply all forcing here
     !   ftype=-1: do not apply forcing
-
-    call TimeLevel_Qdp(tl, qsplit, n0_qdp)
-
     if (ftype==0) then
       call t_startf("ApplyCAMForcing")
       call ApplyCAMForcing(elem, fvm, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
@@ -1413,21 +1414,13 @@ contains
       call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
       call t_stopf("ApplyCAMForcing_dynamics")
     endif
-#else
-    ! Apply HOMME test case forcing
-    call apply_test_forcing(elem,fvm,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
 
-#endif
-
+    if (compute_diagnostics) then
     ! E(1) Energy after CAM forcing
-    if (compute_energy) then
       call t_startf("prim_energy_halftimes")
       call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
       call t_stopf("prim_energy_halftimes")
-    endif
-
     ! qmass and variance, using Q(n0),Qdp(n0)
-    if (compute_diagnostics) then
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
       call t_stopf("prim_diag_scalars")
@@ -1444,7 +1437,7 @@ contains
 
 
 #if (USE_OPENACC)
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
+!    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call t_startf("copy_qdp_h2d")
     call copy_qdp_h2d( elem , n0_qdp )
     call t_stopf("copy_qdp_h2d")
@@ -1462,9 +1455,10 @@ contains
        call t_stopf("prim_step_rX")
     enddo
     ! defer final timelevel update until after remap and diagnostics
+    !compute timelevels for tracers (no longer the same as dynamics)
+    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
 
 #if (USE_OPENACC)
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call t_startf("copy_qdp_h2d")
     call copy_qdp_d2h( elem , np1_qdp )
     call t_stopf("copy_qdp_h2d")
@@ -1475,9 +1469,6 @@ contains
     !  always for tracers
     !  if rsplit>0:  also remap dynamics and compute reference level ps_v
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !compute timelevels for tracers (no longer the same as dynamics)
-    ! note: time level update for fvm tracers takes place in fvm_mod
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1514,26 +1505,9 @@ contains
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
       call t_stopf("prim_diag_scalars")
-    endif
-    if (compute_energy) then
+
       call t_startf("prim_energy_halftimes")
       call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
-      call t_stopf("prim_energy_halftimes")
-    endif
-
-    if (energy_fixer > 0) then
-      call t_startf("prim_energy_fixer")
-      call prim_energy_fixer(elem,hvcoord,hybrid,tl,nets,nete,nsubstep)
-      call t_stopf("prim_energy_fixer")
-    endif
-
-    if (compute_diagnostics) then
-      call t_startf("prim_diag_scalars")
-      call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
-      call t_stopf("prim_diag_scalars")
-
-      call t_startf("prim_energy_halftimes")
-      call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
       call t_stopf("prim_energy_halftimes")
     endif
 
@@ -1541,7 +1515,6 @@ contains
     ! update dynamics time level pointers
     ! =================================
     call TimeLevel_update(tl,"leapfrog")
-    ! note: time level update for fvm tracers takes place in fvm_mod
 
     ! now we have:
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)
