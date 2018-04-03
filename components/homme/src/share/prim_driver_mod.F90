@@ -602,7 +602,7 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
                                     elem_metdet, elem_metinv, elem_state_phis,      &
                                     elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                    elem_state_Qdp, elem_state_ps_v, elem_state_lnps
+                                    elem_state_Qdp, elem_state_ps_v
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
                                     vert_remap_q_alg, statefreq, use_semi_lagrange_transport
@@ -710,7 +710,7 @@ contains
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
 #endif
 
 #ifdef TRILINOS
@@ -894,7 +894,6 @@ contains
              elem(ie)%state%v(:,:,:,:,tl%nm1) = elem(ie)%state%v(:,:,:,:,tl%n0)
              elem(ie)%state%T(:,:,:,tl%nm1)   = elem(ie)%state%T(:,:,:,tl%n0)
              elem(ie)%state%ps_v(:,:,tl%nm1)  = elem(ie)%state%ps_v(:,:,tl%n0)
-             elem(ie)%state%lnps(:,:,tl%nm1)  = elem(ie)%state%lnps(:,:,tl%n0)
           enddo
        endif ! runtype==2
 
@@ -1078,7 +1077,6 @@ contains
     elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
     elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
     elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
-    elem_state_lnps_ptr = c_loc(elem_state_lnps)
     call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                  elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 
@@ -1250,11 +1248,6 @@ contains
     else
        call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
             hybrid, dt, tl, nets, nete, compute_diagnostics)
-
-       ! keep lnps up to date (we should get rid of this requirement)
-       do ie=nets,nete
-          elem(ie)%state%lnps(:,:,tl%np1)= LOG(elem(ie)%state%ps_v(:,:,tl%np1))
-       enddo
     end if
 
     ! =================================
@@ -1473,13 +1466,10 @@ contains
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! time step is complete.  update some diagnostic variables:
-    ! lnps (we should get rid of this)
     ! Q    (mixing ratio)
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     call t_startf("prim_run_subcyle_diags")
     do ie=nets,nete
-       !dir$ simd
-       elem(ie)%state%lnps(:,:,tl%np1)= LOG(elem(ie)%state%ps_v(:,:,tl%np1))
 #if (defined COLUMN_OPENMP)
        !$omp parallel do default(shared), private(k,q,dp_np1)
 #endif
