@@ -611,7 +611,7 @@ contains
     call t_startf('preq_filter')
     if (flt%type == "bv") then
        do ie=nets,nete          
-          elem(ie)%state%ps_v(:,:,nfilt) = EXP(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%ps_v(:,:,nfilt) = EXP(elem(ie)%state%lnps(:,:,nfilt))
           call prim_filt_bv(elem(ie)%state%ps_v(:,:,nfilt),elem(ie)%state%T(:,:,:,nfilt), elem(ie)%state%v(:,:,:,:,nfilt), flt)
 
           do j=1,np
@@ -660,7 +660,7 @@ contains
                 elem(ie)%state%ps_v(i,j,nfilt) = elem(ie)%rmp(i,j)*elem(ie)%state%ps_v(i,j,nfilt)
              end do
           end do
-          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%ps_v(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%ps_v(:,:,nfilt))
 
           do k=1,nlev
              do j=1,np
@@ -680,7 +680,7 @@ contains
 #endif
     else if (flt%type == "fm") then
        do ie=nets,nete
-          elem(ie)%state%ps_v(:,:,nfilt) = EXP(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%ps_v(:,:,nfilt) = EXP(elem(ie)%state%lnps(:,:,nfilt))
           call prim_filt_fm(elem(ie)%state%ps_v(:,:,nfilt),          &
                elem(ie)%state%T(:,:,:,nfilt),   &
                elem(ie)%derived%div(:,:,:,nfilt), &
@@ -688,7 +688,7 @@ contains
                flt,                      &
                elem(ie)%D,                 &
                elem(ie)%Dinv)
-          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%ps_v(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%ps_v(:,:,nfilt))
        end do
     end if
     call t_stopf('preq_filter')
@@ -849,13 +849,13 @@ contains
           mp => elem(ie)%mp
 
 #ifdef _USE_VECTOR
-          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
+!          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
 #else
-          elem(ie)%state%lnps(:,:,nfilt)=EXP(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt)=EXP(elem(ie)%state%lnps(:,:,nfilt))
 #endif
-          call filter_P(elem(ie)%state%lnps(:,:,nfilt),flt)
+!          call filter_P(elem(ie)%state%lnps(:,:,nfilt),flt)
 
-          elem(ie)%state%lnps(:,:,nfilt) = mp*elem(ie)%state%lnps(:,:,nfilt)
+!          elem(ie)%state%lnps(:,:,nfilt) = mp*elem(ie)%state%lnps(:,:,nfilt)
 
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,kptr)
@@ -874,11 +874,11 @@ contains
           end do
 
           kptr=0
-          call edgeVpack(edge_3lp1,                 &
-               elem(ie)%state%lnps(:,:,nfilt), &
-               1,                         &
-               kptr,                      &
-               ie)
+!          call edgeVpack(edge_3lp1,                 &
+!               elem(ie)%state%lnps(:,:,nfilt), &
+!               1,                         &
+!               kptr,                      &
+!               ie)
 
           kptr=1
           call edgeVpack(edge_3lp1,                 &
@@ -905,7 +905,7 @@ contains
           mp  => elem(ie)%mp
 
           kptr=0
-          call edgeVunpack(edge_3lp1, elem(ie)%state%lnps(:,:,nfilt), 1, kptr, ie)
+!          call edgeVunpack(edge_3lp1, elem(ie)%state%lnps(:,:,nfilt), 1, kptr, ie)
 
           kptr=1
           call edgeVunpack(edge_3lp1, elem(ie)%state%T(:,:,1,nfilt), nlev, kptr, ie)
@@ -913,12 +913,12 @@ contains
           kptr=1+nlev
           call edgeVunpack(edge_3lp1, elem(ie)%state%v(:,:,1,1,nfilt), 2*nlev, kptr, ie)
 
-          elem(ie)%state%lnps(:,:,nfilt) = rmp*elem(ie)%state%lnps(:,:,nfilt)
+!          elem(ie)%state%lnps(:,:,nfilt) = rmp*elem(ie)%state%lnps(:,:,nfilt)
 
 #ifdef _USE_VECTOR
-          call vlog(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
+!          call vlog(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
 #else
-          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%lnps(:,:,nfilt))
 #endif
 
 #if (defined COLUMN_OPENMP)
@@ -946,15 +946,15 @@ contains
        do ie=nets,nete
 
 #ifdef _USE_VECTOR
-          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
+!          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
 #else
-          elem(ie)%state%lnps(:,:,nfilt)=EXP(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt)=EXP(elem(ie)%state%lnps(:,:,nfilt))
 #endif
-          call filter_P(elem(ie)%state%lnps(:,:,nfilt),flt)
+!          call filter_P(elem(ie)%state%lnps(:,:,nfilt),flt)
 #ifdef _USE_VECTOR
-          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
+!          call vexp(elem(ie)%state%lnps(1,1,nfilt),elem(ie)%state%lnps(1,1,nfilt),np*np)
 #else
-          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%lnps(:,:,nfilt))
+!          elem(ie)%state%lnps(:,:,nfilt) = LOG(elem(ie)%state%lnps(:,:,nfilt))
 #endif
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,i,j,v1,v2,u,v)

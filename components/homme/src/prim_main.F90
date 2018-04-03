@@ -6,7 +6,7 @@ program prim_main
 #ifdef _PRIM
   use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize
 #ifndef USE_KOKKOS_KERNELS
-  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run, prim_run_subcycle
+  use prim_driver_mod,  only: prim_run_subcycle
 #endif
   use hybvcoord_mod,    only: hvcoord_t, hvcoord_init
 #endif
@@ -302,7 +302,7 @@ program prim_main
         call abortmp("Error! Cannot use this option in Kokkos build")
 #else
         if(par%masterproc) print *,"Leapfrog bootstrap initialization..."
-        call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
+!        call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
 #endif
      endif
   endif
@@ -362,7 +362,7 @@ program prim_main
 #ifdef USE_KOKKOS_KERNELS
            call abortmp ("Error! Functionality not available in Kokkos build")
 #else
-           call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
+!           call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
 #endif
         endif
         call t_stopf('prim_run')
