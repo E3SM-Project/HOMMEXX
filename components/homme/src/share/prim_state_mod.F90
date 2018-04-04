@@ -523,7 +523,7 @@ contains
     !
     !   only compute on full leapfrog timesteps (tl%nstep >= tl%nstep2)
     ! ====================================================================
-
+#ifndef USE_KOKKOS_KERNELS
 !   Compute Energies at time1 and time2 (half levels between leapfrog steps)
     do n=1,4
        
@@ -556,7 +556,6 @@ contains
        PEner(n) = PEner(n)*scale
        TOTE(n)=IEner(n)+PEner(n)+KEner(n)
        
-#ifndef USE_KOKKOS_KERNELS
        do q=1,qsize
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qvar(:,:,q,n)
@@ -578,9 +577,8 @@ contains
              Q1mass(q) = Q1mass(q)*scale
           endif
        enddo
-#endif
     enddo
-    
+#endif
 
 
     !
