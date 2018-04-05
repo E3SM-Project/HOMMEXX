@@ -27,6 +27,8 @@ struct Comm
   // out what processes are dedicated to Homme, and create a comm
   // involving only those processes.
   void init ();
+
+  bool root () const;
 };
 
 } // namespace Homme

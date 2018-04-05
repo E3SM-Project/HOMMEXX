@@ -20,19 +20,17 @@ void initialize_hommexx_session ()
    * threads/processors Kokkos uses */
   initialize_kokkos();
 
-  ExecSpace::print_configuration(std::cout, true);
-
-  // Put here other initialization routines (e.g., MPI)
-  if (Context::singleton().get_comm().m_rank == 0)
+  const auto comm = Context::singleton().get_comm();
+  if (comm.root()) {
+    ExecSpace::print_configuration(std::cout, true);
     std::cout << "HOMMEXX SHA1: " << HOMMEXX_SHA1 << "\n";
+  }
 }
 
 void finalize_hommexx_session ()
 {
   Context::finalize_singleton();
   Kokkos::finalize();
-
-  // Put here other finalization routines (e.g., MPI)
 }
 
 } // namespace Homme

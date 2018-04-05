@@ -59,4 +59,9 @@ void Comm::init ()
 #endif
 }
 
+bool Comm::root () const
+{
+  return m_rank == 0;
+}
+
 } // namespace Homme
