@@ -28,4 +28,6 @@
 // The version of AVX available on the host
 #define AVX_VERSION ${AVX_VERSION}
 
+#define HOMMEXX_SHA1 "${LAST_GIT_COMMIT_SHA}"
+
 #endif
