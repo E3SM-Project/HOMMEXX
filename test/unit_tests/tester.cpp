@@ -10,10 +10,10 @@
 
 int main(int argc, char **argv) {
 
-  Homme::initialize_hommexx_session();
-
   // Initialize mpi
   MPI_Init(&argc,&argv);
+
+  Homme::initialize_hommexx_session();
 
   int result = Catch::Session().run(argc, argv);
 
