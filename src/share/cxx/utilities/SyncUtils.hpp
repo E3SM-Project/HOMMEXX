@@ -15,7 +15,7 @@ template <typename ViewT, typename ArrayT> struct exec_view_mappable {
 #else
   static constexpr bool value = Kokkos::Impl::ViewMapping<
     typename ViewT::traits,
-    typename Kokkos::View<ArrayT, Kokkos::LayoutRight, Kokkos::CudaSpace,
+    typename Kokkos::View<ArrayT, Kokkos::LayoutRight, ExecSpace,
                           Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict> >::traits,
     void>::is_assignable;
 #endif
