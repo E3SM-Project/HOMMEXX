@@ -14,7 +14,7 @@ MESSAGE (STATUS "  --> Building with HOMME_USE_FLAT_ARRAYS = ${HOMME_USE_FLAT_AR
 
 SET(TARGET_DIR          ${HOMME_SOURCE_DIR}/src/preqx)
 SET(UTILS_SHARE_DIR     ${HOMME_SOURCE_DIR}/utils/csm_share)
-SET(SRC_DIR             ${HOMME_SOURCE_DIR}/src)
+SET(SRC_BASE_DIR        ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE_DIR       ${HOMME_SOURCE_DIR}/src/share)
 SET(PHYSICS_DIR         ${HOMME_SOURCE_DIR}/physics)
 SET(UTILS_TIMING_SRC_DIR ${HOMME_SOURCE_DIR}/utils/timing)
@@ -38,28 +38,28 @@ SET (TARGET_F90
 
 SET(PREQX_DEPS_F90
   ${TARGET_F90}
-  ${SRC_DIR}/test_src/asp_tests.F90
-  ${SRC_DIR}/test_src/baroclinic_inst_mod.F90
-  ${SRC_DIR}/test_src/dcmip2012_test1_2_3.F90
-  ${SRC_DIR}/test_src/dcmip2012_test4.F90
-  ${SRC_DIR}/test_src/dcmip2012_test5.F90
-  ${SRC_DIR}/checksum_mod.F90
-  ${SRC_DIR}/common_io_mod.F90
-  ${SRC_DIR}/common_movie_mod.F90
-  ${SRC_DIR}/forcing_mod.F90
-  ${SRC_DIR}/interpolate_driver_mod.F90
-  ${SRC_DIR}/interp_movie_mod.F90
-  ${SRC_DIR}/netcdf_io_mod.F90
-  ${SRC_DIR}/pio_io_mod.F90
-  ${SRC_DIR}/prim_movie_mod.F90
-  ${SRC_DIR}/prim_restart_mod.F90
-  ${SRC_DIR}/ref_state_mod.F90
-  ${SRC_DIR}/repro_sum_mod.F90
-  ${SRC_DIR}/restart_io_mod.F90
-  ${SRC_DIR}/surfaces_mod.F90
-  ${SRC_DIR}/vertical_mod.F90
-  ${SRC_DIR}/test_mod.F90
-  ${SRC_DIR}/utils_mod.F90
+  ${SRC_BASE_DIR}/test_src/asp_tests.F90
+  ${SRC_BASE_DIR}/test_src/baroclinic_inst_mod.F90
+  ${SRC_BASE_DIR}/test_src/dcmip2012_test1_2_3.F90
+  ${SRC_BASE_DIR}/test_src/dcmip2012_test4.F90
+  ${SRC_BASE_DIR}/test_src/dcmip2012_test5.F90
+  ${SRC_BASE_DIR}/checksum_mod.F90
+  ${SRC_BASE_DIR}/common_io_mod.F90
+  ${SRC_BASE_DIR}/common_movie_mod.F90
+  ${SRC_BASE_DIR}/forcing_mod.F90
+  ${SRC_BASE_DIR}/interpolate_driver_mod.F90
+  ${SRC_BASE_DIR}/interp_movie_mod.F90
+  ${SRC_BASE_DIR}/netcdf_io_mod.F90
+  ${SRC_BASE_DIR}/pio_io_mod.F90
+  ${SRC_BASE_DIR}/prim_movie_mod.F90
+  ${SRC_BASE_DIR}/prim_restart_mod.F90
+  ${SRC_BASE_DIR}/ref_state_mod.F90
+  ${SRC_BASE_DIR}/repro_sum_mod.F90
+  ${SRC_BASE_DIR}/restart_io_mod.F90
+  ${SRC_BASE_DIR}/surfaces_mod.F90
+  ${SRC_BASE_DIR}/vertical_mod.F90
+  ${SRC_BASE_DIR}/test_mod.F90
+  ${SRC_BASE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
@@ -146,7 +146,7 @@ ENDIF()
 
 SET(PREQX_DEPS_C
   ${UTILS_SHARE_DIR}/shr_vmath_fwrap.c
-  ${SRC_DIR}/jrio.c
+  ${SRC_BASE_DIR}/jrio.c
 )
 
 SET(PREQX_DEPS_CXX
@@ -187,7 +187,7 @@ IF (${USE_KOKKOS_KERNELS})
     ${PREQX_DEPS_CXX}
   )
 ENDIF ()
-SET(PREQX_SRCS ${PREQX_DEPS} ${SRC_DIR}/prim_main.F90)
+SET(PREQX_SRCS ${PREQX_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 
 SET(PREQX_UT_F90_SRCS
   ${TARGET_F90}
@@ -215,7 +215,7 @@ SET(PREQX_REMAP_UT_CXX_SRCS
 
 SET(PREQX_INCLUDE_DIRS
   ${SRC_SHARE_DIR}
-  ${SRC_DIR}
+  ${SRC_BASE_DIR}
   ${PHYSICS_DIR}
   ${TARGET_DIR}
   ${HOMMEXX_CONFIG_DIR}
