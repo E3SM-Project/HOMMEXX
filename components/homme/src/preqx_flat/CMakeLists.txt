@@ -246,3 +246,14 @@ ENDIF ()
 MESSAGE (STATUS " +------------ Ending execution of PREQX_FLAT_SETUP -------------+")
 
 ENDMACRO(PREQX_FLAT_SETUP)
+
+
+preqx_flat_setup(FALSE)
+############################################################################
+# createTestExec(exec_name exec_type NP PLEV USE_PIO USE_ENERGY)
+############################################################################
+#createTestExec(prtcA_flat_c preqx_flat 4 4 26 FALSE FALSE 4 Fortran)
+createTestExec(preqx_flat preqx_flat ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
+
+
+
