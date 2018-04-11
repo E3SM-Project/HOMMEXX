@@ -1,15 +1,17 @@
 # macro for building PREQx primitive equations executable
 
-MACRO(PREQX_FLAT_SETUP FORTRAN_LOOPS)
+MACRO(PREQX_FLAT_SETUP USE_KOKKOS_KERNELS)
 
-IF (${FORTRAN_LOOPS})
-  SET (USE_KOKKOS_KERNELS FALSE)
+IF (${USE_KOKKOS_KERNELS})
+  SET (HOMME_USE_FLAT_ARRAYS TRUE)
 ELSE ()
-  SET (USE_KOKKOS_KERNELS TRUE)
+  SET (HOMME_USE_FLAT_ARRAYS FALSE)
 ENDIF ()
 
-MESSAGE (STATUS " +---------- Beginning execution of PREQX_FLAT_SETUP ------------+")
+MESSAGE (STATUS " +---------- Beginning execution of PREQX_SETUP ------------+")
 MESSAGE (STATUS "  --> Building with USE_KOKKOS_KERNELS = ${USE_KOKKOS_KERNELS}")
+MESSAGE (STATUS "  --> Building with HOMME_USE_FLAT_ARRAYS = ${HOMME_USE_FLAT_ARRAYS}")
+
 
 SET(TARGET_DIR          ${HOMME_SOURCE_DIR}/src/preqx_flat)
 SET(UTILS_SHARE_DIR     ${HOMME_SOURCE_DIR}/utils/csm_share)
