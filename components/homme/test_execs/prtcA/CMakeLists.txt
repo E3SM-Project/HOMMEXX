@@ -1,11 +1,12 @@
-SET (FORTRAN_LOOPS FALSE)
-SET (HOMME_USE_FLAT_ARRAYS FALSE)
+SET (USE_KOKKOS_KERNELS FALSE)
 
-PREQX_SETUP( )
+PREQX_SETUP(${USE_KOKKOS_KERNELS})
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
 createTestExec(prtcA preqx 4 4 26 FALSE FALSE 4 Fortran)
+
+INCLUDE_DIRECTORIES(${PREQX_INCLUDE_DIRS})
 
 # Copy the needed input files to the binary dir
 CONFIGURE_FILE (${CMAKE_SOURCE_DIR}/test/reg_test/namelists/prtcA-r3-dry.nl

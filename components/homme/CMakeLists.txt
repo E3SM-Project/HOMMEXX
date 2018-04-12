@@ -66,10 +66,7 @@ IF (${HOMME_QUAD_PREC})
 ENDIF ()
 
 # Some options for conditional builds
-OPTION(BUILD_HOMME_PREQX_FLAT "Primitive equations FEM" ON)
-
-# Cristoph's "standalone" executables
-OPTION(BUILD_HOMME_FVM  "Standalone FVM tracers" OFF)
+OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
 
 OPTION(REFSOLN "Whether to read/write reference soln data" FALSE)
 # Reference solution data
@@ -224,8 +221,8 @@ ADD_SUBDIRECTORY(test/unit_tests)
 
 SET(EXEC_LIST ""  CACHE INTERNAL "List of configured executables")
 
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(src/preqx_flat)
+IF(${BUILD_HOMME_PREQX})
+  ADD_SUBDIRECTORY(src/preqx)
 ENDIF()
 
 ADD_SUBDIRECTORY(test_execs)
