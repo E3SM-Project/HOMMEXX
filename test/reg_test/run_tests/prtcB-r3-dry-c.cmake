@@ -1,7 +1,7 @@
 
-SET(TEST_NAME prtcB-flat-r3-dry-c)
+SET(TEST_NAME prtcB-r3-dry-c)
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME prtcB_flat_c)
+SET(EXEC_NAME prtcB_c)
 
 SET(NUM_CPUS 16)
 

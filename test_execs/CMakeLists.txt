@@ -163,15 +163,15 @@ SET (HOMME_TESTS_NDAYS 1)
 
 # Add the test exec subdirs for the preqx executable
 
-IF(${BUILD_HOMME_PREQX_FLAT})
-  ADD_SUBDIRECTORY(preqx_flat_ut)
+IF(${BUILD_HOMME_PREQX})
+  ADD_SUBDIRECTORY(preqx_ut)
   # Setting HOMME_TESTS_NE and HOMME_TESTS_NDAYS, so the namelist.nl file in
   # the test_exec/prtc* directories is usable. Since that namelist should be
   # used for development/debugging purposes only, we use ne=2 and ndays=1
-  ADD_SUBDIRECTORY(prtcA_flat)
-  ADD_SUBDIRECTORY(prtcA_flat_c)
-  ADD_SUBDIRECTORY(prtcB_flat)
-  ADD_SUBDIRECTORY(prtcB_flat_c)
+  ADD_SUBDIRECTORY(prtcA)
+  ADD_SUBDIRECTORY(prtcA_c)
+  ADD_SUBDIRECTORY(prtcB)
+  ADD_SUBDIRECTORY(prtcB_c)
 ENDIF()
 
 # Read the test-list.cmake file to get the HOMME_TESTS list
@@ -183,11 +183,6 @@ SET(TEST_DIR_LIST "")
 createTests(HOMME_TESTS ${HOMME_TESTING_PROFILE})
 
 CREATE_CXX_VS_F90_TESTS(COMPARE_F_C_TEST ${HOMME_TESTING_PROFILE})
-
-IF(${BUILD_HOMME_PREQX} AND ${BUILD_HOMME_PREQX_ACC})
-  # add a test dependency here:
-  set_property(TEST baroCamMoist-acc APPEND PROPERTY DEPENDS baroCamMoist)
-ENDIF()
 
 # End the file with the total number of test files
 FILE (APPEND ${HOMME_TEST_LIST} "\n")

@@ -1,6 +1,6 @@
 # macro for building PREQx primitive equations executable
 
-MACRO(PREQX_FLAT_SETUP USE_KOKKOS_KERNELS)
+MACRO(PREQX_SETUP USE_KOKKOS_KERNELS)
 
 IF (${USE_KOKKOS_KERNELS})
   SET (HOMME_USE_FLAT_ARRAYS TRUE)
@@ -13,7 +13,7 @@ MESSAGE (STATUS "  --> Building with USE_KOKKOS_KERNELS = ${USE_KOKKOS_KERNELS}"
 MESSAGE (STATUS "  --> Building with HOMME_USE_FLAT_ARRAYS = ${HOMME_USE_FLAT_ARRAYS}")
 
 
-SET(TARGET_DIR          ${HOMME_SOURCE_DIR}/src/preqx_flat)
+SET(TARGET_DIR          ${HOMME_SOURCE_DIR}/src/preqx)
 SET(UTILS_SHARE_DIR     ${HOMME_SOURCE_DIR}/utils/csm_share)
 SET(SRC_BASE_DIR        ${HOMME_SOURCE_DIR}/src)
 SET(SRC_SHARE_DIR       ${HOMME_SOURCE_DIR}/src/share)
@@ -37,7 +37,7 @@ SET (TARGET_F90
   ${TARGET_DIR}/viscosity_mod.F90
 )
 
-SET(PREQX_FLAT_DEPS_F90
+SET(PREQX_DEPS_F90
   ${TARGET_F90}
   ${SRC_BASE_DIR}/test_src/asp_tests.F90
   ${SRC_BASE_DIR}/test_src/baroclinic_inst_mod.F90
@@ -134,8 +134,8 @@ SET(PREQX_FLAT_DEPS_F90
 )
 
 IF (NOT ${USE_KOKKOS_KERNELS})
-  SET (PREQX_FLAT_DEPS_F90
-    ${PREQX_FLAT_DEPS_F90}
+  SET (PREQX_DEPS_F90
+    ${PREQX_DEPS_F90}
     ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
     ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
     ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
@@ -143,18 +143,18 @@ IF (NOT ${USE_KOKKOS_KERNELS})
     ${SRC_SHARE_DIR}/prim_advance_mod.F90
   )
 ELSE()
-  SET (PREQX_FLAT_DEPS_F90
-    ${PREQX_FLAT_DEPS_F90}
+  SET (PREQX_DEPS_F90
+    ${PREQX_DEPS_F90}
     ${SRC_SHARE_DIR}/prim_cxx_driver_mod.F90
   )
 ENDIF()
 
-SET(PREQX_FLAT_DEPS_C
+SET(PREQX_DEPS_C
   ${UTILS_SHARE_DIR}/shr_vmath_fwrap.c
   ${SRC_BASE_DIR}/jrio.c
 )
 
-SET(PREQX_FLAT_DEPS_CXX
+SET(PREQX_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/cxx_f90_interface.cpp
   ${SRC_SHARE_DIR}/cxx/prim_advance_exp.cpp
   ${SRC_SHARE_DIR}/cxx/prim_advec_tracers_remap.cpp
@@ -182,24 +182,24 @@ SET(PREQX_FLAT_DEPS_CXX
 )
 
 # If the user specified a file for custom compiler options use those
-IF (DEFINED PREQX_FLAT_CUSTOM_FLAGS_FILE)
-  setCustomCompilerFlags(PREQX_FLAT_CUSTOM_FLAGS_FILE PREQX_FLAT_SRCS_F90)
+IF (DEFINED PREQX_CUSTOM_FLAGS_FILE)
+  setCustomCompilerFlags(PREQX_CUSTOM_FLAGS_FILE PREQX_SRCS_F90)
 ENDIF ()
 
 # We pulled prim_main off the deps cause it would create a main function
 # clash when building the unit test (a main in prim_main.F90 and one in tester.cpp)
-SET(PREQX_FLAT_DEPS ${TARGET_F90} ${PREQX_FLAT_DEPS_F90} ${PREQX_FLAT_DEPS_C})
+SET(PREQX_DEPS ${TARGET_F90} ${PREQX_DEPS_F90} ${PREQX_DEPS_C})
 IF (${USE_KOKKOS_KERNELS})
-  SET (PREQX_FLAT_DEPS
-    ${PREQX_FLAT_DEPS}
-    ${PREQX_FLAT_DEPS_CXX}
+  SET (PREQX_DEPS
+    ${PREQX_DEPS}
+    ${PREQX_DEPS_CXX}
   )
 ENDIF ()
-SET(PREQX_FLAT_SRCS ${PREQX_FLAT_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
+SET(PREQX_SRCS ${PREQX_DEPS} ${SRC_BASE_DIR}/prim_main.F90)
 
-SET(PREQX_FLAT_UT_F90_SRCS
+SET(PREQX_UT_F90_SRCS
   ${TARGET_F90}
-  ${PREQX_FLAT_DEPS_F90}
+  ${PREQX_DEPS_F90}
   ${SRC_SHARE_DIR}/caar_pre_exchange_driver_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_caar_mod.F90
   ${SRC_SHARE_DIR}/prim_advance_exp_mod.F90
@@ -207,21 +207,21 @@ SET(PREQX_FLAT_UT_F90_SRCS
   ${SRC_SHARE_DIR}/prim_advance_mod.F90
 )
 
-SET(PREQX_FLAT_UT_CXX_SRCS
+SET(PREQX_UT_CXX_SRCS
   ${UNIT_TEST_DIR}/preqx_flat_ut.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_sl.cpp
   ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_ml.cpp
-  ${PREQX_FLAT_DEPS_C}
-  ${PREQX_FLAT_DEPS_CXX}
+  ${PREQX_DEPS_C}
+  ${PREQX_DEPS_CXX}
 )
 
-SET(PREQX_FLAT_REMAP_UT_CXX_SRCS
+SET(PREQX_REMAP_UT_CXX_SRCS
   ${UNIT_TEST_DIR}/preqx_flat_ut_remap.cpp
-  ${PREQX_FLAT_DEPS_C}
-  ${PREQX_FLAT_DEPS_CXX}
+  ${PREQX_DEPS_C}
+  ${PREQX_DEPS_CXX}
 )
 
-SET(PREQX_FLAT_INCLUDE_DIRS
+SET(PREQX_INCLUDE_DIRS
   ${SRC_SHARE_DIR}
   ${SRC_BASE_DIR}
   ${PHYSICS_DIR}
@@ -230,8 +230,8 @@ SET(PREQX_FLAT_INCLUDE_DIRS
 )
 
 IF (${USE_KOKKOS_KERNELS})
-  SET (PREQX_FLAT_INCLUDE_DIRS
-    ${PREQX_FLAT_INCLUDE_DIRS}
+  SET (PREQX_INCLUDE_DIRS
+    ${PREQX_INCLUDE_DIRS}
     ${SRC_SHARE_DIR}/cxx
     ${SRC_SHARE_DIR}/cxx/mpi
     ${UTILS_TIMING_SRC_DIR}
@@ -239,12 +239,12 @@ IF (${USE_KOKKOS_KERNELS})
 ENDIF ()
 
 # Make SRCS global so the tests can access it
-SET(EXEC_SOURCES ${PREQX_FLAT_SRCS})
+SET(EXEC_SOURCES ${PREQX_SRCS})
 
 IF (${ENABLE_HORIZ_OPENMP} AND ${ENABLE_COLUMN_OPENMP})
   SET(NESTED_OPENMP TRUE CACHE BOOL "Both horizontal and column threading")
 ENDIF ()
 
-MESSAGE (STATUS " +------------ Ending execution of PREQX_FLAT_SETUP -------------+")
+MESSAGE (STATUS " +------------ Ending execution of PREQX_SETUP -------------+")
 
-ENDMACRO(PREQX_FLAT_SETUP)
+ENDMACRO(PREQX_SETUP)
