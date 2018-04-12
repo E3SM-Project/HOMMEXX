@@ -208,15 +208,15 @@ SET(PREQX_UT_F90_SRCS
 )
 
 SET(PREQX_UT_CXX_SRCS
-  ${UNIT_TEST_DIR}/preqx_flat_ut.cpp
-  ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_sl.cpp
-  ${UNIT_TEST_DIR}/preqx_flat_ut_sphere_op_ml.cpp
+  ${UNIT_TEST_DIR}/preqx_ut.cpp
+  ${UNIT_TEST_DIR}/preqx_ut_sphere_op_sl.cpp
+  ${UNIT_TEST_DIR}/preqx_ut_sphere_op_ml.cpp
   ${PREQX_DEPS_C}
   ${PREQX_DEPS_CXX}
 )
 
 SET(PREQX_REMAP_UT_CXX_SRCS
-  ${UNIT_TEST_DIR}/preqx_flat_ut_remap.cpp
+  ${UNIT_TEST_DIR}/preqx_ut_remap.cpp
   ${PREQX_DEPS_C}
   ${PREQX_DEPS_CXX}
 )
