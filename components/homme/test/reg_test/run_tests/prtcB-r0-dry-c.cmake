@@ -1,11 +1,11 @@
 
-SET(TEST_NAME prtcB-r3-dry-f)
+SET(TEST_NAME prtcB-r0-dry-c)
 # The specifically compiled executable that this test uses
-SET(EXEC_NAME prtcB)
+SET(EXEC_NAME prtcB_c)
 
 SET(NUM_CPUS 16)
 
-SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/prtcB-r3-dry.nl)
+SET(NAMELIST_FILES ${HOMME_ROOT}/test/reg_test/namelists/prtcB-r0-dry.nl)
 SET(VCOORD_FILES ${HOMME_ROOT}/test/vcoord/acme-72*)
 
 # compare all of these files against baselines:
