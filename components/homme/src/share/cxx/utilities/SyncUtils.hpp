@@ -8,15 +8,31 @@ namespace Homme {
 
 // Templates to verify at compile time that a view has the specified array type
 template <typename ViewT, typename ArrayT> struct exec_view_mappable {
+#if CUDA_PARSE_BUG_FIXED
   using exec_view = ExecViewUnmanaged<ArrayT>;
   static constexpr bool value = Kokkos::Impl::ViewMapping<
       typename ViewT::traits, typename exec_view::traits, void>::is_assignable;
+#else
+  static constexpr bool value = Kokkos::Impl::ViewMapping<
+    typename ViewT::traits,
+    typename Kokkos::View<ArrayT, Kokkos::LayoutRight, ExecSpace,
+                          Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict> >::traits,
+    void>::is_assignable;
+#endif
 };
 
 template <typename ViewT, typename ArrayT> struct host_view_mappable {
+#if CUDA_PARSE_BUG_FIXED
   using host_view = HostViewUnmanaged<ArrayT>;
   static constexpr bool value = Kokkos::Impl::ViewMapping<
       typename ViewT::traits, typename host_view::traits, void>::is_assignable;
+#else
+  static constexpr bool value = Kokkos::Impl::ViewMapping<
+    typename ViewT::traits,
+    typename Kokkos::View<ArrayT, Kokkos::LayoutRight, Kokkos::HostSpace,
+                          Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict> >::traits,
+    void>::is_assignable;  
+#endif
 };
 
 // Kokkos views cannot be used to determine which overloaded function to call,
