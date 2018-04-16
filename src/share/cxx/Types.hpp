@@ -84,10 +84,21 @@ template <typename DataType, typename... Properties>
 using HostView = ViewType<DataType, HostMemSpace, Properties...>;
 template <typename DataType, typename... Properties>
 using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
+// Work around Cuda 9.1.85 parse bugs.
+#if CUDA_PARSE_BUG_FIXED
 template <typename DataType, typename... Properties>
 using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecMemSpace>::value,
                                           ExecView<DataType,Properties...>,
                                           typename ExecView<DataType,Properties...>::HostMirror>::type;
+#else
+# if HOMMEXX_MPI_ON_DEVICE
+template <typename DataType, typename... Properties>
+using MPIView = ExecView<DataType,Properties...>;
+# else
+template <typename DataType, typename... Properties>
+using MPIView = typename ExecView<DataType,Properties...>::HostMirror>::type;
+# endif
+#endif
 
 // Further specializations for execution space and managed/unmanaged memory
 template <typename DataType>

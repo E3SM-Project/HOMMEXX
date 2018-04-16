@@ -3,6 +3,8 @@
 #include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"
+#include "Hommexx_config.h"
+#include "mpi/Comm.hpp"
 
 #include <iostream>
 
@@ -18,17 +20,17 @@ void initialize_hommexx_session ()
    * threads/processors Kokkos uses */
   initialize_kokkos();
 
-  ExecSpace::print_configuration(std::cout, true);
-
-  // Put here other initialization routines (e.g., MPI)
+  const auto comm = Context::singleton().get_comm();
+  if (comm.root()) {
+    ExecSpace::print_configuration(std::cout, true);
+    std::cout << "HOMMEXX SHA1: " << HOMMEXX_SHA1 << "\n";
+  }
 }
 
 void finalize_hommexx_session ()
 {
   Context::finalize_singleton();
   Kokkos::finalize();
-
-  // Put here other finalization routines (e.g., MPI)
 }
 
 } // namespace Homme

@@ -7,6 +7,7 @@ SET (CMAKE_CXX_COMPILER mpicxx CACHE FILEPATH "")
 SET (WITH_PNETCDF FALSE CACHE FILEPATH "") 
 SET (NETCDF_DIR /home/projects/hommexx/TPL/ellis-netcdf4 CACHE FILEPATH "") 
 SET (HDF5_DIR /home/projects/hommexx/TPL/ellis-netcdf4 CACHE FILEPATH "")
+SET (ZLIB_DIR $ENV{ZLIB_ROOT} CACHE FILEPATH "")
 
 SET (USE_QUEUING FALSE CACHE BOOL "")
 # 24 is big enough to be useful but small enough to get ne=2 case right. At some # point we should improve things for more flexibility.
