@@ -35,7 +35,7 @@ module prim_driver_mod
 
   private
 #ifndef USE_KOKKOS_KERNELS
-  public :: prim_run, prim_run_subcycle, leapfrog_bootstrap, smooth_topo_datasets
+  public :: prim_run_subcycle, smooth_topo_datasets
 #endif
   public :: prim_init1, prim_init2 , prim_finalize
 
@@ -602,7 +602,7 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
                                     elem_metdet, elem_metinv, elem_state_phis,      &
                                     elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                    elem_state_Qdp, elem_state_ps_v, elem_state_lnps
+                                    elem_state_Qdp, elem_state_ps_v
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
                                     vert_remap_q_alg, statefreq, use_semi_lagrange_transport
@@ -710,7 +710,7 @@ contains
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr, elem_state_lnps_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
 #endif
 
 #ifdef TRILINOS
@@ -894,7 +894,6 @@ contains
              elem(ie)%state%v(:,:,:,:,tl%nm1) = elem(ie)%state%v(:,:,:,:,tl%n0)
              elem(ie)%state%T(:,:,:,tl%nm1)   = elem(ie)%state%T(:,:,:,tl%n0)
              elem(ie)%state%ps_v(:,:,tl%nm1)  = elem(ie)%state%ps_v(:,:,tl%n0)
-             elem(ie)%state%lnps(:,:,tl%nm1)  = elem(ie)%state%lnps(:,:,tl%n0)
           enddo
        endif ! runtype==2
 
@@ -1078,7 +1077,6 @@ contains
     elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
     elem_state_Qdp_ptr  = c_loc(elem_state_Qdp)
     elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
-    elem_state_lnps_ptr = c_loc(elem_state_lnps)
     call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                  elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 
@@ -1090,232 +1088,6 @@ contains
 !=======================================================================================================!
 
 #ifndef USE_KOKKOS_KERNELS
-  subroutine leapfrog_bootstrap(elem, hybrid,nets,nete,tstep,tl,hvcoord)
-
-  !
-  ! leapfrog bootstrap code.
-  !
-  ! take the equivilent of one timestep, but do it with a
-  ! dt/2 euler and a dt/2 leapfrog step
-  !
-  use hybvcoord_mod, only : hvcoord_t
-  use time_mod, only : TimeLevel_t
-
-  type (element_t) , intent(inout)        :: elem(:)
-  type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-  type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
-  integer, intent(in)                     :: nets  ! starting thread element number (private)
-  integer, intent(in)                     :: nete  ! ending thread element number   (private)
-  real(kind=real_kind), intent(in)        :: tstep          ! "timestep dependent" timestep
-  type (TimeLevel_t), intent(inout)       :: tl
-
-
-  ! local
-  real(kind=real_kind) :: tstep_tmp,tstep_dyn
-  integer :: i,ie
-
-
-  tstep_dyn = tstep
-  ! forward euler to get to tstep_dyn/2 (keep t=0 in nm1 timelevel)
-  ! (note: leapfrog tstep_dyn/4 with nm1=n0 is Euler with tstep_dyn/2 )
-  tstep_tmp=tstep_dyn/4
-
-  call prim_run(elem, hybrid,nets,nete, tstep_tmp, tl, hvcoord, "forward")
-
-  ! leapfrog with tstep_dyn/2 to get to tstep_dyn (keep t=0 in nm1 timelevel)
-  tstep_tmp=tstep_dyn/2
-  call prim_run(elem, hybrid,nets,nete, tstep_tmp, tl, hvcoord, "forward")
-
-
-  tl%nstep=tl%nstep-1        ! count all of that as 1 timestep
-
-  end subroutine leapfrog_bootstrap
-#endif
-
-!=======================================================================================================!
-
-#ifndef USE_KOKKOS_KERNELS
-  subroutine prim_run(elem, hybrid,nets,nete, dt, tl, hvcoord, advance_name)
-    use hybvcoord_mod, only : hvcoord_t
-    use time_mod, only : TimeLevel_t, timelevel_update, smooth
-    use control_mod, only: statefreq, integration, ftype, qsplit, disable_diagnostics
-    use prim_advance_mod, only : prim_advance_si, preq_robert3
-    use prim_advance_exp_mod, only : prim_advance_exp
-    use prim_state_mod, only : prim_printstate, prim_diag_scalars, prim_energy_halftimes
-    use prim_advection_mod, only: deriv
-    use parallel_mod, only : abortmp
-#ifndef CAM
-    use column_model_mod, only : ApplyColumnModel
-#endif
-
-    type (element_t) , intent(inout)        :: elem(:)
-    type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-
-    type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
-
-    integer, intent(in)                     :: nets  ! starting thread element number (private)
-    integer, intent(in)                     :: nete  ! ending thread element number   (private)
-    real(kind=real_kind), intent(in)        :: dt              ! "timestep dependent" timestep
-    type (TimeLevel_t), intent(inout)       :: tl
-    character(len=*), intent(in) :: advance_name
-    real(kind=real_kind) :: st, st1, dp
-    integer :: ie, t, q,k,i,j
-
-
-    logical :: compute_diagnostics
-
-    ! ===================================
-    ! Main timestepping loop
-    ! ===================================
-
-    ! compute diagnostics and energy for STDOUT
-    ! compute energy if we are using an energy fixer
-
-    if (MODULO(tl%nstep+1,statefreq)==0 .or. tl%nstep+1==tl%nstep0) then
-       compute_diagnostics=.true.
-    else
-       compute_diagnostics=.false.
-    endif
-
-    if(disable_diagnostics) compute_diagnostics=.false.
-
-    tot_iter=0.0
-
-
-    ! Forcing options for testing CAM-HOMME energy balance:
-    if (ftype == -1) then
-       ! disable all forcing, but allow moisture:
-       do ie=nets,nete
-#ifndef USE_KOKKOS_KERNELS
-          elem(ie)%derived%FQ = 0
-#endif
-          elem(ie)%derived%FM = 0
-          elem(ie)%derived%FT = 0
-       enddo
-    endif
-    if (ftype == -2) then
-       ! disable moisture, but allow dynamics forcing
-       do ie=nets,nete
-          elem(ie)%state%Q = 0
-          elem(ie)%state%Qdp = 0
-#ifndef USE_KOKKOS_KERNELS
-          elem(ie)%derived%FQ = 0
-#endif
-       enddo
-    endif
-    if (ftype == -3) then
-       ! disable forcing & moisture
-       do ie=nets,nete
-          elem(ie)%state%Q = 0
-          elem(ie)%state%Qdp = 0
-#ifndef USE_KOKKOS_KERNELS
-          elem(ie)%derived%FQ = 0
-#endif
-          elem(ie)%derived%FM = 0
-          elem(ie)%derived%FT = 0
-       enddo
-    endif
-
-    ! =================================
-    ! energy, dissipation rate diagnostics.  Uses data at t-1,t
-    ! to compute diagnostics at t - 0.5.
-    ! small error in the t+.5 terms because at this
-    ! point only state variables at t-1 has been Robert filtered.
-    ! =================================
-    if (compute_diagnostics) then
-       call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
-       call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
-    endif
-
-    ! ===============
-    ! initialize mean flux accumulation variables
-    ! ===============
-    do ie=nets,nete
-       elem(ie)%derived%eta_dot_dpdn=0
-       elem(ie)%derived%omega_p=0
-    enddo
-
-    ! ===============
-    ! Dynamical Step  uses Q at tl%n0
-    ! ===============
-#if (defined HORIZ_OPENMP)
-!$OMP BARRIER
-#endif
-    if (integration == "semi_imp") then
-       call prim_advance_si(elem, nets, nete, cg(hybrid%ithr), blkjac, red, &
-            refstate, hvcoord, deriv(hybrid%ithr), flt, hybrid, tl, dt)
-       tot_iter=tot_iter+cg(hybrid%ithr)%iter
-    else if (integration == "full_imp") then
-       call abortmp('full_imp integration requires tstep_type > 0')
-    else
-       call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
-            hybrid, dt, tl, nets, nete, compute_diagnostics)
-
-       ! keep lnps up to date (we should get rid of this requirement)
-       do ie=nets,nete
-          elem(ie)%state%lnps(:,:,tl%np1)= LOG(elem(ie)%state%ps_v(:,:,tl%np1))
-       enddo
-    end if
-
-    ! =================================
-    ! energy, dissipation rate diagnostics.  Uses data at t and t+1
-    ! to compute diagnostics at t + 0.5.
-    ! =================================
-    if (compute_diagnostics) then
-       call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
-       call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
-    endif
-
-    ! ===================================
-    ! Compute Forcing Tendencies from nm1 data (for PROCESS SPLIT)
-    ! or np1 data (for TIMESPLIT) and add tendencies into soluiton at timelevel np1
-    ! ===================================
-#ifdef CAM
-    call abortmp('CAM-HOMME-SE requires RK timestepping option turned on')
-#else
-    call ApplyColumnModel(elem, hybrid, hvcoord, cm(hybrid%ithr),dt)
-#endif
-    ! measure the effects of forcing
-    if (compute_diagnostics) then
-       call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
-       call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
-    endif
-
-
-    ! =================================
-    ! timestep is complete.
-    ! =================================
-
-
-    !Now apply robert filter to all prognostic variables
-    if (smooth/=0) &
-       call preq_robert3(tl%nm1,tl%n0,tl%np1,elem,hvcoord,nets,nete)
-    ! measure the effects of Robert filter
-    if (compute_diagnostics) then
-       call prim_energy_halftimes(elem,hvcoord,tl,4,.false.,nets,nete)
-       call prim_diag_scalars(elem,hvcoord,tl,4,.false.,nets,nete)
-    endif
-
-
-    ! =================================
-    ! update dynamics time level pointers
-    ! =================================
-    call TimeLevel_update(tl,advance_name)
-
-  ! ============================================================
-    ! Print some diagnostic information
-    ! ============================================================
-
-    if (compute_diagnostics) then
-       if (hybrid%masterthread) then
-          if (integration == "semi_imp") write(iulog,*) "cg its=",cg(0)%iter
-       end if
-       call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
-    end if
-  end subroutine prim_run
-
-!=======================================================================================================!
-
   subroutine prim_run_subcycle(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
 
     !   advance dynamic variables and tracers (u,v,T,ps,Q,C) from time t to t + dt_q
@@ -1336,9 +1108,7 @@ contains
     use fvm_control_volume_mod, only: n0_fvm
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-#ifdef CAM
-    use prim_advance_mod,   only: applycamforcing, applycamforcing_dynamics
-#endif
+    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1362,7 +1132,7 @@ contains
     real(kind=real_kind) :: dp_np1(np,np)
     integer :: ie,i,j,k,n,q,t
     integer :: n0_qdp,np1_qdp,r,nstep_end
-    logical :: compute_diagnostics, compute_energy
+    logical :: compute_diagnostics
 
     ! compute timesteps for tracer transport and vertical remap
 
@@ -1374,14 +1144,10 @@ contains
        nstep_end = tl%nstep + qsplit*rsplit  ! nstep at end of this routine
     endif
 
-    ! activate energy diagnostics if using an energy fixer
-    compute_energy = energy_fixer > 0
-
     ! activate diagnostics periodically for display to stdout
     compute_diagnostics   = .false.
     if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0) then
        compute_diagnostics= .true.
-       compute_energy     = .true.
     endif
     if(disable_diagnostics) compute_diagnostics= .false.
 
@@ -1390,9 +1156,17 @@ contains
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
       call t_stopf("prim_diag_scalars")
+
+      call t_startf("prim_energy_halftimes")
+      call prim_energy_halftimes(elem,hvcoord,tl,3,.true.,nets,nete)
+      call t_stopf("prim_energy_halftimes")
     endif
 
-#ifdef CAM
+    call TimeLevel_Qdp(tl, qsplit, n0_qdp, np1_qdp)
+#ifndef CAM
+    ! Apply HOMME test case forcing
+    call apply_test_forcing(elem,fvm,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
+#endif
 
     ! Apply CAM Physics forcing
 
@@ -1400,9 +1174,6 @@ contains
     !   ftype= 1: forcing was applied time-split in CAM coupling layer
     !   ftype= 0: apply all forcing here
     !   ftype=-1: do not apply forcing
-
-    call TimeLevel_Qdp(tl, qsplit, n0_qdp)
-
     if (ftype==0) then
       call t_startf("ApplyCAMForcing")
       call ApplyCAMForcing(elem, fvm, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
@@ -1413,21 +1184,13 @@ contains
       call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
       call t_stopf("ApplyCAMForcing_dynamics")
     endif
-#else
-    ! Apply HOMME test case forcing
-    call apply_test_forcing(elem,fvm,hybrid,hvcoord,tl%n0,n0_qdp,dt_remap,nets,nete)
 
-#endif
-
+    if (compute_diagnostics) then
     ! E(1) Energy after CAM forcing
-    if (compute_energy) then
       call t_startf("prim_energy_halftimes")
       call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
       call t_stopf("prim_energy_halftimes")
-    endif
-
     ! qmass and variance, using Q(n0),Qdp(n0)
-    if (compute_diagnostics) then
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
       call t_stopf("prim_diag_scalars")
@@ -1444,7 +1207,7 @@ contains
 
 
 #if (USE_OPENACC)
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
+!    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call t_startf("copy_qdp_h2d")
     call copy_qdp_h2d( elem , n0_qdp )
     call t_stopf("copy_qdp_h2d")
@@ -1462,9 +1225,10 @@ contains
        call t_stopf("prim_step_rX")
     enddo
     ! defer final timelevel update until after remap and diagnostics
+    !compute timelevels for tracers (no longer the same as dynamics)
+    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
 
 #if (USE_OPENACC)
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call t_startf("copy_qdp_h2d")
     call copy_qdp_d2h( elem , np1_qdp )
     call t_stopf("copy_qdp_h2d")
@@ -1475,20 +1239,14 @@ contains
     !  always for tracers
     !  if rsplit>0:  also remap dynamics and compute reference level ps_v
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !compute timelevels for tracers (no longer the same as dynamics)
-    ! note: time level update for fvm tracers takes place in fvm_mod
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! time step is complete.  update some diagnostic variables:
-    ! lnps (we should get rid of this)
     ! Q    (mixing ratio)
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     call t_startf("prim_run_subcyle_diags")
     do ie=nets,nete
-       !dir$ simd
-       elem(ie)%state%lnps(:,:,tl%np1)= LOG(elem(ie)%state%ps_v(:,:,tl%np1))
 #if (defined COLUMN_OPENMP)
        !$omp parallel do default(shared), private(k,q,dp_np1)
 #endif
@@ -1514,26 +1272,9 @@ contains
       call t_startf("prim_diag_scalars")
       call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
       call t_stopf("prim_diag_scalars")
-    endif
-    if (compute_energy) then
+
       call t_startf("prim_energy_halftimes")
       call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
-      call t_stopf("prim_energy_halftimes")
-    endif
-
-    if (energy_fixer > 0) then
-      call t_startf("prim_energy_fixer")
-      call prim_energy_fixer(elem,hvcoord,hybrid,tl,nets,nete,nsubstep)
-      call t_stopf("prim_energy_fixer")
-    endif
-
-    if (compute_diagnostics) then
-      call t_startf("prim_diag_scalars")
-      call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
-      call t_stopf("prim_diag_scalars")
-
-      call t_startf("prim_energy_halftimes")
-      call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
       call t_stopf("prim_energy_halftimes")
     endif
 
@@ -1541,7 +1282,6 @@ contains
     ! update dynamics time level pointers
     ! =================================
     call TimeLevel_update(tl,"leapfrog")
-    ! note: time level update for fvm tracers takes place in fvm_mod
 
     ! now we have:
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)

@@ -187,7 +187,7 @@ contains
     vsum_t(1) = 0.0D0
 
     ! npts = np
-    npts=SIZE(elem(1)%state%lnps(:,:,n0),1)
+    npts=SIZE(elem(1)%state%ps_v(:,:,n0),1)
 
     do q=1,qsize
        do ie=nets,nete
@@ -217,7 +217,6 @@ contains
     do ie=nets,nete
 
        tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,n0)
-       !       tmp(:,:,ie)=EXP(elem(ie)%state%lnps(:,:,n0))
 
 
        !======================================================  
@@ -793,7 +792,9 @@ contains
     real (kind=real_kind) :: l1,l2,linf
     integer               :: n0,i,j,k,ie,npts
 
-    npts=SIZE(elem(1)%state%lnps(:,:,n0),1)
+!og: not sure about this but this subroutine is not in homme anymore. npts is
+!redefined below.
+!    npts=SIZE(elem(1)%state%lnps(:,:,n0),1)
     n0=tl%n0
     do ie=nets,nete
        v(:,:,:,:,ie)=elem(ie)%state%v(:,:,:,:,n0) 

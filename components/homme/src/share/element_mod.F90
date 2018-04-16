@@ -44,7 +44,6 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_state_v    (:,:,:,:,:,:)            ! velocity                           1
   real (kind=real_kind), allocatable, target, public :: elem_state_Temp (:,:,:,:,:)              ! temperature                        2
   real (kind=real_kind), allocatable, target, public :: elem_state_dp3d (:,:,:,:,:)              ! delta p on levels                  8
-  real (kind=real_kind), allocatable, target, public :: elem_state_lnps (:,:,:,:)                ! log surface pressure               3
   real (kind=real_kind), allocatable, target, public :: elem_state_ps_v (:,:,:,:)                ! surface pressure                   4
   real (kind=real_kind), allocatable, target, public :: elem_state_phis (:,:,:)                  ! surface geopotential (prescribed)  5
   real (kind=real_kind), allocatable, target, public :: elem_state_Q    (:,:,:,:,:)              ! Tracer concentration               6
@@ -59,7 +58,6 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_derived_omega_p          (:,:,:,:)     ! vertical tendency (derived)
   real (kind=real_kind), allocatable, target, public :: elem_derived_eta_dot_dpdn     (:,:,:,:)     ! mean vertical flux from dynamics
   real (kind=real_kind), allocatable, target, public :: elem_derived_eta_dot_dpdn_prescribed(:,:,:,:)     ! mean vertical flux from dynamics
-  real (kind=real_kind), allocatable, target, public :: elem_derived_grad_lnps        (:,:,:,:)     ! gradient of log surface pressure
   real (kind=real_kind), allocatable, target, public :: elem_derived_zeta             (:,:,:,:)     ! relative vorticity
   real (kind=real_kind), allocatable, target, public :: elem_derived_div              (:,:,:,:,:)   ! divergence
   real (kind=real_kind), allocatable, target, public :: elem_derived_dp               (:,:,:,:)     ! for dp_tracers at physics timestep
@@ -110,7 +108,6 @@ module element_mod
     real (kind=real_kind) :: v   (np,np,2,nlev,timelevels)            ! velocity                           1
     real (kind=real_kind) :: T   (np,np,nlev,timelevels)              ! temperature                        2
     real (kind=real_kind) :: dp3d(np,np,nlev,timelevels)              ! delta p on levels                  8
-    real (kind=real_kind) :: lnps(np,np,timelevels)                   ! log surface pressure               3
     real (kind=real_kind) :: ps_v(np,np,timelevels)                   ! surface pressure                   4
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
@@ -133,7 +130,6 @@ module element_mod
     real (kind=real_kind) :: eta_dot_dpdn(np,np,nlevp)                ! mean vertical flux from dynamics
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
-    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure
     real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity
     real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence
 
@@ -189,7 +185,6 @@ module element_mod
     real (kind=real_kind), pointer :: v   (:,:,:,:,:)            ! velocity                           1
     real (kind=real_kind), pointer :: T   (:,:,:,:)              ! temperature                        2
     real (kind=real_kind), pointer :: dp3d(:,:,:,:)              ! delta p on levels                  8
-    real (kind=real_kind), pointer :: lnps(:,:,:)                ! log surface pressure               3
     real (kind=real_kind), pointer :: ps_v(:,:,:)                ! surface pressure                   4
     real (kind=real_kind), pointer :: phis(:,:)                  ! surface geopotential (prescribed)  5
     real (kind=real_kind), pointer :: Q   (:,:,:,:)              ! Tracer concentration               6
@@ -199,7 +194,6 @@ module element_mod
     real (kind=real_kind) :: v   (np,np,2,nlev,timelevels)            ! velocity                           1
     real (kind=real_kind) :: T   (np,np,nlev,timelevels)              ! temperature                        2
     real (kind=real_kind) :: dp3d(np,np,nlev,timelevels)              ! delta p on levels                  8
-    real (kind=real_kind) :: lnps(np,np,timelevels)                   ! log surface pressure               3
     real (kind=real_kind) :: ps_v(np,np,timelevels)                   ! surface pressure                   4
     real (kind=real_kind) :: phis(np,np)                              ! surface geopotential (prescribed)  5
     real (kind=real_kind) :: Q   (np,np,nlev,qsize_d)                 ! Tracer concentration               6
@@ -230,7 +224,6 @@ module element_mod
     real (kind=real_kind), pointer :: eta_dot_dpdn_prescribed(:,:,:)      ! prescribed wind test cases
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
-    real (kind=real_kind), pointer :: grad_lnps(:,:,:)                    ! gradient of log surface pressure
     real (kind=real_kind), pointer :: zeta(:,:,:)                         ! relative vorticity
     real (kind=real_kind), pointer :: div(:,:,:,:)                        ! divergence
 
@@ -252,7 +245,6 @@ module element_mod
     real (kind=real_kind) :: eta_dot_dpdn_prescribed(np,np,nlevp)     ! prescribed wind test cases
 
     ! semi-implicit diagnostics: computed in explict-component, reused in Helmholtz-component.
-    real (kind=real_kind) :: grad_lnps(np,np,2)                       ! gradient of log surface pressure
     real (kind=real_kind) :: zeta(np,np,nlev)                         ! relative vorticity
     real (kind=real_kind) :: div(np,np,nlev,timelevels)               ! divergence
 
@@ -822,7 +814,6 @@ contains
     allocate( elem_state_v    (np,np,2,nlev,timelevels,nelemd) )
     allocate( elem_state_Temp (np,np,nlev,timelevels,nelemd)   )
     allocate( elem_state_dp3d (np,np,nlev,timelevels,nelemd)   )
-    allocate( elem_state_lnps (np,np,timelevels,nelemd)        )
     allocate( elem_state_ps_v (np,np,timelevels,nelemd)        )
     allocate( elem_state_phis (np,np,nelemd)                   )
     allocate( elem_state_Q    (np,np,nlev,qsize_d,nelemd)      )
@@ -832,7 +823,6 @@ contains
       elem(ie)%state%v        => elem_state_v    (:,:,:,:,:,ie)
       elem(ie)%state%T        => elem_state_Temp (:,:,:,:,ie)
       elem(ie)%state%dp3d     => elem_state_dp3d (:,:,:,:,ie)
-      elem(ie)%state%lnps     => elem_state_lnps (:,:,:,ie)
       elem(ie)%state%ps_v     => elem_state_ps_v (:,:,:,ie)
       elem(ie)%state%phis     => elem_state_phis (:,:,ie)
       elem(ie)%state%Q        => elem_state_Q    (:,:,:,:,ie)
@@ -848,7 +838,6 @@ contains
     allocate( elem_derived_omega_p          (np,np,nlev,nelemd)                    )
     allocate( elem_derived_eta_dot_dpdn     (np,np,nlevp,nelemd)                   )
     allocate( elem_derived_eta_dot_dpdn_prescribed     (np,np,nlevp,nelemd)                   )
-    allocate( elem_derived_grad_lnps        (np,np,2,nelemd)                       )
     allocate( elem_derived_zeta             (np,np,nlev,nelemd)                    )
     allocate( elem_derived_div              (np,np,nlev,timelevels,nelemd)         )
     allocate( elem_derived_dp               (np,np,nlev,nelemd)                    )
@@ -870,7 +859,6 @@ contains
       elem(ie)%derived%omega_p              => elem_derived_omega_p          (:,:,:,ie)
       elem(ie)%derived%eta_dot_dpdn         => elem_derived_eta_dot_dpdn     (:,:,:,ie)
       elem(ie)%derived%eta_dot_dpdn_prescribed=>elem_derived_eta_dot_dpdn_prescribed(:,:,:,ie)
-      elem(ie)%derived%grad_lnps            => elem_derived_grad_lnps        (:,:,:,ie)
       elem(ie)%derived%zeta                 => elem_derived_zeta             (:,:,:,ie)
       elem(ie)%derived%div                  => elem_derived_div              (:,:,:,:,ie)
       elem(ie)%derived%dp                   => elem_derived_dp               (:,:,:,ie)

@@ -6,7 +6,7 @@ program prim_main
 #ifdef _PRIM
   use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize
 #ifndef USE_KOKKOS_KERNELS
-  use prim_driver_mod,  only: leapfrog_bootstrap, prim_run, prim_run_subcycle
+  use prim_driver_mod,  only: prim_run_subcycle
 #endif
   use hybvcoord_mod,    only: hvcoord_t, hvcoord_init
 #endif
@@ -20,7 +20,7 @@ program prim_main
   use dimensions_mod,   only: nelemd, qsize, ntrac
   use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type
 #ifdef USE_KOKKOS_KERNELS
-  use control_mod,      only: qsplit, rsplit
+  use control_mod,      only: qsplit, rsplit, disable_diagnostics
 #endif
   use domain_mod,       only: domain1d_t, decompose
   use element_mod,      only: element_t
@@ -302,7 +302,7 @@ program prim_main
         call abortmp("Error! Cannot use this option in Kokkos build")
 #else
         if(par%masterproc) print *,"Leapfrog bootstrap initialization..."
-        call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
+!        call leapfrog_bootstrap(elem, hybrid,1,nelemd,tstep,tl,hvcoord)
 #endif
      endif
   endif
@@ -351,9 +351,11 @@ program prim_main
                                          elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
                                          elem_derived_omega_p_ptr)
           endif
-
-          if (MODULO(tl%nstep,statefreq)==0) then
-            call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete,fvm)
+          
+          if(.not. disable_diagnostics) then
+            if (MODULO(tl%nstep,statefreq)==0) then
+              call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete,fvm)
+            endif
           endif
 #else
           call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
@@ -362,7 +364,7 @@ program prim_main
 #ifdef USE_KOKKOS_KERNELS
            call abortmp ("Error! Functionality not available in Kokkos build")
 #else
-           call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
+!           call prim_run(elem, hybrid,nets,nete, tstep, tl, hvcoord, "leapfrog")
 #endif
         endif
         call t_stopf('prim_run')
