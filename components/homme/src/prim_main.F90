@@ -20,7 +20,7 @@ program prim_main
   use dimensions_mod,   only: nelemd, qsize, ntrac
   use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type
 #ifdef USE_KOKKOS_KERNELS
-  use control_mod,      only: qsplit, rsplit
+  use control_mod,      only: qsplit, rsplit, disable_diagnostics
 #endif
   use domain_mod,       only: domain1d_t, decompose
   use element_mod,      only: element_t
@@ -351,9 +351,11 @@ program prim_main
                                          elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
                                          elem_derived_omega_p_ptr)
           endif
-
-          if (MODULO(tl%nstep,statefreq)==0) then
-            call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete,fvm)
+          
+          if(.not. disable_diagnostics) then
+            if (MODULO(tl%nstep,statefreq)==0) then
+              call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete,fvm)
+            endif
           endif
 #else
           call prim_run_subcycle(elem, fvm, hybrid,nets,nete, tstep, tl, hvcoord,1)
