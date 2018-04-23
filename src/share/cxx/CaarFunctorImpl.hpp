@@ -834,35 +834,33 @@ private:
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
 
-        Real integration = 0;
-        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          const int vector_end =
-              (ilev == NUM_LEV - 1
-                   ? ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE)
-                   : VECTOR_SIZE - 1);
+      Real integration = 0;
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        const int vector_end =
+            (ilev == NUM_LEV - 1
+                 ? ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE)
+                 : VECTOR_SIZE - 1);
 
-          const Scalar vgrad_p =
-              m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-                  m_elements.buffers.pressure_grad(kv.team_idx, 0, igp, jgp, ilev) +
-              m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-                  m_elements.buffers.pressure_grad(kv.team_idx, 1, igp, jgp, ilev);
-          auto &omega_p = m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev);
-          const auto &p = m_elements.buffers.pressure(kv.team_idx, igp, jgp, ilev);
-          const auto &div_vdp =
-              m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, ilev);
+        const Scalar vgrad_p =
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
+                m_elements.buffers.pressure_grad(kv.team_idx, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
+                m_elements.buffers.pressure_grad(kv.team_idx, 1, igp, jgp, ilev);
+        auto &omega_p = m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev);
+        const auto &p = m_elements.buffers.pressure(kv.team_idx, igp, jgp, ilev);
+        const auto &div_vdp =
+            m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, ilev);
 
-          Scalar integration_ij;
-          integration_ij[0] = integration;
-          for (int iv = 0; iv < vector_end; ++iv)
-            integration_ij[iv + 1] = integration_ij[iv] + div_vdp[iv];
-          omega_p = (vgrad_p - (integration_ij + 0.5 * div_vdp)) / p;
-          integration = integration_ij[vector_end] + div_vdp[vector_end];
-        }
-      });
+        Scalar integration_ij;
+        integration_ij[0] = integration;
+        for (int iv = 0; iv < vector_end; ++iv)
+          integration_ij[iv + 1] = integration_ij[iv] + div_vdp[iv];
+        omega_p = (vgrad_p - (integration_ij + 0.5 * div_vdp)) / p;
+        integration = integration_ij[vector_end] + div_vdp[vector_end];
+      }
     });
   }
 };
