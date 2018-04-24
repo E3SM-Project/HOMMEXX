@@ -667,7 +667,7 @@ private:
         accumulator += (dp(k) + dp(k+1))/2;
 
         if (last) {
-          p(k+1) = accumulator;
+          p(k+1) += accumulator;
         }
       });
 
@@ -760,16 +760,17 @@ private:
         integration(ilev) = 0.0;
       });
 
-      // accumulate rgas_tv_dp_over_p in [NUM_PHYSICAL_LEV,1]. Use a currently unused buffer to store cumsum
+      // accumulate rgas_tv_dp_over_p in [NUM_PHYSICAL_LEV,1].
+      // Store sum(NUM_PHYSICAL_LEV,k) in integration(k-1)
       Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV-1),
                             [&](const int k, Real& accumulator, const bool last) {
-        // level must range in [NUM_PHYSICAL_LEV,1], while k ranges in [0, NUM_PHYSICAL_LEV-1].
-        const int level = NUM_PHYSICAL_LEV-k;
+        // level must range in [NUM_PHYSICAL_LEV-1,1], while k ranges in [0, NUM_PHYSICAL_LEV-2].
+        const int level = NUM_PHYSICAL_LEV-1-k;
 
         accumulator += rgas_tv_dp_over_p(level)[0];
 
         if (last) {
-          integration(level) = accumulator;
+          integration(level-1) = accumulator;
         }
       });
 
@@ -778,7 +779,7 @@ private:
       const auto phi = Homme::subview(m_elements.m_phi,kv.ie, igp, jgp);
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int level) {
-        phi(level) = phis + 2.0 * integration(level+1) + rgas_tv_dp_over_p(level);
+        phi(level) = phis + 2.0 * integration(level) + rgas_tv_dp_over_p(level);
       });
     });
     kv.team_barrier();
