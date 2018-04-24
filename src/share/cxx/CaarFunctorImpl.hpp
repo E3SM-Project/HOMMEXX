@@ -743,7 +743,7 @@ private:
 
       // Use currently unused buffers to store one column of data.
       const auto rgas_tv_dp_over_p = Homme::subview(m_elements.buffers.vstar, kv.team_idx, 0, igp, jgp);
-      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> integration(&m_elements.buffers.divergence_temp(kv.team_idx,igp,jgp,0));
+      const auto integration = Homme::subview(m_elements.buffers.divergence_temp,kv.team_idx,igp,jgp);
 
       // Precompute this product
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
@@ -775,7 +775,7 @@ private:
 
       // Update phi with a parallel_for: phi(k)= phis + 2.0 * integration(k+1) + rgas_tv_dp_over_p(k);
       const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
-      auto phi = Homme::subview(m_elements.m_phi,kv.ie, igp, jgp);
+      const auto phi = Homme::subview(m_elements.m_phi,kv.ie, igp, jgp);
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int level) {
         phi(level) = phis + 2.0 * integration(level+1) + rgas_tv_dp_over_p(level);
