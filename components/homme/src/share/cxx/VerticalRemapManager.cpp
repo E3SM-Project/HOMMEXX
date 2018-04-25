@@ -13,14 +13,24 @@ namespace Homme {
 struct VerticalRemapManager::Impl {
   Impl(const SimulationParams &params, const Elements &e, const Tracers &t,
        const HybridVCoord &h) {
-    if (params.remap_alg == RemapAlg::PPM_FIXED) {
+    if (params.remap_alg == RemapAlg::PPM_FIXED_PARABOLA) {
       if (params.rsplit != 0) {
         remapper = std::make_shared<Remap::RemapFunctor<
-            true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixed> >(
+            true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedParabola> >(
             params.qsize, e, t, h);
       } else {
         remapper = std::make_shared<Remap::RemapFunctor<
-            false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixed> >(
+            false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedParabola> >(
+            params.qsize, e, t, h);
+      }
+    } else if (params.remap_alg == RemapAlg::PPM_FIXED_MEANS) {
+      if (params.rsplit != 0) {
+        remapper = std::make_shared<Remap::RemapFunctor<
+            true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedMeans> >(
+            params.qsize, e, t, h);
+      } else {
+        remapper = std::make_shared<Remap::RemapFunctor<
+            false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedMeans> >(
             params.qsize, e, t, h);
       }
     } else if (params.remap_alg == RemapAlg::PPM_MIRRORED) {
