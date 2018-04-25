@@ -107,7 +107,7 @@ subroutine remap1(Qdp,nx,qsize,dp1,dp2)
                             lt1,lt2,lt3,t0,t1,t2,t3,t4,tm,tp,ie,i,ilev,j,jk,k,q
   logical :: abort=.false.
 
-  if (vert_remap_q_alg == 1 .or. vert_remap_q_alg == 2) then
+  if (vert_remap_q_alg == 1 .or. vert_remap_q_alg == 2 .or. vert_remap_q_alg == 3) then
      call remap_Q_ppm(qdp,nx,qsize,dp1,dp2)
      return
   endif
@@ -508,7 +508,7 @@ subroutine remap_Q_ppm_c_callable(Qdp,nx,qsize,dp1,dp2,alg) bind(c)
   real (kind=real_kind), intent(in) :: dp1(nx,nx,nlev),dp2(nx,nx,nlev)
 
   !aim for alg=1 or alg=2 only
-  if((alg == 1).OR.(alg == 2)) then
+  if(alg == 1 .or. alg == 2 .or. alg == 3) then
     vert_remap_q_alg = alg
     call remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   else
@@ -584,18 +584,15 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       do k = 1 , nlev
         kk = k  !Keep from an order n^2 search operation by assuming the old cell index is close.
         !Find the index of the old grid cell in which this new cell's bottom interface resides.
-
         do while ( pio(kk) <= pin(k+1) )
           kk = kk + 1
         enddo
-
         kk = kk - 1                   !kk is now the cell index we're integrating over.
         if (kk == nlev+1) kk = nlev   !This is to keep the indices in bounds.
                                       !Top bounds match anyway, so doesn't matter what coefficients are used
         kid(k) = kk                   !Save for reuse
         z1(k) = -0.5D0                !This remapping assumes we're starting from the left interface of an old grid cell
                                       !In fact, we're usually integrating very little or almost all of the cell in question
-
         z2(k) = ( pin(k+1) - ( pio(kk) + pio(kk+1) ) * 0.5 ) / dpo(kk)  !PPM interpolants are normalized to an independent
                                                                         !coordinate domain [-0.5,0.5].
       enddo
@@ -603,7 +600,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       !This turned out a big optimization, remembering that only parts of the PPM algorithm depends on the data, namely the
       !limiting. So anything that depends only on the grid is pre-computed outside the tracer loop.
       ppmdx(:,:) = compute_ppm_grids( dpo )
-
 
       !From here, we loop over tracers for only those portions which depend on tracer data, which includes PPM limiting and
       !mass accumulation
@@ -619,12 +615,15 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
-
         do k = 1 , gs
-          ao(1   -k) = ao(       k)
-          ao(nlev+k) = ao(nlev+1-k)
+          if (vert_remap_q_alg == 3) then
+             ao(1   -k) = ao(1)
+             ao(nlev+k) = ao(nlev)
+          elseif (vert_remap_q_alg == 2 .or. vert_remap_q_alg == 1) then   !Ignored if vert_remap_q_alg == 2
+             ao(1   -k) = ao(       k)
+             ao(nlev+k) = ao(nlev+1-k)
+          endif
         enddo
-
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
         !Compute tracer values on the new grid by integrating from the old cell bottom to the new
@@ -646,74 +645,48 @@ end subroutine remap_Q_ppm
 
 
 !=======================================================================================================!
-
-
-!THis compute grid-based coefficients from Collela & Woodward 1984.
-function compute_ppm_grids( dx )   result(rslt)
+!This computes grid-based coefficients from Collela & Woodward 1984.
+subroutine compute_ppm_grids_c_callable(dx,rslt,alg) bind(c)
+  use iso_c_binding, only: c_int
   use control_mod, only: vert_remap_q_alg
   implicit none
-  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
+  integer(c_int), intent(in) :: alg
+  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)
+  real(kind=real_kind), intent(out):: rslt(10,0:nlev+1)  !grid spacings
+  if(alg == 1 .or. alg == 2 .or. alg == 3) then
+    vert_remap_q_alg = alg
+    rslt = compute_ppm_grids(dx)
+    rslt(4:10, nlev + 1) = 0.0
+  else
+    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1, 2, or 3) .')
+  endif
+end subroutine compute_ppm_grids_c_callable
+
+function compute_ppm_grids( dx )   result(rslt)
+  implicit none
+  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)
   real(kind=real_kind)             :: rslt(10,0:nlev+1)  !grid spacings
   integer :: j
   integer :: indB, indE
 
   !Calculate grid-based coefficients for stage 1 of compute_ppm
-
-! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
-#ifdef PREQX_UT_ZERO_RSLT
-  rslt(:,:) = 0.0d0
-#endif
-
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-1
-  else
-    indB = 0
-    indE = nlev+1
-  endif
-
-  do j = indB , indE
+  do j = 0 , nlev+1
     rslt( 1,j) = dx(j) / ( dx(j-1) + dx(j) + dx(j+1) )
-    rslt( 2,j) = ( 2.*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
+    rslt( 2,j) = ( 2.D0*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
     rslt( 3,j) = ( dx(j) + 2.*dx(j+1) ) / ( dx(j-1) + dx(j) )
   enddo
 
-  !Caculate grid-based coefficients for stage 2 of compute_ppm
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-2
-  else
-    indB = 0
-    indE = nlev
-  endif
-  do j = indB , indE
+  !Calculate grid-based coefficients for stage 2 of compute_ppm
+  do j = 0 , nlev
     rslt( 4,j) = dx(j) / ( dx(j) + dx(j+1) )
-    rslt( 5,j) = 1. / sum( dx(j-1:j+2) )
-    rslt( 6,j) = ( 2. * dx(j+1) * dx(j) ) / ( dx(j) + dx(j+1 ) )
-    rslt( 7,j) = ( dx(j-1) + dx(j  ) ) / ( 2. * dx(j  ) + dx(j+1) )
-    rslt( 8,j) = ( dx(j+2) + dx(j+1) ) / ( 2. * dx(j+1) + dx(j  ) )
-    rslt( 9,j) = dx(j  ) * ( dx(j-1) + dx(j  ) ) / ( 2.*dx(j  ) +    dx(j+1) )
-    rslt(10,j) = dx(j+1) * ( dx(j+1) + dx(j+2) ) / (    dx(j  ) + 2.*dx(j+1) )
+    rslt( 5,j) = 1.D0 / sum( dx(j-1:j+2) )
+    rslt( 6,j) = ( 2.D0 * dx(j+1) * dx(j) ) / ( dx(j) + dx(j+1 ) )
+    rslt( 7,j) = ( dx(j-1) + dx(j  ) ) / ( 2.D0 * dx(j  ) + dx(j+1) )
+    rslt( 8,j) = ( dx(j+2) + dx(j+1) ) / ( 2.D0 * dx(j+1) + dx(j  ) )
+    rslt( 9,j) = dx(j  ) * ( dx(j-1) + dx(j  ) ) / ( 2.D0 * dx(j  ) +    dx(j+1) )
+    rslt(10,j) = dx(j+1) * ( dx(j+1) + dx(j+2) ) / (    dx(j  ) + 2.D0 * dx(j+1) )
   enddo
 end function compute_ppm_grids
-
-!=======================================================================================================!
-
-subroutine compute_ppm_grids_c_callable(dx,rslt,alg) bind(c)
-  use iso_c_binding, only: c_int
-  use control_mod, only: vert_remap_q_alg
-  integer(c_int), intent(in) :: alg
-  real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
-  real(kind=real_kind), intent(out):: rslt(10,0:nlev+1)  !grid spacings
-
-  !aim for alg=1 or alg=2 only
-  if((alg == 1).OR.(alg == 2)) then
-    vert_remap_q_alg = alg
-    rslt = compute_ppm_grids(dx)
-  else
-    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
-  endif
-end subroutine compute_ppm_grids_c_callable
 
 !=======================================================================================================!
 
@@ -726,15 +699,14 @@ subroutine compute_ppm_c_callable(a,dx,coefs,alg) bind(c)
   real(kind=real_kind), intent(out):: coefs(0:2,   nlev  )  !PPM coefficients (for parabola)
 
   !aim for alg=1 or alg=2 only
-  if((alg == 1).OR.(alg == 2)) then
+  if(alg == 1 .or. alg == 2 .or. alg == 3) then
     vert_remap_q_alg = alg
     coefs = compute_ppm(a,dx)
   else
-    call abortmp('compute_ppm_grids_c_callable: bad alg (not 1 or 2) .')
+    call abortmp('compute_ppm_c_callable: bad alg (not 1, 2, or 3) .')
   endif
 end subroutine compute_ppm_c_callable
 
-!=======================================================================================================!
 
 !This computes a limited parabolic interpolant using a net 5-cell stencil, but the stages of computation are broken up into 3 stages
 function compute_ppm( a , dx )    result(coefs)
@@ -753,65 +725,36 @@ function compute_ppm( a , dx )    result(coefs)
   integer :: indB, indE
 
   ! Stage 1: Compute dma for each cell, allowing a 1-cell ghost stencil below and above the domain
-
-! THIS IS AN EXTRA ASSIGNMENT IN F, should be wrapped in some ifdef
-#ifdef PREQX_UT_ZERO_RSLT
-  coefs(:,:) = 0.0d0
-#endif
-
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-1
-  else
-    indB = 0
-    indE = nlev+1
-  endif
-  do j = indB , indE
+  do j = 0 , nlev+1
     da = dx(1,j) * ( dx(2,j) * ( a(j+1) - a(j) ) + dx(3,j) * ( a(j) - a(j-1) ) )
     dma(j) = minval( (/ abs(da) , 2. * abs( a(j) - a(j-1) ) , 2. * abs( a(j+1) - a(j) ) /) ) * sign(1.D0,da)
     if ( ( a(j+1) - a(j) ) * ( a(j) - a(j-1) ) <= 0. ) dma(j) = 0.
   enddo
 
   ! Stage 2: Compute ai for each cell interface in the physical domain (dimension nlev+1)
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-2
-  else
-    indB = 0
-    indE = nlev
-  endif
-  do j = indB , indE
+  do j = 0 , nlev
     ai(j) = a(j) + dx(4,j) * ( a(j+1) - a(j) ) + dx(5,j) * ( dx(6,j) * ( dx(7,j) - dx(8,j) ) &
          * ( a(j+1) - a(j) ) - dx(9,j) * dma(j+1) + dx(10,j) * dma(j) )
   enddo
 
   ! Stage 3: Compute limited PPM interpolant over each cell in the physical domain
   ! (dimension nlev) using ai on either side and ao within the cell.
-  if (vert_remap_q_alg == 2) then
-    indB = 3
-    indE = nlev-2
-  else
-    indB = 1
-    indE = nlev
-  endif
-  do j = indB , indE
+  do j = 1 , nlev
     al = ai(j-1)
     ar = ai(j  )
     if ( (ar - a(j)) * (a(j) - al) <= 0. ) then
       al = a(j)
       ar = a(j)
     endif
-    if ( (ar - al) * (a(j) - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.D0*a(j) - 2.D0 * ar
-    if ( (ar - al) * (a(j) - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.D0*a(j) - 2.D0 * al
+    if ( (ar - al) * (a(j) - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.*a(j) - 2. * ar
+    if ( (ar - al) * (a(j) - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.*a(j) - 2. * al
     !Computed these coefficients from the edge values and cell mean in Maple. Assumes normalized coordinates: xi=(x-x0)/dx
-    coefs(0,j) = 1.5D0 * a(j) - ( al + ar ) / 4.D0
+    coefs(0,j) = 1.5 * a(j) - ( al + ar ) / 4.
     coefs(1,j) = ar - al
-    coefs(2,j) = 3.D0 * (-2.D0 * a(j) + ( al + ar ))
+    coefs(2,j) = 3. * (-2. * a(j) + ( al + ar ))
   enddo
 
-  !If we're not using a mirrored boundary condition, then make the two cells bordering the top and bottom
-  !material boundaries piecewise constant. Zeroing out the first and second moments, and setting the zeroth
-  !moment to the cell mean is sufficient to maintain conservation.
+  !If vert_remap_q_alg == 2, use piecewise constant in the boundaries, and don't use ghost cells.
   if (vert_remap_q_alg == 2) then
     coefs(0,1:2) = a(1:2)
     coefs(1:2,1:2) = 0.
