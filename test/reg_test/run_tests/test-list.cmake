@@ -8,6 +8,7 @@ SET(HOMME_TESTS
   prtcB-r3-dry-f
   prtcB-r0-dry-c
   prtcB-r3-dry-c
+  prtcB-r3-q6-dry-f
   prtcB-r3-q6-dry-c
   prtcA-r0-moist-f
   prtcA-r3-moist-f
