@@ -10,6 +10,8 @@ SET(HOMME_TESTS
   prtcB-r3-dry-c
   prtcB-r3-q6-dry-f
   prtcB-r3-q6-dry-c
+  prtcB-r3-tensorhv-dry-f
+  prtcB-r3-tensorhv-dry-c
   prtcA-r0-moist-f
   prtcA-r3-moist-f
   prtcA-r0-moist-c
@@ -28,6 +30,7 @@ SET (COMPARE_F_C_TEST
   prtcB-r0-dry
   prtcB-r3-dry
   prtcB-r3-q6-dry
+  prtcB-r3-tensorhv-dry
   prtcA-r0-moist
   prtcA-r3-moist
   prtcB-r0-moist
