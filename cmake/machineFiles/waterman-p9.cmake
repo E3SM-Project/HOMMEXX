@@ -27,3 +27,4 @@ set (ENABLE_HORIZ_OPENMP OFF CACHE BOOL "")
 set (USE_NUM_PROCS 8 CACHE STRING "")
 
 set (OPT_FLAGS "-mcpu=power9 -mtune=power9" CACHE STRING "")
+SET (USE_MPI_OPTIONS "--bind-to core" CACHE FILEPATH "")
