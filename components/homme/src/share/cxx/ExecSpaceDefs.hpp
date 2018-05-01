@@ -298,10 +298,12 @@ struct Dispatch {
 #if defined KOKKOS_HAVE_CUDA
 template <>
 struct Dispatch<Kokkos::Cuda> {
+  using ExeSpace = Kokkos::Cuda;
+
   template<typename LoopBdyType, class Lambda, typename ValueType>
   KOKKOS_FORCEINLINE_FUNCTION
   static void parallel_reduce (
-    const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
+    const Kokkos::TeamPolicy<ExeSpace>::member_type& team,
     const LoopBdyType& loop_boundaries,
     const Lambda& lambda, ValueType& result)
   {
@@ -367,7 +369,7 @@ struct Dispatch<Kokkos::Cuda> {
     value_type accumulator = value_type();
     // Only one thread does the work, i.e., only one sweeps (so last arg to lambda is true)
     Kokkos::single(Kokkos::PerThread(team), [&] () {
-      for (int i = 0; i < N; ++i) {
+      for (int i = 0; i < num_iters; ++i) {
         lambda(i, accumulator, true);
       }
     });
