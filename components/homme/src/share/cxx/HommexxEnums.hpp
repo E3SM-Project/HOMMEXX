@@ -39,7 +39,8 @@ enum class MoistDry {
 
 enum class RemapAlg {
   PPM_MIRRORED = 1,
-  PPM_FIXED    = 2
+  PPM_FIXED_PARABOLA = 2,
+  PPM_FIXED_MEANS = 3,
 };
 
 enum class TestCase {
