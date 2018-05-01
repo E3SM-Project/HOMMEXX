@@ -27,7 +27,9 @@ namespace Homme {
 #else
 
 #if   (AVX_VERSION == 0)
-static constexpr const int VECTOR_SIZE = 1;
+// Vector<VectorTag<SIMD<T, SpT>, l> > can use this for good results
+// on, e.g., Power9, where AVX doesn't exist.
+static constexpr const int VECTOR_SIZE = 8;
 #elif (AVX_VERSION == 1 || AVX_VERSION == 2)
 static constexpr const int VECTOR_SIZE = 4;
 #elif (AVX_VERSION == 512)
