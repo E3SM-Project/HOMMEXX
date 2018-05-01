@@ -618,6 +618,7 @@ private:
 
       Real dp_prev = 0;
       Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
+
       for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
         const int vector_end =
             (ilev == NUM_LEV - 1
@@ -646,27 +647,30 @@ private:
   compute_pressure_impl(KernelVariables &kv) const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
 
-        Real dp_prev = 0;
-        Real p_prev = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0;
-        for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
-          const int ilev = level / VECTOR_SIZE;
-          const int ivec = level % VECTOR_SIZE;
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]>        p (&m_elements.buffers.pressure(kv.team_idx,igp,jgp,0)[0]);
+      ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> dp (&m_elements.m_dp3d(kv.team_idx,m_data.n0,igp,jgp,0)[0]);
 
-          Real &p = m_elements.buffers.pressure(kv.team_idx, igp, jgp, ilev)[ivec];
-          const Real dp =
-              m_elements.m_dp3d(kv.ie, m_data.n0, igp, jgp, ilev)[ivec];
-
-          // p[k] = p[k-1] + 0.5*(dp[k-1] + dp[k])
-          p = p_prev + 0.5 * (dp_prev + dp);
-          // Update p[k-1] and dp[k-1]
-          p_prev = p;
-          dp_prev = dp;
-        };
+      // Add the part for k=0: hyai0*ps0 + 0.5*dp(0)
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,NUM_PHYSICAL_LEV),
+                           [&](const int level) {
+        p(level) = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0 + 0.5*dp(0);
       });
+
+      // Compute cumsum of (dp(k-1) + dp(k)) in [1,NUM_PHYSICAL_LEV] and update p(k)
+      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV-1),
+                            [&](const int k, Real& accumulator, const bool last) {
+
+        // Note: the actual level must range in [1,NUM_PHYSICAL_LEV], while k ranges in [0, NUM_PHYSICAL_LEV-1].
+        accumulator += (dp(k) + dp(k+1))/2;
+
+        if (last) {
+          p(k+1) += accumulator;
+        }
+      });
+
     });
     kv.team_barrier();
   }
@@ -726,6 +730,7 @@ private:
 #endif
   }
 
+  // CUDA version
   template <typename ExecSpaceType>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<
       std::is_same<ExecSpaceType, Hommexx_Cuda>::value, void>::type
@@ -736,11 +741,11 @@ private:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
 
-      // Use a currently unused buffer to store one column of data.
-      const auto rgas_tv_dp_over_p =
-          Homme::subview(m_elements.buffers.vstar, kv.team_idx, 0, igp, jgp);
+      // Use currently unused buffers to store one column of data.
+      const auto rgas_tv_dp_over_p = Homme::subview(m_elements.buffers.vstar, kv.team_idx, 0, igp, jgp);
+      const auto integration = Homme::subview(m_elements.buffers.divergence_temp,kv.team_idx,igp,jgp);
 
-      // Precompute this product as a SIMD-like operation.
+      // Precompute this product
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &ilev) {
         const auto &t_v =
@@ -750,31 +755,31 @@ private:
 
         rgas_tv_dp_over_p(ilev) =
             PhysicalConstants::Rgas * t_v * (dp3d * 0.5 / p);
+
+        // Init integration to 0, so it's ready for later
+        integration(ilev) = 0.0;
       });
 
-      // Precompy this to the integration array to minimize data access and ops
-      // in the Kokkos::single-protected cumsum.
-      const auto integration =
-          Homme::subview(m_elements.m_phi, kv.ie, igp, jgp);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV - 1),
-                           [&](const int &ilev) {
-        integration(ilev) = rgas_tv_dp_over_p(ilev + 1);
+      // accumulate rgas_tv_dp_over_p in [NUM_PHYSICAL_LEV,1].
+      // Store sum(NUM_PHYSICAL_LEV,k) in integration(k-1)
+      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV-1),
+                            [&](const int k, Real& accumulator, const bool last) {
+        // level must range in [NUM_PHYSICAL_LEV-1,1], while k ranges in [0, NUM_PHYSICAL_LEV-2].
+        const int level = NUM_PHYSICAL_LEV-1-k;
+
+        accumulator += rgas_tv_dp_over_p(level)[0];
+
+        if (last) {
+          integration(level-1) = accumulator;
+        }
       });
 
-      // Integrate using 1 thread per vector pack. We can use phi itself to
-      // hold the integral.
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        integration(NUM_LEV - 1) = 0;
-        for (int ilev = NUM_LEV - 2; ilev >= 0; --ilev)
-          integration(ilev) += integration(ilev + 1);
-      });
-
-      // Add integral and constant terms to phi as a SIMD-like operation.
+      // Update phi with a parallel_for: phi(k)= phis + 2.0 * integration(k+1) + rgas_tv_dp_over_p(k);
       const Real phis = m_elements.m_phis(kv.ie, igp, jgp);
+      const auto phi = Homme::subview(m_elements.m_phi,kv.ie, igp, jgp);
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
-                           [&](const int &ilev) {
-        m_elements.m_phi(kv.ie, igp, jgp, ilev) =
-            phis + 2.0 * integration(ilev) + rgas_tv_dp_over_p(ilev);
+                           [&](const int level) {
+        phi(level) = phis + 2.0 * integration(level) + rgas_tv_dp_over_p(level);
       });
     });
     kv.team_barrier();
@@ -800,13 +805,15 @@ private:
       const int igp = loop_idx / NP;
       const int jgp = loop_idx % NP;
 
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        m_elements.buffers.omega_p(kv.team_idx, igp, jgp, 0) = 0;
-        for (int ilev = 1; ilev < NUM_LEV; ++ilev) {
-          m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev) =
-              m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev - 1) +
-              m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, ilev - 1);
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> omega_p(&m_elements.buffers.omega_p(kv.team_idx, igp, jgp, 0)[0]);
+      ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> div_vdp(&m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, 0)[0]);
+      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+                            [&](const int level, Real& accumulator, const bool last) {
+        if (last) {
+          omega_p(level) = accumulator;
         }
+
+        accumulator += div_vdp(level);
       });
 
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
@@ -843,35 +850,33 @@ private:
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int loop_idx) {
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
 
-        Real integration = 0;
-        for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
-          const int vector_end =
-              (ilev == NUM_LEV - 1
-                   ? ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE)
-                   : VECTOR_SIZE - 1);
+      Real integration = 0;
+      for (int ilev = 0; ilev < NUM_LEV; ++ilev) {
+        const int vector_end =
+            (ilev == NUM_LEV - 1
+                 ? ((NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE)
+                 : VECTOR_SIZE - 1);
 
-          const Scalar vgrad_p =
-              m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
-                  m_elements.buffers.pressure_grad(kv.team_idx, 0, igp, jgp, ilev) +
-              m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
-                  m_elements.buffers.pressure_grad(kv.team_idx, 1, igp, jgp, ilev);
-          auto &omega_p = m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev);
-          const auto &p = m_elements.buffers.pressure(kv.team_idx, igp, jgp, ilev);
-          const auto &div_vdp =
-              m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, ilev);
+        const Scalar vgrad_p =
+            m_elements.m_v(kv.ie, m_data.n0, 0, igp, jgp, ilev) *
+                m_elements.buffers.pressure_grad(kv.team_idx, 0, igp, jgp, ilev) +
+            m_elements.m_v(kv.ie, m_data.n0, 1, igp, jgp, ilev) *
+                m_elements.buffers.pressure_grad(kv.team_idx, 1, igp, jgp, ilev);
+        auto &omega_p = m_elements.buffers.omega_p(kv.team_idx, igp, jgp, ilev);
+        const auto &p = m_elements.buffers.pressure(kv.team_idx, igp, jgp, ilev);
+        const auto &div_vdp =
+            m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, ilev);
 
-          Scalar integration_ij;
-          integration_ij[0] = integration;
-          for (int iv = 0; iv < vector_end; ++iv)
-            integration_ij[iv + 1] = integration_ij[iv] + div_vdp[iv];
-          omega_p = (vgrad_p - (integration_ij + 0.5 * div_vdp)) / p;
-          integration = integration_ij[vector_end] + div_vdp[vector_end];
-        }
-      });
+        Scalar integration_ij;
+        integration_ij[0] = integration;
+        for (int iv = 0; iv < vector_end; ++iv)
+          integration_ij[iv + 1] = integration_ij[iv] + div_vdp[iv];
+        omega_p = (vgrad_p - (integration_ij + 0.5 * div_vdp)) / p;
+        integration = integration_ij[vector_end] + div_vdp[vector_end];
+      }
     });
   }
 };
