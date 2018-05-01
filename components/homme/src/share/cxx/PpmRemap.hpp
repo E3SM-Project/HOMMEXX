@@ -217,21 +217,27 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       boundaries::fill_cell_means_gs(kv,
                                      Homme::subview(ao, kv.team_idx, igp, jgp));
 
-      // Scan region
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        // Accumulate the old mass up to old grid cell interface locations
-        // to simplify integration during remapping. Also, divide out the
-        // grid spacing so we're working with actual tracer values and can
-        // conserve mass.
-        mass_o(kv.team_idx, igp, jgp, 1) = 0.0;
-        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int ilevel = k / VECTOR_SIZE;
-          const int ivector = k % VECTOR_SIZE;
+      Kokkos::parallel_scan(
+          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+          [=](const int &k, Real &accumulator, const bool last) {
+            // Accumulate the old mass up to old grid cell interface locations
+            // to simplify integration during remapping. Also, divide out the
+            // grid spacing so we're working with actual tracer values and can
+            // conserve mass.
+            if (last) {
+              mass_o(kv.team_idx, igp, jgp, k + 1) = accumulator;
+            }
+            const int ilevel = k / VECTOR_SIZE;
+            const int ivector = k % VECTOR_SIZE;
+            accumulator += remap_var(igp, jgp, ilevel)[ivector];
+          });
 
-          mass_o(kv.team_idx, igp, jgp, k + 2) =
-              mass_o(kv.team_idx, igp, jgp, k + 1) +
-              remap_var(igp, jgp, ilevel)[ivector];
-        } // end k loop
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        const int ilast = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
+        const int vlast = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+        mass_o(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV + 1) =
+            mass_o(kv.team_idx, igp, jgp, NUM_PHYSICAL_LEV) +
+            remap_var(igp, jgp, ilast)[vlast];
       });
 
       // Reflect the real values across the top and bottom boundaries into
@@ -498,35 +504,52 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       const {
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
-      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
-        const int igp = loop_idx / NP;
-        const int jgp = loop_idx % NP;
-        ExecViewUnmanaged<Real[_ppm_consts::PIO_PHYSICAL_LEV]> pt_pio =
-            Homme::subview(pio, kv.ie, igp, jgp);
-        ExecViewUnmanaged<Real[_ppm_consts::PIN_PHYSICAL_LEV]> pt_pin =
-            Homme::subview(pin, kv.ie, igp, jgp);
-        pt_pio(0) = 0.0;
-        pt_pin(0) = 0.0;
-        ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_src_thickness =
-            Homme::subview(src_layer_thickness, igp, jgp);
-        ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_tgt_thickness =
-            Homme::subview(tgt_layer_thickness, igp, jgp);
-        // scan region
-        for (int k = 0; k < NUM_PHYSICAL_LEV; k++) {
-          const int layer_vlevel = k / VECTOR_SIZE;
-          const int layer_vector = k % VECTOR_SIZE;
-          pt_pio(k + 1) =
-              pt_pio(k) + pt_src_thickness(layer_vlevel)[layer_vector];
-          pt_pin(k + 1) =
-              pt_pin(k) + pt_tgt_thickness(layer_vlevel)[layer_vector];
-        } // k loop
+      const int igp = loop_idx / NP;
+      const int jgp = loop_idx % NP;
+      ExecViewUnmanaged<Real[_ppm_consts::PIO_PHYSICAL_LEV]> pt_pio =
+          Homme::subview(pio, kv.ie, igp, jgp);
+      ExecViewUnmanaged<Real[_ppm_consts::PIN_PHYSICAL_LEV]> pt_pin =
+          Homme::subview(pin, kv.ie, igp, jgp);
+      ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_src_thickness =
+          Homme::subview(src_layer_thickness, igp, jgp);
+      ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_tgt_thickness =
+          Homme::subview(tgt_layer_thickness, igp, jgp);
 
+      Kokkos::parallel_scan(
+          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+          [=](const int &level, Real &accumulator, const bool last) {
+            if (last) {
+              pt_pio(level) = accumulator;
+            }
+            const int ilev = level / VECTOR_SIZE;
+            const int vlev = level % VECTOR_SIZE;
+            accumulator += pt_src_thickness(ilev)[vlev];
+          });
+      Kokkos::parallel_scan(
+          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+          [=](const int &level, Real &accumulator, const bool last) {
+            if (last) {
+              pt_pin(level) = accumulator;
+            }
+            const int ilev = level / VECTOR_SIZE;
+            const int vlev = level % VECTOR_SIZE;
+            accumulator += pt_tgt_thickness(ilev)[vlev];
+          });
+
+      Kokkos::single(Kokkos::PerThread(kv.team), [&]() {
+        const int ilast = (NUM_PHYSICAL_LEV - 1) / VECTOR_SIZE;
+        const int vlast = (NUM_PHYSICAL_LEV - 1) % VECTOR_SIZE;
+        pt_pio(NUM_PHYSICAL_LEV) =
+            pt_pio(NUM_PHYSICAL_LEV - 1) + pt_src_thickness(ilast)[vlast];
+        pt_pin(NUM_PHYSICAL_LEV) =
+            pt_pin(NUM_PHYSICAL_LEV - 1) + pt_tgt_thickness(ilast)[vlast];
         // This is here to allow an entire block of k
         // threads to run in the remapping phase. It makes
         // sure there's an old interface value below the
         // domain that is larger.
         assert(fabs(pio(kv.ie, igp, jgp, NUM_PHYSICAL_LEV) -
                     pin(kv.ie, igp, jgp, NUM_PHYSICAL_LEV)) < 1.0);
+
         pt_pio(_ppm_consts::PIO_PHYSICAL_LEV - 1) =
             pt_pio(_ppm_consts::PIO_PHYSICAL_LEV - 2) + 1.0;
 
@@ -535,12 +558,7 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
         // either.
         pt_pin(NUM_PHYSICAL_LEV) = pt_pio(NUM_PHYSICAL_LEV);
       });
-    });
 
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
-                         [&](const int &loop_idx) {
-      const int igp = loop_idx / NP;
-      const int jgp = loop_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
                            [&](const int &k) {
         int ilevel = k / VECTOR_SIZE;
