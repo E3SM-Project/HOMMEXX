@@ -1,0 +1,29 @@
+set (mynetcdf /ascldap/users/ambradl/lib/waterman-netcdf4)
+
+SET(NETCDF_DIR ${mynetcdf} CACHE FILEPATH "")
+
+SET(NETCDF_Fortran_DIR ${mynetcdf} CACHE FILEPATH "")
+SET(NETCDFF_DIR ${mynetcdf} CACHE FILEPATH "")
+
+SET(NetcdfF_LIBRARY -L${mynetcdf}/lib -lnetcdff -lnetcdf -lhdf5_hl -lhdf5 -ldl -lz CACHE LIST "")
+SET(ZLIB_DIR $ENV{ZLIB_ROOT} CACHE FILEPATH "")
+
+SET(HOMME_FIND_BLASLAPACK TRUE CACHE BOOL "")
+
+SET(USE_QUEUING FALSE CACHE BOOL "")
+
+SET(ENABLE_CUDA FALSE CACHE BOOL "")
+
+SET(USE_TRILINOS OFF CACHE BOOL "")
+SET(KOKKOS_PATH "/home/ambradl/lib/waterman-kokkos/p9" CACHE STRING "")
+
+SET(CMAKE_C_COMPILER "mpicc" CACHE STRING "")
+SET(CMAKE_CXX_COMPILER "mpicxx" CACHE STRING "")
+SET(CMAKE_Fortran_COMPILER "mpifort" CACHE STRING "")
+
+set (ENABLE_COLUMN_OPENMP ON CACHE BOOL "")
+set (ENABLE_HORIZ_OPENMP OFF CACHE BOOL "")
+
+set (USE_NUM_PROCS 8 CACHE STRING "")
+
+set (OPT_FLAGS "-mcpu=power9 -mtune=power9" CACHE STRING "")
