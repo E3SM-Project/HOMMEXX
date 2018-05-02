@@ -116,16 +116,19 @@ TEST_CASE("ExecSpaceDefs",
   }
 }
 
-template <typename Dispatcher, int num_points, int vector_length>
+template <typename Dispatcher, int num_points, int scan_length>
 void test_parallel_scan(
     Kokkos::TeamPolicy<ExecSpace> policy,
-    ExecViewManaged<const Real * [num_points][vector_length]> input,
-    ExecViewManaged<Real * [num_points][vector_length]> output) {
+    ExecViewManaged<const Real * [num_points][scan_length]> input,
+    ExecViewManaged<Real * [num_points][scan_length]> output) {
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember & team) {
+    assert(team.league_rank() < input.extent_int(0));
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, input.extent_int(1)),
                          [&](const int ip) {
+      assert(ip < input.extent_int(1));
       auto input_vector = Homme::subview(input, team.league_rank(), ip);
       auto output_vector = Homme::subview(output, team.league_rank(), ip);
+
       auto inclusive_sum = [&](const int i, Real &accum, bool last) {
         accum += input_vector(i);
         if (last) {
@@ -146,14 +149,17 @@ template <typename ExeSpace> struct KokkosDispatcher {
   }
 };
 
-TEST_CASE("Parallel scan",
+TEST_CASE("Parallel_scan",
           "Test parallel vector scan at ThreadVectorRange level.") {
   constexpr int num_elems = 10;
   constexpr int num_points = 16;
   constexpr int vector_length = 16;
-  ExecViewManaged<Real*[num_points][vector_length]> input("", num_elems);
-  ExecViewManaged<Real*[num_points][vector_length]> output_dispatch("", num_elems);
-  ExecViewManaged<Real*[num_points][vector_length]> output_kokkos("", num_elems);
+  constexpr int scan_length = 97;
+  ExecViewManaged<Real * [num_points][scan_length]> input("", num_elems);
+  ExecViewManaged<Real * [num_points][scan_length]> output_dispatch("",
+                                                                    num_elems);
+  ExecViewManaged<Real * [num_points][scan_length]> output_kokkos("",
+                                                                  num_elems);
 
   // Policy used in all parallel for's below
   Kokkos::TeamPolicy<ExecSpace> policy(num_elems,num_points,vector_length);
@@ -164,7 +170,7 @@ TEST_CASE("Parallel scan",
     const int ie = team.league_rank();
     Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_points),
                          [&](const int ip) {
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, vector_length),
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, scan_length),
                            [&](const int iv) {
         // We fill the vector entry iv with 1./(iv+1) - 1./(iv+2).
         // This way, the sum of entries [0,N] should return 1 - 1./(N+2).
@@ -187,10 +193,10 @@ TEST_CASE("Parallel scan",
   // Note: we do not know if the BFB version is used or not. It depends
   //       on whether HOMMEXX_GPU_BFB_WITH_CPU was defined BEFORE including
   //       the ExecSpaceDefs.hpp header.
-  test_parallel_scan<Dispatch<ExecSpace>, num_points, vector_length>(
+  test_parallel_scan<Dispatch<ExecSpace>, num_points, scan_length>(
       policy, input, output_dispatch);
 
-  test_parallel_scan<KokkosDispatcher<ExecSpace>, num_points, vector_length>(
+  test_parallel_scan<KokkosDispatcher<ExecSpace>, num_points, scan_length>(
       policy, input, output_kokkos);
 
   // The two versions *should* give the exact answer on CPU,
@@ -198,10 +204,10 @@ TEST_CASE("Parallel scan",
   auto output_dispatch_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), output_dispatch);
   auto output_kokkos_h   = Kokkos::create_mirror_view_and_copy(HostMemSpace(), output_kokkos);
 
-  const Real rel_threshold = std::numeric_limits<Real>::epsilon();
+  const Real rel_threshold = 4.0 * std::numeric_limits<Real>::epsilon();
   for (int ie=0; ie<num_elems; ++ie) {
     for (int ip=0; ip<num_points; ++ip) {
-      for (int iv=0; iv<vector_length; ++iv) {
+      for (int iv=0; iv<scan_length; ++iv) {
         const Real computed_kokkos   = output_kokkos_h(ie, ip, iv);
         const Real computed_dispatch = output_dispatch_h(ie, ip, iv);
         const Real exact = 1.0 - 1.0/(iv+2);
@@ -209,7 +215,7 @@ TEST_CASE("Parallel scan",
 
         rel_error = compare_answers(computed_kokkos, computed_dispatch);
         REQUIRE(rel_error<=rel_threshold);
-        rel_error = compare_answers(exact, computed_dispatch);
+        rel_error = compare_answers(exact, computed_kokkos);
         REQUIRE(rel_error<=rel_threshold);
         rel_error = compare_answers(exact, computed_dispatch);
         REQUIRE(rel_error<=rel_threshold);
