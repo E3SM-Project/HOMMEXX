@@ -668,7 +668,7 @@ private:
         accumulator += (dp(k) + dp(k+1))/2;
 
         if (last) {
-          p(k+1) += accumulator;
+          p(k+1) = accumulator;
         }
       });
     });
