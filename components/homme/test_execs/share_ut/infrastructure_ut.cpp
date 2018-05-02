@@ -116,16 +116,44 @@ TEST_CASE("ExecSpaceDefs",
   }
 }
 
+template <typename Dispatcher, int num_points, int vector_length>
+void test_parallel_scan(
+    Kokkos::TeamPolicy<ExecSpace> policy,
+    ExecViewManaged<const Real * [num_points][vector_length]> input,
+    ExecViewManaged<Real * [num_points][vector_length]> output) {
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember & team) {
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, input.extent_int(1)),
+                         [&](const int ip) {
+      auto input_vector = Homme::subview(input, team.league_rank(), ip);
+      auto output_vector = Homme::subview(output, team.league_rank(), ip);
+      auto inclusive_sum = [&](const int i, Real &accum, bool last) {
+        accum += input_vector(i);
+        if (last) {
+          output_vector(i) = accum;
+        }
+      };
+      Dispatcher::parallel_scan(team, input.extent_int(2), inclusive_sum);
+    });
+  });
+}
+
+template <typename ExeSpace> struct KokkosDispatcher {
+  template <class Lambda>
+  static KOKKOS_FORCEINLINE_FUNCTION void
+  parallel_scan(const typename Kokkos::TeamPolicy<ExeSpace>::member_type &team,
+                const int num_iters, const Lambda &lambda) {
+    Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team, num_iters), lambda);
+  }
+};
+
 TEST_CASE("Parallel scan",
           "Test parallel vector scan at ThreadVectorRange level.") {
-
-  constexpr int num_elems   = 10;
+  constexpr int num_elems = 10;
   constexpr int num_points = 16;
   constexpr int vector_length = 16;
-  ExecViewManaged<Real*[num_points][vector_length]> input("",num_elems,vector_length);
-  ExecViewManaged<Real*[num_points][vector_length]> output_seq("",num_elems,vector_length);
-  ExecViewManaged<Real*[num_points][vector_length]> output_dispatch("",num_elems,vector_length);
-  ExecViewManaged<Real*[num_points][vector_length]> output_kokkos("",num_elems,vector_length);
+  ExecViewManaged<Real*[num_points][vector_length]> input("", num_elems);
+  ExecViewManaged<Real*[num_points][vector_length]> output_dispatch("", num_elems);
+  ExecViewManaged<Real*[num_points][vector_length]> output_kokkos("", num_elems);
 
   // Policy used in all parallel for's below
   Kokkos::TeamPolicy<ExecSpace> policy(num_elems,num_points,vector_length);
@@ -134,13 +162,13 @@ TEST_CASE("Parallel scan",
   // Fill the input view.
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember& team){
     const int ie = team.league_rank();
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,num_points),
-                         [&](const int ip){
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,vector_length),
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(team, num_points),
+                         [&](const int ip) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(team, vector_length),
                            [&](const int iv) {
         // We fill the vector entry iv with 1./(iv+1) - 1./(iv+2).
         // This way, the sum of entries [0,N] should return 1 - 1./(N+2).
-        input(ie,ip,iv) = 1.0/(iv+1) - 1.0/(iv+2);
+        input(ie, ip, iv) = 1.0/(iv+1) - 1.0/(iv+2);
       });
     });
   });
@@ -159,56 +187,31 @@ TEST_CASE("Parallel scan",
   // Note: we do not know if the BFB version is used or not. It depends
   //       on whether HOMMEXX_GPU_BFB_WITH_CPU was defined BEFORE including
   //       the ExecSpaceDefs.hpp header.
-  Kokkos::parallel_for(policy,KOKKOS_LAMBDA(const TeamMember& team){
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,num_points),
-                         [&](const int ip) {
-      auto input_vector  = Homme::subview(input,team.league_rank(),ip);
-      auto output_vector = Homme::subview(output_dispatch,team.league_rank(),ip);
-      auto my_lambda = [&](const int i, Real& accum, bool last) {
-        accum += input_vector(i);
-        if (last) {
-          output_vector(i) = accum;
-        }
-      };
-      Dispatch<ExecSpace>::parallel_scan(team,vector_length,my_lambda);
-    });
-  });
+  test_parallel_scan<Dispatch<ExecSpace>, num_points, vector_length>(
+      policy, input, output_dispatch);
 
-  // Computing the scan sum with Kokkos' standard routine.
-  Kokkos::parallel_for(policy,KOKKOS_LAMBDA(const TeamMember& team){
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(team,num_points),
-                         [&](const int ip) {
-      auto input_vector  = Homme::subview(input,team.league_rank(),ip);
-      auto output_vector = Homme::subview(output_kokkos,team.league_rank(),ip);
-      auto my_lambda = [&](const int i, Real& accum, bool last) {
-        accum += input_vector(i);
-        if (last) {
-          output_vector(i) = accum;
-        }
-      };
-      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team,vector_length),my_lambda);
-    });
-  });
+  test_parallel_scan<KokkosDispatcher<ExecSpace>, num_points, vector_length>(
+      policy, input, output_kokkos);
 
   // The two versions *should* give the exact answer on CPU,
   // but differ on GPU. Either way, we should be within a good tolerance
-  auto output_dispatch_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(),output_dispatch);
-  auto output_kokkos_h   = Kokkos::create_mirror_view_and_copy(HostMemSpace(),output_kokkos);
+  auto output_dispatch_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), output_dispatch);
+  auto output_kokkos_h   = Kokkos::create_mirror_view_and_copy(HostMemSpace(), output_kokkos);
 
   const Real rel_threshold = std::numeric_limits<Real>::epsilon();
   for (int ie=0; ie<num_elems; ++ie) {
     for (int ip=0; ip<num_points; ++ip) {
       for (int iv=0; iv<vector_length; ++iv) {
-        const Real computed_kokkos   = output_kokkos_h(ie,ip,iv);
-        const Real computed_dispatch = output_dispatch_h(ie,ip,iv);
+        const Real computed_kokkos   = output_kokkos_h(ie, ip, iv);
+        const Real computed_dispatch = output_dispatch_h(ie, ip, iv);
         const Real exact = 1.0 - 1.0/(iv+2);
         Real rel_error;
 
-        rel_error = compare_answers(computed_kokkos,computed_dispatch);
+        rel_error = compare_answers(computed_kokkos, computed_dispatch);
         REQUIRE(rel_error<=rel_threshold);
-        rel_error = compare_answers(exact,computed_dispatch);
+        rel_error = compare_answers(exact, computed_dispatch);
         REQUIRE(rel_error<=rel_threshold);
-        rel_error = compare_answers(exact,computed_dispatch);
+        rel_error = compare_answers(exact, computed_dispatch);
         REQUIRE(rel_error<=rel_threshold);
       }
     }
