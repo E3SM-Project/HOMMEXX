@@ -283,15 +283,27 @@ struct Dispatch {
     for (int k = 0; k < NP*NP; ++k)
       lambda(k, result);
   }
+
+  template<class Lambda>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_scan (
+    const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
+    const int num_iters,
+    const Lambda& lambda)
+  {
+    Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team,num_iters), lambda);
+  }
 };
 
 #if defined KOKKOS_HAVE_CUDA
 template <>
 struct Dispatch<Kokkos::Cuda> {
+  using ExeSpace = Kokkos::Cuda;
+
   template<typename LoopBdyType, class Lambda, typename ValueType>
   KOKKOS_FORCEINLINE_FUNCTION
   static void parallel_reduce (
-    const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
+    const Kokkos::TeamPolicy<ExeSpace>::member_type& team,
     const LoopBdyType& loop_boundaries,
     const Lambda& lambda, ValueType& result)
   {
@@ -333,6 +345,37 @@ struct Dispatch<Kokkos::Cuda> {
   {
     parallel_reduce(team, Kokkos::ThreadVectorRange(team, NP*NP),
                     lambda, result);
+  }
+
+  template<class Lambda>
+  static KOKKOS_FORCEINLINE_FUNCTION
+  void parallel_scan (
+    const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
+    const int num_iters,
+    const Lambda& lambda)
+  {
+#if defined HOMMEXX_GPU_BFB_WITH_CPU
+    // We want to get C++ on GPU to match F90 on CPU. Thus, need to
+    // serialize parallel scans.
+
+    // Detect the value type
+    using value_type =
+      typename Kokkos::Impl::FunctorAnalysis
+        < Kokkos::Impl::FunctorPatternInterface::SCAN
+        , void
+        , Lambda >::value_type ;
+
+    // All threads init result.
+    value_type accumulator = value_type();
+    // Only one thread does the work, i.e., only one sweeps (so last arg to lambda is true)
+    Kokkos::single(Kokkos::PerThread(team), [&] () {
+      for (int i = 0; i < num_iters; ++i) {
+        lambda(i, accumulator, true);
+      }
+    });
+#else
+    Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team,num_iters), lambda);
+#endif
   }
 };
 #endif
