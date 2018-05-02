@@ -653,24 +653,24 @@ private:
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]>        p (&m_elements.buffers.pressure(kv.team_idx,igp,jgp,0)[0]);
       ExecViewUnmanaged<const Real[NUM_PHYSICAL_LEV]> dp (&m_elements.m_dp3d(kv.team_idx,m_data.n0,igp,jgp,0)[0]);
 
-      // Add the part for k=0: hyai0*ps0 + 0.5*dp(0)
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team,NUM_PHYSICAL_LEV),
-                           [&](const int level) {
-        p(level) = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0 + 0.5*dp(0);
+      const Real p0 = m_hvcoord.hybrid_ai0 * m_hvcoord.ps0 + 0.5*dp(0);
+      Kokkos::single(Kokkos::PerThread(kv.team),[&](){
+        p(0) = p0;
       });
-
       // Compute cumsum of (dp(k-1) + dp(k)) in [1,NUM_PHYSICAL_LEV] and update p(k)
-      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV-1),
-                            [&](const int k, Real& accumulator, const bool last) {
+      // For level=1 (which is k=0), first add p0=hyai0*ps0 + 0.5*dp(0).
+      Dispatch<ExecSpaceType>::parallel_scan(kv.team, NUM_PHYSICAL_LEV-1,
+                                            [&](const int k, Real& accumulator, const bool last) {
 
         // Note: the actual level must range in [1,NUM_PHYSICAL_LEV], while k ranges in [0, NUM_PHYSICAL_LEV-1].
+        // If k=0, add the p0 part: hyai0*ps0 + 0.5*dp(0)
+        accumulator += (k==0 ? p0 : 0);
         accumulator += (dp(k) + dp(k+1))/2;
 
         if (last) {
-          p(k+1) += accumulator;
+          p(k+1) = accumulator;
         }
       });
-
     });
     kv.team_barrier();
   }
@@ -762,8 +762,8 @@ private:
 
       // accumulate rgas_tv_dp_over_p in [NUM_PHYSICAL_LEV,1].
       // Store sum(NUM_PHYSICAL_LEV,k) in integration(k-1)
-      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV-1),
-                            [&](const int k, Real& accumulator, const bool last) {
+      Dispatch<ExecSpaceType>::parallel_scan(kv.team, NUM_PHYSICAL_LEV-1,
+                                            [&](const int k, Real& accumulator, const bool last) {
         // level must range in [NUM_PHYSICAL_LEV-1,1], while k ranges in [0, NUM_PHYSICAL_LEV-2].
         const int level = NUM_PHYSICAL_LEV-1-k;
 
@@ -807,8 +807,8 @@ private:
 
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> omega_p(&m_elements.buffers.omega_p(kv.team_idx, igp, jgp, 0)[0]);
       ExecViewUnmanaged<Real[NUM_PHYSICAL_LEV]> div_vdp(&m_elements.buffers.div_vdp(kv.team_idx, igp, jgp, 0)[0]);
-      Kokkos::parallel_scan(Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
-                            [&](const int level, Real& accumulator, const bool last) {
+      Dispatch<ExecSpaceType>::parallel_scan(kv.team, NUM_PHYSICAL_LEV,
+                                            [&](const int level, Real& accumulator, const bool last) {
         if (last) {
           omega_p(level) = accumulator;
         }
