@@ -6,6 +6,7 @@
 
 
 #include "Context.hpp"
+#include "Diagnostics.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
 #include "HybridVCoord.hpp"
@@ -28,7 +29,8 @@ extern "C" {
 void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1)
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
-  // Get control and simulation params
+
+  // Get simulation params
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);
 
@@ -46,12 +48,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   bool compute_diagnostics = false;
   bool compute_energy      = params.energy_fixer;
   if (nstep_end%params.state_frequency==0 || nstep_end==tl.nstep0) {
-#ifndef NDEBUG
-    std::cout << "WARNING! You need to implement something at line " << __LINE__ << " of file " << __FILE__ << "\n";
-#endif
-    // TODO: uncomment these lines, and implement diagnostics stuff
-    //compute_diagnostics = true;
-    //compute_energy      = true;
+    compute_diagnostics = true;
+    compute_energy      = true;
   }
 
   if (params.disable_diagnostics) {
@@ -59,22 +57,22 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   }
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
+    Diagnostics& diags = Context::singleton().get_diagnostics();
+    diags.prim_diag_scalars(true,3);
   }
 
   // Apply forcing
 #ifdef CAM
-HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
+  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
                         Errors::err_not_implemented);
   // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
 
   // if (ftype==0) then
   //   call t_startf("ApplyCAMForcing")
-  //   call ApplyCAMForcing(elem, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
+  //   call ApplyCAMForcing(elem, fvm, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
   //   call t_stopf("ApplyCAMForcing")
-  // elseif (ftype==2)
+
+  // elseif (ftype==2) then
   //   call t_startf("ApplyCAMForcing_dynamics")
   //   call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
   //   call t_stopf("ApplyCAMForcing_dynamics")
@@ -85,15 +83,13 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
 #endif
 
   if (compute_energy) {
-    Errors::runtime_abort("'compute energy' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
+    Diagnostics& diags = Context::singleton().get_diagnostics();
+    diags.prim_energy_halftimes(true,0);
   }
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
+    Diagnostics& diags = Context::singleton().get_diagnostics();
+    diags.prim_diag_scalars(true,0);
   }
 
   // Initialize dp3d from ps
@@ -171,41 +167,14 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   GPTLstop("tl-sc Q-from-qdp");
 
   if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
-  }
+    Diagnostics& diags = Context::singleton().get_diagnostics();
+    diags.prim_diag_scalars(false,1);
 
-  if (compute_energy) {
-    // call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
-    Errors::runtime_abort("'compute energy' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-  }
-
-  if (params.energy_fixer) {
-    Errors::runtime_abort("'energu fixer' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_energy_fixer(elem,hvcoord,hybrid,tl,nets,nete,nsubstep)
-  }
-
-  if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
-    // call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
+    diags.prim_energy_halftimes(false,1);
   }
 
   // Update dynamics time levels
   tl.update_dynamics_levels(UpdateType::LEAPFROG);
-
-  // ============================================================
-  // Print some diagnostic information
-  // ============================================================
-  if (compute_diagnostics) {
-    Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
-                          Errors::err_not_implemented);
-    // call prim_printstate(elem, tl, hybrid, hvcoord, nets, nete)
-  }
 
   // Update the timelevel info to pass back to fortran
   nstep = tl.nstep;

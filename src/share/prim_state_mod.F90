@@ -422,10 +422,9 @@ contains
     !
     !   only compute on full leapfrog timesteps (tl%nstep >= tl%nstep2)
     ! ====================================================================
-#ifndef USE_KOKKOS_KERNELS
 !   Compute Energies at time1 and time2 (half levels between leapfrog steps)
     do n=1,4
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%IEner(:,:,n)
        enddo
@@ -435,39 +434,39 @@ contains
 !BUG       print *,'IAM: ',iam,' prim_printstate: SUM(tmp): ',SUM(tmp)
        IEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        IEner(n) = IEner(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%IEner_wet(:,:,n)
        enddo
        IEner_wet(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        IEner_wet(n) = IEner_wet(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%KEner(:,:,n)
        enddo
        KEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        KEner(n) = KEner(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%PEner(:,:,n)
        enddo
        PEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        PEner(n) = PEner(n)*scale
        TOTE(n)=IEner(n)+PEner(n)+KEner(n)
-       
+
        do q=1,qsize
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qvar(:,:,q,n)
           enddo
           Qvar(q,n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
           Qvar(q,n) = Qvar(q,n)*scale
-          
+
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qmass(:,:,q,n)
           enddo
           Qmass(q,n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
           Qmass(q,n) = Qmass(q,n)*scale
-          
+
           if (n==2) then
              do ie=nets,nete
                 tmp(:,:,ie)=elem(ie)%accum%Q1mass(:,:,q)
@@ -477,7 +476,6 @@ contains
           endif
        enddo
     enddo
-#endif
 
 
     !

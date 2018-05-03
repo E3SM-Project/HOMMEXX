@@ -5,6 +5,7 @@
  *******************************************************************************/
 
 #include "Derivative.hpp"
+#include "Diagnostics.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
 #include "Context.hpp"
@@ -161,6 +162,17 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
 
   Kokkos::deep_copy(ps_v_host,ps_v_f90);
   Kokkos::deep_copy(elements.m_ps_v,ps_v_host);
+}
+
+void init_diagnostics_c (F90Ptr& elem_accum_qvar_ptr,  F90Ptr& elem_accum_qmass_ptr, F90Ptr& elem_accum_q1mass_ptr,
+                         F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr, F90Ptr& elem_accum_kener_ptr,
+                         F90Ptr& elem_accum_pener_ptr)
+{
+  Elements& elements = Context::singleton().get_elements ();
+  Diagnostics& diagnostics = Context::singleton().get_diagnostics ();
+
+  diagnostics.init(elements.num_elems(), elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,
+                   elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr, elem_accum_pener_ptr);
 }
 
 void init_boundary_exchanges_c ()
