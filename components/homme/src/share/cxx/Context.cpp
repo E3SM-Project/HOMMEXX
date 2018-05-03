@@ -6,6 +6,7 @@
 #include "Comm.hpp"
 #include "Connectivity.hpp"
 #include "Derivative.hpp"
+#include "Diagnostics.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
 #include "HybridVCoord.hpp"
@@ -35,6 +36,11 @@ Comm& Context::get_comm() {
     comm_->init();
   }
   return *comm_;
+}
+
+Diagnostics& Context::get_diagnostics() {
+  if ( ! diagnostics_) diagnostics_.reset(new Diagnostics());
+  return *diagnostics_;
 }
 
 Elements& Context::get_elements() {
@@ -122,6 +128,7 @@ void Context::clear() {
   elements_ = nullptr;
   tracers_ = nullptr;
   derivative_ = nullptr;
+  diagnostics_ = nullptr;
   hvcoord_ = nullptr;
   hyperviscosity_functor_ = nullptr;
   connectivity_ = nullptr;

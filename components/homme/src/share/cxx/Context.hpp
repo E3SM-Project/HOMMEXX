@@ -13,6 +13,7 @@ class CaarFunctor;
 class Comm;
 class Connectivity;
 class Derivative;
+class Diagnostics;
 class Elements;
 class Tracers;
 class HybridVCoord;
@@ -44,6 +45,7 @@ private:
   std::unique_ptr<Elements>               elements_;
   std::unique_ptr<Tracers>                tracers_;
   std::unique_ptr<Derivative>             derivative_;
+  std::unique_ptr<Diagnostics>            diagnostics_;
   std::unique_ptr<HybridVCoord>           hvcoord_;
   std::unique_ptr<HyperviscosityFunctor>  hyperviscosity_functor_;
   std::shared_ptr<Connectivity>           connectivity_;
@@ -64,6 +66,7 @@ public:
   // Getters for each managed object.
   CaarFunctor& get_caar_functor();
   Comm& get_comm();
+  Diagnostics& get_diagnostics();
   Elements& get_elements();
   Tracers& get_tracers();
   Derivative& get_derivative();
