@@ -1,17 +1,17 @@
+#include "CaarFunctor.hpp"
+#include "Context.hpp"
 #include "Derivative.hpp"
 #include "Elements.hpp"
-#include "Tracers.hpp"
-#include "Context.hpp"
+#include "ErrorDefs.hpp"
+#include "EulerStepFunctor.hpp"
+#include "HommexxEnums.hpp"
 #include "HybridVCoord.hpp"
+#include "HyperviscosityFunctor.hpp"
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
-#include "HommexxEnums.hpp"
-#include "EulerStepFunctor.hpp"
-#include "HyperviscosityFunctor.hpp"
-#include "CaarFunctor.hpp"
+#include "Tracers.hpp"
 #include "mpi/BoundaryExchange.hpp"
 #include "mpi/BuffersManager.hpp"
-#include "ErrorDefs.hpp"
 
 #include "utilities/SyncUtils.hpp"
 
@@ -74,6 +74,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
+  params.use_cpstar                    = false;
 
   // TODO Parse a fortran string and set this properly. For now, our code does
   // not depend on this except to throw an error in apply_test_forcing.
