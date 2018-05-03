@@ -515,7 +515,7 @@ module element_mod
      real (kind=real_kind), pointer    :: sub_elem_mass_flux(:,:,:,:)
      real (kind=real_kind), pointer    :: vec_sphere2cart(:,:,:,:)
 #else
-     real (kind=real_kind)    :: metinv(np,np,2,2) 
+     real (kind=real_kind)    :: metinv(np,np,2,2)
      real (kind=real_kind)    :: metdet(np,np)                        ! g = SQRT(det(g_ij)) on velocity and pressure grid
      real (kind=real_kind)    :: rmetdet(np,np)                       ! 1/metdet on velocity pressure grid
      real (kind=real_kind)    :: Dinv(np,np,2,2)                      ! Map vector field on the sphere to covariant v on cube
@@ -896,11 +896,9 @@ contains
     allocate( elem_accum_PEner      (np,np,4,nelemd)         )
     allocate( elem_accum_IEner      (np,np,4,nelemd)         )
     allocate( elem_accum_IEner_wet  (np,np,4,nelemd)         )
-#ifndef USE_KOKKOS_KERNELS
     allocate( elem_accum_Qvar       (np,np,qsize_d,4,nelemd) )
     allocate( elem_accum_Qmass      (np,np,qsize_d,4,nelemd) )
     allocate( elem_accum_Q1mass     (np,np,qsize_d,nelemd)   )
-#endif
 
     do ie = 1 , nelemd
 #ifdef ENERGY_DIAGNOSTICS

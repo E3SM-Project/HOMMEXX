@@ -39,7 +39,7 @@ private
   public :: prim_diag_scalars
 
 contains
-!=======================================================================================================! 
+!=======================================================================================================!
 
 
   subroutine prim_printstate_init(par)
@@ -62,7 +62,7 @@ contains
     end if
 
   end subroutine prim_printstate_init
-!=======================================================================================================! 
+!=======================================================================================================!
 
   subroutine prim_printstate(elem, tl,hybrid,hvcoord,nets,nete, fvm)
 
@@ -121,7 +121,7 @@ contains
     !
     ! for fvm diagnostics
     !
-    real (kind=real_kind) :: psc_mass, psc_min, psc_max,dp_fvm_mass, dp_fvm_min, dp_fvm_max 
+    real (kind=real_kind) :: psc_mass, psc_min, psc_max,dp_fvm_mass, dp_fvm_min, dp_fvm_max
 
 
     real (kind=real_kind) :: fusum_p, fvsum_p, ftsum_p, fqsum_p
@@ -139,9 +139,9 @@ contains
     real (kind=real_kind) :: ddt_tot,ddt_diss
     integer               :: n0, nm1, pnm1, np1
     integer               :: npts,n,q
-    
+
     call t_startf('prim_printstate')
-    if (hybrid%masterthread) then 
+    if (hybrid%masterthread) then
        write(iulog,*) "nstep=",tl%nstep," time=",Time_at(tl%nstep)/(24*3600)," [day]"
     end if
     if (.not. present(fvm) .and. ntrac>0) then
@@ -162,25 +162,25 @@ contains
 #ifdef CAM
     pnm1 = 1
 #else
-    pnm1=tl%nm1  
+    pnm1=tl%nm1
 #endif
 
     dt=tstep*qsplit
-    if (rsplit>0) dt = tstep*qsplit*rsplit  ! vertical REMAP timestep 
+    if (rsplit>0) dt = tstep*qsplit*rsplit  ! vertical REMAP timestep
     !
-    !   dynamics variables in n0 are at time =  'time' 
+    !   dynamics variables in n0 are at time =  'time'
     !
     !   Diagnostics computed a 4 different levels during one compute REMAP step
     ! in RK code:
     !   E(:,:,2)-E(:,:,1)   change due to dynamics step  from time-dt to time
-    !   E(:,:,3)-E(:,:,2)   change due to energy fixer   
+    !   E(:,:,3)-E(:,:,2)   change due to energy fixer
     !   E(:,:,1)-E(:,:,4)   impact of forcing
     !
     ! Dissipation rates were computed during the first dynamics timstep, and represent
     ! the change going from 'time-dt' to 'time-dt+tstep' (one dynamics step)
     !
     time=tl%nstep*tstep
-    time2 = time 
+    time2 = time
     time1 = time - dt
 
 
@@ -219,7 +219,7 @@ contains
        tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,n0)
 
 
-       !======================================================  
+       !======================================================
        umax_local(ie)    = MAXVAL(elem(ie)%state%v(:,:,1,:,n0))
        vmax_local(ie)    = MAXVAL(elem(ie)%state%v(:,:,2,:,n0))
 
@@ -295,7 +295,7 @@ contains
        global_shared_buf(ie,10) = dpsum_local(ie)
     end do
 
-    !JMD This is a Thread Safe Reduction 
+    !JMD This is a Thread Safe Reduction
     umin_p = ParallelMin(umin_local,hybrid)
     umax_p = ParallelMax(umax_local,hybrid)
 
@@ -304,7 +304,7 @@ contains
 
     tmin_p = ParallelMin(tmin_local,hybrid)
     tmax_p = ParallelMax(tmax_local,hybrid)
-    
+
     if (rsplit>0)then
        dpmin_p = ParallelMin(dpmin_local,hybrid)
        dpmax_p = ParallelMax(dpmax_local,hybrid)
@@ -348,11 +348,11 @@ contains
 
     !   mass = integral( ps-p(top) )
     do ie=nets,nete
-       tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,n0) 
+       tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,n0)
     enddo
     Mass2 = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
     do ie=nets,nete
-       tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,np1) 
+       tmp(:,:,ie)=elem(ie)%state%ps_v(:,:,np1)
     enddo
 
     !
@@ -360,7 +360,7 @@ contains
     !   but we assume hybi(1) is zero at top of atmosphere (pure pressure coordinates)
     !    Mass = (Mass2-(hvcoord%hyai(1)*hvcoord%ps0) )*scale  ! this correction is a constant,
     !                                                         ! ~20 kg/m^2 (effects 4th digit of Mass)
-    !   BUT: CAM EUL defines mass as integral( ps ), so to be consistent, ignore ptop contribution; 
+    !   BUT: CAM EUL defines mass as integral( ps ), so to be consistent, ignore ptop contribution;
     Mass = Mass2*scale
 
     !
@@ -369,7 +369,7 @@ contains
     if (ntrac>0) then
        do q=1,ntrac
           do ie=nets,nete
-             tmp1(ie) = MINVAL(fvm(ie)%c(1:nc,1:nc,:,q,n0_fvm)) 
+             tmp1(ie) = MINVAL(fvm(ie)%c(1:nc,1:nc,:,q,n0_fvm))
           enddo
           cmin(q) = ParallelMin(tmp1,hybrid)
           do ie=nets,nete
@@ -421,7 +421,7 @@ contains
           tmp1(ie) = MAXVAL(fvm(ie)%dp_fvm(1:nc,1:nc,:,n0_fvm))
        enddo
        dp_fvm_max = ParallelMax(tmp1,hybrid)
-       
+
        global_shared_buf(:,1) = 0.0D0
        do k=1,nlev
           do ie=nets,nete
@@ -473,15 +473,15 @@ contains
           write(iulog,'(A37,3(E23.15))')&
                   "   min(dp_), max(dp_), mass(dp_) =  ",dp_fvm_min, dp_fvm_max, dp_fvm_mass
           write(iulog,'(A37,3(E23.15))')&
-                  "   min(psC), max(psC), mass(psC) =  ",psc_min, psc_max, psC_mass          
+                  "   min(psC), max(psC), mass(psC) =  ",psc_min, psc_max, psC_mass
           write(iulog,'(A36)') "                                   "
 
        end if
     end if
- 
+
 
     if ( test_case(1:10) == "baroclinic" ) then
-       ! zeta does not need to be made continious, but we  
+       ! zeta does not need to be made continious, but we
        allocate(tmp3d(np,np,nlev,nets:nete))
        call compute_zeta_C0(tmp3d,elem,hybrid,nets,nete,n0)
        tmp=tmp3d(:,:,nlev,:)**2
@@ -489,7 +489,7 @@ contains
        deallocate(tmp3d)
     endif
 
-    if(hybrid%par%masterproc .and. hybrid%ithr==0) then 
+    if(hybrid%par%masterproc .and. hybrid%ithr==0) then
        if ( test_case(1:10) == "baroclinic" ) then
           write(iulog,101) "2-norm relative vorticity = ",relvort
 101       format (A30,E24.15)
@@ -516,16 +516,15 @@ contains
     endif
 
     ! ====================================================================
-    !	
-    !   Detailed diagnostics.  Computed with quantities computed by 
+    !
+    !   Detailed diagnostics.  Computed with quantities computed by
     !   prim_advance() and prim_advection()
     !
     !   only compute on full leapfrog timesteps (tl%nstep >= tl%nstep2)
     ! ====================================================================
-#ifndef USE_KOKKOS_KERNELS
 !   Compute Energies at time1 and time2 (half levels between leapfrog steps)
     do n=1,4
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%IEner(:,:,n)
        enddo
@@ -535,39 +534,39 @@ contains
 !BUG       print *,'IAM: ',iam,' prim_printstate: SUM(tmp): ',SUM(tmp)
        IEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        IEner(n) = IEner(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%IEner_wet(:,:,n)
        enddo
        IEner_wet(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        IEner_wet(n) = IEner_wet(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%KEner(:,:,n)
        enddo
        KEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        KEner(n) = KEner(n)*scale
-       
+
        do ie=nets,nete
           tmp(:,:,ie)=elem(ie)%accum%PEner(:,:,n)
        enddo
        PEner(n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
        PEner(n) = PEner(n)*scale
        TOTE(n)=IEner(n)+PEner(n)+KEner(n)
-       
+
        do q=1,qsize
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qvar(:,:,q,n)
           enddo
           Qvar(q,n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
           Qvar(q,n) = Qvar(q,n)*scale
-          
+
           do ie=nets,nete
              tmp(:,:,ie)=elem(ie)%accum%Qmass(:,:,q,n)
           enddo
           Qmass(q,n) = global_integral(elem, tmp(:,:,nets:nete),hybrid,npts,nets,nete)
           Qmass(q,n) = Qmass(q,n)*scale
-          
+
           if (n==2) then
              do ie=nets,nete
                 tmp(:,:,ie)=elem(ie)%accum%Q1mass(:,:,q)
@@ -577,7 +576,6 @@ contains
           endif
        enddo
     enddo
-#endif
 
 
     !
@@ -662,16 +660,16 @@ contains
 #endif
 
 
-    if(hybrid%par%masterproc .and. hybrid%ithr==0) then 
+    if(hybrid%par%masterproc .and. hybrid%ithr==0) then
        if(moisture /= "dry")then
           if (qsize>=1) then
              write(iulog,'(a,E23.15,a,E23.15,a)') "    dry M = ",Mass-Q1mass(1),' kg/m^2'
           endif
        endif
-       
-       ! note: diagnostics not yet coded for semi-implicit 
+
+       ! note: diagnostics not yet coded for semi-implicit
        if (integration == "explicit") then
-          
+
           write(iulog,'(3a25)') "**DYNAMICS**        J/m^2","   W/m^2","W/m^2    "
 #ifdef ENERGY_DIAGNOSTICS
           ! terms computed during prim_advance, if ENERGY_DIAGNOSTICS is enabled
@@ -680,30 +678,30 @@ contains
           if (use_cpstar==1) then
              write(iulog,'(a,2e22.14)') 'Tot IE wet advection horiz, vert:  ',-IEhorz_wet,-IEvert_wet
           endif
-          
+
           write(iulog,'(a,2e22.14)') 'Transfer:   KE->IE, KE->PE:        ',-(T1+T2_m), -T2_s
           write(iulog,'(a,2e22.14)') 'Transfer:   IE->KE, PE->KE:        ',-S1,-S2
           if (use_cpstar==1) then
              write(iulog,'(a,2e22.14)') 'Transfer:   IE->KE(wet only):      ',-S1_wet
           endif
-          
+
           ddt_tot =  (KEner(2)-KEner(1))/(dt)
-          ddt_diss = ddt_tot -(T1+T2) 
+          ddt_diss = ddt_tot -(T1+T2)
           write(iulog,'(a,3E22.14)') "KE,d/dt,diss:",KEner(2),ddt_tot,ddt_diss
-          
+
           if (use_cpstar==1) then
              ddt_tot =  ( (IEner(2)-IEner_wet(2)) - (IEner(1)-IEner_wet(1))  )/dt
              ddt_diss = ddt_tot - (S1 -S1_wet)
              write(iulog,'(a,3E22.14,a)') "IE,d/dt,diss:",IEner(2)-IEner_wet(2),ddt_tot,ddt_diss,' (dry)'
-             ddt_tot =  ( IEner_wet(2) - IEner_wet(1) )/dt 
+             ddt_tot =  ( IEner_wet(2) - IEner_wet(1) )/dt
              ddt_diss =  ddt_tot - S1_wet
              write(iulog,'(a,3E22.14,a)') "IE,d/dt,diss:",IEner_wet(2),ddt_tot,ddt_diss,' (wet)'
           else
              ddt_tot =  (IEner(2)-IEner(1))/(dt)
-             ddt_diss = ddt_tot - S1 
+             ddt_diss = ddt_tot - S1
              write(iulog,'(a,3E22.14)') "IE,d/dt,diss:",IEner(2),ddt_tot,ddt_diss
           endif
-          
+
           ddt_tot = (PEner(2)-PEner(1))/(dt)
           ddt_diss = ddt_tot - S2
           write(iulog,'(a,3E22.14)') "PE,d/dt,diss:",PEner(2),ddt_tot,ddt_diss
@@ -714,7 +712,7 @@ contains
 #endif
           ddt_tot = (TOTE(2)-TOTE(1))/(dt)
           write(iulog,'(a,3E22.14)') " E,dE/dt     ",TOTE(2),ddt_tot
-          
+
           if (tstep_type>0) then  !no longer support tracer advection with tstep_type = 0
              do q=1,qsize
                 write(iulog,'(a,i3,a,E22.14,a,2E15.7)') "Q",q,",Q diss, dQ^2/dt:",Qmass(q,2)," kg/m^2",&
@@ -740,8 +738,8 @@ contains
 #ifdef CAM
        ! for cam, this information only makes sense for short test runs with
        ! physics disabled (ftype<0).  So disable this diagnostic if ftype>=0:
-       if (ftype>=0) TOTE0=-1  
-#endif       
+       if (ftype>=0) TOTE0=-1
+#endif
        if (TOTE0>0) then
           write(iulog,100) "(E-E0)/E0    ",(TOTE(4)-TOTE0)/TOTE0
           if (tstep_type>0) then  !no longer support tracer advection with tstep_type = 0
@@ -753,15 +751,15 @@ contains
           endif
        endif
     endif
-    
+
 100 format (A10,3(E23.15))
-    
-    
+
+
     ! initialize "E0" for printout of E-E0/E0
-    ! energy is computed in timestep loop.  Save the value 
+    ! energy is computed in timestep loop.  Save the value
     ! after the first real timestep, not the half-timesteps used
-    ! to bootstrap leapfrog: 
-    if (tl%nstep >= tl%nstep0 .and. TOTE0==0 ) then  
+    ! to bootstrap leapfrog:
+    if (tl%nstep >= tl%nstep0 .and. TOTE0==0 ) then
        TOTE0=TOTE(4)
        do q=1,qsize
           Qmass0(q)=Qmass(q,1)
@@ -771,8 +769,8 @@ contains
 
   call t_stopf('prim_printstate')
   end subroutine prim_printstate
-   
-   
+
+
   subroutine prim_printstate_par(elem, tl,hybrid,hvcoord,nets,nete, par)
     type (element_t), intent(in) :: elem(:)
     type (TimeLevel_t), target, intent(in) :: tl
@@ -780,7 +778,7 @@ contains
     type (hvcoord_t), intent(in)   :: hvcoord
     integer,intent(in)             :: nets,nete
     character(len=*), parameter    :: fstub = "state_norms"
-    integer	                   :: simday
+    integer                    :: simday
     type(parallel_t)               :: par
 
     real (kind=real_kind)  :: v(np,np,2,nlev,nets:nete)
@@ -797,16 +795,16 @@ contains
 !    npts=SIZE(elem(1)%state%lnps(:,:,n0),1)
     n0=tl%n0
     do ie=nets,nete
-       v(:,:,:,:,ie)=elem(ie)%state%v(:,:,:,:,n0) 
-       T(:,:,:,ie)=elem(ie)%state%T(:,:,:,n0) 
-       ps_v(:,:,ie)=elem(ie)%state%ps_v(:,:,n0) 
+       v(:,:,:,:,ie)=elem(ie)%state%v(:,:,:,:,n0)
+       T(:,:,:,ie)=elem(ie)%state%T(:,:,:,n0)
+       ps_v(:,:,ie)=elem(ie)%state%ps_v(:,:,n0)
     enddo
        simday = 0
 
 #ifdef _REFSOLN
 ! parallel write file with state vector in unformatted blocks for later calculation of norms
-!    call ref_state_write(v(:,:,:,:,nets:nete),T(:,:,:,nets:nete),ps_v(:,:,nets:nete), & 
-!	fstub,simday,nets,nete,par)
+!    call ref_state_write(v(:,:,:,:,nets:nete),T(:,:,:,nets:nete),ps_v(:,:,nets:nete), &
+! fstub,simday,nets,nete,par)
 !    do ie=nets,nete
 !       vp(:,:,:,:,ie)=v(:,:,:,:,ie)
 !       Tp(:,:,:,ie)=T(:,:,:,ie)
@@ -820,8 +818,8 @@ contains
     !$OMP BARRIER
 #endif
 !  Parallel version of ref_state, comment out if writing above
-!    call ref_state_read(vp(:,:,:,:,nets:nete),Tp(:,:,:,nets:nete),ps_vp(:,:,nets:nete), & 
-!	fstub,simday,nets,nete,par)
+!    call ref_state_read(vp(:,:,:,:,nets:nete),Tp(:,:,:,nets:nete),ps_vp(:,:,nets:nete), &
+! fstub,simday,nets,nete,par)
 #if (defined HORIZ_OPENMP)
     !$OMP BARRIER
 #endif
@@ -845,31 +843,31 @@ contains
 
   end subroutine prim_printstate_par
 
-!=======================================================================================================! 
+!=======================================================================================================!
 
 
 subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
-! 
+!
 !  called at the end of a timestep, before timelevel update.  Solution known at
-!  dynamics:     nm1,  n0,  np1.  
+!  dynamics:     nm1,  n0,  np1.
 !
 !                                                           LF code            RK code
 !  This routine is called 4 times:  n=1:    t1=nm1, t2=n0   start              after forcing, before timestep
 !                                   n=2:    t1=n0, t2=np1   after timestep     after timestep, including remap
-!                                   n=3:    t1=n0, t2=np1   after forcing      after fixer 
+!                                   n=3:    t1=n0, t2=np1   after forcing      after fixer
 !                                   n=4:    t1=n0, t2=np1   after Robert       before forcing
 !
 ! LF case we use staggered formulas:
 !  compute the energies at time half way between timelevels t1 and t2,
 !  using timelevels t1,t2.  store in location n of our elem()%accum%* variables
-!    
-!  in the Dry case, PE (and similar for IE) will be conserved exactly by Leapfrog, 
+!
+!  in the Dry case, PE (and similar for IE) will be conserved exactly by Leapfrog,
 !  if it is defined as:
 !
 !   PE(n+.5)  = .5*(  T(n+1) dp(n) + T(n) dp(n+1) )
 !
 !  KE cannot be exactly conserved with Leapfrog.  but we still use:
-!  
+!
 !   KE(n+.5) = .5*(  .5 u(n+1)^2 dp(n) +  .5 u(n)^2 dp(n+1) )
 !
 !
@@ -906,7 +904,7 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     if (t_before_advance) then
        t1=tl%nm1
        t2=tl%n0
-       call TimeLevel_Qdp( tl, qsplit, t2_qdp, t1_qdp) !get n0 level into t2_qdp 
+       call TimeLevel_Qdp( tl, qsplit, t2_qdp, t1_qdp) !get n0 level into t2_qdp
     else
        t1=tl%n0
        t2=tl%np1
@@ -926,7 +924,7 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
 
     !   IE   Cp*dpdn*T  + (Cpv-Cp) Qdpdn*T
     !        Cp*dpdn(n)*T(n+1) + (Cpv-Cp) Qdpdn(n)*T(n+1)
-    !        [Cp + (Cpv-Cp) Q(n)] *dpdn(n)*T(n+1) 
+    !        [Cp + (Cpv-Cp) Q(n)] *dpdn(n)*T(n+1)
     do ie=nets,nete
 
 #if (defined COLUMN_OPENMP)
@@ -958,9 +956,9 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
                 cp_star2=cp
              endif
              if (tstagger) then
-                sumlk(i,j,k) = sumlk(i,j,k) + cp_star1*elem(ie)%state%T(i,j,k,t2) *dpt1(i,j,k)/2 
+                sumlk(i,j,k) = sumlk(i,j,k) + cp_star1*elem(ie)%state%T(i,j,k,t2) *dpt1(i,j,k)/2
                 sumlk(i,j,k) = sumlk(i,j,k) + Cp_star2*elem(ie)%state%T(i,j,k,t1) *dpt2(i,j,k)/2
-                suml2k(i,j,k) = suml2k(i,j,k) + (cp_star1-cp)*elem(ie)%state%T(i,j,k,t2) *dpt1(i,j,k)/2 
+                suml2k(i,j,k) = suml2k(i,j,k) + (cp_star1-cp)*elem(ie)%state%T(i,j,k,t2) *dpt1(i,j,k)/2
                 suml2k(i,j,k) = suml2k(i,j,k) + (cp_star2-cp)*elem(ie)%state%T(i,j,k,t1) *dpt2(i,j,k)/2
              else
                 sumlk(i,j,k) = sumlk(i,j,k) + Cp_star2*elem(ie)%state%T(i,j,k,t2) *dpt2(i,j,k)
@@ -978,7 +976,7 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
        elem(ie)%accum%IEner(:,:,n)=suml(:,:)
        elem(ie)%accum%IEner_wet(:,:,n)=suml2(:,:)
 
-    
+
     !   KE   .5 dp/dn U^2
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k,E)
@@ -986,14 +984,14 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
        do k=1,nlev
           if (tstagger) then
              E = (elem(ie)%state%v(:,:,1,k,t2)**2 +  &
-                  elem(ie)%state%v(:,:,2,k,t2)**2 ) / 2 
+                  elem(ie)%state%v(:,:,2,k,t2)**2 ) / 2
              sumlk(:,:,k) = E*dpt1(:,:,k)/2
              E = (elem(ie)%state%v(:,:,1,k,t1)**2 +  &
-                  elem(ie)%state%v(:,:,2,k,t1)**2 ) / 2 
+                  elem(ie)%state%v(:,:,2,k,t1)**2 ) / 2
              sumlk(:,:,k) = sumlk(:,:,k) + E*dpt2(:,:,k)/2
           else
              E = (elem(ie)%state%v(:,:,1,k,t2)**2 +  &
-                  elem(ie)%state%v(:,:,2,k,t2)**2 ) / 2 
+                  elem(ie)%state%v(:,:,2,k,t2)**2 ) / 2
              sumlk(:,:,k) = E*dpt2(:,:,k)
           endif
        enddo
@@ -1004,7 +1002,7 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
        elem(ie)%accum%KEner(:,:,n)=suml(:,:)
 
 
-    
+
     !   PE   dp/dn PHIs
        suml=0
        do k=1,nlev
@@ -1036,24 +1034,24 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
        end do
 
     enddo
-    
+
 end subroutine prim_energy_halftimes
-    
-!=======================================================================================================! 
-  
+
+!=======================================================================================================!
+
 
 subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
-! 
+!
 !  called at the end of a timestep, before timelevel update.  Solution known at
-!  timelevel nm1,n0,np1.  
+!  timelevel nm1,n0,np1.
 !
 !  This routine is called twice:  n=1:    t1=nm1, t2=n0
 !                                 n=2:    t1=n0, t2=np1
-! 
+!
 !  in all cases:
 !     Q1mass(n) = Qdp(t2)    (or:  Q(t2)*dp(t2) )
-! 
-!  We also compute 
+!
+!  We also compute
 !     Qmass(n)  = .5*(  Q(t2) dp(t1)  Q(t1) dp(t2) )       Leapfrog, concentration formulation
 !     Qmass(n)  = .5*(  Qdp(t1) + Qdp(t2) )                Leapfrog, conservation formulation
 !     Qmass(n)  =  Qdp(t2)                                 RK2, conservation formulation
@@ -1067,7 +1065,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     integer :: t1,t2,n,nets,nete
     type (element_t)     , intent(inout), target :: elem(:)
     type (hvcoord_t)                  :: hvcoord
-    
+
     integer :: ie,k,q,nm_f
     real (kind=real_kind), dimension(np,np)  :: ps         ! pressure
     real (kind=real_kind), dimension(np,np)  :: dp         ! delta pressure
@@ -1079,9 +1077,9 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
 
     nm_f = 1
     if (t_before_advance) then
-       t1=tl%nm1     
+       t1=tl%nm1
        t2=tl%n0
-       call TimeLevel_Qdp( tl, qsplit, t2_qdp) !get n0 level into t2_qdp 
+       call TimeLevel_Qdp( tl, qsplit, t2_qdp) !get n0 level into t2_qdp
     else
        t1=tl%n0
        t2=tl%np1
@@ -1107,7 +1105,7 @@ subroutine prim_diag_scalars(elem,hvcoord,tl,n,t_before_advance,nets,nete)
              elem(ie)%accum%Qvar(:,:,q,n)=suml(:,:)
           enddo
        enddo
-       
+
        do ie=nets,nete
 #if (defined COLUMN_OPENMP)
           !$omp parallel do private(q,k,suml)
