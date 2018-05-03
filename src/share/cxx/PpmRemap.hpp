@@ -217,8 +217,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       boundaries::fill_cell_means_gs(kv,
                                      Homme::subview(ao, kv.team_idx, igp, jgp));
 
-      Kokkos::parallel_scan(
-          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+      Dispatch<ExecSpace>::parallel_scan(
+          kv.team, NUM_PHYSICAL_LEV,
           [=](const int &k, Real &accumulator, const bool last) {
             // Accumulate the old mass up to old grid cell interface locations
             // to simplify integration during remapping. Also, divide out the
@@ -515,8 +515,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
       ExecViewUnmanaged<const Scalar[NUM_LEV]> pt_tgt_thickness =
           Homme::subview(tgt_layer_thickness, igp, jgp);
 
-      Kokkos::parallel_scan(
-          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+      Dispatch<ExecSpace>::parallel_scan(
+          kv.team, NUM_PHYSICAL_LEV,
           [=](const int &level, Real &accumulator, const bool last) {
             if (last) {
               pt_pio(level) = accumulator;
@@ -525,8 +525,8 @@ template <typename boundaries> struct PpmVertRemap : public VertRemapAlg {
             const int vlev = level % VECTOR_SIZE;
             accumulator += pt_src_thickness(ilev)[vlev];
           });
-      Kokkos::parallel_scan(
-          Kokkos::ThreadVectorRange(kv.team, NUM_PHYSICAL_LEV),
+      Dispatch<ExecSpace>::parallel_scan(
+          kv.team, NUM_PHYSICAL_LEV,
           [=](const int &level, Real &accumulator, const bool last) {
             if (last) {
               pt_pin(level) = accumulator;
