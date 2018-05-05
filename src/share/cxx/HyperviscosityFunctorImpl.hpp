@@ -70,8 +70,9 @@ public:
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
 
+//second iter of laplace, const hv
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TagLaplace&, const TeamMember& team) const {
+  void operator() (const TagSecondLaplaceConstHV&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
     m_sphere_ops.laplace_simple(kv,
@@ -87,6 +88,35 @@ public:
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
+
+//second iter of laplace, tensor hv
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const TagSecondLaplaceTensorHV&, const TeamMember& team) const {
+    KernelVariables kv(team);
+    // Laplacian of temperature
+    m_sphere_ops.laplace_tensor(kv,
+                   TENSOR,
+                   Homme::subview(m_elements.buffers.ttens,kv.ie),
+                   Homme::subview(m_elements.buffers.ttens,kv.ie));
+    // Laplacian of pressure
+    m_sphere_ops.laplace_tensor(kv,
+                   TENSOR,
+                   Homme::subview(m_elements.buffers.dptens,kv.ie),
+                   Homme::subview(m_elements.buffers.dptens,kv.ie));
+    // Laplacian of velocity
+   //TENSOR CARTESIAN , but first iter is done with usual const hv laplace, sort out NUDIV here
+   /* m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
+                              Homme::subview(m_elements.buffers.vtens,kv.ie),
+                              Homme::subview(m_elements.buffers.vtens,kv.ie)); */
+    m_sphere_ops.vlaplace_sphere_wk_cartesian(kv, 
+                              m_data.nu_ratio,????
+                              TENSOR,
+                              TRANSFORM,
+                              Homme::subview(m_elements.buffers.vtens,kv.ie),
+                              Homme::subview(m_elements.buffers.vtens,kv.ie));
+
+  }
+
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const TagUpdateStates&, const int idx) const {

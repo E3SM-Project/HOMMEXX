@@ -80,8 +80,15 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
 {
   // For the first laplacian we use a differnt kernel, which uses directly the states
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
-  auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_elements.num_elems());
-  Kokkos::parallel_for(policy_first_laplace, *this);
+  
+  //tensor or const hv
+  if ( m_data.hyperviscosity_scaling ) {
+    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceTensorHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_first_laplace, *this);
+  }else{
+    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceConstHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_first_laplace, *this);
+  }  
   Kokkos::fence();
 
   // Exchange
@@ -92,8 +99,17 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
   // Compute second laplacian
-  auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_elements.num_elems());
-  Kokkos::parallel_for(policy_second_laplace, *this);
+
+
+//is TagLaplace used anywhere else? if not -- rename
+  //tensor or const hv
+  if ( m_data.hyperviscosity_scaling ) {
+    auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagSecondLaplaceTensorHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_second_laplace, *this);
+  }else{
+    auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagSecondLaplaceConstHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_second_laplace, *this);
+  }
   Kokkos::fence();
 }
 
