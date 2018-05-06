@@ -96,9 +96,8 @@ ELSE()
   MESSAGE (ABORT "Invalid choice for 'HOMMEXX_EXEC_SPACE'. Valid options (case insensitive) are 'Cuda', 'OpenMP', 'Threads', 'Serial', 'Default'")
 ENDIF()
 
-# Execution space parameters. Ideally, these will go away because they can be
-# queried at runtime.
-SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 4 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
+# Execution space parameters. 8 is a nice size for V100.
+SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 8 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
 
 # An option to allow to use GPU pointers for MPI calls. The value of this option is irrelevant for CPU/KNL builds.
 OPTION (HOMMEXX_MPI_ON_DEVICE "Whether we want to use device pointers for MPI calls (relevant only for GPU builds)" ON)
