@@ -1,0 +1,3 @@
+
+for SL comparisons, rsplit should have been set to 1, not 6. see may02 scripts instead.
+
