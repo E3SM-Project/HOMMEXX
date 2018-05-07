@@ -1,0 +1,30 @@
+2,3c2,3
+< NThreads=-1
+< vthreads = 1
+---
+> NThreads=1
+> vert_num_threads = 1
+39a40,54
+> &solver_nl
+> precon_method = "identity"
+> maxits        = 500
+> tol           = 1.e-9
+> /
+> &filter_nl
+> filter_type   = "taylor"
+> transfer_type = "bv"
+> filter_freq   = 0
+> filter_mu     = 0.04D0
+> p_bv          = 12.0D0
+> s_bv          = .666666666666666666D0
+> wght_fm       = 0.10D0
+> kcut_fm       = 2
+> /
+53c68
+<  output_frequency=0,0
+---
+>  output_frequency=-1,-1
+61a77,79
+> 
+> 
+> 
