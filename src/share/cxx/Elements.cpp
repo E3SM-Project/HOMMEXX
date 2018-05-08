@@ -11,7 +11,7 @@
 
 namespace Homme {
 
-void Elements::init(const int num_elems) {
+void Elements::init(const int num_elems, const bool consthv) {
   m_num_elems = num_elems;
 
   buffers.init(num_elems);
@@ -22,6 +22,11 @@ void Elements::init(const int num_elems) {
   m_rspheremp = ExecViewManaged<Real * [NP][NP]>("RSPHEREMP", m_num_elems);
   m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
+
+  if(!consthv){
+    m_tensorvisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSORVISC", m_num_elems);
+  }
+
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
   //D is not a metric tensor, D^tD is
@@ -65,7 +70,8 @@ void Elements::init(const int num_elems) {
 
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                        CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
-                       CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis) {
+                       CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis,
+                       CF90Ptr &tensorvisc, const bool consthv ) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -83,14 +89,21 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
+//either way this is ok, performed once, if this does not compile, call ctor always
+  ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_tensorvisc;
+  if( !consthv ){
+    h_tensorvisc = Kokkos::create_mirror_view(m_tensorvisc);
+  }
+
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
       Kokkos::create_mirror_view(m_d);
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_dinv =
       Kokkos::create_mirror_view(m_dinv);
 
+//why are these 2 vars treated differently? also, unmanaged views
   HostViewUnmanaged<const Real *[NP][NP]>       h_mp_f90 (mp, m_num_elems);
   HostViewUnmanaged<const Real *[2][2][NP][NP]> h_metinv_f90 (metinv, m_num_elems);
-
+  
   // 2d scalars
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int igp = 0; igp < NP; ++igp) {
@@ -105,6 +118,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
     }
   }
 
+  if( consthv ){
   // 2d tensors
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int idim = 0; idim < 2; ++idim) {
@@ -119,6 +133,22 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       }
     }
   }
+  else{
+  for (int ie = 0; ie < m_num_elems; ++ie) {
+    for (int idim = 0; idim < 2; ++idim) {
+      for (int jdim = 0; jdim < 2; ++jdim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+            h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
+            h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
+            h_metinv(ie, idim, jdim, igp, jgp) = h_metinv_f90(ie, idim, jdim, igp, jgp);
+            h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensor];
+          }
+        }
+      }
+    }
+  }
+  }//end if consthv
 
   Kokkos::deep_copy(m_fcor, h_fcor);
   Kokkos::deep_copy(m_metinv, h_metinv);
@@ -127,10 +157,13 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_spheremp, h_spheremp);
   Kokkos::deep_copy(m_rspheremp, h_rspheremp);
   Kokkos::deep_copy(m_phis, h_phis);
+  if( !consthv ) Kokkos::deep_copy(m_tensorvisc, h_tensorvisc);
 
   Kokkos::deep_copy(m_d, h_d);
   Kokkos::deep_copy(m_dinv, h_dinv);
 }
+
+//test for tensor hv is needed
 
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
