@@ -4,7 +4,15 @@ PREQX_SETUP(${USE_KOKKOS_KERNELS})
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
-createTestExec(prtcB_c preqx 4 4 72 FALSE FALSE 40 Fortran)
+
+
+MESSAGE(STATUS " in test_execs B_c : Building with QSIZE_D = ${QSIZE_D}")
+MESSAGE(STATUS " in test_execs B_c : Building with PREQX_NP = ${PREQX_NP}")
+MESSAGE(STATUS " in test_execs B_c : Building with PREQX_PLEV = ${PREQX_PLEV}")
+MESSAGE(STATUS " in test_execs B_c : Building with PREQX_USE_PIO = ${PREQX_USE_PIO}")
+MESSAGE(STATUS " in test_execs B_c : Building with PREQX_USE_ENERGY = ${PREQX_USE_ENERGY}")
+
+createTestExec(prtcB_c preqx ${PREQX_NP} 4 ${PREQX_PLEV} ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
 
 INCLUDE_DIRECTORIES(${PREQX_INCLUDE_DIRS})
 
