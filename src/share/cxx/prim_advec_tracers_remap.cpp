@@ -75,7 +75,7 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   Kokkos::fence();
   GPTLstop("tl-at qdp_time_avg");
 
-  if (params.limiter_option!=8) {
+  if ( ! (params.limiter_option == 8 || params.limiter_option == 9)) {
     Errors::option_error("prim_advec_tracers_remap_RK2","limiter_option",
                           params.limiter_option);
     // call advance_hypervis_scalar(edgeadv,elem,hvcoord,hybrid,deriv,tl%np1,np1_qdp,nets,nete,dt)
