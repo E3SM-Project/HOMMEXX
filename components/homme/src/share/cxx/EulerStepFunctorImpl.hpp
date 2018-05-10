@@ -518,6 +518,9 @@ private:
     if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
       kv.team_barrier();
+    } else if (m_data.limiter_option == 9) {
+      limiter_clip_and_sum(kv);
+      kv.team_barrier();
     }
     apply_spheremp(kv);
   }
@@ -588,6 +591,20 @@ private:
         Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0));
     else
       limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void limiter_clip_and_sum (const KernelVariables& kv) const {
+    const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
+    const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
+    const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
+    if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
+      SerialLimiter<ExecSpace>::run<9>(
+        sphweights, dpmass, qlim, ptens,
+        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0));
+    else
+      limiter_clip_and_sum(kv.team, sphweights, dpmass, qlim, ptens);
   }
 
   //! apply mass matrix, overwrite np1 with solution:
