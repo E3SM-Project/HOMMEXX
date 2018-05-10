@@ -4,7 +4,7 @@ PREQX_SETUP(${USE_KOKKOS_KERNELS})
 
 # Set the variables for this test executable
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
-createTestExec(prtcB preqx 4 4 72 FALSE FALSE 35 Fortran)
+createTestExec(prtcB preqx ${PREQX_NP} 4 ${PREQX_PLEV} ${PREQX_USE_PIO} ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
 
 INCLUDE_DIRECTORIES(${PREQX_INCLUDE_DIRS})
 

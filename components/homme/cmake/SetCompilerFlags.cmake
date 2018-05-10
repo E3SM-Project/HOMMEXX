@@ -124,15 +124,23 @@ ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "GPROF")
 ENDIF ()
 
 # Handle Cuda.
-find_package(CUDA QUIET)
-if (${CUDA_FOUND})
-  string (FIND ${CMAKE_CXX_COMPILER} "nvcc" pos)
-  if (${pos} GREATER -1)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD")
-  else ()
-    message ("Cuda was found, but the C++ compiler is not nvcc_wrapper, so building without Cuda support.")
-  endif ()
-endif ()
+#<<<<<<< Updated upstream
+#find_package(CUDA QUIET)
+#if (${CUDA_FOUND})
+#  string (FIND ${CMAKE_CXX_COMPILER} "nvcc" pos)
+#  if (${pos} GREATER -1)
+#    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD")
+#  else ()
+#    message ("Cuda was found, but the C++ compiler is not nvcc_wrapper, so building without Cuda support.")
+#  endif ()
+#endif ()
+#=======
+##### EDISON hack
+#find_package(CUDA QUIET)
+#if (${CUDA_FOUND})
+#  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-extended-lambda -DCUDA_BUILD")
+#endif ()
+#>>>>>>> Stashed changes
 
 ##############################################################################
 # Optimization flags
