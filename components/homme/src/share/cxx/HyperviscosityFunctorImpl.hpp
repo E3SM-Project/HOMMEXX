@@ -181,25 +181,25 @@ public:
         m_elements.buffers.dptens(kv.ie, igp, jgp, lev) *= -m_data.nu_p;
       });
 
-
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, int(NUM_BIHARMONIC_LEV)),
+      if (m_data.nu_top > 0) {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, int(NUM_BIHARMONIC_LEV)),
                            [&](const int ilev) {
-        m_elements.buffers.vtens(kv.ie, 0, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_v(kv.ie, 0, igp, jgp, ilev);
-        m_elements.buffers.vtens(kv.ie, 1, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_v(kv.ie, 1, igp, jgp, ilev);
+          m_elements.buffers.vtens(kv.ie, 0, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 0, igp, jgp, ilev);
+          m_elements.buffers.vtens(kv.ie, 1, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 1, igp, jgp, ilev);
 
-        m_elements.buffers.ttens(kv.ie, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_t(kv.ie, igp, jgp, ilev);
+          m_elements.buffers.ttens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_t(kv.ie, igp, jgp, ilev);
 
-        m_elements.buffers.dptens(kv.ie, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_dp3d(kv.ie, igp, jgp, ilev);
-      });
-
+          m_elements.buffers.dptens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_dp3d(kv.ie, igp, jgp, ilev);
+        });
+      }
       // While for T and v we exchange the tendencies, for dp3d we exchange the updated state.
       // However, since the BE structure already has registerd the *tens quantities, we store
       // the updated state in dptens.
