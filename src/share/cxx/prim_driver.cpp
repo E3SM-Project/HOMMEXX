@@ -46,10 +46,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   // Check if needed to compute diagnostics or energy
   bool compute_diagnostics = false;
-  bool compute_energy      = params.energy_fixer;
   if (nstep_end%params.state_frequency==0 || nstep_end==tl.nstep0) {
     compute_diagnostics = true;
-    compute_energy      = true;
   }
 
   if (params.disable_diagnostics) {
@@ -59,7 +57,10 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   if (compute_diagnostics) {
     Diagnostics& diags = Context::singleton().get_diagnostics();
     diags.prim_diag_scalars(true,3);
+    diags.prim_energy_halftimes(true,2);
   }
+
+  tl.update_tracers_levels(params.qsplit);
 
   // Apply forcing
 #ifdef CAM
@@ -82,13 +83,9 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   apply_test_forcing ();
 #endif
 
-  if (compute_energy) {
-    Diagnostics& diags = Context::singleton().get_diagnostics();
-    diags.prim_energy_halftimes(true,0);
-  }
-
   if (compute_diagnostics) {
     Diagnostics& diags = Context::singleton().get_diagnostics();
+    diags.prim_energy_halftimes(true,0);
     diags.prim_diag_scalars(true,0);
   }
 
@@ -138,37 +135,12 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   ////////////////////////////////////////////////////////////////////////
   // time step is complete.  update some diagnostic variables:
-  // lnps (we should get rid of this)
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
-  GPTLstart("tl-sc Q-from-qdp");
-  {
-    const auto qdp = tracers.qdp;
-    const auto np1_qdp = tl.np1_qdp;
-    const auto np1 = tl.np1;
-    const auto qsize = params.qsize;
-    Kokkos::parallel_for(
-        Kokkos::RangePolicy<ExecSpace>(0, elements.num_elems() * params.qsize *
-                                              NP * NP * NUM_LEV),
-        KOKKOS_LAMBDA(const int idx) {
-          const int ie = (((idx / NUM_LEV) / NP) / NP) / qsize;
-          const int iq = (((idx / NUM_LEV) / NP) / NP) % qsize;
-          const int igp = ((idx / NUM_LEV) / NP) % NP;
-          const int jgp = (idx / NUM_LEV) % NP;
-          const int ilev = idx % NUM_LEV;
-
-          tracers.q(ie, iq, igp, jgp, ilev) = qdp(ie, np1_qdp, iq, igp, jgp, ilev) /
-                              (hybrid_ai_delta[ilev] * ps0 +
-                               hybrid_bi_delta[ilev] * ps_v(ie, np1, igp, jgp));
-        });
-  }
-  ExecSpace::fence();
-  GPTLstop("tl-sc Q-from-qdp");
-
+  Diagnostics& diags = Context::singleton().get_diagnostics();
+  diags.update_q(tl.np1_qdp,tl.np1);
   if (compute_diagnostics) {
-    Diagnostics& diags = Context::singleton().get_diagnostics();
     diags.prim_diag_scalars(false,1);
-
     diags.prim_energy_halftimes(false,1);
   }
 
