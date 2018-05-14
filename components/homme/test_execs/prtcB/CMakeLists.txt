@@ -6,8 +6,6 @@ PREQX_SETUP(${USE_KOKKOS_KERNELS})
 #                          NP  NC PLEV USE_PIO WITH_ENERGY QSIZE_D LINK_LANGUAGE
 createTestExec(prtcB preqx 4 4 72 FALSE FALSE 35 Fortran)
 
-#INCLUDE_DIRECTORIES(${PREQX_INCLUDE_DIRS})
-
 # Copy the needed input files to the binary dir
 CONFIGURE_FILE (${CMAKE_SOURCE_DIR}/test/reg_test/namelists/prtcB-r3-dry.nl
                 ${CMAKE_CURRENT_BINARY_DIR}/namelist.nl)
