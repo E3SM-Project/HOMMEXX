@@ -464,7 +464,7 @@ public:
     m_data.rhs_multiplier = rhs_multiplier;
     m_data.DSSopt         = DSSopt;
 
-    if (m_data.limiter_option == 8) {
+    if (EulerStepFunctor::is_quasi_monotone(m_data.limiter_option)) {
       // when running lim8, we also need to limit the biharmonic, so that term
       // needs to be included in each euler step.  three possible algorithms
       // here:
@@ -529,7 +529,8 @@ private:
   void compute_2d_advection_step (const KernelVariables& kv) const {
     const auto& c = m_data;
     const auto& e = m_elements;
-    const bool lim8 = c.limiter_option == 8;
+    const bool lim_quasi_monotone
+      = EulerStepFunctor::is_quasi_monotone(c.limiter_option);
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0.0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
     const auto& f_dss = (c.DSSopt == DSSOption::ETA ?
@@ -548,7 +549,7 @@ private:
             const auto dp = e.buffers.pressure(kv.ie,i,j,k);
             e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
             e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
-            if (lim8) {
+            if (lim_quasi_monotone) {
               //! Note that the term dpdissk is independent of Q
               //! UN-DSS'ed dp at timelevel n0+1:
               e.buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * e.m_derived_divdp(kv.ie,i,j,k);
@@ -765,7 +766,7 @@ public: // Expose for unit testing.
     with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
   }
 
-  // This is limiter_option = 9 in ACME master. For now, just unit test it.
+  // This is limiter_option = 9 in ACME master.
   template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
   KOKKOS_INLINE_FUNCTION static void
   limiter_clip_and_sum (const TeamMember& team,
