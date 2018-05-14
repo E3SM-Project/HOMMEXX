@@ -112,7 +112,6 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
 
   sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
-  sync_to_host(tracers.q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -159,14 +158,14 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
   Kokkos::deep_copy(elements.m_ps_v,ps_v_host);
 }
 
-void init_diagnostics_c (F90Ptr& elem_accum_qvar_ptr,  F90Ptr& elem_accum_qmass_ptr, F90Ptr& elem_accum_q1mass_ptr,
-                         F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr, F90Ptr& elem_accum_kener_ptr,
-                         F90Ptr& elem_accum_pener_ptr)
+void init_diagnostics_c (F90Ptr& elem_state_q_ptr, F90Ptr& elem_accum_qvar_ptr,  F90Ptr& elem_accum_qmass_ptr,
+                         F90Ptr& elem_accum_q1mass_ptr, F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr,
+                         F90Ptr& elem_accum_kener_ptr, F90Ptr& elem_accum_pener_ptr)
 {
   Elements& elements = Context::singleton().get_elements ();
   Diagnostics& diagnostics = Context::singleton().get_diagnostics ();
 
-  diagnostics.init(elements.num_elems(), elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,
+  diagnostics.init(elements.num_elems(), elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,
                    elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr, elem_accum_pener_ptr);
 }
 

@@ -13,7 +13,7 @@
 namespace Homme
 {
 
-void Diagnostics::init (const int num_elems, F90Ptr& elem_accum_qvar_ptr,
+void Diagnostics::init (const int num_elems, F90Ptr& elem_state_q_ptr, F90Ptr& elem_accum_qvar_ptr,
                         F90Ptr& elem_accum_qmass_ptr, F90Ptr& elem_accum_q1mass_ptr,
                         F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr,
                         F90Ptr& elem_accum_kener_ptr, F90Ptr& elem_accum_pener_ptr)
@@ -23,6 +23,7 @@ void Diagnostics::init (const int num_elems, F90Ptr& elem_accum_qvar_ptr,
 
   // F90 ptr to array (n1,n2,...,nK,nelemd) can be stuffed directly in an unmanaged view
   // with scalar type Real*[nK]...[n2][n1] (with runtime dimension nelemd)
+  h_Q      = HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_state_q_ptr,num_elems);
   h_Qvar   = HostViewUnmanaged<Real*[4][QSIZE_D][NP][NP]>(elem_accum_qvar_ptr,num_elems);
   h_Qmass  = HostViewUnmanaged<Real*[4][QSIZE_D][NP][NP]>(elem_accum_qmass_ptr,num_elems);
   h_Q1mass = HostViewUnmanaged<Real*   [QSIZE_D][NP][NP]>(elem_accum_q1mass_ptr,num_elems);
@@ -30,6 +31,44 @@ void Diagnostics::init (const int num_elems, F90Ptr& elem_accum_qvar_ptr,
   h_IEner_wet = HostViewUnmanaged<Real*   [NP][NP]>(elem_accum_iener_wet_ptr,num_elems);
   h_KEner     = HostViewUnmanaged<Real*[4][NP][NP]>(elem_accum_kener_ptr,num_elems);
   h_PEner     = HostViewUnmanaged<Real*[4][NP][NP]>(elem_accum_pener_ptr,num_elems);
+}
+
+void Diagnostics::update_q(const int np1_qdp, const int np1)
+{
+  // Get simulation params
+  SimulationParams& params = Context::singleton().get_simulation_params();
+  assert(params.params_set);
+
+  // Get hybrid vertical coordinate
+  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
+  auto hyai_delta = Kokkos::create_mirror_view(hvcoord.hybrid_ai_delta);
+  auto hybi_delta = Kokkos::create_mirror_view(hvcoord.hybrid_bi_delta);
+  Kokkos::deep_copy(hyai_delta,hvcoord.hybrid_ai_delta);
+  Kokkos::deep_copy(hybi_delta,hvcoord.hybrid_bi_delta);
+
+  // Get qdp from Tracers and ps_v from Elements
+  Tracers& tracers = Context::singleton().get_tracers();
+  Elements& elements = Context::singleton().get_elements();
+  auto h_qdp = Kokkos::create_mirror_view(tracers.qdp);
+  auto h_ps_v = Kokkos::create_mirror_view(elements.m_ps_v);
+  Kokkos::deep_copy(h_qdp,tracers.qdp);
+  Kokkos::deep_copy(h_ps_v,elements.m_ps_v);
+
+  // Compute q = qdp/dp
+  for (int ie=0; ie<m_num_elems; ++ie) {
+    for (int iq=0; iq<params.qsize; ++iq) {
+      for (int igp=0; igp<NP; ++igp) {
+        for (int jgp=0; jgp<NP; ++jgp) {
+          for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
+            int ilev = level / VECTOR_SIZE;
+            int ivec = level % VECTOR_SIZE;
+            Real dp = hyai_delta(ilev)[ivec]*hvcoord.ps0 + hybi_delta(ilev)[ivec]*h_ps_v(ie,np1,igp,jgp);
+            h_Q(ie,iq,level,igp,jgp) = h_qdp(ie,np1_qdp,iq,igp,jgp,ilev)[ivec]/dp;
+          }
+        }
+      }
+    }
+  }
 }
 
 void Diagnostics::prim_diag_scalars (const bool before_advance, const int ivar)
@@ -57,9 +96,7 @@ void Diagnostics::prim_diag_scalars (const bool before_advance, const int ivar)
 
     // Copy back tracers concentration and mass
     auto qdp_h = Kokkos::create_mirror_view(tracers.qdp);
-    auto Q_h   = Kokkos::create_mirror_view(tracers.q);
     Kokkos::deep_copy(qdp_h,tracers.qdp);
-    Kokkos::deep_copy(Q_h,tracers.q);
     for (int ie=0; ie<m_num_elems; ++ie) {
       for (int iq=0; iq<params.qsize; ++iq) {
         for (int igp=0; igp<NP; ++igp) {
@@ -68,12 +105,12 @@ void Diagnostics::prim_diag_scalars (const bool before_advance, const int ivar)
             Real accum_qdp = 0;
 
             HostViewUnmanaged<Real[NUM_PHYSICAL_LEV]> qdp(&qdp_h(ie,t2_qdp,iq,igp,jgp,0)[0]);
-            HostViewUnmanaged<Real[NUM_PHYSICAL_LEV]> Q(&Q_h(ie,iq,igp,jgp,0)[0]);
             for (int level=0; level<NUM_PHYSICAL_LEV; ++level) {
-              accum_qdp_q += qdp(level)*Q(level);
+              accum_qdp_q += qdp(level)*h_Q(ie,iq,level,igp,jgp);
               accum_qdp   += qdp(level);
             }
             h_Qvar(ie,ivar,iq,igp,jgp) = accum_qdp_q;
+
             h_Qmass(ie,ivar,iq,igp,jgp) = accum_qdp;
             h_Q1mass(ie,iq,igp,jgp) = accum_qdp;
           }
@@ -134,12 +171,6 @@ void Diagnostics::prim_energy_halftimes (const bool before_advance, const int iv
     return PC::cp*(1.0 + (PC::Cpwater_vapor/PC::cp - 1.0)*rin);
   };
 
-  // Init energy views to 0
-  Kokkos::deep_copy(h_IEner,0.0);
-  Kokkos::deep_copy(h_IEner_wet,0.0);
-  Kokkos::deep_copy(h_KEner,0.0);
-  Kokkos::deep_copy(h_PEner,0.0);
-
   // !   IE   Cp*dpdn*T  + (Cpv-Cp) Qdpdn*T
   // !        Cp*dpdn(n)*T(n+1) + (Cpv-Cp) Qdpdn(n)*T(n+1)
   // !        [Cp + (Cpv-Cp) Q(n)] *dpdn(n)*T(n+1)
@@ -149,6 +180,12 @@ void Diagnostics::prim_energy_halftimes (const bool before_advance, const int iv
   for (int ie=0; ie<m_num_elems; ++ie) {
     for (int igp=0; igp<NP; ++igp) {
       for (int jgp=0; jgp<NP; ++jgp) {
+        // Accumulation values
+        Real IEner = 0.0;
+        Real IEner_wet = 0.0;
+        Real KEner = 0.0;
+        Real PEner = 0.0;
+
         auto u = Homme::subview(h_v,ie,t1,0,igp,jgp);
         auto v = Homme::subview(h_v,ie,t1,1,igp,jgp);
         auto T = Homme::subview(h_T,ie,t1,igp,jgp);
@@ -156,8 +193,8 @@ void Diagnostics::prim_energy_halftimes (const bool before_advance, const int iv
         for (int ilev=0; ilev<NUM_LEV; ++ilev) {
           Scalar dpt1 = dhyai(ilev)*hvcoord.ps0 + dhybi(ilev)*h_ps_v(ie,t1,igp,jgp);
 
-          const int vector_end = (ilev==NUM_LEV-1 ? NUM_PHYSICAL_LEV % VECTOR_SIZE : VECTOR_SIZE);
-          for (int ivec=0; ivec<vector_end; ++ivec) {
+          const int vector_end = (ilev==NUM_LEV-1 ? (NUM_PHYSICAL_LEV + VECTOR_SIZE - 1) % VECTOR_SIZE : VECTOR_SIZE - 1);
+          for (int ivec=0; ivec<=vector_end; ++ivec) {
             if (params.use_cpstar) {
               Real qval_t1 = qdp_h(ie,t1_qdp,0,igp,jgp,ilev)[ivec]/dpt1[ivec];
               cp_star1 = virtual_specific_heat(qval_t1);
@@ -165,16 +202,21 @@ void Diagnostics::prim_energy_halftimes (const bool before_advance, const int iv
               cp_star1 = cp;
             }
 
-            h_IEner(ie,ivar,igp,jgp) += cp_star1*T(ilev)[ivec]*dpt1[ivec]/2;
-            h_IEner_wet(ie,igp,jgp) += (cp_star1 - cp)*T(ilev)[ivec]*dpt1[ivec]/2;
-
-            h_KEner(ie,ivar,igp,jgp) += (std::pow(u(ilev)[ivec],2) + std::pow(v(ilev)[ivec],2))*0.5*dpt1[ivec];
-            h_PEner(ie,ivar,igp,jgp) += h_phis(ie,igp,jgp)*dpt1[ivec];
+            IEner     += cp_star1*T(ilev)[ivec]*dpt1[ivec];
+            IEner_wet += (cp_star1 - cp)*T(ilev)[ivec]*dpt1[ivec];
+            KEner     += (std::pow(u(ilev)[ivec],2) + std::pow(v(ilev)[ivec],2))*0.5*dpt1[ivec];
+            PEner     += h_phis(ie,igp,jgp)*dpt1[ivec];
           }
         } // ilev
+        h_IEner(ie,ivar,igp,jgp) = IEner;
+        h_IEner_wet(ie,igp,jgp)  = IEner_wet;
+        h_KEner(ie,ivar,igp,jgp) = KEner;
+        h_PEner(ie,ivar,igp,jgp) = PEner;
       } // jgp
     } // igp
   } // ie
+printf("IEner(%d,%d,%d,%d) = %3.10f\n",0,ivar,0,0,h_IEner(0,ivar,0,0));
+printf("KEner(%d,%d,%d,%d) = %3.10f\n",0,ivar,0,0,h_KEner(0,ivar,0,0));
 }
 
 } // namespace Homme

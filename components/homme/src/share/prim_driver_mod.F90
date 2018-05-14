@@ -469,11 +469,9 @@ contains
        elem(ie)%derived%FQps=0.0
        elem(ie)%derived%FT=0.0
 
-#ifndef USE_KOKKOS_KERNELS
        elem(ie)%accum%Qvar=0
        elem(ie)%accum%Qmass=0
        elem(ie)%accum%Q1mass=0
-#endif
 
        elem(ie)%derived%Omega_p=0
        elem(ie)%state%dp3d=0
@@ -602,7 +600,8 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,                &
                                     elem_metdet, elem_metinv, elem_state_phis,             &
                                     elem_state_v, elem_state_temp, elem_state_dp3d,        &
-                                    elem_state_Qdp, elem_state_ps_v, elem_accum_qvar,      &
+                                    elem_state_Qdp, elem_state_ps_v,                       &
+                                    elem_state_q, elem_accum_qvar,                         &
                                     elem_accum_qmass, elem_accum_q1mass, elem_accum_iener, &
                                     elem_accum_iener_wet, elem_accum_kener, elem_accum_pener
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
@@ -659,16 +658,16 @@ contains
       type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
       type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
     end subroutine init_elements_2d_c
-    subroutine init_diagnostics_c (elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,     &
-                                   elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr, &
-                                   elem_accum_pener_ptr) bind(c)
+    subroutine init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
+                                   elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
+                                   elem_accum_kener_ptr, elem_accum_pener_ptr) bind(c)
       use iso_c_binding, only : c_ptr
       !
       ! Inputs
       !
-      type (c_ptr), intent(in) :: elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr
-      type (c_ptr), intent(in) :: elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr
-      type (c_ptr), intent(in) :: elem_accum_pener_ptr
+      type (c_ptr), intent(in) :: elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr
+      type (c_ptr), intent(in) :: elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr
+      type (c_ptr), intent(in) :: elem_accum_kener_ptr, elem_accum_pener_ptr
     end subroutine init_diagnostics_c
     subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                        elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
@@ -723,7 +722,7 @@ contains
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_state_q_ptr, elem_state_Qdp_ptr, elem_state_ps_v_ptr
     type (c_ptr) :: elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr
     type (c_ptr) :: elem_accum_iener_ptr, elem_accum_iener_wet_ptr
     type (c_ptr) :: elem_accum_kener_ptr, elem_accum_pener_ptr
@@ -1096,6 +1095,7 @@ contains
     call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                  elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 
+    elem_state_q_ptr         = c_loc(elem_state_q)
     elem_accum_qvar_ptr      = c_loc(elem_accum_qvar)
     elem_accum_qmass_ptr     = c_loc(elem_accum_qmass)
     elem_accum_q1mass_ptr    = c_loc(elem_accum_q1mass)
@@ -1103,9 +1103,9 @@ contains
     elem_accum_iener_wet_ptr = c_loc(elem_accum_iener_wet)
     elem_accum_kener_ptr     = c_loc(elem_accum_kener)
     elem_accum_pener_ptr     = c_loc(elem_accum_pener)
-    call init_diagnostics_c (elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,     &
-                             elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr, &
-                             elem_accum_pener_ptr)
+    call  init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
+                              elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
+                              elem_accum_kener_ptr, elem_accum_pener_ptr)
 
     call init_boundary_exchanges_c ()
 #endif
