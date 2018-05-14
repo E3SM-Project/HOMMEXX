@@ -281,7 +281,7 @@ ENDMACRO(PREQX_SETUP)
 
 #configure this for _c exec:
 SET (USE_KOKKOS_KERNELS TRUE)
-preqx_setup(TRUE)
+preqx_setup(USE_KOKKOS_KERNELS)
 createTestExec(preqx preqx ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
 
 
