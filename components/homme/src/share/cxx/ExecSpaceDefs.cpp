@@ -35,7 +35,11 @@ void initialize_kokkos () {
   }
   std::stringstream ss;
   ss << "--kokkos-ndevices=" << nd;
-  args.push_back(const_cast<char*>(ss.str().c_str()));
+  const auto key = ss.str();
+  std::vector<char> str(key.size()+1);
+  std::copy(key.begin(), key.end(), str.begin());
+  str.back() = 0;
+  args.push_back(const_cast<char*>(str.data()));
 #endif
 
   const char* silence = "--kokkos-disable-warnings";
