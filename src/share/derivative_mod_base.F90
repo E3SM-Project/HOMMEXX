@@ -3078,7 +3078,6 @@ end do
     real (kind=real_kind) :: x(np*np),c(np*np),v(np*np)
 
 
-#if 1
     do k=1,nlev
 
        k1 = 1
@@ -3118,7 +3117,7 @@ end do
              x(k1) = minp(k)
           end if
        end do
-       if (.not. modified) cycle
+!       if (.not. modified) cycle
 
        if (addmass /= zero) then
           ! Determine weights.
@@ -3143,7 +3142,6 @@ end do
        end do
 
     enddo
-#endif
 
   end subroutine limiter_clip_and_sum
 
