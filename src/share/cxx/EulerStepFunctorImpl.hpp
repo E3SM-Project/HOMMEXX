@@ -836,9 +836,6 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
        const ArrayGllLvl& irwrk) {
 
-
-#if 1
-
 # define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
 # define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
@@ -1017,7 +1014,6 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
 # undef forlev
 # undef forij
-#endif
 }//end SerialLimiter
 
 }
