@@ -243,13 +243,13 @@ contains
          if ( limiter_option == 8) then
             ! apply limiter to Q = Qtens / dp_star
             !call t_startf('lim8')
-            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
             !call t_stopf('lim8')
          elseif ( limiter_option == 9 ) then
             !call t_startf('lim9')
-            call limiter_clip_and_sum(    Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dpdissk )
+            call limiter_clip_and_sum(    Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
             !call t_stopf('lim9')
          endif
 
