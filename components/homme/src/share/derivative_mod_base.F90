@@ -3117,6 +3117,9 @@ end do
              x(k1) = minp(k)
           end if
        end do
+
+! Commented out for BFB with C++ version; Fortran version in E3SM master
+! benefits from this line.
 !       if (.not. modified) cycle
 
        if (addmass /= zero) then
