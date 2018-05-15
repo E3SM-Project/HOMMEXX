@@ -600,6 +600,7 @@ private:
     const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
     const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
+
     if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
       SerialLimiter<ExecSpace>::run<9>(
         sphweights, dpmass, qlim, ptens,
@@ -834,6 +835,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 ::run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
        const ArrayGllLvl& irwrk) {
+
 # define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
 # define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
@@ -1009,10 +1011,10 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       x(i,j,lev) *= dpmass(i,j,lev);
     }
   }
-  
+
 # undef forlev
 # undef forij
-}
+}//end SerialLimiter
 
 }
 

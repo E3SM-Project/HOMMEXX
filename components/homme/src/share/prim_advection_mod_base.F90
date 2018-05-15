@@ -146,7 +146,7 @@ contains
        n0_qdp,dt,Vstar,elem,deriv,Qtens, &
        rhs_viss,Qtens_biharmonic,np1_qdp)
     use kinds,          only : real_kind
-    use derivative_mod, only : derivative_t, limiter_optim_iter_full
+    use derivative_mod, only : derivative_t, limiter_optim_iter_full, limiter_clip_and_sum
     use element_mod,    only : element_t
     !
     ! Inputs
@@ -191,7 +191,7 @@ contains
           Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
           Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
 
-          if ( limiter_option == 8) then
+          if (( limiter_option == 8).or.( limiter_option == 9 )) then
              ! Note that the term dpdissk is independent of Q
              ! UN-DSS'ed dp at timelevel n0+1:
              dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
@@ -242,8 +242,15 @@ contains
 
          if ( limiter_option == 8) then
             ! apply limiter to Q = Qtens / dp_star
-            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+            !call t_startf('lim8')
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
+            !call t_stopf('lim8')
+         elseif ( limiter_option == 9 ) then
+            !call t_startf('lim9')
+            call limiter_clip_and_sum(    Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
+            !call t_stopf('lim9')
          endif
 
          ! apply mass matrix, overwrite np1 with solution:
@@ -1489,7 +1496,7 @@ end subroutine ALE_parametric_coords
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !  Dissipation
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    if ( limiter_option == 8  ) then
+    if ( (limiter_option == 8) .or. (limiter_option == 9) ) then
       ! dissipation was applied in RHS.
     else
       call t_startf('ah_scalar')
@@ -1621,7 +1628,7 @@ end subroutine ALE_parametric_coords
     !   compute biharmonic mixing term f
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     rhs_viss = 0
-    if ( limiter_option == 8  ) then
+    if ( (limiter_option == 8) .or. (limiter_option == 9) ) then
        call t_startf('bihmix_qminmax')
        ! when running lim8, we also need to limit the biharmonic, so that term needs
        ! to be included in each euler step.  three possible algorithms here:
@@ -1771,7 +1778,7 @@ end subroutine ALE_parametric_coords
        endif
        call t_stopf('bihmix_qminmax')
     endif  ! compute biharmonic mixing term and qmin/qmax
-    ! end of limiter_option == 8
+    ! end of limiter_option == 8 or == 9
 
 
     call t_startf('eus_2d_advec')
