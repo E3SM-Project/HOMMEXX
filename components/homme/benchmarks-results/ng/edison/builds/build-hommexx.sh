@@ -27,7 +27,7 @@ if ( $conf ) then
 
 
    make -j4 clean
-   make -j8 prtcB_c
+   make -j8 preqx
    exit
 endif
 
