@@ -20,6 +20,10 @@ namespace Homme {
 // Until whenever CUDA supports constexpr properly
 #ifdef CUDA_BUILD
 
+#ifdef CAM
+#define QSIZE_D PCNST
+#endif
+
 #define VECTOR_SIZE         1
 
 #define NUM_PHYSICAL_LEV    PLEV
@@ -31,6 +35,10 @@ namespace Homme {
 #define NUM_INTERFACE_LEV   NUM_LEV_P
 
 #else
+
+#ifdef CAM
+static constexpr const int QSIZE_D = PCNST;
+#endif
 
 #if   (HOMMEXX_AVX_VERSION == 0)
 // Vector<VectorTag<SIMD<T, SpT>, l> > can use this for good results
