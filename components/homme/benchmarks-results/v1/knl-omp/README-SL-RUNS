@@ -1,0 +1,3 @@
+
+These SL runs did not have hor. threads on. In namelists, NThreads=-1 did not lead to correct number of threads, which was set by OMP_NUM_THREADS.
+
