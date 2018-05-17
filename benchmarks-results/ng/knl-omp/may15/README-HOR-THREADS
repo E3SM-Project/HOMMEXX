@@ -1,4 +1,4 @@
 
-These runs for homme and SL ran with 1 thread only. XX ran with 2 threads as expected. The problem is in acme-master, next runs (may 16) will have 2-4 hor. threads for homme and still 1 thread for SL. 
+These runs for homme and SL ran with 1 thread only. XX ran with 2 threads as expected. The problem is in acme-master, next runs (may16) will have 2-4 hor. threads. 
 
 
