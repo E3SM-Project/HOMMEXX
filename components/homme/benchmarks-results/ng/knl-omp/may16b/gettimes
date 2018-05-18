@@ -1,0 +1,13 @@
+#!/bin/bash
+
+for i in run/*/time-* ; do echo -n ${i}": " ; awk '/prim_main_loop/ && !seen {print $6 ; seen=1}' $i ; unset seen ; done
+
+
+grep "vertical\|prim_main\|_rk2\|U3\-5\|vis_dp" time-homme-ne120-*
+grep "vertical\|prim_main\|_rk2\|U3\-5\|vis_dp\|remap_ALE" time-hommeSL-ne120-*
+grep "tl-sc vertical\|prim_main\|_RK2\|U3\-5\|vis_dp" time-xx-ne120-*
+
+
+
+
+
