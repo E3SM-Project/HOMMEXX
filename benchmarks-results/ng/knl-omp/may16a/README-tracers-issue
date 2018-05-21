@@ -1,0 +1,4 @@
+
+Here homme master was ran before benchmark branch was merged. Thus not all tracers are init-ed as supposed to. The same is true for xx and SL. Runs from May19 for homme will have correctly init-ed tracers, but not in SL or xx.
+
+
