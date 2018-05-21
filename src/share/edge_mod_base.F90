@@ -535,6 +535,7 @@ endif
     deallocate(edge%reverse)
 #if (defined HORIZ_OPENMP)
 !$OMP END MASTER
+!$OMP BARRIER
 #endif
 
   end subroutine FreeEdgeBuffer
@@ -554,6 +555,7 @@ endif
     deallocate(buffer%receive)
 #if (defined HORIZ_OPENMP)
 !$OMP END MASTER
+!$OMP BARRIER
 #endif
 
   end subroutine FreeGhostBuffer3D
