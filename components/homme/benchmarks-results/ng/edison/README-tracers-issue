@@ -1,0 +1,4 @@
+
+Runs from may09, may15 were run with homme benchmark branch and have correctly init-ed tracers for homme. Not yet true for SL or xx code. Difference is probably minor, but eventually runs with proper tracers are needed.
+
+
