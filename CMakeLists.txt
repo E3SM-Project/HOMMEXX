@@ -26,7 +26,7 @@ ENABLE_TESTING()
 SET (HOMME_TESTING_PROFILE "nightly" CACHE STRING "Determine how long/pervasive the testing is. Currently available options: 'dev', 'short', 'nightly'.")
 
 # Add the cmake/CMakeLists.txt file
-SET (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+SET (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/externals")
 
 # need to get the cmake_fortran_c_interface.h header
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
