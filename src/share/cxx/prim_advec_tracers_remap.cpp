@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #include "Context.hpp"
 #include "EulerStepFunctor.hpp"
 #include "SimulationParams.hpp"
@@ -84,4 +90,3 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
 }
 
 } // namespace Homme
-
