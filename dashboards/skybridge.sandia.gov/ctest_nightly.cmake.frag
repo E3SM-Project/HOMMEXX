@@ -220,7 +220,7 @@ if (BUILD_HOMMEXX_SERIAL)
   set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXSerialDebug)
   
   set (CONFIGURE_OPTIONS
-    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
+    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=16"
     "-DUSE_TRILINOS=FALSE"
@@ -236,7 +236,7 @@ if (BUILD_HOMMEXX_SERIAL)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme"
+    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )
@@ -418,7 +418,7 @@ if (BUILD_HOMMEXX_OPENMP)
   set_property (GLOBAL PROPERTY Label SkybridgeHOMMEXXOpenMP)
   
   set (CONFIGURE_OPTIONS
-    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/skybridge.cmake"
+    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/cmake/machineFiles/skybridge.cmake"
     "-DCMAKE_Fortran_FLAGS:STRING='-nowarn'" 
     "-DUSE_NUM_PROCS=8"
     "-DUSE_TRILINOS=FALSE"
@@ -432,7 +432,7 @@ if (BUILD_HOMMEXX_OPENMP)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuildOpenMP"
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme"
+    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )

@@ -226,7 +226,7 @@ if (BUILD_HOMMEXX_CUDA)
   set_property (GLOBAL PROPERTY Label RideHOMMEXXCuda)
   
   set (CONFIGURE_OPTIONS
-    "-C$ENV{jenkins_hommexx_dir}/components/homme/cmake/machineFiles/RIDE.cmake"
+    "-C$ENV{jenkins_hommexx_dir}/cmake/machineFiles/RIDE.cmake"
     "-DUSE_NUM_PROCS=16"
     "-DUSE_TRILINOS=FALSE"
     "-DHOMMEXX_FPMODEL=strict"
@@ -241,7 +241,7 @@ if (BUILD_HOMMEXX_CUDA)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
-    SOURCE "$ENV{jenkins_hommexx_dir}/components/homme"
+    SOURCE "$ENV{jenkins_hommexx_dir}"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )
