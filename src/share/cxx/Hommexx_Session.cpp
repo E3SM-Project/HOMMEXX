@@ -4,8 +4,12 @@
  * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
  *******************************************************************************/
 
-#include "Hommexx_Session.hpp"
+#ifdef HAVE_CONFIG_H
+#include "Hommexx_config.h"
+#endif
+// HAVE_CONFIG_H
 
+#include "Hommexx_Session.hpp"
 #include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"

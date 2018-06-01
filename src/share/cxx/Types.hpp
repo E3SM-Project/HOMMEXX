@@ -7,17 +7,13 @@
 #ifndef HOMMEXX_TYPES_HPP
 #define HOMMEXX_TYPES_HPP
 
-#include "Config.hpp"
 #include <Kokkos_Core.hpp>
 
+#include "Config.hpp"
 #include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
 
 #include <vector/KokkosKernels_Vector.hpp>
-
-#ifdef HAVE_CONFIG_H
-#include "config.h.c"
-#endif
 
 #define __MACRO_STRING(MacroVal) #MacroVal
 #define MACRO_STRING(MacroVal) __MACRO_STRING(MacroVal)

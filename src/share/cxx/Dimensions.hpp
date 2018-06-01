@@ -7,10 +7,6 @@
 #ifndef HOMMEXX_DIMENSIONS_HPP
 #define HOMMEXX_DIMENSIONS_HPP
 
-#ifdef HAVE_CONFIG_H
-#include "config.h.c"
-#endif
-
 #include "Config.hpp"
 
 #include <Kokkos_Core.hpp>
