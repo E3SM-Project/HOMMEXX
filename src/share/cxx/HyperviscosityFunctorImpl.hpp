@@ -73,7 +73,7 @@ public:
 
 //first iter of laplace, tensor hv 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TagFirstLaplaceConstHV&, const TeamMember& team) const {
+  void operator() (const TagFirstLaplaceTensorHV&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
     m_sphere_ops.laplace_tensor(kv,
@@ -87,9 +87,11 @@ public:
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
-                              Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
-                              Homme::subview(m_elements.buffers.vtens,kv.ie));
+    m_sphere_ops.vlaplace_sphere_wk_cartesian(kv,
+                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements,m_vec_sph2cart,kv.ie),
+                   Homme::subview(m_elements.m_v.kv.ie,m_data.np1),
+                   Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
 
 
@@ -133,9 +135,8 @@ public:
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie)); */
     m_sphere_ops.vlaplace_sphere_wk_cartesian(kv, 
-                              m_data.nu_ratio,????
                               Homme::subview(m_elements,m_tensorvisc,kv.ie),
-                              TRANSFORM,
+                              Homme::subview(m_elements,m_vec_sph2cart,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
 

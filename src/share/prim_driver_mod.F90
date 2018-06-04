@@ -647,8 +647,9 @@ contains
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr, c_int
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr,
+                                   tensorvisc_ptr, vec_sph2cart_ptr) bind(c)
+      use iso_c_binding, only : c_ptr, c_int, c_bool
       !
       ! Inputs
       !
@@ -656,6 +657,8 @@ contains
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
       type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
       type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
+      type (c_ptr) , intent(in) :: tensorvisc_ptr, vec_sph2cart_ptr
+      logical(kind=c_bool), intent(in) :: consthv
     end subroutine init_elements_2d_c
     subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                        elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
@@ -711,6 +714,7 @@ contains
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
     type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_tensorvisc_ptr, elem_vec_sph2cart_ptr
 #endif
 
 #ifdef TRILINOS
@@ -1069,9 +1073,14 @@ contains
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_metinv_ptr     = c_loc(elem_metinv)
     elem_state_phis_ptr = c_loc(elem_state_phis)
+    elem_tensorvisc_ptr = c_loc(elem_tensorvisc)
+    elem_vec_sph2cart_ptr = c_loc(elem_vec_sph2cart)
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
+                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr,   &
+                                   elem_tensorvisc_prt, elem_vec_shp2cart_ptr,              &
+                                   LOGICAL(hypervisc_scaling/=0,c_bool))
+
     elem_state_v_ptr    = c_loc(elem_state_v)
     elem_state_temp_ptr = c_loc(elem_state_temp)
     elem_state_dp3d_ptr = c_loc(elem_state_dp3d)

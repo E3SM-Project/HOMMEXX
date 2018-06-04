@@ -132,11 +132,13 @@ void init_time_level_c (const int& nm1, const int& n0, const int& np1,
 
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
-                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
+                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis,
+                         CF90Ptr &tensorvisc, CF90Ptr &vec_sph2cart,
+                         const bool consthv)
 {
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems);
-  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis,tensorvisc,vec_sph2cart,consthv);
 }
 
 void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_temp_ptr, CF90Ptr& elem_state_dp3d_ptr,

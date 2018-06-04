@@ -783,8 +783,8 @@ public:
       const int igp = loop_idx / NP; //slowest
       const int jgp = loop_idx % NP; //fastest
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV_REQUEST), [&] (const int& ilev) {
-#define UNDAMPRRCART
-#ifdef UNDAMPRRCART
+//#define UNDAMPRRCART
+//#ifdef UNDAMPRRCART
         laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
                                 + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
                                 + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev)
@@ -796,14 +796,14 @@ public:
                                 + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev)
                                 + 2.0*spheremp(igp,jgp)*vector(1,igp,jgp,ilev)
                                         *(PhysicalConstants::rrearth)*(PhysicalConstants::rrearth);
-#else
-        laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
-                                + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
-                                + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev);
-        laplace(1,igp,jgp,ilev) = vec_sph2cart(1,0,igp,jgp)*laplace0(igp,jgp,ilev)
-                                + vec_sph2cart(1,1,igp,jgp)*laplace1(igp,jgp,ilev)
-                                + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev);
-#endif
+//#else
+//        laplace(0,igp,jgp,ilev) = vec_sph2cart(0,0,igp,jgp)*laplace0(igp,jgp,ilev)
+//                                + vec_sph2cart(0,1,igp,jgp)*laplace1(igp,jgp,ilev)
+//                                + vec_sph2cart(0,2,igp,jgp)*laplace2(igp,jgp,ilev);
+//        laplace(1,igp,jgp,ilev) = vec_sph2cart(1,0,igp,jgp)*laplace0(igp,jgp,ilev)
+//                                + vec_sph2cart(1,1,igp,jgp)*laplace1(igp,jgp,ilev)
+//                                + vec_sph2cart(1,2,igp,jgp)*laplace2(igp,jgp,ilev);
+//#endif
       });
     });
     kv.team_barrier();

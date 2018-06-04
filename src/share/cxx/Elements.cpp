@@ -25,11 +25,12 @@ void Elements::init(const int num_elems, const bool consthv) {
 
   if(!consthv){
     m_tensorvisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSORVISC", m_num_elems);
+    m_vec_sph2cart = ExecViewManaged<Real * [2][3][NP][NP]>("VEC_SPH2CART", m_num_elems);
   }
 
   m_phis = ExecViewManaged<Real * [NP][NP]>("PHIS", m_num_elems);
 
-  //D is not a metric tensor, D^tD is
+  //matrix D and its derivatives 
   m_d =
       ExecViewManaged<Real * [2][2][NP][NP]>("matrix D", m_num_elems);
   m_dinv = ExecViewManaged<Real * [2][2][NP][NP]>(
@@ -71,7 +72,9 @@ void Elements::init(const int num_elems, const bool consthv) {
 void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                        CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
                        CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis,
-                       CF90Ptr &tensorvisc, const bool consthv ) {
+                       CF90Ptr &tensorvisc, 
+                       CF90Ptr vec_sph2cart,
+                       const bool consthv) {
   int k_scalars = 0;
   int k_tensors = 0;
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_fcor =
@@ -91,8 +94,10 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 
 //either way this is ok, performed once, if this does not compile, call ctor always
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_tensorvisc;
+  ExecViewManaged<Real *[2][3][NP][NP]>::HostMirror h_vec_sph2cart;
   if( !consthv ){
     h_tensorvisc = Kokkos::create_mirror_view(m_tensorvisc);
+    h_vec_sph2cart = Kokkos::create_mirror_view(m_vec_sph2cart);
   }
 
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_d =
@@ -135,19 +140,31 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   }
   else{
   for (int ie = 0; ie < m_num_elems; ++ie) {
+
+    for (int idim = 0; idim < 2; ++idim) {
+      for (int jdim = 0; jdim < 3; ++jdim) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = vec_sph2cart[k_tensor];
+          }
+        }
+      }
+    }// inint 2x2 quantities
+
+    k_tensor = 0;
     for (int idim = 0; idim < 2; ++idim) {
       for (int jdim = 0; jdim < 2; ++jdim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-            h_d(ie, idim, jdim, igp, jgp) = D[k_tensors];
-            h_dinv(ie, idim, jdim, igp, jgp) = Dinv[k_tensors];
-            h_metinv(ie, idim, jdim, igp, jgp) = h_metinv_f90(ie, idim, jdim, igp, jgp);
             h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensor];
           }
         }
       }
-    }
-  }
+    }// inint 2x2 quantities
+
+
+
+  }//ie
   }//end if consthv
 
   Kokkos::deep_copy(m_fcor, h_fcor);
@@ -158,6 +175,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   Kokkos::deep_copy(m_rspheremp, h_rspheremp);
   Kokkos::deep_copy(m_phis, h_phis);
   if( !consthv ) Kokkos::deep_copy(m_tensorvisc, h_tensorvisc);
+  if( !consthv ) Kokkos::deep_copy(m_vec_sph2cart, h_vec_sph2cart);
 
   Kokkos::deep_copy(m_d, h_d);
   Kokkos::deep_copy(m_dinv, h_dinv);
@@ -168,6 +186,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
+  init(num_elems);
   init(num_elems);
   std::random_device rd;
   std::mt19937_64 engine(rd());
