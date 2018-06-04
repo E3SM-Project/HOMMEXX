@@ -73,7 +73,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                        CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
                        CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis,
                        CF90Ptr &tensorvisc, 
-                       CF90Ptr vec_sph2cart,
+                       CF90Ptr &vec_sph2cart,
                        const bool consthv) {
   int k_scalars = 0;
   int k_tensors = 0;
@@ -138,6 +138,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       }
     }
   }
+  }
   else{
   for (int ie = 0; ie < m_num_elems; ++ie) {
 
@@ -145,18 +146,18 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       for (int jdim = 0; jdim < 3; ++jdim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = vec_sph2cart[k_tensor];
+            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = vec_sph2cart[k_tensors];
           }
         }
       }
     }// inint 2x2 quantities
 
-    k_tensor = 0;
+    k_tensors = 0;
     for (int idim = 0; idim < 2; ++idim) {
       for (int jdim = 0; jdim < 2; ++jdim) {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-            h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensor];
+            h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensors];
           }
         }
       }
@@ -186,7 +187,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
-  init(num_elems);
+  init(num_elems, 1);
   init(num_elems);
   std::random_device rd;
   std::mt19937_64 engine(rd());

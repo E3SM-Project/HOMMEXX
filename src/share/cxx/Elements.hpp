@@ -111,7 +111,7 @@ public:
 
   Elements() = default;
 
-  void init(const int num_elems);
+  void init(const int num_elems, const bool consthv);
 
   void random_init(int num_elems, Real max_pressure = 1.0);
 
