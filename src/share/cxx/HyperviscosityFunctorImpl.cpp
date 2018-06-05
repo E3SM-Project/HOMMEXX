@@ -9,7 +9,7 @@ namespace Homme
 HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& params, const Elements& elements, const Derivative& deriv)
  : m_elements   (elements)
  , m_deriv      (deriv)
- , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s,params.hypervis_scaling)
  , m_sphere_ops (Context::singleton().get_sphere_operators())
 {
   // Sanity check
@@ -82,7 +82,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
   
   //tensor or const hv
-  if ( m_data.hyperviscosity_scaling ) {
+  if ( m_data.consthv ) {
     auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceTensorHV>(m_elements.num_elems());
     Kokkos::parallel_for(policy_first_laplace, *this);
   }else{
@@ -103,7 +103,7 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
 
 //is TagLaplace used anywhere else? if not -- rename
   //tensor or const hv
-  if ( m_data.hyperviscosity_scaling ) {
+  if ( m_data.consthv ) {
     auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagSecondLaplaceTensorHV>(m_elements.num_elems());
     Kokkos::parallel_for(policy_second_laplace, *this);
   }else{

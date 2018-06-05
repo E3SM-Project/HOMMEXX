@@ -20,21 +20,23 @@ CaarFunctor::CaarFunctor()
   HybridVCoord&    hvcoord    = Context::singleton().get_hvcoord();
   SphereOperators& sphere_ops = Context::singleton().get_sphere_operators();
   const int        rsplit     = Context::singleton().get_simulation_params().rsplit;
+  const bool       consthv    = (Context::singleton().get_simulation_params().hypervis_scaling == 0);
 
   // Build functor impl
-  m_caar_impl.reset(new CaarFunctorImpl(elements,tracers,derivative,hvcoord,sphere_ops,rsplit));
+  m_caar_impl.reset(new CaarFunctorImpl(elements,tracers,derivative,hvcoord,sphere_ops,rsplit,consthv));
   m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 
 CaarFunctor::CaarFunctor(const Elements &elements, const Tracers &tracers,
                          const Derivative &derivative,
                          const HybridVCoord &hvcoord,
-                         const SphereOperators &sphere_ops, const int rsplit)
+                         const SphereOperators &sphere_ops, 
+                         const int rsplit, const bool consthv)
     : m_policy(
           Homme::get_default_team_policy<ExecSpace>(elements.num_elems())) {
   // Build functor impl
   m_caar_impl.reset(new CaarFunctorImpl(elements, tracers, derivative, hvcoord,
-                                        sphere_ops, rsplit));
+                                        sphere_ops, rsplit, consthv));
   m_caar_impl->m_sphere_ops.allocate_buffers(m_policy);
 }
 

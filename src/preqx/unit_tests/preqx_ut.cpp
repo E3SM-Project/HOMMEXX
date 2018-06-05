@@ -99,7 +99,7 @@ void caar_adjust_eta_dot_dpdn_c_int(const Real eta_ave_w,
 template <typename TestFunctor_T> class compute_subfunctor_test {
 public:
   compute_subfunctor_test(Elements &elements, Tracers &tracers,
-                          const int rsplit_in = 0)
+                          const int rsplit_in = 0, const bool consthv = true)
       : functor(
             elements, tracers, Context::singleton().get_derivative(),
             Context::singleton().get_hvcoord(),
@@ -118,7 +118,8 @@ public:
         metdet("metdet", elements.num_elems()),
         dinv("DInv", elements.num_elems()),
         spheremp("SphereMP", elements.num_elems()), dvv("dvv"),
-        rsplit(rsplit_in)
+        rsplit(rsplit_in),
+        consthv(consthv_in)
         {
 
     functor.m_sphere_ops.allocate_buffers(policy);

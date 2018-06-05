@@ -17,9 +17,12 @@ class HyperviscosityFunctorImpl
 {
   struct HyperviscosityData {
     HyperviscosityData(const int hypervis_subcycle_in, const Real nu_ratio_in, const Real nu_top_in,
-                       const Real nu_in, const Real nu_p_in, const Real nu_s_in)
+                       const Real nu_in, const Real nu_p_in, const Real nu_s_in,
+                       const Real hypervis_scaling_in)
                       : hypervis_subcycle(hypervis_subcycle_in), nu_ratio(nu_ratio_in)
-                      , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in) {}
+                      , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in)
+                      , hypervis_scaling(hypervis_scaling_in)
+                      , consthv(hypervis_scaling == 0){}
 
 
     const int   hypervis_subcycle;
@@ -34,12 +37,17 @@ class HyperviscosityFunctorImpl
     Real        dt;
 
     Real        eta_ave_w;
+
+    Real hypervis_scaling;
+    bool consthv;
   };
 
 public:
 
-  struct TagFirstLaplace {};
-  struct TagLaplace {};
+  struct TagFirstLaplaceConstHV {};
+  struct TagFirstLaplaceTensorHV {};
+  struct TagSecondLaplaceConstHV {};
+  struct TagSecondLaplaceTensorHV {};
   struct TagUpdateStates {};
   struct TagApplyInvMass {};
   struct TagHyperPreExchange {};
@@ -77,20 +85,20 @@ public:
     KernelVariables kv(team);
     // Laplacian of temperature
     m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
                    Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
     m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
                    Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
     m_sphere_ops.vlaplace_sphere_wk_cartesian(kv,
-                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
-                   Homme::subview(m_elements,m_vec_sph2cart,kv.ie),
-                   Homme::subview(m_elements.m_v.kv.ie,m_data.np1),
+                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements.m_vec_sph2cart,kv.ie),
+                   Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                    Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
 
@@ -121,12 +129,12 @@ public:
     KernelVariables kv(team);
     // Laplacian of temperature
     m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie),
                    Homme::subview(m_elements.buffers.ttens,kv.ie));
     // Laplacian of pressure
     m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements,m_tensorvisc,kv.ie),
+                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
     // Laplacian of velocity
@@ -135,8 +143,8 @@ public:
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie)); */
     m_sphere_ops.vlaplace_sphere_wk_cartesian(kv, 
-                              Homme::subview(m_elements,m_tensorvisc,kv.ie),
-                              Homme::subview(m_elements,m_vec_sph2cart,kv.ie),
+                              Homme::subview(m_elements.m_tensorvisc,kv.ie),
+                              Homme::subview(m_elements.m_vec_sph2cart,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
 
@@ -200,7 +208,6 @@ public:
     constexpr int NUM_BIHARMONIC_LEV = (NUM_BIHARMONIC_PHYSICAL_LEVELS + VECTOR_SIZE - 1) / VECTOR_SIZE;
     if (m_data.nu_top > 0) {
 
-      // TODO: Only run on the levels we need to 0-2
       m_sphere_ops.vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
             kv, m_data.nu_ratio,
             // input

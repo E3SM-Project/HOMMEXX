@@ -23,7 +23,8 @@ namespace Homme {
 struct CaarFunctorImpl {
 
   struct CaarData {
-    CaarData (const int rsplit_in) : rsplit(rsplit_in) {}
+    CaarData (const int rsplit_in, const bool consthv_in) : rsplit(rsplit_in),
+                                                            consthv(consthv_in) {}
     int       nm1;
     int       n0;
     int       np1;
@@ -33,7 +34,13 @@ struct CaarFunctorImpl {
     Real      eta_ave_w;
 
     const int rsplit;
+    bool      consthv;
+
     bool      compute_diagnostics;
+
+//do i need this?
+//    Real hyperviscosity_scaling;
+
   };
 
   CaarData              m_data;
@@ -47,8 +54,9 @@ struct CaarFunctorImpl {
 
   CaarFunctorImpl(const Elements &elements, const Tracers &tracers,
                   const Derivative &derivative, const HybridVCoord &hvcoord,
-                  const SphereOperators &sphere_ops, const int rsplit)
-      : m_data(rsplit)
+                  const SphereOperators &sphere_ops, 
+                  const int rsplit, const bool consthv)
+      : m_data(rsplit,consthv)
       , m_hvcoord(hvcoord)
       , m_elements(elements)
       , m_tracers(tracers)

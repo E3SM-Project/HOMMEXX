@@ -602,7 +602,8 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,         &
                                     elem_metdet, elem_metinv, elem_state_phis,      &
                                     elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                    elem_state_Qdp, elem_state_ps_v
+                                    elem_state_Qdp, elem_state_ps_v,                &
+                                    elem_tensorvisc, elem_vec_sph2cart
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
                                     vert_remap_q_alg, statefreq, use_semi_lagrange_transport
@@ -647,8 +648,8 @@ contains
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr,
-                                   tensorvisc_ptr, vec_sph2cart_ptr) bind(c)
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr,              &
+                                   tensorvisc_ptr, vec_sph2cart_ptr, consthv) bind(c)
       use iso_c_binding, only : c_ptr, c_int, c_bool
       !
       ! Inputs
@@ -1073,13 +1074,13 @@ contains
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_metinv_ptr     = c_loc(elem_metinv)
     elem_state_phis_ptr = c_loc(elem_state_phis)
-    elem_tensorvisc_ptr = c_loc(elem_tensorvisc)
+    elem_tensorvisc_ptr  = c_loc(elem_tensorvisc)
     elem_vec_sph2cart_ptr = c_loc(elem_vec_sph2cart)
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
                                    elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr,   &
-                                   elem_tensorvisc_prt, elem_vec_shp2cart_ptr,              &
-                                   LOGICAL(hypervisc_scaling/=0,c_bool))
+                                   elem_tensorvisc_ptr, elem_vec_sph2cart_ptr,              &
+                                   LOGICAL(hypervis_scaling==0,c_bool))
 
     elem_state_v_ptr    = c_loc(elem_state_v)
     elem_state_temp_ptr = c_loc(elem_state_temp)
@@ -1326,6 +1327,7 @@ contains
     use control_mod,        only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
     use control_mod,        only: use_semi_lagrange_transport, tracer_transport_type
     use control_mod,        only: tracer_grid_type, TRACER_GRIDTYPE_GLL
+    use control_mod,        only: hypervis_scaling
     use derivative_mod,     only: subcell_integration
     use fvm_bsp_mod,        only: get_boomerang_velocities_gll, get_solidbody_velocities_gll
     use fvm_control_volume_mod, only : fvm_supercycling
