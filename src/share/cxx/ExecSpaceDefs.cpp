@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include <sstream>
+#include <vector>
 
 #include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
