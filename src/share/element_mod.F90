@@ -6,8 +6,8 @@ module element_mod
 
   use kinds,                  only: real_kind, long_kind, int_kind
   use coordinate_systems_mod, only: spherical_polar_t, cartesian2D_t, cartesian3D_t, distance
-  use dimensions_mod,         only: np, nc, npsq, nlev, nlevp, qsize_d, max_neigh_edges
-  use edgetype_mod,           only: edgedescriptor_t, rotation_t
+  use dimensions_mod,         only: np, npsq, nlev, nlevp, qsize_d, max_neigh_edges
+  use edgetype_mod,           only: edgedescriptor_t
   use gridgraph_mod,          only: gridvertex_t
 
   implicit none
@@ -570,7 +570,8 @@ module element_mod
      !  |    (1,1,1)     |                |              |  (4,1,1)   |
      !  ---------------------------------------------------------------
      !          First Coordinate ------->
-     real (kind=real_kind) :: sub_elem_mass_flux(nc,nc,4,nlev)
+
+     ! real (kind=real_kind) :: sub_elem_mass_flux(nc,nc,4,nlev)
 
      ! Convert vector fields from spherical to rectangular components
      ! The transpose of this operation is its pseudoinverse.
@@ -738,15 +739,6 @@ contains
     num = SIZE(elem)
 
     do j=1,num
-       allocate(elem(j)%desc%putmapP(max_neigh_edges))
-       allocate(elem(j)%desc%getmapP(max_neigh_edges))
-       allocate(elem(j)%desc%putmapP_ghost(max_neigh_edges))
-       allocate(elem(j)%desc%getmapP_ghost(max_neigh_edges))
-       allocate(elem(j)%desc%putmapS(max_neigh_edges))
-       allocate(elem(j)%desc%getmapS(max_neigh_edges))
-       allocate(elem(j)%desc%reverse(max_neigh_edges))
-       allocate(elem(j)%desc%globalID(max_neigh_edges))
-       allocate(elem(j)%desc%loc2buf(max_neigh_edges))
        do i=1,max_neigh_edges
           elem(j)%desc%loc2buf(i)=i
           elem(j)%desc%globalID(i)=-1
@@ -789,8 +781,9 @@ contains
     allocate( elem_spherep             (np,np, nelemd)    )
     allocate( elem_spheremp            (np,np, nelemd)    )
     allocate( elem_rspheremp           (np,np, nelemd)    )
-    allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
-    allocate( elem_vec_sph2cart     (np,np,3,2,nelemd) )
+    ! allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
+    ! allocate( elem_vec_sph2cart     (np,np,3,2,nelemd) )
+    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd) )
     allocate( elem_tensorVisc          (np,np,2,2,nelemd) )
 
     do ie = 1 , nelemd

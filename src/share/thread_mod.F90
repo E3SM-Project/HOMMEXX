@@ -18,8 +18,8 @@ module thread_mod
 
   integer, public :: NThreads, nthreads_accel
   integer, public :: vert_num_threads
-  integer, public :: nThreadsHoriz=1   ! Actuall number of threads in the horizontal dimension
-  integer, public :: vthreads
+  integer, public :: nthreadshoriz   ! Actual number of threads in the horizontal dimension
+  integer, public :: vthreads = 1 ! not used unless set in namelist
 
   public :: omp_get_thread_num
   public :: omp_in_parallel
