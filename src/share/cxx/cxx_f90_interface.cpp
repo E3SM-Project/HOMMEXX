@@ -35,7 +35,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","vert_remap_q_alg",remap_alg,{1,2});
   Errors::check_option("init_simulation_params_c","prescribed_wind",prescribed_wind,{false});
   Errors::check_option("init_simulation_params_c","hypervis_order",hypervis_order,{2});
-  Errors::check_option("init_simulation_params_c","hypervis_scaling",hypervis_scaling,{0.0});
+//  Errors::check_option("init_simulation_params_c","hypervis_scaling",hypervis_scaling,{0.0});
   Errors::check_option("init_simulation_params_c","use_semi_lagrangian_transport",use_semi_lagrangian_transport,{false});
   Errors::check_option("init_simulation_params_c","time_step_type",time_step_type,{5});
   Errors::check_option("init_simulation_params_c","limiter_option",limiter_option,{8});
