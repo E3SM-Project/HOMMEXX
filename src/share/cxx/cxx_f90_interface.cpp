@@ -137,7 +137,7 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
                          const bool consthv)
 {
   Elements& r = Context::singleton().get_elements ();
-  r.init (num_elems);
+  r.init (num_elems, consthv);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis,tensorvisc,vec_sph2cart,consthv);
 }
 
