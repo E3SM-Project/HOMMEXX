@@ -95,7 +95,6 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // Initialize dp3d from ps
   GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
-  Tracers& tracers = Context::singleton().get_tracers();
   HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
   const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
   const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
