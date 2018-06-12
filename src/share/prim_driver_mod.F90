@@ -1056,6 +1056,10 @@ contains
 #ifdef USE_KOKKOS_KERNELS
     call init_caar_derivative_c(deriv(hybrid%ithr))
 
+
+print *, 'HY SCALING in prim_driver', hypervis_scaling
+print *, 'HY SCALING logical val', LOGICAL(hypervis_scaling==0,c_bool)
+
     call init_simulation_params_c (vert_remap_q_alg, limiter_option, rsplit, qsplit, tstep_type,  &
                                    energy_fixer, qsize, statefreq,                                &
                                    nu, nu_p, nu_q, nu_s, nu_div, nu_top,                          &
@@ -1076,6 +1080,9 @@ contains
     elem_state_phis_ptr = c_loc(elem_state_phis)
     elem_tensorvisc_ptr  = c_loc(elem_tensorvisc)
     elem_vec_sph2cart_ptr = c_loc(elem_vec_sph2cart)
+
+
+print *, 'CONSTHV  logical val, rihgt before call', LOGICAL(hypervis_scaling==0,c_bool)
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
                                    elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr,   &

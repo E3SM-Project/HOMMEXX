@@ -71,6 +71,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.nu_top                        = nu_top;
   params.hypervis_order                = hypervis_order;
   params.hypervis_subcycle             = hypervis_subcycle;
+  params.hypervis_scaling              = hypervis_scaling;
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
@@ -81,6 +82,9 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Now this structure can be used safely
   params.params_set = true;
+
+std::cout << "AFTER call init_sim_params, params.hypervis_scaling " <<   params.hypervis_scaling << "\n"; 
+
 }
 
 void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
@@ -134,8 +138,11 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
                          CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis,
                          CF90Ptr &tensorvisc, CF90Ptr &vec_sph2cart,
-                         const bool consthv)
+                         const bool& consthv)
 {
+
+std::cout << "in init_elements_2d_c , consthv " << consthv << "\n";
+
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, consthv);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis,tensorvisc,vec_sph2cart,consthv);

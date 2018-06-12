@@ -276,7 +276,6 @@ public:
                  const ExecViewUnmanaged<      Real [NP][NP]> laplace) const
   {
     const auto& grad_s = Homme::subview(vector_buf_sl, kv.team_idx, 1);
-    // let's ignore var coef and tensor hv
     gradient_sphere_sl(kv, field, grad_s);
     divergence_sphere_wk_sl(kv, grad_s, laplace);
   } // end of laplace_wk_sl
@@ -587,7 +586,6 @@ public:
     static_assert(NUM_LEV_REQUEST>0, "Error! Template argument NUM_LEV_REQUEST must be positive.\n");
 
     const auto& grad_s = Homme::subview(vector_buf_ml, kv.team_idx, 0);
-      // let's ignore var coef and tensor hv
     gradient_sphere<NUM_LEV_REQUEST>(kv, field, grad_s);
     divergence_sphere_wk<NUM_LEV_REQUEST>(kv, grad_s, laplace);
   }//end of laplace_simple

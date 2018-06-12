@@ -23,7 +23,13 @@ void Elements::init(const int num_elems, const bool consthv) {
   m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
 
+
+std::cout <<  " BEFORE constructor for tensorvisc , consthv " << consthv << "\n";
+
   if(!consthv){
+
+std::cout <<  " BEFORE constructor for tensorvisc \n";
+
     m_tensorvisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSORVISC", m_num_elems);
     m_vec_sph2cart = ExecViewManaged<Real * [2][3][NP][NP]>("VEC_SPH2CART", m_num_elems);
   }
@@ -187,6 +193,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
 void Elements::random_init(const int num_elems, const Real max_pressure) {
   // arbitrary minimum value to generate and minimum determinant allowed
   constexpr const Real min_value = 0.015625;
+  // 1 is for const hv
   init(num_elems, 1);
   std::random_device rd;
   std::mt19937_64 engine(rd());

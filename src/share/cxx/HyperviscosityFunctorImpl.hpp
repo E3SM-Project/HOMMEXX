@@ -22,7 +22,7 @@ class HyperviscosityFunctorImpl
                       : hypervis_subcycle(hypervis_subcycle_in), nu_ratio(nu_ratio_in)
                       , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in)
                       , hypervis_scaling(hypervis_scaling_in)
-                      , consthv(hypervis_scaling == 0){}
+                      , consthv(hypervis_scaling_in == 0){}
 
 
     const int   hypervis_subcycle;
@@ -206,6 +206,8 @@ public:
     // ThreadVectorRange
     constexpr int NUM_BIHARMONIC_PHYSICAL_LEVELS = 3;
     constexpr int NUM_BIHARMONIC_LEV = (NUM_BIHARMONIC_PHYSICAL_LEVELS + VECTOR_SIZE - 1) / VECTOR_SIZE;
+
+
     if (m_data.nu_top > 0) {
 
       m_sphere_ops.vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
@@ -228,7 +230,7 @@ public:
             Homme::subview(m_elements.m_dp3d, kv.ie, m_data.np1),
             // output
             Homme::subview(laplace_dp3d, kv.ie));
-    }
+    }//if nu_top>0
     kv.team_barrier();
 
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
@@ -243,24 +245,25 @@ public:
         m_elements.buffers.dptens(kv.ie, igp, jgp, lev) *= -m_data.nu_p;
       });
 
-
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, int(NUM_BIHARMONIC_LEV)),
+      if (m_data.nu_top > 0) {
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, int(NUM_BIHARMONIC_LEV)),
                            [&](const int ilev) {
-        m_elements.buffers.vtens(kv.ie, 0, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_v(kv.ie, 0, igp, jgp, ilev);
-        m_elements.buffers.vtens(kv.ie, 1, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_v(kv.ie, 1, igp, jgp, ilev);
+          m_elements.buffers.vtens(kv.ie, 0, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 0, igp, jgp, ilev);
+          m_elements.buffers.vtens(kv.ie, 1, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_v(kv.ie, 1, igp, jgp, ilev);
 
-        m_elements.buffers.ttens(kv.ie, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_t(kv.ie, igp, jgp, ilev);
+          m_elements.buffers.ttens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_t(kv.ie, igp, jgp, ilev);
 
-        m_elements.buffers.dptens(kv.ie, igp, jgp, ilev) +=
-            m_nu_scale_top[ilev] *
-            laplace_dp3d(kv.ie, igp, jgp, ilev);
-      });
+          m_elements.buffers.dptens(kv.ie, igp, jgp, ilev) +=
+              m_nu_scale_top[ilev] *
+              laplace_dp3d(kv.ie, igp, jgp, ilev);
+        });
+      }
 
       // While for T and v we exchange the tendencies, for dp3d we exchange the updated state.
       // However, since the BE structure already has registerd the *tens quantities, we store
