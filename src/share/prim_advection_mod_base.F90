@@ -833,154 +833,6 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 ! if (hybrid%par%masterproc) print *,__FILE__,__LINE__," MAXVAL(ABS(rc)):",MAXVAL(ABS(rc)),eta," nclip:",nclip
 end subroutine Cobra_Elem
 
-! ----------------------------------------------------------------------------------!
-!SUBROUTINE ALE_RKDSS-----------------------------------------------CE-for FVM!
-! AUTHOR: CHRISTOPH ERATH, MARK TAYLOR, 06. December 2012
-!
-! DESCRIPTION: ! create a runge kutta taylor serios mixture to calculate the departure grid
-!
-! CALLS:
-! INPUT:
-!
-! OUTPUT:
-!-----------------------------------------------------------------------------------!
-
-! this will calculate the velocity at time t+1/2  along the trajectory s(t) given the velocities
-! at the GLL points at time t and t+1 using a second order time accurate formulation.
-
-
-subroutine ALE_RKdss(elem, nets, nete, hy, deriv, dt, tl)
-
-  use derivative_mod,  only : derivative_t, ugradv_sphere
-  use edge_mod,        only : edgevpack, edgevunpack
-  use edgetype_mod,    only : EdgeBuffer_t
-  use bndry_mod,       only : bndry_exchangev
-  use kinds,           only : real_kind
-  use hybrid_mod,      only : hybrid_t
-  use element_mod,     only : element_t
-  use dimensions_mod,   only : np, nlev
-
-  implicit none
-
-  type (element_t)     , intent(inout)             :: elem(:)
-  integer              , intent(in   )             :: nets
-  integer              , intent(in   )             :: nete
-  type (hybrid_t)      , intent(in)                :: hy ! distributed parallel structure (shared)
-  type (derivative_t)  , intent(in)                :: deriv ! derivative struct
-  real (kind=real_kind), intent(in)                :: dt ! timestep
-  type (TimeLevel_t)   , intent(in)                :: tl
-
-  integer                                          :: ie, k
-  real (kind=real_kind), dimension(np,np,2)        :: vtmp
-  integer :: np1
-
-  np1 = tl%np1
-
-
-! RK-SSP 2 stage 2nd order:
-!     x*(t+1) = x(t) + U(x(t),t) dt
-!     x(t+1) = x(t) +  1/2 ( U(x*(t+1),t+1) + U(x(t),t) ) dt
-! apply taylor series:
-!  U(x*(t+1),t+1) = U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1)
-!
-! x(t+1) = x(t) +  1/2 ( U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1) + U(x(t),t) ) dt
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1) + U(x(t),t) )
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + U(x(t),t) + (x*(t+1)-x(t)) gradU(x(t),t+1) )
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + U(x(t),t) + U(x(t),t) dt  gradU(x(t),t+1) )
-!
-!
-!  (x(t+1)-x(t))/dt =  1/2(U(x(t),t+1) + U(x(t),t) + dt U(x(t),t) gradU(x(t),t+1))
-!
-! suppose dt = -ts (we go backward)
-!  (x(t-ts)-x(t))/-ts =  1/2( U(x(t),t-ts)+U(x(t),t)) - ts 1/2 U(x(t),t) gradU(x(t),t-ts)
-!
-!  x(t-ts) = x(t)) -ts * [ 1/2( U(x(t),t-ts)+U(x(t),t)) - ts 1/2 U(x(t),t) gradU(x(t),t-ts) ]
-!
-!    !------------------------------------------------------------------------------------
-
-  do ie=nets,nete
-     ! vstarn0 = U(x,t)
-     ! vstar   = U(x,t+1)
-    do k=1,nlev
-      vtmp(:,:,:)=ugradv_sphere(elem(ie)%state%v(:,:,:,k,np1), elem(ie)%derived%vstar(:,:,:,k),deriv,elem(ie))
-
-      elem(ie)%derived%vstar(:,:,:,k) = &
-           (elem(ie)%state%v(:,:,:,k,np1) + elem(ie)%derived%vstar(:,:,:,k))/2 - dt*vtmp(:,:,:)/2
-
-      elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%spheremp(:,:)
-      elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%spheremp(:,:)
-    enddo
-    call edgeVpack(edgeveloc,elem(ie)%derived%vstar,2*nlev,0,ie)
-  enddo
-
-  call t_startf('ALE_RKdss_bexchV')
-  call bndry_exchangeV(hy,edgeveloc)
-  call t_stopf('ALE_RKdss_bexchV')
-
-  do ie=nets,nete
-    call edgeVunpack(edgeveloc,elem(ie)%derived%vstar,2*nlev,0,ie)
-    do k=1, nlev
-      elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%rspheremp(:,:)
-      elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%rspheremp(:,:)
-    end do
-  end do
-end subroutine ALE_RKdss
-
-! ----------------------------------------------------------------------------------!
-!SUBROUTINE FVM_DEP_FROM_GLL----------------------------------------------CE-for FVM!
-! AUTHOR: CHRISTOPH ERATH, MARK TAYLOR 14. December 2011                            !
-! DESCRIPTION: calculates the deparute grid for fvm coming from the gll points      !
-!                                                                                   !
-! CALLS:
-! INPUT:
-!
-! OUTPUT:
-!-----------------------------------------------------------------------------------!
-subroutine ALE_departure_from_gll(acart, vstar, elem, dt)
-  use physical_constants,     only : rearth
-  use coordinate_systems_mod, only : spherical_polar_t, cartesian3D_t, change_coordinates
-  use time_mod,               only : timelevel_t
-  use element_mod,            only : element_t
-  use kinds,                  only : real_kind
-  use dimensions_mod,         only : np
-
-  implicit none
-
-  type(cartesian3D_t)     ,intent(out)  :: acart(np,np)
-  real (kind=real_kind)   ,intent(in)   :: vstar(np,np,2)
-  type (element_t)        ,intent(in)   :: elem
-  real (kind=real_kind)   ,intent(in)   :: dt
-
-  integer                               :: i,j
-
-  real (kind=real_kind)                 :: uxyz (np,np,3)
-
-   ! convert velocity from lat/lon to cartesian 3D
-
-  do i=1,3
-     ! Summing along the third dimension is a sum over components for each point.
-     ! (This is just a faster way of doing a dot product for each grid point,
-     ! since reindexing the inputs to use the intrinsic effectively would be
-     ! just asking for trouble.)
-     uxyz(:,:,i)=sum( elem%vec_sphere2cart(:,:,i,:)*vstar(:,:,:) ,3)
-  end do
-  ! interpolate velocity to fvm nodes
-  ! compute departure point
-  ! crude, 1st order accurate approximation.  to be improved
-  do i=1,np
-     do j=1,np
-        acart(i,j) = change_coordinates(elem%spherep(i,j))
-        acart(i,j)%x = acart(i,j)%x - dt*uxyz(i,j,1)/rearth
-        acart(i,j)%y = acart(i,j)%y - dt*uxyz(i,j,2)/rearth
-        acart(i,j)%z = acart(i,j)%z - dt*uxyz(i,j,3)/rearth
-     enddo
-  enddo
-
-end subroutine ALE_departure_from_gll
-
-
-
-
 subroutine ALE_elems_with_dep_points (elem_indexes, dep_points, num_neighbors, ngh_corners)
 
   use element_mod,            only : element_t
@@ -1862,28 +1714,25 @@ end subroutine ALE_parametric_coords
 #endif
 
 #ifndef USE_KOKKOS_KERNELS
-  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap_interface(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     use kinds,          only: real_kind
     use hybvcoord_mod,  only: hvcoord_t
     use hybrid_mod,     only: hybrid_t
-
-    use fvm_control_volume_mod, only : fvm_struct
 
     implicit none
 
     type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
     type (element_t), intent(inout)   :: elem(:)
-    type(fvm_struct), intent(inout)   :: fvm(:)
     type (hvcoord_t), intent(in)      :: hvcoord
     real (kind=real_kind), intent(in) :: dt
     integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
 
     call t_startf('total vertical remap time')
-    call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
     call t_stopf('total vertical remap time')
   end subroutine vertical_remap_interface
 
-  subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
 
   ! This routine is called at the end of the vertically Lagrangian
   ! dynamics step to compute the vertical flux needed to get back
@@ -1905,10 +1754,7 @@ end subroutine ALE_parametric_coords
   use hybrid_mod,     only: hybrid_t
   use derivative_mod, only: interpolate_gll2fvm_points
 
-  use fvm_control_volume_mod, only : fvm_struct
-
   type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
-  type(fvm_struct), intent(inout) :: fvm(:)
   real (kind=real_kind)           :: cdp(1:nc,1:nc,nlev,ntrac)
   real (kind=real_kind)           :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
   type (element_t), intent(inout) :: elem(:)
