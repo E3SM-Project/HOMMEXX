@@ -18,6 +18,7 @@ public:
   void prim_energy_halftimes (const bool before_advance, const int ivar);
 
 private:
+  ExecViewManaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>    m_Q;
   HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>  h_Q;
 
   HostViewUnmanaged<Real*[4][QSIZE_D][NP][NP]>        h_Qvar;
