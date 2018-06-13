@@ -20,7 +20,6 @@ module prim_state_mod
   use reduction_mod,    only: parallelmax,parallelmin
   use perf_mod,         only: t_startf, t_stopf
   use physical_constants, only : p0,Cp,g
-  use fvm_control_volume_mod, only: fvm_struct
 #ifdef _REFSOLN
   use ref_state_mod,    only : ref_state_read, ref_state_write
 #endif
@@ -64,14 +63,12 @@ contains
   end subroutine prim_printstate_init
 !=======================================================================================================! 
 
-  subroutine prim_printstate(elem, tl,hybrid,hvcoord,nets,nete, fvm)
+  subroutine prim_printstate(elem, tl,hybrid,hvcoord,nets,nete)
 
     use physical_constants,     only: dd_pi
     use control_mod,            only: tracer_transport_type
-    use fvm_control_volume_mod, only: n0_fvm, np1_fvm
 
     type(element_t),            intent(in) :: elem(:)
-    type(fvm_struct), optional, intent(in) :: fvm(:)
     type(TimeLevel_t),target,   intent(in) :: tl
     type(hybrid_t),             intent(in) :: hybrid
     type(hvcoord_t),            intent(in) :: hvcoord
@@ -144,9 +141,6 @@ contains
     if (hybrid%masterthread) then 
        write(iulog,*) "nstep=",tl%nstep," time=",Time_at(tl%nstep)/(24*3600)," [day]"
     end if
-    if (.not. present(fvm) .and. ntrac>0) then
-       print *,'ERROR: prim_state_mod.F90: optional fvm argument required if ntrac>0'
-    endif
 
     TOTE     = 0
     KEner    = 0
@@ -363,76 +357,6 @@ contains
     !   BUT: CAM EUL defines mass as integral( ps ), so to be consistent, ignore ptop contribution; 
     Mass = Mass2*scale
 
-    !
-    ! fvm diagnostics
-    !
-    if (ntrac>0) then
-       do q=1,ntrac
-          do ie=nets,nete
-             tmp1(ie) = MINVAL(fvm(ie)%c(1:nc,1:nc,:,q,n0_fvm)) 
-          enddo
-          cmin(q) = ParallelMin(tmp1,hybrid)
-          do ie=nets,nete
-             tmp1(ie) = MAXVAL(fvm(ie)%c(1:nc,1:nc,:,q,n0_fvm))
-          enddo
-          cmax(q) = ParallelMax(tmp1,hybrid)
-          !
-          ! compute total tracer mass
-          !
-          global_shared_buf(:,1) = 0.0D0
-          do k=1,nlev
-             do ie=nets,nete
-                global_shared_buf(ie,1) = global_shared_buf(ie,1)+&
-                     SUM(fvm(ie)%c(1:nc,1:nc,k,q,n0_fvm)*&
-                         fvm(ie)%dp_fvm(1:nc,1:nc,k,n0_fvm)*&
-                         fvm(ie)%area_sphere(1:nc,1:nc))
-             end do
-          enddo
-          call wrap_repro_sum(nvars=1, comm=hybrid%par%comm)
-          csum(q) = global_shared_sum(1)/(dble(nlev)*4.0D0*DD_PI)
-       enddo
-       !
-       ! psC diagnostics
-       !
-       do ie=nets,nete
-          tmp1(ie) = MINVAL(fvm(ie)%psc(1:nc,1:nc))
-       enddo
-       psc_min = ParallelMin(tmp1,hybrid)
-       do ie=nets,nete
-          tmp1(ie) = MAXVAL(fvm(ie)%psc(1:nc,1:nc))
-       enddo
-       !
-       ! surface pressure mass implied by fvm
-       !
-       psc_max = ParallelMax(tmp1,hybrid)
-       do ie=nets,nete
-          global_shared_buf(ie,1) = SUM(fvm(ie)%psc(1:nc,1:nc)*fvm(ie)%area_sphere(1:nc,1:nc))
-       enddo
-       call wrap_repro_sum(nvars=1, comm=hybrid%par%comm)
-       psc_mass = global_shared_sum(1)/(4.0D0*DD_PI)
-       !
-       ! dp_fvm
-       !
-       do ie=nets,nete
-          tmp1(ie) = MINVAL(fvm(ie)%dp_fvm(1:nc,1:nc,:,n0_fvm))
-       enddo
-       dp_fvm_min = ParallelMin(tmp1,hybrid)
-       do ie=nets,nete
-          tmp1(ie) = MAXVAL(fvm(ie)%dp_fvm(1:nc,1:nc,:,n0_fvm))
-       enddo
-       dp_fvm_max = ParallelMax(tmp1,hybrid)
-       
-       global_shared_buf(:,1) = 0.0D0
-       do k=1,nlev
-          do ie=nets,nete
-             global_shared_buf(ie,1) = global_shared_buf(ie,1)+&
-                  SUM(fvm(ie)%dp_fvm(1:nc,1:nc,k,n0_fvm)*fvm(ie)%area_sphere(1:nc,1:nc))
-          end do
-       enddo
-       call wrap_repro_sum(nvars=1, comm=hybrid%par%comm)
-       dp_fvm_mass = global_shared_sum(1)/(4.0D0*DD_PI)
-    end if
-
 
     if(hybrid%masterthread) then
        write(iulog,100) "u     = ",umin_p,umax_p,usum_p
@@ -459,24 +383,6 @@ contains
        if(fvmin_p.ne.fvmax_p) write(iulog,100) "fv = ",fvmin_p,fvmax_p,fvsum_p
        if(ftmin_p.ne.ftmax_p) write(iulog,100) "ft = ",ftmin_p,ftmax_p,ftsum_p
        if(fqmin_p.ne.fqmax_p) write(iulog,100) "fq = ",fqmin_p, fqmax_p, fqsum_p
-       !
-       ! fvm diagnostics
-       !
-       if (ntrac>0) then
-          write(iulog,'(A36)') "-----------------------------------"
-          write(iulog,'(A36)') "fvm diagnostics                    "
-          write(iulog,'(A36)') "-----------------------------------"
-          do q=1,ntrac
-             write(iulog,'(A36,I1,3(E23.15))')&
-                  "#c,min(c  ), max(c  ), mass(c  ) = ",q,cmin(q), cmax(q), csum(q)
-          enddo
-          write(iulog,'(A37,3(E23.15))')&
-                  "   min(dp_), max(dp_), mass(dp_) =  ",dp_fvm_min, dp_fvm_max, dp_fvm_mass
-          write(iulog,'(A37,3(E23.15))')&
-                  "   min(psC), max(psC), mass(psC) =  ",psc_min, psc_max, psC_mass          
-          write(iulog,'(A36)') "                                   "
-
-       end if
     end if
  
 
