@@ -191,7 +191,7 @@ struct RemapFunctor : public Remapper,
     Kokkos::deep_copy(host_valid_input, valid_layer_thickness);
     for (int ie = 0; ie < m_elements.num_elems(); ++ie) {
       if (host_valid_input(ie) == false) {
-        Errors::runtime_abort("Negative layer thickness detected, aborting!",
+        Errors::runtime_abort("Negative (or nan) layer thickness detected, aborting!",
                               Errors::err_negative_layer_thickness);
       }
     }
@@ -309,6 +309,7 @@ struct RemapFunctor : public Remapper,
     // If there's nothing to remap, it will only perform the verification
     run_functor<ComputeThicknessTag>("Remap Thickness Functor",
                                      this->m_elements.num_elems());
+    this->input_valid_assert();
     if (num_to_remap() > 0) {
       // We don't want the latency of launching an empty kernel
       if (nonzero_rsplit) {
@@ -327,7 +328,6 @@ struct RemapFunctor : public Remapper,
                                               this->num_states_remap);
       }
     }
-    this->input_valid_assert();
   }
 
 private:
@@ -455,6 +455,7 @@ private:
           const int level = loop_idx % NUM_PHYSICAL_LEV;
           const int ilev = level / VECTOR_SIZE;
           const int vlev = level % VECTOR_SIZE;
+          is_invalid |= std::isnan(src_layer_thickness(igp, jgp, ilev)[vlev]);
           is_invalid |= (src_layer_thickness(igp, jgp, ilev)[vlev] < 0.0);
         },
         invalid);
