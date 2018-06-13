@@ -27,7 +27,7 @@ private:
       return 0;
     }
 
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 #ifdef __CUDA_ARCH__
     template <typename ExecSpaceType>
     static KOKKOS_INLINE_FUNCTION typename std::enable_if<
@@ -44,9 +44,9 @@ private:
       return -1;
     }
 #endif // __CUDA_ARCH__
-#endif // KOKKOS_HAVE_CUDA
+#endif // KOKKOS_ENABLE_CUDA
 
-#ifdef KOKKOS_HAVE_OPENMP
+#ifdef KOKKOS_ENABLE_OPENMP
     template<typename ExecSpaceType>
     static
     KOKKOS_INLINE_FUNCTION

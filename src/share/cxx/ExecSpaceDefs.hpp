@@ -19,31 +19,31 @@ namespace Homme
 
 // Some in-house names for Kokkos exec spaces, which are
 // always defined, possibly as alias of void
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 using Hommexx_Cuda = Kokkos::Cuda;
 #else
 using Hommexx_Cuda = void;
 #endif
 
-#ifdef KOKKOS_HAVE_OPENMP
+#ifdef KOKKOS_ENABLE_OPENMP
 using Hommexx_OpenMP = Kokkos::OpenMP;
 #else
 using Hommexx_OpenMP = void;
 #endif
 
-#ifdef KOKKOS_HAVE_PTHREADS
+#ifdef KOKKOS_ENABLE_PTHREADS
 using Hommexx_Threads = Kokkos::Threads;
 #else
 using Hommexx_Threads = void;
 #endif
 
-#ifdef KOKKOS_HAVE_SERIAL
+#ifdef KOKKOS_ENABLE_SERIAL
 using Hommexx_Serial = Kokkos::Serial;
 #else
 using Hommexx_Serial = void;
 #endif
 
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 # define HOMMEXX_STATIC
 #else
 # define HOMMEXX_STATIC static
@@ -301,7 +301,7 @@ struct Dispatch {
   }
 };
 
-#if defined KOKKOS_HAVE_CUDA
+#if defined KOKKOS_ENABLE_CUDA
 template <>
 struct Dispatch<Kokkos::Cuda> {
   using ExeSpace = Kokkos::Cuda;

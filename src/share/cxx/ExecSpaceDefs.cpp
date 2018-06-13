@@ -11,7 +11,7 @@
 #include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
 
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 # include <cuda.h>
 #endif
 
@@ -32,7 +32,7 @@ void initialize_kokkos () {
   //   If for some reason we're running on a GPU platform, have Cuda enabled,
   // but are using a different execution space, this initialization is still
   // OK. The rank gets a GPU assigned and simply will ignore it.
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
   int nd;
   const auto ret = cudaGetDeviceCount(&nd);
   if (ret != cudaSuccess) {
@@ -147,14 +147,14 @@ team_num_threads_vectors (const int num_parallel_iterations,
   // number/4. That seems to be in Cuda specs, but I don't know of a function
   // that provides this number. Use a configuration option that defaults to 4.
   const int min_num_warps = HOMMEXX_CUDA_MIN_WARP_PER_TEAM;
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
   const int num_warps_device = Kokkos::Impl::cuda_internal_maximum_concurrent_block_count();
   const int num_threads_warp = Kokkos::Impl::CudaTraits::WarpSize;
   // The number on P100 is 16, but for some reason
   // Kokkos::Impl::cuda_internal_maximum_grid_count() returns 8. I may be
   // misusing the function. I have an open issue with the Kokkos team to resolve
   // this. For now:
-# ifdef KOKKOS_HAVE_DEBUG
+# ifdef KOKKOS_ENABLE_DEBUG
   // Work around spurious "terminate called after throwing an instance
   // of 'std::runtime_error'" message.
   const int max_num_warps = 8;

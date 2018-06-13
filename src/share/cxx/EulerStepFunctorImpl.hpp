@@ -53,7 +53,7 @@ struct SerialLimiter {
       const ArrayGllLvl& irwrk);
 };
 // GPU doesn't have a serial impl.
-#if defined KOKKOS_HAVE_CUDA
+#if defined KOKKOS_ENABLE_CUDA
 template <>
 struct SerialLimiter<Kokkos::Cuda> {
   template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
