@@ -46,7 +46,7 @@ module interp_movie_mod
 #undef V_IS_LATLON
 #if defined(_PRIM)
 #define V_IS_LATLON
-  integer, parameter :: varcnt = 43
+  integer, parameter :: varcnt = 42
   integer, parameter :: maxdims =  5
   character*(*), parameter :: varnames(varcnt)=(/'ps       ', &
                                                  'geos     ', &
@@ -63,7 +63,6 @@ module interp_movie_mod
                                                  'Q3       ', &
                                                  'Q4       ', &
                                                  'Q5       ', &
-                                                 'psC      ', &
                                                  'C1       ', &
                                                  'C2       ', &
                                                  'C3       ', &
@@ -100,7 +99,6 @@ module interp_movie_mod
                                           PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,&
                                           PIO_double,PIO_double,&
-                                          PIO_double,&
                                           PIO_double,PIO_double,&
                                           PIO_double,&
                                           PIO_double,PIO_double,PIO_double,PIO_double,&
@@ -108,15 +106,14 @@ module interp_movie_mod
                                           PIO_double,PIO_double,&
                                           PIO_double/)
   logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,.false.,&
-                                              .false.,&   
-                                              .false.,.false.,.false.,.false.,.false.,&
-                                              .false.,.false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
                                               .false.,.false.,.false.,.false.,.false.,&
-                                              .false.,.false.,.false.,&
-                                              .false.,&
-                                              .false.,.false.,.true. ,.true. ,&
-                                              .true.,.true. ,.true. ,&   ! gw,lev,ilev
+                                              .false.,.false.,.false.,.false.,.false.,&
+                                              .false.,.false.,.false.,.false.,.false.,&
+                                              .false.,.false.,.false.,.false.,.false.,&
+                                              .false.,.false.,&
+                                              .true. ,.true. ,&
+                                              .true. ,.true. ,.true. ,&   ! gw,lev,ilev
                                               .true. ,.true. ,&   ! hy arrays
                                               .true. ,.true. ,&   ! hy arrays
                                               .true./)
@@ -137,7 +134,6 @@ module interp_movie_mod
        1,2,3,5,0,  &   ! Q3
        1,2,3,5,0,  &   ! Q4
        1,2,3,5,0,  &   ! Q5
-       1,2,5,0,0,  &   ! psC
        1,2,3,5,0,  &   ! C1
        1,2,3,5,0,  &   ! C2
        1,2,3,5,0,  &   ! C3
