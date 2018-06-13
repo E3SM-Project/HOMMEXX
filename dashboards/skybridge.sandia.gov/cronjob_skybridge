@@ -1,4 +1,4 @@
-#this cronjob is run on login12 of skybridge
+#this cronjob is run on login2 of skybridge
 00 00 * * 1-7  rm -rf /projects/hommexx/hommexxCDash/Skybridge*/*
 30 00 * * 1-7  cd /projects/hommexx/nightlyHOMMEXXCDash; bash -c -l "bash nightly_cron_script_trilinos_checkout.sh; source skybridge_modules_gcc.sh >& modules_trilinos.out; bash build_kokkos_serial.sh >& build_kokkos_serial.out"; sbatch run_all_serial.batch
 00 03 * * 1-7  cd /projects/hommexx/nightlyHOMMEXXCDash; bash -c -l "source skybridge_modules_gcc.sh >& modules_trilinos.out; bash build_kokkos_openmp.sh >& build_kokkos_openmp.out"; sbatch run_all_openmp.batch
