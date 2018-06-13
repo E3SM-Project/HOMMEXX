@@ -5,7 +5,7 @@
 module prim_state_mod
 
   use kinds,            only: real_kind, iulog
-  use dimensions_mod,   only: nlev, np, nc, qsize_d, qsize, nelemd, ntrac, ntrac_d
+  use dimensions_mod,   only: nlev, np, nc, qsize_d, qsize, nelemd
   use parallel_mod,     only:  iam, ordered, parallel_t, syncmp
   use parallel_mod,     only: global_shared_buf, global_shared_sum
   use global_norms_mod, only: wrap_repro_sum
@@ -105,14 +105,14 @@ contains
          dpmin_local(nets:nete), dpmax_local(nets:nete), dpsum_local(nets:nete)
 
 
-    real (kind=real_kind) :: umin_p, vmin_p, tmin_p, qvmin_p(qsize_d), cmin(ntrac_d),&
+    real (kind=real_kind) :: umin_p, vmin_p, tmin_p, qvmin_p(qsize_d),&
          psmin_p, dpmin_p
 
 
-    real (kind=real_kind) :: umax_p, vmax_p, tmax_p, qvmax_p(qsize_d), cmax(ntrac_d),&
+    real (kind=real_kind) :: umax_p, vmax_p, tmax_p, qvmax_p(qsize_d),&
          psmax_p, dpmax_p
 
-    real (kind=real_kind) :: usum_p, vsum_p, tsum_p, qvsum_p(qsize_d), csum(ntrac_d),&
+    real (kind=real_kind) :: usum_p, vsum_p, tsum_p, qvsum_p(qsize_d),&
          pssum_p, dpsum_p
 
     !

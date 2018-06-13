@@ -56,7 +56,7 @@ module prim_advection_mod_base
 !
 !
   use kinds, only              : real_kind
-  use dimensions_mod, only     : nlev, nlevp, np, qsize, ntrac, nc
+  use dimensions_mod, only     : nlev, nlevp, np, qsize, nc
   use physical_constants, only : rgas, Rwater_vapor, kappa, g, rearth, rrearth, cp
   use derivative_mod, only     : gradient, vorticity, gradient_wk, derivative_t, divergence, &
                                  gradient_sphere, divergence_sphere
@@ -1538,7 +1538,6 @@ end subroutine ALE_parametric_coords
   use hybrid_mod,     only: hybrid_t
 
   type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
-  real (kind=real_kind)           :: cdp(1:nc,1:nc,nlev,ntrac)
   real (kind=real_kind)           :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
   type (element_t), intent(inout) :: elem(:)
   type (hvcoord_t)                :: hvcoord

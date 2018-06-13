@@ -72,7 +72,7 @@ contains
 
   subroutine applyCAMforcing(elem,hvcoord,np1,np1_qdp,dt_q,nets,nete)
 
-  use dimensions_mod, only: np, nc, nlev, qsize, ntrac
+  use dimensions_mod, only: np, nc, nlev, qsize
   use control_mod,    only: moisture, tracer_grid_type
   use control_mod,    only: TRACER_GRIDTYPE_GLL
   use physical_constants, only: Cp

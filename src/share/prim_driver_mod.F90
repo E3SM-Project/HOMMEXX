@@ -8,7 +8,7 @@ module prim_driver_mod
 
   use cg_mod,           only: cg_t
   use derivative_mod,   only: derivative_t
-  use dimensions_mod,   only: np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, ntrac, qsize, nc,nhc
+  use dimensions_mod,   only: np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
   use element_mod,      only: element_t, timelevels,  allocate_element_desc
   use filter_mod,       only: filter_t
   use hybrid_mod,       only: hybrid_t
@@ -923,25 +923,6 @@ contains
        enddo
     endif
 
-    if (ntrac>0) then
-
-      ! do it only for FVM tracers, dp_fvm field will be the AIR DENSITY
-      ! should be optimize and combined with the above caculation
-      do ie=nets,nete
-        do k=1,nlev
-          do i=1,np
-            do j=1,np
-              elem(ie)%derived%dp(i,j,k)=( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,tl%n0)
-            enddo
-          enddo
-        enddo
-      enddo
-      if (hybrid%masterthread) then
-         write(iulog,*) 'FVM tracers initialized.'
-      end if
-    endif
-
     ! for restart runs, we read in Qdp for exact restart, and rederive Q
     if (runtype==1) then
        call TimeLevel_Qdp( tl, qsplit, n0_qdp)
@@ -1302,14 +1283,6 @@ contains
 
     !call t_startf("prim_step_init")
     dt_q = dt*qsplit
-    if (ntrac>0.and.rstep==1) then
-       !
-       ! save velocity at time t for fvm trajectory algorithm
-       !
-       do ie=nets,nete
-          elem(ie)%sub_elem_mass_flux=0
-       end do
-    end if
 
     ! ===============
     ! initialize mean flux accumulation variables and save some variables at n0
@@ -1350,30 +1323,6 @@ contains
             hybrid, dt, tl, nets, nete, .false.)
        ! defer final timelevel update until after Q update.
     enddo
-
-#ifdef HOMME_TEST_SUB_ELEMENT_MASS_FLUX
-    if (0<ntrac.and.rstep==1) then
-      do ie=nets,nete
-      do k=1,nlev
-        tempdp3d = elem(ie)%state%dp3d(:,:,k,tl%np1) - &
-                   elem(ie)%derived%dp(:,:,k)
-        tempmass = subcell_integration(tempdp3d, np, nc, elem(ie)%metdet)
-        tempflux = dt_q*elem(ie)%sub_elem_mass_flux(:,:,:,k)
-        do i=1,nc
-        do j=1,nc
-          x = SUM(tempflux(i,j,:))
-          if (ABS(tempmass(i,j)).lt.1e-11 .and. 1e-11.lt.ABS(x)) then
-            print *,__FILE__,__LINE__,"**********",ie,k,i,j,tempmass(i,j),x
-          elseif (1e-5.lt.ABS((tempmass(i,j)-x)/tempmass(i,j))) then
-            print *,__FILE__,__LINE__,"**********",ie,k,i,j,tempmass(i,j),x,&
-                   ABS((tempmass(i,j)-x)/tempmass(i,j))
-          endif
-        end do
-        end do
-      end do
-      end do
-    end if
-#endif
     call t_stopf("prim_step_dyn")
 
     ! current dynamics state variables:

@@ -19,7 +19,7 @@
 module interpolate_mod
   use kinds, only : real_kind, iulog
   use element_mod, only : element_t
-  use dimensions_mod, only : np, ne, nelemd, nc, nhe, nhc
+  use dimensions_mod, only : np, ne, nelemd, nc
   use quadrature_mod, only : quadrature_t, legendre, quad_norm
   use coordinate_systems_mod, only : spherical_polar_t, cartesian2d_t, &
        cartesian3D_t, sphere2cubedsphere, spherical_to_cart, &

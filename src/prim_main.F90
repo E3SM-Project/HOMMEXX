@@ -17,7 +17,7 @@ program prim_main
                               omp_set_num_threads, omp_get_nested, &
                               omp_get_num_threads, omp_get_max_threads
   use time_mod,         only: tstep, nendstep, timelevel_t, TimeLevel_init
-  use dimensions_mod,   only: nelemd, qsize, ntrac
+  use dimensions_mod,   only: nelemd, qsize
   use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type
 #ifdef USE_KOKKOS_KERNELS
   use control_mod,      only: qsplit, rsplit, disable_diagnostics
@@ -405,10 +405,6 @@ program prim_main
 
   call t_stopf('Total')
   if(par%masterproc) print *,"writing timing data"
-!   write(numproc_char,*) par%nprocs
-!   write(numtrac_char,*) ntrac
-!   call system('mkdir -p '//'time/'//trim(adjustl(numproc_char))//'-'//trim(adjustl(numtrac_char)))
-!   call t_prf('time/HommeFVMTime-'//trim(adjustl(numproc_char))//'-'//trim(adjustl(numtrac_char)),par%comm)
   call t_prf('HommeTime', par%comm)
   if(par%masterproc) print *,"calling t_finalizef"
   call t_finalizef()

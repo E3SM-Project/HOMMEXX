@@ -70,12 +70,7 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
                         Errors::err_not_implemented);
   // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
 
-  // if (ftype==0) then
-  //   call t_startf("ApplyCAMForcing")
-  //   call ApplyCAMForcing(elem, fvm, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
-  //   call t_stopf("ApplyCAMForcing")
-
-  // elseif (ftype==2) then
+  // if (ftype==2) then
   //   call t_startf("ApplyCAMForcing_dynamics")
   //   call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
   //   call t_stopf("ApplyCAMForcing_dynamics")
@@ -205,7 +200,7 @@ HybridVCoord  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
   if (compute_diagnostics) {
     Errors::runtime_abort("'compute diagnostic' functionality not yet available in C++ build.\n",
                           Errors::err_not_implemented);
-    // call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete, fvm)
+    // call prim_printstate(elem, tl, hybrid, hvcoord, nets, nete)
   }
 
   // Update the timelevel info to pass back to fortran
