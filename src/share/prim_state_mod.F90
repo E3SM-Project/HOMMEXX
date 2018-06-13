@@ -115,12 +115,6 @@ contains
     real (kind=real_kind) :: usum_p, vsum_p, tsum_p, qvsum_p(qsize_d),&
          pssum_p, dpsum_p
 
-    !
-    ! for fvm diagnostics
-    !
-    real (kind=real_kind) :: psc_mass, psc_min, psc_max,dp_fvm_mass, dp_fvm_min, dp_fvm_max 
-
-
     real (kind=real_kind) :: fusum_p, fvsum_p, ftsum_p, fqsum_p
     real (kind=real_kind) :: fumin_p, fvmin_p, ftmin_p, fqmin_p
     real (kind=real_kind) :: fumax_p, fvmax_p, ftmax_p, fqmax_p
