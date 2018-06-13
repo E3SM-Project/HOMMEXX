@@ -61,7 +61,7 @@ contains
     use kinds,          only : real_kind
     use bndry_mod,      only : bndry_exchangev
     use derivative_mod, only : derivative_t, subcell_dss_fluxes
-    use dimensions_mod, only : nlev, ntrac
+    use dimensions_mod, only : nlev
     use edge_mod,       only : edgevpack, edgevunpack, edgedgvunpack
     use edgetype_mod,   only : edgedescriptor_t
     use element_mod,    only : element_t, elem_state_temp, elem_state_v, elem_state_dp3d

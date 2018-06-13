@@ -419,7 +419,7 @@ contains
   subroutine caar_pre_exchange_monolithic_f90(nm1,n0,np1,qn0,dt2,elem,hvcoord,hybrid,&
                                               deriv,nets,nete,compute_diagnostics,eta_ave_w)
     use kinds, only : real_kind
-    use dimensions_mod, only : np, nc, nlev, ntrac, max_corner_elem
+    use dimensions_mod, only : np, nc, nlev, max_corner_elem
     use element_mod, only : element_t,PrintElem
     use derivative_mod, only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
     use derivative_mod, only : subcell_div_fluxes, subcell_dss_fluxes

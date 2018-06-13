@@ -25,11 +25,8 @@ module control_mod
 ! may be chosen at runtime due to compile-type restrictions on arrays
   integer, public, parameter :: TRACERTRANSPORT_SE_GLL          = 1
   integer, public, parameter :: TRACERTRANSPORT_SEMILAGRANG_GLL = 2
-  integer, public, parameter :: TRACERTRANSPORT_LAGRANGIAN_FVM  = 3
-  integer, public, parameter :: TRACERTRANSPORT_FLUXFORM_FVM    = 4
   integer, public            :: tracer_transport_type           = TRACERTRANSPORT_SE_GLL
   integer, public, parameter :: TRACER_GRIDTYPE_GLL             = 11
-  integer, public, parameter :: TRACER_GRIDTYPE_FVM             = 12
   integer, public            :: tracer_grid_type = TRACER_GRIDTYPE_GLL
 
 !shallow water advection tests:
