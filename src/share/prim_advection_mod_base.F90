@@ -87,7 +87,8 @@ module prim_advection_mod_base
 
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
 #ifndef USE_KOKKOS_KERNELS
-  public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
+  public :: vertical_remap_interface
+  public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2
 #endif
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
@@ -365,207 +366,8 @@ contains
     integer              , intent(in   ) :: nete
 
 
-  if (use_semi_lagrange_transport) then
-    call Prim_Advec_Tracers_remap_ALE( elem , deriv ,                 hybrid , dt , tl , nets , nete )
-
-  else
     call Prim_Advec_Tracers_remap_rk2( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
-  end if
   end subroutine Prim_Advec_Tracers_remap
-
-
-
-subroutine  Prim_Advec_Tracers_remap_ALE( elem , deriv , hybrid , dt , tl , nets , nete )
-  use coordinate_systems_mod, only : cartesian3D_t, cartesian2D_t
-  use dimensions_mod,         only : max_neigh_edges
-  use edge_mod,               only : initghostbuffer3D, ghostVpack_unoriented, ghostVunpack_unoriented
-  use bndry_mod,              only : ghost_exchangevfull
-  use interpolate_mod,        only : interpolate_tracers, minmax_tracers
-  use control_mod   ,         only : qsplit
-  use global_norms_mod,       only : wrap_repro_sum
-  use parallel_mod,           only: global_shared_buf, global_shared_sum, syncmp
-  use control_mod,            only : use_semi_lagrange_transport_local_conservation
-
-
-
-  implicit none
-  type (element_t)     , intent(inout) :: elem(:)
-  type (derivative_t)  , intent(in   ) :: deriv
-  type (hybrid_t)      , intent(in   ) :: hybrid
-  real(kind=real_kind) , intent(in   ) :: dt
-  type (TimeLevel_t)   , intent(in   ) :: tl
-  integer              , intent(in   ) :: nets
-  integer              , intent(in   ) :: nete
-
-
-  type(cartesian3D_t)                           :: dep_points  (np,np)
-  integer                                       :: elem_indexes(np,np)
-  type(cartesian2D_t)                           :: para_coords (np,np)
-  real(kind=real_kind)                          :: Que         (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: Que_t       (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: minq        (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: maxq        (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: f                      (qsize)
-  real(kind=real_kind)                          :: g                      (qsize)
-  real(kind=real_kind)                          :: mass              (nlev,qsize)
-  real(kind=real_kind)                          :: elem_mass         (nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: rho         (np,np,nlev,      nets:nete)
-
-  real(kind=real_kind)                          :: neigh_q     (np,np,qsize,max_neigh_edges+1)
-  real(kind=real_kind)                          :: u           (np,np,qsize)
-
-  integer                                       :: i,j,k,l,n,q,ie,kptr, n0_qdp, np1_qdp
-  integer                                       :: num_neighbors
-
-  call t_barrierf('Prim_Advec_Tracers_remap_ALE', hybrid%par%comm)
-  call t_startf('Prim_Advec_Tracers_remap_ALE')
-
-  call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
-
-  ! compute displacements for departure grid
-  ! store in elem%derived%vstar
-  call ALE_RKdss (elem, nets, nete, hybrid, deriv, dt, tl)
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  run ghost exchange to get global ID of all neighbors
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !
-  call t_startf('Prim_Advec_Tracers_remap_ALE_ghost_exchange')
-  do ie=nets,nete
-     kptr=0
-     do k=1,nlev
-     do q=1,qsize
-        ! note: pack so that tracers per level are contiguous so we can unpack into
-        ! array neigh_q()
-        elem(ie)%state%Q(:,:,k,q) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) / elem(ie)%derived%dp(:,:,k)
-        call ghostVpack_unoriented(ghostbuf_tr, elem(ie)%state%Q(:,:,k,q),np,1,kptr,elem(ie)%desc)
-        kptr=kptr+1
-     enddo
-     enddo
-  end do
-
-  call t_startf('pat_remap_ale_gexchV')
-  call ghost_exchangeVfull(hybrid%par,hybrid%ithr,ghostbuf_tr)
-  call t_stopf('pat_remap_ale_gexchV')
-
-  do ie=nets,nete
-     num_neighbors = elem(ie)%desc%actual_neigh_edges+1
-     do k=1,nlev
-
-        ! find departure points
-        call ALE_departure_from_gll     (dep_points, elem(ie)%derived%vstar(:,:,:,k), elem(ie), dt)
-
-        ! find element containing departure point
-        call ALE_elems_with_dep_points  (elem_indexes, dep_points, num_neighbors, elem(ie)%desc%neigh_corners)
-
-        ! compute the parametric points
-        call ALE_parametric_coords      (para_coords, elem_indexes, dep_points, num_neighbors, elem(ie)%desc%neigh_corners)
-
-        ! for each level k, unpack all tracer neighbor data on that level
-        kptr=(k-1)*qsize
-        neigh_q=0
-        u(:,:,:) = elem(ie)%state%Q(:,:,k,1:qsize)
-        call ghostVunpack_unoriented (ghostbuf_tr, neigh_q, np, qsize, kptr, elem(ie)%desc, elem(ie)%GlobalId, u)
-
-        do i=1,np
-        do j=1,np
-          ! interpolate tracers to deperature grid
-          call interpolate_tracers     (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f)
-          elem(ie)%state%Q(i,j,k,:) = f
-!         call minmax_tracers          (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f,g)
-          do q=1,qsize
-            f(q) = MINVAL(neigh_q(:,:,q,elem_indexes(i,j)))
-            g(q) = MAXVAL(neigh_q(:,:,q,elem_indexes(i,j)))
-          end do
-          minq(i,j,k,:,ie) = f
-          maxq(i,j,k,:,ie) = g
-        enddo
-        enddo
-
-     end do
-  end do
-
-
-  call t_stopf('Prim_Advec_Tracers_remap_ALE_ghost_exchange')
-  ! compute original mass, at tl_1%n0
-  elem_mass = 0
-  do ie=nets,nete
-    n=0
-    do k=1,nlev
-    do q=1,qsize
-      n=n+1
-      global_shared_buf(ie,n) = 0
-      do j=1,np
-        global_shared_buf(ie,n) = global_shared_buf(ie,n) + DOT_PRODUCT(elem(ie)%state%Qdp(:,j,k,q,n0_qdp),elem(ie)%spheremp(:,j))
-        elem_mass(k,q,ie)       = elem_mass(k,q,ie)       + DOT_PRODUCT(elem(ie)%state%Qdp(:,j,k,q,n0_qdp),elem(ie)%spheremp(:,j))
-      end do
-    end do
-    end do
-  end do
-  call wrap_repro_sum(nvars=n, comm=hybrid%par%comm)
-  n=0
-  do k=1,nlev
-  do q=1,qsize
-    n=n+1
-    mass(k,q) = global_shared_sum(n)
-  enddo
-  enddo
-
-
-  do ie=nets,nete
-  do k=1,nlev
-    rho(:,:,k,ie) = elem(ie)%spheremp(:,:)*elem(ie)%state%dp3d(:,:,k,tl%np1)
-  end do
-  end do
-
-  do ie=nets,nete
-    Que_t(:,:,:,1:qsize,ie) = elem(ie)%state%Q(:,:,:,1:qsize)
-  end do
-  call t_startf('Prim_Advec_Tracers_remap_ALE_Cobra')
-  if (use_semi_lagrange_transport_local_conservation) then
-    call Cobra_Elem (Que, Que_t, rho, minq, maxq, elem_mass, hybrid, nets, nete)
-  else
-    call Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
-  end if
-  call t_stopf('Prim_Advec_Tracers_remap_ALE_Cobra')
-
-  do ie=nets,nete
-    elem(ie)%state%Q(:,:,:,1:qsize) =  Que(:,:,:,1:qsize,ie)
-  end do
-
-
-  do ie=nets,nete
-  do k=1,nlev
-  do q=1,qsize
-     ! note: pack so that tracers per level are contiguous so we can unpack into
-     ! array neigh_q()
-     elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%state%Q(:,:,k,q) * elem(ie)%state%dp3d(:,:,k,tl%np1)
-  enddo
-  enddo
-  end do
-
-
-! do ie=nets,nete
-!    do q = 1 , qsize
-!       do k = 1 , nlev    !  Potential loop inversion (AAM)
-!          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:)* elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
-!       enddo
-!    enddo
-!     call edgeVpack(edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
-! enddo
-! call bndry_exchangeV( hybrid , edgeAdv    )
-! do ie = nets , nete
-!    call edgeVunpack( edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
-!    do q = 1 , qsize
-!       do k = 1 , nlev    !  Potential loop inversion (AAM)
-!          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
-!       enddo
-!    enddo
-! enddo
-  call t_stopf('Prim_Advec_Tracers_remap_ALE')
-
-
-end subroutine Prim_Advec_Tracers_remap_ALE
 
 subroutine VDOT(rp,Que,rho,mass,hybrid,nets,nete)
   use parallel_mod,        only: global_shared_buf, global_shared_sum
@@ -1075,30 +877,12 @@ subroutine  ALE_parametric_coords (parametric_coord, elem_indexes, dep_points, n
     sphere(:,j) = change_coordinates(dep_points(:,j))
   end do
 
-!!$  call t_startf('Prim_Advec_Tracers_remap_ALE_parametric_coords_cart')
-!!$  do i=1,np
-!!$    do j=1,np
-!!$      n = elem_indexes(i,j)
-!!$      ! Mark will fill in  parametric_coordinates for corners.
-!!$      parametric_coord(i,j) = cartesian_parametric_coordinates(sphere(i,j),ngh_corners(:,n))
-!!$    end do
-!!$  end do
-!!$  call t_stopf('Prim_Advec_Tracers_remap_ALE_parametric_coords_cart')
-!  call t_startf('Prim_Advec_Tracers_remap_ALE_parametric_coords_dmap')
   do i=1,np
     do j=1,np
       n = elem_indexes(i,j)
-      !parametric_test(i,j)  = parametric_coordinates(sphere(i,j),ngh_corners(:,n))
       parametric_coord(i,j)= parametric_coordinates(sphere(i,j),ngh_corners(:,n))
     end do
   end do
-!  call t_stopf('Prim_Advec_Tracers_remap_ALE_parametric_coords_dmap')
-! do i=1,np
-!   do j=1,np
-!     d = distance(parametric_coord(i,j),parametric_test(i,j))
-!     print *,__LINE__,parametric_coord(i,j), parametric_test(i,j), d
-!   end do
-! end do
 end subroutine ALE_parametric_coords
 
 
@@ -1714,7 +1498,7 @@ end subroutine ALE_parametric_coords
 #endif
 
 #ifndef USE_KOKKOS_KERNELS
-  subroutine vertical_remap_interface(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap_interface(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
     use kinds,          only: real_kind
     use hybvcoord_mod,  only: hvcoord_t
     use hybrid_mod,     only: hybrid_t
@@ -1725,14 +1509,14 @@ end subroutine ALE_parametric_coords
     type (element_t), intent(inout)   :: elem(:)
     type (hvcoord_t), intent(in)      :: hvcoord
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+    integer, intent(in)               :: np1,np1_qdp,nets,nete
 
     call t_startf('total vertical remap time')
-    call vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
     call t_stopf('total vertical remap time')
   end subroutine vertical_remap_interface
 
-  subroutine vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
 
   ! This routine is called at the end of the vertically Lagrangian
   ! dynamics step to compute the vertical flux needed to get back
@@ -1752,7 +1536,6 @@ end subroutine ALE_parametric_coords
   use control_mod,    only: rsplit, tracer_transport_type
   use parallel_mod,   only: abortmp
   use hybrid_mod,     only: hybrid_t
-  use derivative_mod, only: interpolate_gll2fvm_points
 
   type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
   real (kind=real_kind)           :: cdp(1:nc,1:nc,nlev,ntrac)
@@ -1761,7 +1544,7 @@ end subroutine ALE_parametric_coords
   type (hvcoord_t)                :: hvcoord
   real (kind=real_kind)           :: dt
 
-  integer :: ie,i,j,k,np1,nets,nete,np1_qdp,np1_fvm
+  integer :: ie,i,j,k,np1,nets,nete,np1_qdp
   integer :: q
 
   real (kind=real_kind), dimension(np,np,nlev)  :: dp,dp_star

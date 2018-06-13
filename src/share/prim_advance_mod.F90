@@ -26,7 +26,7 @@ module prim_advance_mod
   private
   save
   public :: prim_advance_init, &
-       applyCAMforcing_dynamics, applyCAMforcing, smooth_phis, overwrite_SEdensity
+       applyCAMforcing_dynamics, applyCAMforcing, smooth_phis
 
   type (EdgeBuffer_t) :: edge1
   type (EdgeBuffer_t) :: edge2
@@ -70,17 +70,15 @@ contains
   end subroutine prim_advance_init
 
 
-  subroutine applyCAMforcing(elem,fvm,hvcoord,np1,np1_qdp,dt_q,nets,nete)
+  subroutine applyCAMforcing(elem,hvcoord,np1,np1_qdp,dt_q,nets,nete)
 
   use dimensions_mod, only: np, nc, nlev, qsize, ntrac
   use control_mod,    only: moisture, tracer_grid_type
-  use control_mod,    only: TRACER_GRIDTYPE_GLL, TRACER_GRIDTYPE_FVM
+  use control_mod,    only: TRACER_GRIDTYPE_GLL
   use physical_constants, only: Cp
-  use fvm_control_volume_mod, only : fvm_struct, n0_fvm
 
   implicit none
   type (element_t),       intent(inout) :: elem(:)
-  type(fvm_struct),       intent(inout) :: fvm(:)
   real (kind=real_kind),  intent(in)    :: dt_q
   type (hvcoord_t),       intent(in)    :: hvcoord
   integer,                intent(in)    :: np1,nets,nete,np1_qdp
@@ -99,11 +97,6 @@ contains
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(q,k,i,j,v1)
 #endif
-     !
-     ! even when running fvm tracers we need to updates forcing on ps and qv on GLL grid
-     !
-     ! for fvm tracer qsize is usually 1 (qv)
-     !
      do q=1,qsize
         do k=1,nlev
            do j=1,np
@@ -128,28 +121,6 @@ contains
            enddo
         enddo
      enddo
-     ! Repeat for the fvm tracers
-     do q = 1, ntrac
-        do k = 1, nlev
-           do j = 1, nc
-              do i = 1, nc
-                 v1 = fvm(ie)%fc(i,j,k,q)
-                 if (fvm(ie)%c(i,j,k,q,n0_fvm) + v1 < 0 .and. v1<0) then
-                    if (fvm(ie)%c(i,j,k,q,n0_fvm) < 0 ) then
-                       v1 = 0  ! C already negative, dont make it more so
-                    else
-                       v1 = -fvm(ie)%c(i,j,k,q,n0_fvm)
-                    end if
-                 end if
-                 fvm(ie)%c(i,j,k,q,np1_qdp) = fvm(ie)%c(i,j,k,q,n0_fvm) + v1
-                 !                    if (q == 1) then
-                 !!XXgoldyXX: Should update the pressure forcing here??!!??
-                 !                    elem(ie)%derived%FQps(i,j,1)=elem(ie)%derived%FQps(i,j,1)+v1/dt_q
-                 !                  end if
-              end do
-           end do
-        end do
-     end do
 
      if (wet .and. qsize>0) then
         ! to conserve dry mass in the precese of Q1 forcing:
@@ -391,97 +362,5 @@ contains
 #endif
   enddo
   end subroutine smooth_phis
-
-  subroutine overwrite_SEdensity(elem, fvm, dt_q, hybrid,nets,nete, np1)
-
-    use fvm_reconstruction_mod, only: reconstruction
-    use fvm_filter_mod, only: monotonic_gradient_cart, recons_val_cart
-    use dimensions_mod, only : np, nlev, nc,nhe
-    use hybrid_mod, only : hybrid_t
-    use edge_mod, only : edgevpack, edgevunpack, edgevunpackmax, edgevunpackmin
-    use bndry_mod, only : bndry_exchangev
-    use element_mod, only : element_t
-    use derivative_mod, only : derivative_t , laplace_sphere_wk
-    use time_mod, only : TimeLevel_t
-    use fvm_control_volume_mod, only : fvm_struct
-
-    type(element_t) , intent(inout) :: elem(:)
-    type(fvm_struct), intent(inout) :: fvm(:)
-    type(hybrid_t),   intent(in)    :: hybrid ! distributed parallel structure (shared)
-    integer,          intent(in)    :: nets   ! starting thread element number (private)
-    integer,          intent(in)    :: nete   ! ending thread element number   (private)
-    integer,          intent(in)    :: np1
-    integer :: ie, k
-
-    real (kind=real_kind)             :: xp,yp, tmpval, dt_q
-    integer                           :: i, j,ix, jy, starti,endi,tmpi
-
-    real (kind=real_kind), dimension(5,1-nhe:nc+nhe,1-nhe:nc+nhe)      :: recons
-
-    if ((nc .ne. 4) .or. (np .ne. 4)) then
-      if(hybrid%masterthread) then
-        print *,"You are in OVERWRITE SE AIR DENSITY MODE"
-        print *,"This only works for nc=4 and np=4"
-        print *,"Write a new search algorithm or pay $10000!"
-      endif
-      stop
-    endif
-#if defined(_FVM)
-    do ie=nets,nete
-      call reconstruction(fvm(ie)%psc, fvm(ie),recons)
-      call monotonic_gradient_cart(fvm(ie)%psc, fvm(ie),recons, elem(ie)%desc)
-      do j=1,np
-        do i=1,np
-          xp=tan(elem(ie)%cartp(i,j)%x)
-          yp=tan(elem(ie)%cartp(i,j)%y)
-          ix=i
-          jy=j
-          ! Search index along "x"  (bisection method)
-!           starti = 1
-!           endi = nc+1
-!           do
-!              if  ((endi-starti) <=  1)  exit
-!              tmpi = (endi + starti)/2
-!              if (xp  >  fvm%acartx(tmpi)) then
-!                 starti = tmpi
-!              else
-!                 endi = tmpi
-!              endif
-!           enddo
-!           ix = starti
-!
-!         ! Search index along "y"
-!           starti = 1
-!           endi = nc+1
-!           do
-!              if  ((endi-starti) <=  1)  exit
-!              tmpi = (endi + starti)/2
-!              if (yp  >  fvm%acarty(tmpi)) then
-!                 starti = tmpi
-!              else
-!                 endi = tmpi
-!              endif
-!           enddo
-!           jy = starti
-
-          call recons_val_cart(fvm(ie)%psc, xp,yp,fvm(ie)%spherecentroid,recons,ix,jy,tmpval)
-          elem(ie)%state%ps_v(i,j,np1)= elem(ie)%state%ps_v(i,j,np1) +&
-               dt_q*(tmpval - elem(ie)%state%ps_v(i,j,np1) )/(7*24*60*60)
-        end do
-      end do
-      elem(ie)%state%ps_v(:,:,np1)=elem(ie)%state%ps_v(:,:,np1)*elem(ie)%spheremp(:,:)
-     call edgeVpack(edge3p1,elem(ie)%state%ps_v(:,:,np1),1,0,ie)
-  enddo
-
-  call t_startf('overwr_SEdens_bexchV')
-  call bndry_exchangeV(hybrid,edge3p1)
-  call t_stopf('overwr_SEdens_bexchV')
-
-  do ie=nets,nete
-     call edgeVunpack(edge3p1, elem(ie)%state%ps_v(:,:,np1), 1, 0, ie)
-     elem(ie)%state%ps_v(:,:,np1)=elem(ie)%state%ps_v(:,:,np1)*elem(ie)%rspheremp(:,:)
-  enddo
-#endif
-  end subroutine overwrite_SEdensity
 
 end module prim_advance_mod

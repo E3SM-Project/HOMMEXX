@@ -1054,7 +1054,6 @@ contains
     !       tl%n0    time t + dt_q
 
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
-    use fvm_control_volume_mod, only: n0_fvm
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
@@ -1187,7 +1186,7 @@ contains
     !  always for tracers
     !  if rsplit>0:  also remap dynamics and compute reference level ps_v
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    call vertical_remap_interface(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
+    call vertical_remap_interface(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,nets,nete)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! time step is complete.  update some diagnostic variables:
