@@ -34,7 +34,8 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
                                const int& time_step_type, const int& energy_fixer, const int& qsize, const int& state_frequency,
                                const Real& nu, const Real& nu_p, const Real& nu_q, const Real& nu_s, const Real& nu_div, const Real& nu_top,
                                const int& hypervis_order, const int& hypervis_subcycle, const double& hypervis_scaling,
-                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
+                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics,
+                               const bool& use_cpstar, const bool& use_semi_lagrangian_transport)
 {
   // Check that the simulation options are supported. This helps us in the future, since we
   // are currently 'assuming' some option have/not have certain values. As we support for more
@@ -80,6 +81,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.hypervis_subcycle             = hypervis_subcycle;
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
+  params.use_cpstar                    = use_cpstar;
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
 
   // TODO Parse a fortran string and set this properly. For now, our code does

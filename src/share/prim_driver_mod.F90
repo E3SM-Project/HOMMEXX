@@ -576,7 +576,7 @@ contains
                                     elem_accum_iener_wet, elem_accum_kener, elem_accum_pener
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
-                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport
+                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport, use_cpstar
     use iso_c_binding,        only: c_ptr, c_loc, c_bool
 #endif
 
@@ -604,7 +604,7 @@ contains
                                          nu, nu_p, nu_q, nu_s, nu_div, nu_top,                     &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
                                          prescribed_wind, moisture, disable_diagnostics,           &
-                                         use_semi_lagrange_transport) bind(c)
+                                         use_cpstar, use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
       !
       ! Inputs
@@ -614,7 +614,7 @@ contains
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
       real(kind=c_double),  intent(in) :: nu, nu_p, nu_q, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
-      logical(kind=c_bool), intent(in) :: prescribed_wind, disable_diagnostics, use_semi_lagrange_transport, moisture
+      logical(kind=c_bool), intent(in) :: prescribed_wind, moisture, disable_diagnostics, use_cpstar, use_semi_lagrange_transport
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
@@ -1003,6 +1003,7 @@ contains
                                    LOGICAL(prescribed_wind==1,c_bool),                            &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
+                                   LOGICAL(use_cpstar==1,c_bool),                           &
                                    LOGICAL(use_semi_lagrange_transport,c_bool))
 
     elem_D_ptr          = c_loc(elem_D)
@@ -1242,7 +1243,6 @@ contains
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
-
     ! ============================================================
     ! Print some diagnostic information
     ! ============================================================
