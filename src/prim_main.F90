@@ -74,12 +74,12 @@ program prim_main
       integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
     end subroutine init_time_level_c
 
-    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,next_output_step) bind(c)
+    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
       use iso_c_binding, only: c_int, c_double
       !
       ! Inputs
       !
-      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, next_output_step
+      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
       real (kind=c_double), intent(in) :: tstep
     end subroutine prim_run_subcycle_c
 
@@ -337,7 +337,7 @@ program prim_main
           if (nets/=1 .or. nete/=nelemd) then
             call abortmp ("We don't allow to call C routines from a horizontally threaded region")
           endif
-          call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c,nstep)
+          call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c,nEndStep)
           tl%nstep = nstep_c
           tl%nm1   = nm1_c + 1
           tl%n0    = n0_c  + 1
@@ -351,7 +351,7 @@ program prim_main
           call prim_run_subcycle(elem, hybrid,nets,nete, tstep, tl, hvcoord,1)
 #endif
           if(.not. disable_diagnostics) then
-            if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nstep) then
+            if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nEndStep) then
               call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete)
             endif
           endif

@@ -26,7 +26,7 @@ void apply_test_forcing ();
 
 extern "C" {
 
-void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1, const int& next_output_step)
+void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1, const int& last_time_step)
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
 
@@ -47,7 +47,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // Check if needed to compute diagnostics or energy
   bool compute_diagnostics = false;
   if (nstep_end%params.state_frequency==0 || nstep_end==tl.nstep0 ||
-      nstep_end>=next_output_step) {
+      nstep_end>=last_time_step) {
     compute_diagnostics = true;
   }
 
