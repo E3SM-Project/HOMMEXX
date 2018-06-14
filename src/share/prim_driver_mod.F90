@@ -1066,10 +1066,11 @@ contains
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
-    use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
+    use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
+    use common_movie_mod,   only: nextoutputstep
 
 #if USE_OPENACC
     use openacc_utils_mod,  only: copy_qdp_h2d, copy_qdp_d2h
@@ -1102,7 +1103,7 @@ contains
 
     ! activate diagnostics periodically for display to stdout
     compute_diagnostics   = .false.
-    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0) then
+    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0 .or. nstep_end>=nextoutputstep(tl)) then
        compute_diagnostics= .true.
     endif
     if(disable_diagnostics) compute_diagnostics= .false.
@@ -1243,12 +1244,6 @@ contains
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
-    ! ============================================================
-    ! Print some diagnostic information
-    ! ============================================================
-    if (compute_diagnostics) then
-       call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
-    end if
   end subroutine prim_run_subcycle
 
   subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
