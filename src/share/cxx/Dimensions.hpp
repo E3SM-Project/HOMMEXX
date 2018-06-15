@@ -7,9 +7,9 @@
 #ifndef HOMMEXX_DIMENSIONS_HPP
 #define HOMMEXX_DIMENSIONS_HPP
 
-#include "Config.hpp"
-
 #include <Kokkos_Core.hpp>
+
+#include "Config.hpp"
 
 namespace Homme {
 
