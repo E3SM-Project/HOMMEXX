@@ -7,7 +7,7 @@
 #ifndef HOMMEXX_TYPES_HPP
 #define HOMMEXX_TYPES_HPP
 
-#include <Hommexx_config.h>
+#include "Config.hpp"
 #include <Kokkos_Core.hpp>
 
 #include "ExecSpaceDefs.hpp"
@@ -33,13 +33,13 @@ using F90Ptr = Real *const; // Using this in a function signature emphasizes
 using CF90Ptr = const Real *const; // Using this in a function signature
                                    // emphasizes that the ordering is Fortran
 
-#if (AVX_VERSION > 0)
+#if (HOMMEX_AVX_VERSION > 0)
 using VectorTagType =
     KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
     KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>;
-#endif // AVX_VERSION
+#endif // HOMMEX_AVX_VERSION
 
 using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;

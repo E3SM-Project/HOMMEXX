@@ -11,7 +11,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "Hommexx_config.h"
+#include "Config.hpp"
 #include "Dimensions.hpp"
 
 namespace Homme
