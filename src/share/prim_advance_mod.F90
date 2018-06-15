@@ -101,7 +101,7 @@ contains
         do k=1,nlev
            do j=1,np
               do i=1,np
-                 v1 = dt_q*elem(ie)%derived%FQ(i,j,k,q,1)
+                 v1 = dt_q*elem(ie)%derived%FQ(i,j,k,q)
                  !if (elem(ie)%state%Qdp(i,j,k,q,np1) + v1 < 0 .and. v1<0) then
                  if (elem(ie)%state%Qdp(i,j,k,q,np1_qdp) + v1 < 0 .and. v1<0) then
                     !if (elem(ie)%state%Qdp(i,j,k,q,np1) < 0 ) then
@@ -175,8 +175,8 @@ contains
         enddo
      enddo
 
-     elem(ie)%state%T(:,:,:,np1)   = elem(ie)%state%T(:,:,:,np1)   + dt_q*elem(ie)%derived%FT(:,:,:,1)
-     elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:,1)
+     elem(ie)%state%T(:,:,:,np1)   = elem(ie)%state%T(:,:,:,np1)   + dt_q*elem(ie)%derived%FT(:,:,:)
+     elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:)
 
   enddo
   end subroutine applyCAMforcing
@@ -200,8 +200,8 @@ contains
     logical :: wet
 
     do ie=nets,nete
-      elem(ie)%state%T(:,:,:,np1)  = elem(ie)%state%T(:,:,:,np1)    + dt_q*elem(ie)%derived%FT(:,:,:,1)
-      elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:,1)
+      elem(ie)%state%T(:,:,:,np1)  = elem(ie)%state%T(:,:,:,np1)    + dt_q*elem(ie)%derived%FT(:,:,:)
+      elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:)
     enddo
   end subroutine applyCAMforcing_dynamics
 

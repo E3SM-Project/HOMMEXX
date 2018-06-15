@@ -64,8 +64,8 @@ module element_mod
   real (kind=real_kind), allocatable, target, public :: elem_derived_divdp            (:,:,:,:)     ! divergence of dp
   real (kind=real_kind), allocatable, target, public :: elem_derived_divdp_proj       (:,:,:,:)     ! DSSed divdp
   real (kind=real_kind), allocatable, target, public :: elem_derived_FQ               (:,:,:,:,:,:) ! tracer forcing
-  real (kind=real_kind), allocatable, target, public :: elem_derived_FM               (:,:,:,:,:,:) ! momentum forcing
-  real (kind=real_kind), allocatable, target, public :: elem_derived_FT               (:,:,:,:,:)   ! temperature forcing
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FM               (:,:,:,:,:)   ! momentum forcing
+  real (kind=real_kind), allocatable, target, public :: elem_derived_FT               (:,:,:,:)     ! temperature forcing
   real (kind=real_kind), allocatable, target, public :: elem_derived_FQps             (:,:,:,:)     ! forcing of FQ on ps_v
 
   ! elem_accum_t arrays
@@ -140,9 +140,9 @@ module element_mod
 
 #ifdef CAM
     ! forcing terms for CAM
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, 1)                ! tracer forcing
-    real (kind=real_kind) :: FM(np,np,2,nlev, 1)                      ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, 1)                        ! temperature forcing
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d)                   ! tracer forcing
+    real (kind=real_kind) :: FM(np,np,2,nlev)                         ! momentum forcing
+    real (kind=real_kind) :: FT(np,np,nlev)                           ! temperature forcing
     real (kind=real_kind) :: etadot_prescribed(np,np,nlevp)           ! prescribed vertical tendency
     real (kind=real_kind) :: u_met(np,np,nlev)                        ! zonal component of prescribed meteorology winds
     real (kind=real_kind) :: dudt_met(np,np,nlev)                     ! rate of change of zonal component of prescribed meteorology winds
@@ -158,9 +158,9 @@ module element_mod
     real (kind=real_kind) :: Ttnd(npsq,nlev)                          ! accumulated T tendency due to nudging towards prescribed met
 #else
     ! forcing terms for HOMME
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing
-    real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d)                   ! tracer forcing
+    real (kind=real_kind) :: FM(np,np,2,nlev)                         ! momentum forcing
+    real (kind=real_kind) :: FT(np,np,nlev)                           ! temperature forcing
 #endif
 
     ! forcing terms for both CAM and HOMME
@@ -257,9 +257,9 @@ module element_mod
 
 #ifdef CAM
     ! forcing terms for CAM
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, 1)                ! tracer forcing
-    real (kind=real_kind) :: FM(np,np,2,nlev, 1)                      ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, 1)                        ! temperature forcing
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d)                   ! tracer forcing
+    real (kind=real_kind) :: FM(np,np,2,nlev)                         ! momentum forcing
+    real (kind=real_kind) :: FT(np,np,nlev)                           ! temperature forcing
     real (kind=real_kind) :: etadot_prescribed(np,np,nlevp)           ! prescribed vertical tendency
     real (kind=real_kind) :: u_met(np,np,nlev)                        ! zonal component of prescribed meteorology winds
     real (kind=real_kind) :: dudt_met(np,np,nlev)                     ! rate of change of zonal component of prescribed meteorology winds
@@ -277,14 +277,14 @@ module element_mod
 #else
 #ifdef HOMME_USE_FLAT_ARRAYS
     ! forcing terms for HOMME
-    real (kind=real_kind), pointer :: FQ(:,:,:,:,:)                   ! tracer forcing
-    real (kind=real_kind), pointer :: FM(:,:,:,:,:)                   ! momentum forcing
-    real (kind=real_kind), pointer :: FT(:,:,:,:)                     ! temperature forcing
+    real (kind=real_kind), pointer :: FQ(:,:,:,:)                     ! tracer forcing
+    real (kind=real_kind), pointer :: FM(:,:,:,:)                     ! momentum forcing
+    real (kind=real_kind), pointer :: FT(:,:,:)                       ! temperature forcing
 #else
     ! forcing terms for HOMME
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d, timelevels)       ! tracer forcing
-    real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
+    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d)                   ! tracer forcing
+    real (kind=real_kind) :: FM(np,np,2,nlev)                         ! momentum forcing
+    real (kind=real_kind) :: FT(np,np,nlev)                           ! temperature forcing
 #endif
 ! #ifdef CAM
 #endif
@@ -837,10 +837,10 @@ contains
     allocate( elem_derived_divdp            (np,np,nlev,nelemd)                    )
     allocate( elem_derived_divdp_proj       (np,np,nlev,nelemd)                    )
 #ifndef USE_KOKKOS_KERNELS
-    allocate( elem_derived_FQ               (np,np,nlev,qsize_d,timelevels,nelemd) )
+    allocate( elem_derived_FQ               (np,np,nlev,qsize_d,nelemd) )
 #endif
-    allocate( elem_derived_FM               (np,np,2,nlev,timelevels,nelemd)       )
-    allocate( elem_derived_FT               (np,np,nlev,timelevels,nelemd)         )
+    allocate( elem_derived_FM               (np,np,2,nlev,nelemd)       )
+    allocate( elem_derived_FT               (np,np,nlev,nelemd)         )
     allocate( elem_derived_FQps             (np,np,timelevels,nelemd)              )
 
     do ie = 1 , nelemd
@@ -857,9 +857,9 @@ contains
       elem(ie)%derived%dp                   => elem_derived_dp               (:,:,:,ie)
       elem(ie)%derived%divdp                => elem_derived_divdp            (:,:,:,ie)
       elem(ie)%derived%divdp_proj           => elem_derived_divdp_proj       (:,:,:,ie)
-      elem(ie)%derived%FQ                   => elem_derived_FQ               (:,:,:,:,:,ie)
-      elem(ie)%derived%FM                   => elem_derived_FM               (:,:,:,:,:,ie)
-      elem(ie)%derived%FT                   => elem_derived_FT               (:,:,:,:,ie)
+      elem(ie)%derived%FQ                   => elem_derived_FQ               (:,:,:,:,ie)
+      elem(ie)%derived%FM                   => elem_derived_FM               (:,:,:,:,ie)
+      elem(ie)%derived%FT                   => elem_derived_FT               (:,:,:,ie)
       elem(ie)%derived%FQps                 => elem_derived_FQps             (:,:,:,ie)
     enddo
 
