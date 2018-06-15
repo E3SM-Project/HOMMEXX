@@ -112,15 +112,15 @@ module namelist_mod
     se_met_tevolve
 #endif
 
-  use thread_mod,     only: nthreads, nthreads_accel, omp_set_num_threads, omp_get_max_threads, vert_num_threads, vthreads
+  use thread_mod,     only: nthreads, omp_set_num_threads, omp_get_max_threads, vthreads
   use dimensions_mod, only: ne, np, nnodes, nmpi_per_node, npart, qsize, qsize_d, set_mesh_dimensions
 #ifdef CAM
   use time_mod,       only: nsplit, smooth, phys_tscale
 #else
-  use time_mod,       only: tstep, ndays,nmax, nendstep,secpday, smooth, secphr, nsplit, phys_tscale
+  use time_mod,       only: tstep, ndays, nmax, nendstep,secpday, smooth, secphr, nsplit, phys_tscale
 #endif
-  use parallel_mod,   only: parallel_t,  iam, abortmp, &
-       partitionfornodes, useframes, mpireal_t, mpilogical_t, mpiinteger_t, mpichar_t
+  use parallel_mod,   only: parallel_t, iam, abortmp, &
+       partitionfornodes, mpireal_t, mpilogical_t, mpiinteger_t, mpichar_t
   use cg_mod,         only: cg_no_debug
 
 #ifndef CAM
@@ -217,8 +217,7 @@ module namelist_mod
 #else
       qsize,             &         ! number of SE tracers
       nthreads,          &         ! number of threads per process
-      vert_num_threads,  &         ! number of threads per process
-      nthreads_accel,    &         ! number of threads per an accelerator process
+      vthreads,  &         ! number of threads per process
       limiter_option,    &
       smooth,            &         ! timestep Filter
       omega,             &
@@ -232,7 +231,6 @@ module namelist_mod
       npart,         &
       uselapi,       &
       multilevel,    &
-      useframes,     &
       numnodes,      &
       ne,            &             ! element resolution factor
       tasknum,       &
@@ -373,7 +371,6 @@ module namelist_mod
 
     PARTMETHOD    = RECURSIVE
     npart         = 1
-    useframes     = 0
     multilevel    = 1
     uselapi       = .TRUE.
 #ifdef CAM
@@ -396,8 +393,7 @@ module namelist_mod
     ndays         = 0
     nmax          = 12
     nthreads = 1
-    vert_num_threads = 1
-    nthreads_accel = -1
+    vthreads = 1
     se_ftype = ftype   ! MNL: For non-CAM runs, ftype=0 in control_mod
     phys_tscale=0
     nsplit = 1
@@ -699,7 +695,6 @@ module namelist_mod
     call MPI_bcast(statefreq,       1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(restartfreq,     1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(multilevel,      1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(useframes,       1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(runtype,         1,MPIinteger_t,par%root,par%comm,ierr)
 
 #ifdef CAM
@@ -717,8 +712,7 @@ module namelist_mod
     call MPI_bcast(tstep,           1, MPIreal_t   , par%root,par%comm,ierr)
     call MPI_bcast(nmax,            1, MPIinteger_t, par%root,par%comm,ierr)
     call MPI_bcast(NTHREADS,        1, MPIinteger_t, par%root,par%comm,ierr)
-    call MPI_bcast(vert_num_threads,1, MPIinteger_t, par%root,par%comm,ierr)
-    call MPI_bcast(nthreads_accel,  1, MPIinteger_t, par%root,par%comm,ierr)
+    call MPI_bcast(vthreads,1, MPIinteger_t, par%root,par%comm,ierr)
     call MPI_bcast(ndays,           1, MPIinteger_t, par%root,par%comm,ierr)
     nEndStep = nmax
 
@@ -841,21 +835,15 @@ module namelist_mod
     call MPI_bcast(tracer_grid_type,1,MPIinteger_t,par%root,par%comm,ierr)
 #endif
 
-#ifdef IS_ACCELERATOR
-    if (nthreads_accel > 0) then
-        nthreads = nthreads_accel
-    end if
-#endif
-
     ! sanity check on thread count
     ! HOMME will run if if nthreads > max, but gptl will print out GB of warnings.
-    if (NThreads*vert_num_threads > omp_get_max_threads()) then
+    if (NThreads*vthreads > omp_get_max_threads()) then
        if(par%masterproc) write(iulog,*) "Main:NThreads=",NThreads
        if(par%masterproc) print *,'omp_get_max_threads() = ',OMP_get_max_threads()
        if(par%masterproc) print *,'requested threads exceeds OMP_get_max_threads()'
        call abortmp('stopping')
     endif
-    call omp_set_num_threads(NThreads*vert_num_threads)
+    call omp_set_num_threads(NThreads*vthreads)
 
 
     ! if user sets hypervis_subcycle=-1, then use automatic formula
@@ -1018,8 +1006,7 @@ module namelist_mod
           call abortmp('user specified qsize > qsize_d parameter in dimensions_mod.F90')
        endif
        write(iulog,*)"readnl: NThreads      = ",NTHREADS
-       write(iulog,*)"readnl: vert_num_threads = ",vert_num_threads
-       write(iulog,*)"readnl: nthreads_accel = ",nthreads_accel
+       write(iulog,*)"readnl: vthreads = ",vthreads
 #endif
 
        write(iulog,*)"readnl: ne,np         = ",NE,np
@@ -1027,7 +1014,6 @@ module namelist_mod
        write(iulog,*)'readnl: nmpi_per_node = ',nmpi_per_node
        write(iulog,*)"readnl: vthreads      = ",vthreads
        write(iulog,*)'readnl: multilevel    = ',multilevel
-       write(iulog,*)'readnl: useframes     = ',useframes
        write(iulog,*)'readnl: nnodes        = ',nnodes
        write(iulog,*)'readnl: npart         = ',npart
        write(iulog,*)'readnl: test_cfldep   = ',test_cfldep

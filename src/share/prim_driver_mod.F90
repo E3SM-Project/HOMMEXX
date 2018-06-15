@@ -19,7 +19,7 @@ module prim_driver_mod
   use reduction_mod,    only: reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
                               red_sum, red_sum_int, red_flops, initreductionbuffer
   use solver_mod,       only: blkjac_t
-  use thread_mod,       only: nThreadsHoriz, omp_get_num_threads
+  use thread_mod,       only: hthreads, omp_get_num_threads
 
 #ifndef CAM
   use column_types_mod, only : ColumnModel_t
@@ -511,7 +511,7 @@ contains
     nets=1
     nete=nelemd
     ! set the actual number of threads which will be used in the horizontal
-    nThreadsHoriz = n_domains
+    hthreads = n_domains
 #ifndef CAM
     allocate(cm(0:n_domains-1))
 #endif
