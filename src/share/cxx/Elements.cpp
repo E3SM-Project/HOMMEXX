@@ -145,24 +145,27 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   }
   
   if(!consthv){
-  for (int ie = 0; ie < m_num_elems; ++ie) {
-
-    for (int idim = 0; idim < 2; ++idim) {
-      for (int jdim = 0; jdim < 3; ++jdim) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-            h_vec_sph2cart(ie, idim, jdim, igp, jgp) = vec_sph2cart[k_tensors];
+    k_tensors = 0;
+    for (int ie = 0; ie < m_num_elems; ++ie) {
+      for (int idim = 0; idim < 2; ++idim) {
+        for (int jdim = 0; jdim < 3; ++jdim) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+              h_vec_sph2cart(ie, idim, jdim, igp, jgp) = vec_sph2cart[k_tensors];
           }
         }
       }
     }// inint 2x2 quantities
-
+  }
+  }
+  if(!consthv){
     k_tensors = 0;
-    for (int idim = 0; idim < 2; ++idim) {
-      for (int jdim = 0; jdim < 2; ++jdim) {
-        for (int igp = 0; igp < NP; ++igp) {
-          for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
-            h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensors];
+    for (int ie = 0; ie < m_num_elems; ++ie) {
+      for (int idim = 0; idim < 2; ++idim) {
+        for (int jdim = 0; jdim < 2; ++jdim) {
+          for (int igp = 0; igp < NP; ++igp) {
+            for (int jgp = 0; jgp < NP; ++jgp, ++k_tensors) {
+              h_tensorvisc(ie, idim, jdim, igp, jgp) = tensorvisc[k_tensors];
           }
         }
       }

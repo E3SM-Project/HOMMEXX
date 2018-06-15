@@ -162,6 +162,12 @@ public:
       const int jgp = point_idx % NP;
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &lev) {
+
+//m_elements.buffers.vtens(kv.ie,0,igp,jgp,lev) = 0;
+//m_elements.buffers.vtens(kv.ie,1,igp,jgp,lev) = 0;
+//m_elements.buffers.ttens(kv.ie,igp,jgp,lev) = 0;
+//m_elements.buffers.dptens(kv.ie,igp,jgp,lev) = 0;
+
         m_elements.m_derived_dpdiss_ave(kv.ie, igp, jgp, lev) +=
             m_data.eta_ave_w *
             m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, lev) /

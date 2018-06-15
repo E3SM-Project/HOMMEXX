@@ -178,9 +178,15 @@ module prim_advance_hypervis_mod
 !                IE dissipation from continuity equation
 !                (1 deg: to about 0.1 W/m^2)
 !
+
+
+
   if (hypervis_order == 2) then
      do ic=1,hypervis_subcycle
         call biharmonic_wk_dp3d(elem,dptens,dpflux,ttens,vtens,deriv,edge3,hybrid,nt,nets,nete)
+!ttens=0
+!vtens=0
+!dptens=0
 
         do ie=nets,nete
 

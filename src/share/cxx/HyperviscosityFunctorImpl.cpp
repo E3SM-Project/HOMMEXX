@@ -82,6 +82,7 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     Kokkos::parallel_for(policy_update_states, *this);
     Kokkos::fence();
   }
+
 }
 
 void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
