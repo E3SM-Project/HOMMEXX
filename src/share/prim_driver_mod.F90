@@ -554,7 +554,8 @@ contains
     use hybvcoord_mod,        only: hvcoord_t
     use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
     use prim_state_mod,       only: prim_printstate, prim_diag_scalars
-    use prim_si_ref_mod,      only: prim_si_refstate_init, prim_set_mass
+    use prim_si_mod,          only: prim_set_mass
+    use prim_si_ref_mod,      only: prim_si_refstate_init
     use prim_advection_mod,   only: deriv, prim_advec_init2, prim_advec_init_deriv
     use solver_init_mod,      only: solver_init2
     use time_mod,             only: timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, smooth, nsplit, TimeLevel_Qdp
