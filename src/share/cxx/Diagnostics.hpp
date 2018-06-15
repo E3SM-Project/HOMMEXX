@@ -13,13 +13,12 @@ public:
              F90Ptr& elem_accum_q1mass_ptr, F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr,
              F90Ptr& elem_accum_kener_ptr, F90Ptr& elem_accum_pener_ptr);
 
-  void update_q(const int np1_qdp, const int np1);
   void prim_diag_scalars (const bool before_advance, const int ivar);
   void prim_energy_halftimes (const bool before_advance, const int ivar);
 
+  HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> h_Q;
+
 private:
-  ExecViewManaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>    m_Q;
-  HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>  h_Q;
 
   HostViewUnmanaged<Real*[4][QSIZE_D][NP][NP]>        h_Qvar;
   HostViewUnmanaged<Real*[4][QSIZE_D][NP][NP]>        h_Qmass;

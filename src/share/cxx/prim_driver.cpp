@@ -23,6 +23,7 @@ namespace Homme
 void prim_step (const Real, const bool);
 void vertical_remap (const Real);
 void apply_test_forcing ();
+void update_q (const int np1_qdp, const int np1);
 
 extern "C" {
 
@@ -138,9 +139,10 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // time step is complete.  update some diagnostic variables:
   // Q    (mixing ratio)
   ////////////////////////////////////////////////////////////////////////
-  Diagnostics& diags = Context::singleton().get_diagnostics();
-  diags.update_q(tl.np1_qdp,tl.np1);
+  update_q(tl.np1_qdp,tl.np1);
+
   if (compute_diagnostics) {
+    Diagnostics& diags = Context::singleton().get_diagnostics();
     diags.prim_diag_scalars(false,1);
     diags.prim_energy_halftimes(false,1);
   }
@@ -168,6 +170,65 @@ void apply_test_forcing () {
     Errors::runtime_abort("Test case not yet available in C++ build.\n",
                           Errors::err_not_implemented);
   }
+}
+
+void update_q (const int np1_qdp, const int np1)
+{
+  // Get simulation params
+  SimulationParams& params = Context::singleton().get_simulation_params();
+  assert(params.params_set);
+
+  // Get hybrid vertical coordinate
+  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
+  auto hyai_delta = hvcoord.hybrid_ai_delta;
+  auto hybi_delta = hvcoord.hybrid_bi_delta;
+  const Real ps0 = hvcoord.ps0;
+
+  // Get ps_v from Elements
+  Elements& elements = Context::singleton().get_elements();
+  auto ps_v = elements.m_ps_v;
+
+  // Get the tracers concentration and mass from Tracers
+  Tracers& tracers = Context::singleton().get_tracers();
+  auto qdp = tracers.qdp;
+  auto Q = tracers.Q;
+
+  // Update the device copy of Q, stored in Tracers
+  const int num_elems = elements.num_elems();
+  const int qsize = params.qsize;
+  Kokkos::parallel_for(Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,num_elems*qsize*NP*NP*NUM_LEV),
+                       KOKKOS_LAMBDA(const int idx) {
+    const int ie    =  idx / (qsize*NP*NP*NUM_LEV);
+    const int iq    = (idx / (NP*NP*NUM_LEV)) % qsize;
+    const int igp   = (idx / (NP*NUM_LEV)) % NP;
+    const int jgp   = (idx / NUM_LEV) % NP;
+    const int level =  idx % NUM_LEV;
+
+    const Scalar dp = hyai_delta(level)*ps0 + hybi_delta(level)*ps_v(ie,np1,igp,jgp);
+    Q(ie,iq,igp,jgp,level) = qdp(ie,np1_qdp,iq,igp,jgp,level)/dp;
+  });
+
+  // Get the tracers concentration from Diagnostics
+  Diagnostics& diags = Context::singleton().get_diagnostics();
+  auto h_Q = diags.h_Q;
+
+  // Update the host copy of Q, stored in Diagnostics
+  ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror Q_host;
+  Q_host = Kokkos::create_mirror_view(Q);
+  Kokkos::deep_copy(Q_host,Q);
+
+  Kokkos::parallel_for(Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,num_elems*qsize*NP*NP*NUM_PHYSICAL_LEV),
+                       KOKKOS_LAMBDA(const int idx) {
+    const int ie    =  idx / (qsize*NP*NP*NUM_PHYSICAL_LEV);
+    const int iq    = (idx / (NP*NP*NUM_PHYSICAL_LEV)) % qsize;
+    const int igp   = (idx / (NP*NUM_PHYSICAL_LEV)) % NP;
+    const int jgp   = (idx / NUM_PHYSICAL_LEV) % NP;
+    const int level =  idx % NUM_PHYSICAL_LEV;
+    const int ilev = level / VECTOR_SIZE;
+    const int ivec = level % VECTOR_SIZE;
+
+    h_Q(ie,iq,level,igp,jgp) = Q_host(ie,iq,igp,jgp,ilev)[ivec];
+  });
 }
 
 } // namespace Homme

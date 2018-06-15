@@ -31,50 +31,6 @@ void Diagnostics::init (const int num_elems, F90Ptr& elem_state_q_ptr, F90Ptr& e
   h_IEner_wet = HostViewUnmanaged<Real*   [NP][NP]>(elem_accum_iener_wet_ptr,num_elems);
   h_KEner     = HostViewUnmanaged<Real*[4][NP][NP]>(elem_accum_kener_ptr,num_elems);
   h_PEner     = HostViewUnmanaged<Real*[4][NP][NP]>(elem_accum_pener_ptr,num_elems);
-
-  // Sync the device copy of Q
-  m_Q = ExecViewManaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>("Q",num_elems);
-  Kokkos::deep_copy(m_Q,h_Q);
-}
-
-void Diagnostics::update_q(const int np1_qdp, const int np1)
-{
-  // Get simulation params
-  SimulationParams& params = Context::singleton().get_simulation_params();
-  assert(params.params_set);
-
-  // Get hybrid vertical coordinate
-  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
-  auto hyai_delta = hvcoord.hybrid_ai_delta;
-  auto hybi_delta = hvcoord.hybrid_bi_delta;
-  const Real ps0 = hvcoord.ps0;
-
-  // Get qdp from Tracers and ps_v from Elements
-  Tracers& tracers = Context::singleton().get_tracers();
-  Elements& elements = Context::singleton().get_elements();
-  auto qdp = Kokkos::create_mirror_view(tracers.qdp);
-  auto ps_v = Kokkos::create_mirror_view(elements.m_ps_v);
-  auto Q = m_Q;
-
-  const int num_elems = m_num_elems;
-  const int qsize = params.qsize;
-  const int num_iters = num_elems*qsize*NP*NP*NUM_PHYSICAL_LEV;
-  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,num_iters),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie    =  idx / (qsize*NP*NP*NUM_PHYSICAL_LEV);
-    const int iq    = (idx / (NP*NP*NUM_PHYSICAL_LEV)) % qsize;
-    const int igp   = (idx / (NP*NUM_PHYSICAL_LEV)) % NP;
-    const int jgp   = (idx / NUM_PHYSICAL_LEV) % NP;
-    const int level =  idx % NUM_PHYSICAL_LEV;
-    const int ilev = level / VECTOR_SIZE;
-    const int ivec = level % VECTOR_SIZE;
-
-    const Real dp = hyai_delta(ilev)[ivec]*ps0 + hybi_delta(ilev)[ivec]*ps_v(ie,np1,igp,jgp);
-    Q(ie,iq,level,igp,jgp) = qdp(ie,np1_qdp,iq,igp,jgp,ilev)[ivec]/dp;
-  });
-
-  // Copy computed data to F90 pointer
-  Kokkos::deep_copy(h_Q,m_Q);
 }
 
 void Diagnostics::prim_diag_scalars (const bool before_advance, const int ivar)
