@@ -44,8 +44,7 @@ class HyperviscosityFunctorImpl
 
 public:
 
-  struct TagFirstLaplaceConstHV {};
-  struct TagFirstLaplaceTensorHV {};
+  struct TagFirstLaplaceHV {};
   struct TagSecondLaplaceConstHV {};
   struct TagSecondLaplaceTensorHV {};
   struct TagUpdateStates {};
@@ -62,7 +61,7 @@ public:
 
 // first iter of laplace, const hv
   KOKKOS_INLINE_FUNCTION
-  void operator() (const TagFirstLaplaceConstHV&, const TeamMember& team) const {
+  void operator() (const TagFirstLaplaceHV&, const TeamMember& team) const {
     KernelVariables kv(team);
     // Laplacian of temperature
     m_sphere_ops.laplace_simple(kv,
@@ -78,30 +77,6 @@ public:
                               Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
-
-//first iter of laplace, tensor hv 
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const TagFirstLaplaceTensorHV&, const TeamMember& team) const {
-    KernelVariables kv(team);
-    // Laplacian of temperature
-    m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
-                   Homme::subview(m_elements.m_t,kv.ie,m_data.np1),
-                   Homme::subview(m_elements.buffers.ttens,kv.ie));
-    // Laplacian of pressure
-    m_sphere_ops.laplace_tensor(kv,
-                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
-                   Homme::subview(m_elements.m_dp3d,kv.ie,m_data.np1),
-                   Homme::subview(m_elements.buffers.dptens,kv.ie));
-
-    // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_cartesian(kv,
-                   Homme::subview(m_elements.m_tensorvisc,kv.ie),
-                   Homme::subview(m_elements.m_vec_sph2cart,kv.ie),
-                   Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
-                   Homme::subview(m_elements.buffers.vtens,kv.ie));
-  }
-
 
 
 //second iter of laplace, const hv

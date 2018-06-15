@@ -129,7 +129,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
     }
   }
 
-  if( consthv ){
   // 2d tensors
   for (int ie = 0; ie < m_num_elems; ++ie) {
     for (int idim = 0; idim < 2; ++idim) {
@@ -144,8 +143,8 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
       }
     }
   }
-  }
-  else{
+  
+  if(!consthv){
   for (int ie = 0; ie < m_num_elems; ++ie) {
 
     for (int idim = 0; idim < 2; ++idim) {
@@ -168,9 +167,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
         }
       }
     }// inint 2x2 quantities
-
-
-
   }//ie
   }//end if consthv
 

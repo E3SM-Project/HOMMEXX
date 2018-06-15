@@ -90,13 +90,13 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
   
   //tensor or const hv
-  if ( m_data.consthv ) {
-    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceConstHV>(m_elements.num_elems());
+//  if ( m_data.consthv ) {
+    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceHV>(m_elements.num_elems());
     Kokkos::parallel_for(policy_first_laplace, *this);
-  }else{
-    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceTensorHV>(m_elements.num_elems());
-    Kokkos::parallel_for(policy_first_laplace, *this);
-  }  
+//  }else{
+//    auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceTensorHV>(m_elements.num_elems());
+//    Kokkos::parallel_for(policy_first_laplace, *this);
+//  }  
   Kokkos::fence();
 
   // Exchange
