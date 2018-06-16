@@ -386,6 +386,13 @@ struct Dispatch<Kokkos::Cuda> {
 };
 #endif
 
+#ifdef KOKKOS_ENABLE_CUDA
+// Cuda-provided GPU-safe replacements for std functions.
+using ::isnan;
+#else
+using std::isnan;
+#endif
+
 } // namespace Homme
 
 #endif // HOMMEXX_EXEC_SPACE_DEFS_HPP
