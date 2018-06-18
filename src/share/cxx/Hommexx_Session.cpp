@@ -9,7 +9,7 @@
 #include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"
-#include "Hommexx_config.h"
+#include "Config.hpp"
 #include "mpi/Comm.hpp"
 
 #include <iostream>
@@ -29,7 +29,22 @@ void initialize_hommexx_session ()
   const auto comm = Context::singleton().get_comm();
   if (comm.root()) {
     ExecSpace::print_configuration(std::cout, true);
+    // Print configure-time settings.
+#ifdef HOMMEXX_SHA1
     std::cout << "HOMMEXX SHA1: " << HOMMEXX_SHA1 << "\n";
+#endif
+    std::cout << "HOMMEXX AVX_VERSION: " << HOMMEXX_AVX_VERSION << "\n";
+    std::cout << "HOMMEXX VECTOR_SIZE: " << VECTOR_SIZE << "\n";
+    std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
+    std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
+#ifdef HOMMEXX_CONFIG_IS_CMAKE
+    std::cout << "HOMMEXX configured with CMake\n";
+# ifdef HAVE_CONFIG_H
+    std::cout << "HOMMEXX has config.h.c\n";
+# endif
+#else
+    std::cout << "HOMMEXX provided best default values in Config.hpp\n";
+#endif
   }
 }
 
