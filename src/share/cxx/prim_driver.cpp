@@ -196,7 +196,7 @@ void update_q (const int np1_qdp, const int np1)
   // Update the device copy of Q, stored in Tracers
   const int num_elems = elements.num_elems();
   const int qsize = params.qsize;
-  Kokkos::parallel_for(Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,num_elems*qsize*NP*NP*NUM_LEV),
+  Kokkos::parallel_for(Kokkos::RangePolicy<ExecSpace>(0,num_elems*qsize*NP*NP*NUM_LEV),
                        KOKKOS_LAMBDA(const int idx) {
     const int ie    =  idx / (qsize*NP*NP*NUM_LEV);
     const int iq    = (idx / (NP*NP*NUM_LEV)) % qsize;
