@@ -18,9 +18,10 @@ SET (HOMME_FIND_BLASLAPACK TRUE CACHE BOOL "")
 set (USE_TRILINOS FALSE CACHE BOOL "")
 set (KOKKOS_PATH "/home/ambradl/lib/kokkos/arm" CACHE FILEPATH "")
 
-set (CMAKE_Fortran_FLAGS "-g" CACHE STRING "")
-set (CMAKE_C_FLAGS "-g" CACHE STRING "")
-set (CMAKE_CXX_FLAGS "-g" CACHE STRING "")
+set (extra_flags "-mtune=thunderx2t99 -mcpu=thunderx2t99")
+set (CMAKE_Fortran_FLAGS "-g ${extra_flags}" CACHE STRING "")
+set (CMAKE_C_FLAGS "-g ${extra_flags}" CACHE STRING "")
+set (CMAKE_CXX_FLAGS "-g ${extra_flags}" CACHE STRING "")
 set (CMAKE_EXE_LINKER_FLAGS "-ldl" CACHE STRING "")
 
 set (ENABLE_HORIZ_OPENMP FALSE CACHE BOOL "")
