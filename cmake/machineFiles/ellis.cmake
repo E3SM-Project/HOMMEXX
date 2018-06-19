@@ -21,9 +21,9 @@ set (USE_TRILINOS FALSE CACHE BOOL "")
 set (KOKKOS_PATH "/home/ambradl/lib/kokkos/knl" CACHE FILEPATH "") # To trigger KNL vectorization.
 set (ENABLE_INTEL_PHI TRUE CACHE BOOL "")
 
-set (CMAKE_Fortran_FLAGS "-g" CACHE STRING "") 
-set (CMAKE_C_FLAGS "-g" CACHE STRING "") 
-set (CMAKE_CXX_FLAGS "-g" CACHE STRING "") 
+set (CMAKE_Fortran_FLAGS "-g -O1" CACHE STRING "") 
+set (CMAKE_C_FLAGS "-g -O3" CACHE STRING "") 
+set (CMAKE_CXX_FLAGS "-g -O3" CACHE STRING "") 
 set (CMAKE_EXE_LINKER_FLAGS "-ldl" CACHE STRING "")
 
 # These don't matter for the C++ code, only the Fortran. Just pick something # reasonable.

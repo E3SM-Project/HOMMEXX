@@ -140,6 +140,7 @@ if (BUILD_HOMMEXX_OPENMP)
     "-DUSE_NUM_PROCS=24"
     "-DUSE_TRILINOS=FALSE"
     "-DHOMMEXX_FPMODEL=strict"
+    "-DCMAKE_BUILD_TYPE="
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
     "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline/build" 
     )

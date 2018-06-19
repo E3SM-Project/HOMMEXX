@@ -11,7 +11,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "Hommexx_config.h"
+#include "Config.hpp"
 #include "Dimensions.hpp"
 
 namespace Homme
@@ -384,6 +384,13 @@ struct Dispatch<Kokkos::Cuda> {
 #endif
   }
 };
+#endif
+
+#ifdef KOKKOS_ENABLE_CUDA
+// Cuda-provided GPU-safe replacements for std functions.
+using ::isnan;
+#else
+using std::isnan;
 #endif
 
 } // namespace Homme

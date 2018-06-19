@@ -39,6 +39,9 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
 
+# Tell share/cxx/Config.hpp that CMake is being used to build Hommexx.
+add_definitions(-DHOMMEXX_CONFIG_IS_CMAKE)
+
 SET (PERFORMANCE_PROFILE "" CACHE STRING "Whether to build and link with various profiler libraries")
 
 # Set up some directories to facilitate finding netcdf, pnetcdf
@@ -122,8 +125,13 @@ if (${CUDA_FOUND})
   endif ()
 endif ()
 
+# If AVX or Cuda don't take priority, use this software vector size.
+set (HOMMEXX_VECTOR_SIZE 8)
+
 # Print the compiler flags to be used
-STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+if (CMAKE_BUILD_TYPE)
+  STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+endif ()
 MESSAGE(STATUS "Fortran Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_Fortran_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 MESSAGE(STATUS "C Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 MESSAGE(STATUS "CXX Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
