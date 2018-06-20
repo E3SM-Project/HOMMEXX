@@ -18,7 +18,7 @@ namespace Homme
 {
 
 template <typename VectorTagTypeT>
-static void print_vector_tag();
+void print_vector_tag();
 
 template <>
 inline void print_vector_tag<KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>> () {
