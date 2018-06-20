@@ -79,6 +79,8 @@ class EulerStepFunctorImpl {
     int   n0_qdp;
 
     DSSOption   DSSopt;
+
+    bool consthv;
   };
 
   const Elements      m_elements;
@@ -112,6 +114,7 @@ public:
     m_data.limiter_option = params.limiter_option;
     m_data.nu_p = params.nu_p;
     m_data.nu_q = params.nu_q;
+    m_data.consthv = (params.hypervis_scaling == 0);
 
     if (m_data.limiter_option == 4) {
       std::string msg = "[EulerStepFunctorImpl::reset]:";
@@ -171,7 +174,8 @@ public:
     return m_kernel_will_run_limiters ? limiter_team_shmem_size(team_size) : 0;
   }
 
-  struct BIHPre {};
+  struct BIHPreNup {};
+  struct BIHPreNoNup {};
   struct BIHPost {};
 
   /*
@@ -186,9 +190,16 @@ public:
     assert(m_data.rhs_multiplier == 2.0);
     m_data.rhs_viss = 3.0;
 
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
+    if(m_data.nu_p > 0){
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPreNup>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
+    }else{
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPreNoNup>(
+                             m_elements.num_elems() * m_data.qsize),
+                         *this);
+
+    }
 
     ExecSpace::fence();
     profiling_pause();
@@ -206,6 +217,8 @@ public:
     profiling_pause();
   }
 
+
+/*
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPre&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
@@ -228,6 +241,44 @@ public:
     }
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
   }
+*/
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPreNup&, const TeamMember& team) const {
+    KernelVariables kv(team,m_data.qsize);
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    dpdiss_adjustment(kv, team);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPreNoNup&, const TeamMember& team) const {
+    KernelVariables kv(team,m_data.qsize);
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
+  }
+
+  void dpdiss_adjustment (KernelVariables & kv, const TeamMember& team) const {
+
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+      const auto dpdiss_ave = Homme::subview(m_elements.m_derived_dpdiss_ave, kv.ie);
+      Kokkos::parallel_for (
+        Kokkos::TeamThreadRange(team, NP*NP),
+        [&] (const int loop_idx) {
+          const int i = loop_idx / NP;
+          const int j = loop_idx % NP;
+          Kokkos::parallel_for(
+            Kokkos::ThreadVectorRange(team, NUM_LEV),
+            [&] (const int& k) {
+              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_hvcoord.dp0(k);
+            });
+        });
+      team.team_barrier();
+  }
+
+
 
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPost&, const TeamMember& team) const {
@@ -253,7 +304,11 @@ public:
             });
         });
     }
-  }
+  }//end of BIHPost ()
+
+
+
+
 
   struct AALSetupPhase {};
   struct AALTracerPhase {};
