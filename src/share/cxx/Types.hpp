@@ -33,13 +33,13 @@ using F90Ptr = Real *const; // Using this in a function signature emphasizes
 using CF90Ptr = const Real *const; // Using this in a function signature
                                    // emphasizes that the ordering is Fortran
 
-#if (HOMMEX_AVX_VERSION > 0)
+#if (HOMMEXX_AVX_VERSION > 0)
 using VectorTagType =
     KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>;
 #else
 using VectorTagType =
     KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>;
-#endif // HOMMEX_AVX_VERSION
+#endif // HOMMEXX_AVX_VERSION
 
 using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
