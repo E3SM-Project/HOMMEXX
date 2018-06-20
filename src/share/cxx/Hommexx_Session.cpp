@@ -35,6 +35,7 @@ void initialize_hommexx_session ()
 #endif
     std::cout << "HOMMEXX AVX_VERSION: " << HOMMEXX_AVX_VERSION << "\n";
     std::cout << "HOMMEXX VECTOR_SIZE: " << VECTOR_SIZE << "\n";
+    std::cout << "HOMMEXX vector tag: " << Scalar::label() << "\n";
     std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
     std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
 #ifdef HOMMEXX_CONFIG_IS_CMAKE
