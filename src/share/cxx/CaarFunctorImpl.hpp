@@ -35,10 +35,6 @@ struct CaarFunctorImpl {
     const int rsplit;
 
     bool      compute_diagnostics;
-
-//do i need this?
-//    Real hyperviscosity_scaling;
-
   };
 
   CaarData              m_data;

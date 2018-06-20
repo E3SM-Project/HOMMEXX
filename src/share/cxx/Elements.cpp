@@ -23,13 +23,7 @@ void Elements::init(const int num_elems, const bool consthv) {
   m_metinv = ExecViewManaged<Real * [2][2][NP][NP]>("METINV", m_num_elems);
   m_metdet = ExecViewManaged<Real * [NP][NP]>("METDET", m_num_elems);
 
-
-std::cout <<  " BEFORE constructor for tensorvisc , consthv " << consthv << "\n";
-
   if(!consthv){
-
-std::cout <<  " BEFORE constructor for tensorvisc \n";
-
     m_tensorvisc = ExecViewManaged<Real * [2][2][NP][NP]>("TENSORVISC", m_num_elems);
     m_vec_sph2cart = ExecViewManaged<Real * [2][3][NP][NP]>("VEC_SPH2CART", m_num_elems);
   }
@@ -98,7 +92,6 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
   ExecViewManaged<Real *[NP][NP]>::HostMirror h_phis =
       Kokkos::create_mirror_view(m_phis);
 
-//either way this is ok, performed once, if this does not compile, call ctor always
   ExecViewManaged<Real *[2][2][NP][NP]>::HostMirror h_tensorvisc;
   ExecViewManaged<Real *[2][3][NP][NP]>::HostMirror h_vec_sph2cart;
   if( !consthv ){
@@ -155,7 +148,7 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
           }
         }
       }
-    }// inint 2x2 quantities
+    }// init 2d quantities
   }
   }
   if(!consthv){
@@ -169,8 +162,8 @@ void Elements::init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
           }
         }
       }
-    }// inint 2x2 quantities
-  }//ie
+    }// init 2d quantities
+  }//ie loop
   }//end if consthv
 
   Kokkos::deep_copy(m_fcor, h_fcor);

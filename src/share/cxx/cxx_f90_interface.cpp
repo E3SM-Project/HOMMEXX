@@ -35,7 +35,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","vert_remap_q_alg",remap_alg,{1,2});
   Errors::check_option("init_simulation_params_c","prescribed_wind",prescribed_wind,{false});
   Errors::check_option("init_simulation_params_c","hypervis_order",hypervis_order,{2});
-//  Errors::check_option("init_simulation_params_c","hypervis_scaling",hypervis_scaling,{0.0});
   Errors::check_option("init_simulation_params_c","use_semi_lagrangian_transport",use_semi_lagrangian_transport,{false});
   Errors::check_option("init_simulation_params_c","time_step_type",time_step_type,{5});
   Errors::check_option("init_simulation_params_c","limiter_option",limiter_option,{8});
@@ -82,8 +81,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Now this structure can be used safely
   params.params_set = true;
-
-std::cout << "AFTER call init_sim_params, params.hypervis_scaling " <<   params.hypervis_scaling << "\n"; 
 
 }
 
@@ -140,9 +137,6 @@ void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Pt
                          CF90Ptr &tensorvisc, CF90Ptr &vec_sph2cart,
                          const bool& consthv)
 {
-
-std::cout << "in init_elements_2d_c , consthv " << consthv << "\n";
-
   Elements& r = Context::singleton().get_elements ();
   r.init (num_elems, consthv);
   r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis,tensorvisc,vec_sph2cart,consthv);

@@ -113,10 +113,6 @@ public:
                    Homme::subview(m_elements.buffers.dptens,kv.ie),
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
     // Laplacian of velocity
-   //TENSOR CARTESIAN , but first iter is done with usual const hv laplace, sort out NUDIV here
-   /* m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
-                              Homme::subview(m_elements.buffers.vtens,kv.ie),
-                              Homme::subview(m_elements.buffers.vtens,kv.ie)); */
     m_sphere_ops.vlaplace_sphere_wk_cartesian(kv, 
                               Homme::subview(m_elements.m_tensorvisc,kv.ie),
                               Homme::subview(m_elements.m_vec_sph2cart,kv.ie),
@@ -163,11 +159,6 @@ public:
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(kv.team, NUM_LEV),
                            [&](const int &lev) {
 
-//m_elements.buffers.vtens(kv.ie,0,igp,jgp,lev) = 0;
-//m_elements.buffers.vtens(kv.ie,1,igp,jgp,lev) = 0;
-//m_elements.buffers.ttens(kv.ie,igp,jgp,lev) = 0;
-//m_elements.buffers.dptens(kv.ie,igp,jgp,lev) = 0;
-
         m_elements.m_derived_dpdiss_ave(kv.ie, igp, jgp, lev) +=
             m_data.eta_ave_w *
             m_elements.m_dp3d(kv.ie, m_data.np1, igp, jgp, lev) /
@@ -187,7 +178,6 @@ public:
     // ThreadVectorRange
     constexpr int NUM_BIHARMONIC_PHYSICAL_LEVELS = 3;
     constexpr int NUM_BIHARMONIC_LEV = (NUM_BIHARMONIC_PHYSICAL_LEVELS + VECTOR_SIZE - 1) / VECTOR_SIZE;
-
 
     if (m_data.nu_top > 0) {
 
