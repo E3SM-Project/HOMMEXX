@@ -17,6 +17,19 @@
 namespace Homme
 {
 
+template <typename VectorTagTypeT>
+static void print_vector_tag();
+
+template <>
+inline void print_vector_tag<KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>> () {
+  std::cout << "HOMMEXX vector tag: SIMD\n";
+}
+
+template <>
+inline void print_vector_tag<KokkosKernels::Batched::Experimental::AVX<Real, ExecSpace>> () {
+  std::cout << "HOMMEXX vector tag: AVX\n";
+}
+
 void initialize_hommexx_session ()
 {
   /* Make certain profiling is only done for code we're working on */
@@ -35,6 +48,7 @@ void initialize_hommexx_session ()
 #endif
     std::cout << "HOMMEXX AVX_VERSION: " << HOMMEXX_AVX_VERSION << "\n";
     std::cout << "HOMMEXX VECTOR_SIZE: " << VECTOR_SIZE << "\n";
+    print_vector_tag<VectorTagType>();
     std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
     std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
 #ifdef HOMMEXX_CONFIG_IS_CMAKE

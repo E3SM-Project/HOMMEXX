@@ -125,8 +125,8 @@ if (${CUDA_FOUND})
   endif ()
 endif ()
 
-# If AVX or Cuda don't take priority, use this software vector size.
-set (HOMMEXX_VECTOR_SIZE 8)
+SET (HOMMEXX_VECTOR_SIZE 8 CACHE STRING
+  "If AVX or Cuda don't take priority, use this software vector size.")
 
 # Print the compiler flags to be used
 if (CMAKE_BUILD_TYPE)
