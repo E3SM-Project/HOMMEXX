@@ -63,7 +63,7 @@ struct SerialLimiter<Kokkos::Cuda> {
 class EulerStepFunctorImpl {
   struct EulerStepData {
     EulerStepData ()
-      : qsize(-1), limiter_option(0), nu_p(0), nu_q(0)
+      : qsize(-1), limiter_option(0), nu_p(0), nu_q(0), consthv(1)
     {}
 
     int   qsize;
@@ -176,7 +176,8 @@ public:
 
   struct BIHPreNup {};
   struct BIHPreNoNup {};
-  struct BIHPost {};
+  struct BIHPostConstHV {};
+  struct BIHPostTensorHV {};
 
   /*
     ! get new min/max values, and also compute biharmonic mixing term
@@ -209,10 +210,15 @@ public:
     profiling_resume();
     assert(m_data.rhs_multiplier == 2.0);
 
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
+    if(m_data.consthv){
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPostConstHV>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
-
+    }else{
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPostTensorHV>(
+                             m_elements.num_elems() * m_data.qsize),
+                         *this);
+    }
     ExecSpace::fence();
     profiling_pause();
   }
@@ -281,16 +287,31 @@ public:
 
 
   KOKKOS_INLINE_FUNCTION
-  void operator() (const BIHPost&, const TeamMember& team) const {
+  void operator() (const BIHPostConstHV&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     team.team_barrier();
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
-    {
-      const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
-      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+   rhsviss_adjustment(kv, team);
+  }//end of BIHPostConstHV ()
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPostTensorHV&, const TeamMember& team) const {
+    KernelVariables kv(team,m_data.qsize);
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto tensor = Homme::subview(e.m_tensorvisc, kv.ie);
+    team.team_barrier();
+    m_sphere_ops.laplace_tensor(kv, tensor, qtens_biharmonic, qtens_biharmonic);
+    // divergence_sphere_wk provides the barrier.
+    rhsviss_adjustment(kv, team);
+    }//end of BIHPostTensorHV ()
+
+  void rhsviss_adjustment (KernelVariables & kv, const TeamMember & team) const {
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
+    const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
@@ -304,9 +325,6 @@ public:
             });
         });
     }
-  }//end of BIHPost ()
-
-
 
 
 
