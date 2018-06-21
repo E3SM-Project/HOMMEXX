@@ -21,6 +21,7 @@
 #include "ErrorDefs.hpp"
 #include "BoundaryExchange.hpp"
 #include "profiling.hpp"
+#include "vector/vector_pragmas.hpp"
 
 namespace Kokkos {
 struct Real2 {
@@ -704,8 +705,8 @@ private:
         Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
         f);
     } else {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev)
         f(ilev);
     }
@@ -855,8 +856,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
   forij {
     const auto& sphij = sphweights(i,j);
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       const auto& dpm = dpmass(i,j,lev);
       c(i,j,lev) = sphij*dpm;
@@ -866,8 +867,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     }
   }
 
-# pragma ivdep
-# pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
   forlev {
     if (qlim(0,lev) < 0)
       qlim(0,lev) = 0;
@@ -886,8 +887,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       Real addmass[NUM_PHYSICAL_LEV] = {0};
 
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           auto& xij = x(i,j,lev);
           Real delta = 0;
@@ -913,8 +914,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
       Real f[NUM_PHYSICAL_LEV] = {0};
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
           if (addmass[lev] <= 0) {
@@ -927,16 +928,16 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         }
       }
 
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         if (f[lev] != 0)
           f[lev] = addmass[lev] / f[lev];
       }
 
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
           if (addmass[lev] <= 0) {
@@ -953,8 +954,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     Real addmass[NUM_PHYSICAL_LEV] = {0};
 
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         Real delta = 0;
@@ -971,8 +972,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
     Real f[NUM_PHYSICAL_LEV] = {0};
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         if (addmass[lev] <= 0) {
@@ -985,16 +986,16 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       }
     }
 
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       if (f[lev] != 0)
         f[lev] = addmass[lev] / f[lev];
     }
 
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         if (addmass[lev] <= 0) {
@@ -1011,8 +1012,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   }
 
   forij {
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       x(i,j,lev) *= dpmass(i,j,lev);
     }
