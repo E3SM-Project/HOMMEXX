@@ -259,7 +259,6 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPreNup&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     dpdiss_adjustment(kv, team);
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
@@ -268,11 +267,11 @@ public:
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPreNoNup&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
   }
 
+  KOKKOS_INLINE_FUNCTION
   void dpdiss_adjustment (KernelVariables & kv, const TeamMember& team) const {
 
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
@@ -315,6 +314,7 @@ public:
     rhsviss_adjustment(kv, team);
     }//end of BIHPostTensorHV ()
 
+  KOKKOS_INLINE_FUNCTION
   void rhsviss_adjustment (KernelVariables & kv, const TeamMember & team) const {
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
