@@ -12,6 +12,8 @@
 #include "Config.hpp"
 #include "mpi/Comm.hpp"
 
+#include "vector/vector_pragmas.hpp"
+
 #include <iostream>
 
 namespace Homme
@@ -53,6 +55,13 @@ void initialize_hommexx_session ()
     std::cout << "HOMMEXX active AVX set:" << active_avx_string() << "\n";
     std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
     std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
+
+#ifndef HOMMEXX_NO_VECTOR_PRAGMAS
+    std::cout << "HOMMEXX has vector pragmas\n";
+#else
+    std::cout << "HOMMEXX doesn't have vector pragmas\n";
+#endif
+
 #ifdef HOMMEXX_CONFIG_IS_CMAKE
     std::cout << "HOMMEXX configured with CMake\n";
 # ifdef HAVE_CONFIG_H

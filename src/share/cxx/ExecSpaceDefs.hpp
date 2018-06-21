@@ -13,6 +13,7 @@
 
 #include "Config.hpp"
 #include "Dimensions.hpp"
+#include "vector/vector_pragmas.hpp"
 
 namespace Homme
 {
@@ -273,8 +274,8 @@ struct Dispatch {
     const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
     const Lambda& lambda)
   {
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     for (int k = 0; k < NP*NP; ++k)
       lambda(k);
   }
