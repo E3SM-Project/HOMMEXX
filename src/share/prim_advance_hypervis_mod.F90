@@ -184,10 +184,6 @@ module prim_advance_hypervis_mod
   if (hypervis_order == 2) then
      do ic=1,hypervis_subcycle
         call biharmonic_wk_dp3d(elem,dptens,dpflux,ttens,vtens,deriv,edge3,hybrid,nt,nets,nete)
-!ttens=0
-!vtens=0
-!dptens=0
-
         do ie=nets,nete
 
            ! comptue mean flux
