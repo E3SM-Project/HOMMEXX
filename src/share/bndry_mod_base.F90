@@ -10,7 +10,7 @@ module bndry_mod_base
 
   implicit none
   private
-  public :: bndry_exchangeV, ghost_exchangeVfull, compute_ghost_corner_orientation
+  public :: bndry_exchangeV, ghost_exchangeVfull
   public :: ghost_exchangeV
   public :: bndry_exchangeS
   public :: bndry_exchangeS_start
@@ -866,137 +866,6 @@ contains
 #endif
 
   end subroutine ghost_exchangeV
-
-  subroutine compute_ghost_corner_orientation(hybrid,elem,nets,nete)
-!
-!  this routine can NOT be called in a threaded region because then each thread
-!  will have its on ghostbuffer.   initghostbufer3D() should detect this and abort.
-!
-  use kinds, only : real_kind
-  use dimensions_mod, only: nelemd, np
-  use hybrid_mod, only : hybrid_t
-  use element_mod, only : element_t
-  use edge_mod, only : ghostvpackfull, ghostvunpackfull, &
-       initghostbuffer3D,freeghostbuffer3D
-  use control_mod, only : north,south,east,west,neast, nwest, seast, swest
-
-  implicit none
-
-  type (hybrid_t)      , intent(in) :: hybrid
-  type (element_t)     , intent(inout), target :: elem(:)
-  integer :: nets,nete
-  type (ghostBuffer3D_t)   :: ghostbuf_cv
-
-  real (kind=real_kind) :: cin(2,2,1,nets:nete)  !CE: fvm tracer
-  real (kind=real_kind) :: cout(-1:4,-1:4,1,nets:nete)  !CE: fvm tracer
-  integer :: i,j,ie,kptr,np1,np2,nc,nc1,nc2,k,nlev
-  logical :: fail,fail1,fail2
-  real (kind=real_kind) :: tol=.1
-  call syncmp(hybrid%par)
-!   if (hybrid%par%masterproc) print *,'computing ghost cell corner orientations'
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! first test on the Gauss Grid with same number of ghost cells:
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  nc=2   ! test using GLL interior points
-  nc1=-1
-  nc2=4
-
-  nlev=1
-  call initghostbuffer3D(ghostbuf_cv,nlev,nc)
-
-
-  do ie=nets,nete
-     cin(1,1,1,ie)=  elem(ie)%gdofp(1,1)
-     cin(nc,nc,1,ie)=  elem(ie)%gdofp(np,np)
-     cin(1,nc,1,ie)=   elem(ie)%gdofp(1,np)
-     cin(nc,1,1,ie)=  elem(ie)%gdofp(np,1)
-  enddo
-  cout=0
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  run ghost exchange on c array to get corner orientation
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  do ie=nets,nete
-     kptr=0
-     call ghostVpackfull(ghostbuf_cv, cin(:,:,:,ie),1,nc,nc,nlev,kptr,elem(ie)%desc)
-  end do
-  call ghost_exchangeVfull(hybrid%par,hybrid%ithr,ghostbuf_cv)
-  do ie=nets,nete
-     kptr=0
-     call ghostVunpackfull(ghostbuf_cv, cout(:,:,:,ie), nc1,nc2,nc,nlev, kptr, elem(ie)%desc)
-  enddo
-
-!       nc +--------+ 
-!        ^ | nw  ne |    
-!     j  | |        |
-!        1 | sw  se |
-!          +--------+
-!           1 --> nc
-!              i
-
-! check SW corner
-  do ie=nets,nete
-     fail1=.false.
-     fail2=.false.
-     if ( elem(ie)%desc%putmapP_ghost(swest) /= -1) then
-        if (abs(cout(nc1,1,1,ie)-cout(nc1,0,1,ie)) .gt. tol )  fail1=.true.
-        if (abs(cout(1,nc1,1,ie)-cout(0,nc1,1,ie)).gt.tol) fail2=.true.
-     endif
-     if (fail1 .neqv. fail2 ) call abortmp( 'ghost exchange SW orientation failure')
-     if (fail1) then
-        elem(ie)%desc%reverse(swest)=.true.
-        !print *,'reversion sw orientation ie',ie
-        !print *,elem(ie)%desc%reverse(nwest),elem(ie)%desc%reverse(north),elem(ie)%desc%reverse(neast)
-        !print *,elem(ie)%desc%reverse(west),' ',elem(ie)%desc%reverse(east)
-        !print *,elem(ie)%desc%reverse(swest),elem(ie)%desc%reverse(south),elem(ie)%desc%reverse(seast)
-     endif
-  enddo
-! check SE corner
-  do ie=nets,nete
-     fail1=.false.
-     fail2=.false.
-     if ( elem(ie)%desc%putmapP_ghost(seast) /= -1) then
-        if (abs(cout(nc2,1,1,ie)-cout(nc2,0,1,ie)) .gt. tol )  fail1=.true.
-        if (abs(cout(nc+1,nc1,1,ie)-cout(nc,nc1,1,ie)).gt.tol) fail2=.true.
-     endif
-     if (fail1 .neqv. fail2 ) call abortmp('ghost exchange SE orientation failure')
-     if (fail1) then
-        elem(ie)%desc%reverse(seast)=.true.
-     endif
-  enddo
-! check NW corner
-  do ie=nets,nete
-     fail1=.false.
-     fail2=.false.
-     if ( elem(ie)%desc%putmapP_ghost(nwest) /= -1) then
-        if (abs(cout(nc1,nc+1,1,ie)-cout(nc1,nc,1,ie)) .gt. tol )  fail1=.true.
-        if (abs(cout(1,nc2,1,ie)-cout(0,nc2,1,ie)).gt.tol) fail2=.true.
-     endif
-     if (fail1 .neqv. fail2 ) call abortmp( 'ghost exchange NW orientation failure')
-     if (fail1) then
-        elem(ie)%desc%reverse(nwest)=.true.
-     endif
-  enddo
-! check NE corner
-  do ie=nets,nete
-     fail1=.false.
-     fail2=.false.
-     if ( elem(ie)%desc%putmapP_ghost(neast) /= -1) then
-        if (abs(cout(nc2,nc+1,1,ie)-cout(nc2,nc,1,ie)) .gt. tol )  fail1=.true.
-        if (abs(cout(nc+1,nc2,1,ie)-cout(nc,nc2,1,ie)).gt.tol) fail2=.true.
-     endif
-     if (fail1 .neqv. fail2 ) call abortmp( 'ghost exchange NE orientation failure')
-     if (fail1) then
-        elem(ie)%desc%reverse(neast)=.true.
-     endif
-  enddo
-  call freeghostbuffer3D(ghostbuf_cv)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  end ghost exchange corner orientation
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  end subroutine
-
 
   subroutine sort_neighbor_buffer_mapping(par,elem,nets,nete)
 !

@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #ifndef HOMMEXX_EXEC_SPACE_DEFS_HPP
 #define HOMMEXX_EXEC_SPACE_DEFS_HPP
 
@@ -5,39 +11,40 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "Hommexx_config.h"
+#include "Config.hpp"
 #include "Dimensions.hpp"
+#include "vector/vector_pragmas.hpp"
 
 namespace Homme
 {
 
 // Some in-house names for Kokkos exec spaces, which are
 // always defined, possibly as alias of void
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 using Hommexx_Cuda = Kokkos::Cuda;
 #else
 using Hommexx_Cuda = void;
 #endif
 
-#ifdef KOKKOS_HAVE_OPENMP
+#ifdef KOKKOS_ENABLE_OPENMP
 using Hommexx_OpenMP = Kokkos::OpenMP;
 #else
 using Hommexx_OpenMP = void;
 #endif
 
-#ifdef KOKKOS_HAVE_PTHREADS
+#ifdef KOKKOS_ENABLE_PTHREADS
 using Hommexx_Threads = Kokkos::Threads;
 #else
 using Hommexx_Threads = void;
 #endif
 
-#ifdef KOKKOS_HAVE_SERIAL
+#ifdef KOKKOS_ENABLE_SERIAL
 using Hommexx_Serial = Kokkos::Serial;
 #else
 using Hommexx_Serial = void;
 #endif
 
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 # define HOMMEXX_STATIC
 #else
 # define HOMMEXX_STATIC static
@@ -267,8 +274,8 @@ struct Dispatch {
     const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
     const Lambda& lambda)
   {
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     for (int k = 0; k < NP*NP; ++k)
       lambda(k);
   }
@@ -295,7 +302,7 @@ struct Dispatch {
   }
 };
 
-#if defined KOKKOS_HAVE_CUDA
+#if defined KOKKOS_ENABLE_CUDA
 template <>
 struct Dispatch<Kokkos::Cuda> {
   using ExeSpace = Kokkos::Cuda;
@@ -378,6 +385,13 @@ struct Dispatch<Kokkos::Cuda> {
 #endif
   }
 };
+#endif
+
+#ifdef KOKKOS_ENABLE_CUDA
+// Cuda-provided GPU-safe replacements for std functions.
+using ::isnan;
+#else
+using std::isnan;
 #endif
 
 } // namespace Homme

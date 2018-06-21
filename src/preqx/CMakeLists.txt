@@ -76,15 +76,6 @@ SET(PREQX_DEPS_F90
   ${SRC_SHARE_DIR}/edgetype_mod.F90
   ${SRC_SHARE_DIR}/element_mod.F90
   ${SRC_SHARE_DIR}/filter_mod.F90
-  ${SRC_SHARE_DIR}/fvm_analytic_mod.F90
-  ${SRC_SHARE_DIR}/fvm_bsp_mod.F90
-  ${SRC_SHARE_DIR}/fvm_control_volume_mod.F90
-  ${SRC_SHARE_DIR}/fvm_filter_mod.F90
-  ${SRC_SHARE_DIR}/fvm_line_integrals_flux_mod.F90
-  ${SRC_SHARE_DIR}/fvm_line_integrals_mod.F90
-  ${SRC_SHARE_DIR}/fvm_mod.F90
-  ${SRC_SHARE_DIR}/fvm_reconstruction_mod.F90
-  ${SRC_SHARE_DIR}/fvm_transformation_mod.F90
   ${SRC_SHARE_DIR}/global_norms_mod.F90
   ${SRC_SHARE_DIR}/gridgraph_mod.F90
   ${SRC_SHARE_DIR}/hybrid_mod.F90
@@ -238,8 +229,38 @@ IF (${USE_KOKKOS_KERNELS})
   )
 ENDIF ()
 
+INCLUDE_DIRECTORIES(${PREQX_INCLUDE_DIRS})
+
 # Make SRCS global so the tests can access it
 SET(EXEC_SOURCES ${PREQX_SRCS})
+
+
+# Set up defaults if they are not given
+IF (NOT PREQX_NP)
+  SET (PREQX_NP 4)
+ENDIF ()
+IF (NOT PREQX_PLEV)
+  SET (PREQX_PLEV 72)
+ENDIF ()
+IF (NOT PREQX_USE_PIO)
+  SET (PREQX_USE_PIO FALSE)
+ENDIF ()
+IF (NOT PREQX_USE_ENERGY)
+  SET (PREQX_USE_ENERGY FALSE)
+ENDIF ()
+#this should be removed later
+IF (NOT PREQX_NC)
+  SET (PREQX_NC 4)
+ENDIF ()
+IF (NOT QSIZE_D)
+  SET (QSIZE_D 4)
+ENDIF ()
+
+MESSAGE(STATUS " in preqx_setup(): Building with QSIZE_D = ${QSIZE_D}")
+MESSAGE(STATUS " in preqx_setup(): Building with PREQX_NP = ${PREQX_NP}")
+MESSAGE(STATUS " in preqx_setup(): Building with PREQX_PLEV = ${PREQX_PLEV}")
+MESSAGE(STATUS " in preqx_setup(): Building with PREQX_USE_PIO = ${PREQX_USE_PIO}")
+MESSAGE(STATUS " in preqx_setup(): Building with PREQX_USE_ENERGY = ${PREQX_USE_ENERGY}")
 
 IF (${ENABLE_HORIZ_OPENMP} AND ${ENABLE_COLUMN_OPENMP})
   SET(NESTED_OPENMP TRUE CACHE BOOL "Both horizontal and column threading")
@@ -248,3 +269,11 @@ ENDIF ()
 MESSAGE (STATUS " +------------ Ending execution of PREQX_SETUP -------------+")
 
 ENDMACRO(PREQX_SETUP)
+
+#configure this for _c exec:
+SET (USE_KOKKOS_KERNELS TRUE)
+preqx_setup(USE_KOKKOS_KERNELS)
+createTestExec(preqx preqx ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY} ${QSIZE_D} Fortran)
+
+
+

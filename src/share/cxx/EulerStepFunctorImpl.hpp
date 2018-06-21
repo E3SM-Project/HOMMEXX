@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #ifndef HOMMEXX_EULER_STEP_FUNCTOR_IMPL_HPP
 #define HOMMEXX_EULER_STEP_FUNCTOR_IMPL_HPP
 
@@ -15,6 +21,7 @@
 #include "ErrorDefs.hpp"
 #include "BoundaryExchange.hpp"
 #include "profiling.hpp"
+#include "vector/vector_pragmas.hpp"
 
 namespace Kokkos {
 struct Real2 {
@@ -47,7 +54,7 @@ struct SerialLimiter {
       const ArrayGllLvl& irwrk);
 };
 // GPU doesn't have a serial impl.
-#if defined KOKKOS_HAVE_CUDA
+#if defined KOKKOS_ENABLE_CUDA
 template <>
 struct SerialLimiter<Kokkos::Cuda> {
   template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
@@ -537,7 +544,7 @@ public:
     m_data.rhs_multiplier = rhs_multiplier;
     m_data.DSSopt         = DSSopt;
 
-    if (m_data.limiter_option == 8) {
+    if (EulerStepFunctor::is_quasi_monotone(m_data.limiter_option)) {
       // when running lim8, we also need to limit the biharmonic, so that term
       // needs to be included in each euler step.  three possible algorithms
       // here:
@@ -591,6 +598,9 @@ private:
     if (m_data.limiter_option == 8) {
       limiter_optim_iter_full(kv);
       kv.team_barrier();
+    } else if (m_data.limiter_option == 9) {
+      limiter_clip_and_sum(kv);
+      kv.team_barrier();
     }
     apply_spheremp(kv);
   }
@@ -599,7 +609,8 @@ private:
   void compute_2d_advection_step (const KernelVariables& kv) const {
     const auto& c = m_data;
     const auto& e = m_elements;
-    const bool lim8 = c.limiter_option == 8;
+    const bool lim_quasi_monotone
+      = EulerStepFunctor::is_quasi_monotone(c.limiter_option);
     const bool add_ps_diss = c.nu_p > 0 && c.rhs_viss != 0.0;
     const Real diss_fac = add_ps_diss ? -c.rhs_viss * c.dt * c.nu_q : 0;
     const auto& f_dss = (c.DSSopt == DSSOption::ETA ?
@@ -618,7 +629,7 @@ private:
             const auto dp = e.buffers.pressure(kv.ie,i,j,k);
             e.buffers.vstar(kv.ie,0,i,j,k) = e.m_derived_vn0(kv.ie,0,i,j,k) / dp;
             e.buffers.vstar(kv.ie,1,i,j,k) = e.m_derived_vn0(kv.ie,1,i,j,k) / dp;
-            if (lim8) {
+            if (lim_quasi_monotone) {
               //! Note that the term dpdissk is independent of Q
               //! UN-DSS'ed dp at timelevel n0+1:
               e.buffers.dpdissk(kv.ie,i,j,k) = dp - c.dt * e.m_derived_divdp(kv.ie,i,j,k);
@@ -661,6 +672,21 @@ private:
         Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0));
     else
       limiter_optim_iter_full(kv.team, sphweights, dpmass, qlim, ptens);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void limiter_clip_and_sum (const KernelVariables& kv) const {
+    const auto sphweights = Homme::subview(m_elements.m_spheremp, kv.ie);
+    const auto dpmass = Homme::subview(m_elements.buffers.dpdissk, kv.ie);
+    const auto ptens = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto qlim = Homme::subview(m_tracers.qlim, kv.ie, kv.iq);
+
+    if ( ! OnGpu<ExecSpace>::value && kv.team.team_size() == 1)
+      SerialLimiter<ExecSpace>::run<9>(
+        sphweights, dpmass, qlim, ptens,
+        Homme::subview(m_sphere_ops.scalar_buf_ml, kv.team_idx, 0));
+    else
+      limiter_clip_and_sum(kv.team, sphweights, dpmass, qlim, ptens);
   }
 
   //! apply mass matrix, overwrite np1 with solution:
@@ -752,8 +778,8 @@ private:
         Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
         f);
     } else {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev)
         f(ilev);
     }
@@ -821,7 +847,7 @@ public: // Expose for unit testing.
     with_limiter_shell(team, Limit(), sphweights, dpmass, qlim, ptens);
   }
 
-  // This is limiter_option = 9 in ACME master. For now, just unit test it.
+  // This is limiter_option = 9 in ACME master.
   template <typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl>
   KOKKOS_INLINE_FUNCTION static void
   limiter_clip_and_sum (const TeamMember& team,
@@ -889,6 +915,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 ::run (const ArrayGll& sphweights, const ArrayGllLvl& idpmass,
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
        const ArrayGllLvl& irwrk) {
+
 # define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
 # define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
@@ -902,8 +929,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
   forij {
     const auto& sphij = sphweights(i,j);
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       const auto& dpm = dpmass(i,j,lev);
       c(i,j,lev) = sphij*dpm;
@@ -913,8 +940,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     }
   }
 
-# pragma ivdep
-# pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
   forlev {
     if (qlim(0,lev) < 0)
       qlim(0,lev) = 0;
@@ -933,8 +960,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       Real addmass[NUM_PHYSICAL_LEV] = {0};
 
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           auto& xij = x(i,j,lev);
           Real delta = 0;
@@ -960,8 +987,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
       Real f[NUM_PHYSICAL_LEV] = {0};
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
           if (addmass[lev] <= 0) {
@@ -974,16 +1001,16 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         }
       }
 
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         if (f[lev] != 0)
           f[lev] = addmass[lev] / f[lev];
       }
 
       forij {
-#       pragma ivdep
-#       pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
           if (addmass[lev] <= 0) {
@@ -1000,8 +1027,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
     Real addmass[NUM_PHYSICAL_LEV] = {0};
 
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         Real delta = 0;
@@ -1018,8 +1045,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
 
     Real f[NUM_PHYSICAL_LEV] = {0};
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         if (addmass[lev] <= 0) {
@@ -1032,16 +1059,16 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       }
     }
 
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       if (f[lev] != 0)
         f[lev] = addmass[lev] / f[lev];
     }
 
     forij {
-#     pragma ivdep
-#     pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
         if (addmass[lev] <= 0) {
@@ -1058,16 +1085,16 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   }
 
   forij {
-#   pragma ivdep
-#   pragma simd
+VECTOR_IVDEP_LOOP
+VECTOR_SIMD_LOOP
     forlev {
       x(i,j,lev) *= dpmass(i,j,lev);
     }
   }
-  
+
 # undef forlev
 # undef forij
-}
+}//end SerialLimiter
 
 }
 

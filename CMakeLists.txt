@@ -26,7 +26,7 @@ ENABLE_TESTING()
 SET (HOMME_TESTING_PROFILE "nightly" CACHE STRING "Determine how long/pervasive the testing is. Currently available options: 'dev', 'short', 'nightly'.")
 
 # Add the cmake/CMakeLists.txt file
-SET (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+SET (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/externals")
 
 # need to get the cmake_fortran_c_interface.h header
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
@@ -38,6 +38,9 @@ OPTION(PREFER_SHARED "Prefer linking with shared libraries." FALSE)
 
 # need to tell the source to use this capability
 ADD_DEFINITIONS(-DINCLUDE_CMAKE_FCI)
+
+# Tell share/cxx/Config.hpp that CMake is being used to build Hommexx.
+add_definitions(-DHOMMEXX_CONFIG_IS_CMAKE)
 
 SET (PERFORMANCE_PROFILE "" CACHE STRING "Whether to build and link with various profiler libraries")
 
@@ -96,9 +99,8 @@ ELSE()
   MESSAGE (ABORT "Invalid choice for 'HOMMEXX_EXEC_SPACE'. Valid options (case insensitive) are 'Cuda', 'OpenMP', 'Threads', 'Serial', 'Default'")
 ENDIF()
 
-# Execution space parameters. Ideally, these will go away because they can be
-# queried at runtime.
-SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 4 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
+# Execution space parameters. 8 is a nice size for V100.
+SET (HOMMEXX_CUDA_MIN_WARP_PER_TEAM 8 CACHE INT "Minimum number of warps to get 100% occoupancy on GPU")
 
 # An option to allow to use GPU pointers for MPI calls. The value of this option is irrelevant for CPU/KNL builds.
 OPTION (HOMMEXX_MPI_ON_DEVICE "Whether we want to use device pointers for MPI calls (relevant only for GPU builds)" ON)
@@ -123,8 +125,13 @@ if (${CUDA_FOUND})
   endif ()
 endif ()
 
+SET (HOMMEXX_VECTOR_SIZE 8 CACHE STRING
+  "If AVX or Cuda don't take priority, use this software vector size.")
+
 # Print the compiler flags to be used
-STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+if (CMAKE_BUILD_TYPE)
+  STRING (TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
+endif ()
 MESSAGE(STATUS "Fortran Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_Fortran_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 MESSAGE(STATUS "C Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 MESSAGE(STATUS "CXX Flags ${CMAKE_BUILD_TYPE} = ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")

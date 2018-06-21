@@ -56,12 +56,11 @@ module prim_advection_mod_base
 !
 !
   use kinds, only              : real_kind
-  use dimensions_mod, only     : nlev, nlevp, np, qsize, ntrac, nc
+  use dimensions_mod, only     : nlev, nlevp, np, qsize, nc
   use physical_constants, only : rgas, Rwater_vapor, kappa, g, rearth, rrearth, cp
   use derivative_mod, only     : gradient, vorticity, gradient_wk, derivative_t, divergence, &
                                  gradient_sphere, divergence_sphere
   use element_mod, only        : element_t
-  use fvm_control_volume_mod, only        : fvm_struct
   use filter_mod, only         : filter_t, filter_P
   use hybvcoord_mod, only      : hvcoord_t
   use time_mod, only           : TimeLevel_t, smooth, TimeLevel_Qdp
@@ -88,8 +87,8 @@ module prim_advection_mod_base
 
   public :: Prim_Advec_Init1, Prim_Advec_Init2, prim_advec_init_deriv
 #ifndef USE_KOKKOS_KERNELS
-  public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2, Prim_Advec_Tracers_remap_ALE
-  public :: prim_advec_tracers_fvm, vertical_remap_interface
+  public :: vertical_remap_interface
+  public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2
 #endif
 
   type (EdgeBuffer_t)      :: edgeAdv, edgeAdvp1, edgeAdvQminmax, edgeAdv1,  edgeveloc
@@ -146,7 +145,7 @@ contains
        n0_qdp,dt,Vstar,elem,deriv,Qtens, &
        rhs_viss,Qtens_biharmonic,np1_qdp)
     use kinds,          only : real_kind
-    use derivative_mod, only : derivative_t, limiter_optim_iter_full
+    use derivative_mod, only : derivative_t, limiter_optim_iter_full, limiter_clip_and_sum
     use element_mod,    only : element_t
     !
     ! Inputs
@@ -191,7 +190,7 @@ contains
           Vstar(:,:,1,k,ie) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
           Vstar(:,:,2,k,ie) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
 
-          if ( limiter_option == 8) then
+          if (( limiter_option == 8).or.( limiter_option == 9 )) then
              ! Note that the term dpdissk is independent of Q
              ! UN-DSS'ed dp at timelevel n0+1:
              dpdissk(:,:,k,ie) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
@@ -242,8 +241,15 @@ contains
 
          if ( limiter_option == 8) then
             ! apply limiter to Q = Qtens / dp_star
-            call limiter_optim_iter_full( Qtens(:,:,:,q,ie) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                 qmax(:,q,ie) , dpdissk(:,:,:,ie) )
+            !call t_startf('lim8')
+            call limiter_optim_iter_full( Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
+            !call t_stopf('lim8')
+         elseif ( limiter_option == 9 ) then
+            !call t_startf('lim9')
+            call limiter_clip_and_sum(    Qtens(:,:,:,q,ie), elem(ie)%spheremp(:,:), &
+                                          qmin(:,q,ie), qmax(:,q,ie), dpdissk(:,:,:,ie) )
+            !call t_stopf('lim9')
          endif
 
          ! apply mass matrix, overwrite np1 with solution:
@@ -320,20 +326,18 @@ contains
 
   end subroutine Prim_Advec_Init1
 
-  subroutine Prim_Advec_Init_deriv(hybrid,fvm_corners, fvm_points)
+  subroutine Prim_Advec_Init_deriv(hybrid)
 
     use kinds,          only : longdouble_kind
     use dimensions_mod, only : nc
     use derivative_mod, only : derivinit
     implicit none
     type (hybrid_t), intent(in) :: hybrid
-    real(kind=longdouble_kind), intent(in) :: fvm_corners(nc+1)
-    real(kind=longdouble_kind), intent(in) :: fvm_points(nc)
 
     ! ==================================
     ! Initialize derivative structure
     ! ==================================
-    call derivinit(deriv(hybrid%ithr),fvm_corners, fvm_points)
+    call derivinit(deriv(hybrid%ithr))
   end subroutine Prim_Advec_Init_deriv
 
   subroutine Prim_Advec_Init2(elem,hvcoord,hybrid)
@@ -345,153 +349,6 @@ contains
     type (hybrid_t)   , intent(in) :: hybrid
     !Nothing to do
   end subroutine Prim_Advec_Init2
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! fvm driver
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine Prim_Advec_Tracers_fvm(elem, fvm, deriv,hvcoord,hybrid,&
-        dt,tl,nets,nete)
-    use perf_mod, only : t_startf, t_stopf            ! _EXTERNAL
-    use vertremap_mod, only: remap1_nofilter  ! _EXTERNAL (actually INTERNAL)
-    use fvm_mod, only : cslam_runairdensity, cslam_runflux, edgeveloc
-    use fvm_mod, only: fvm_mcgregor, fvm_mcgregordss, fvm_rkdss
-    use fvm_mod, only : fvm_ideal_test, IDEAL_TEST_OFF, IDEAL_TEST_ANALYTICAL_WINDS
-    use fvm_mod, only : fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
-    use fvm_bsp_mod, only: get_boomerang_velocities_gll, get_solidbody_velocities_gll
-    use fvm_control_volume_mod, only : n0_fvm,np1_fvm,fvm_supercycling
-    use control_mod, only : tracer_transport_type
-    use control_mod, only : TRACERTRANSPORT_LAGRANGIAN_FVM, TRACERTRANSPORT_FLUXFORM_FVM
-    use time_mod,    only : time_at
-
-    implicit none
-    type (element_t), intent(inout)   :: elem(:)
-    type (fvm_struct), intent(inout)   :: fvm(:)
-    type (derivative_t), intent(in)   :: deriv
-    type (hvcoord_t)                  :: hvcoord
-    type (hybrid_t),     intent(in):: hybrid
-    type (TimeLevel_t)                :: tl
-
-    real(kind=real_kind) , intent(in) :: dt
-    integer,intent(in)                :: nets,nete
-
-
-    real (kind=real_kind), dimension(np,np,nlev)    :: dp_star
-    real (kind=real_kind), dimension(np,np,nlev)    :: dp
-    real (kind=real_kind)                           :: eta_dot_dpdn(np,np,nlevp)
-    integer :: np1,ie,k
-
-    real (kind=real_kind)  :: vstar(np,np,2)
-    real (kind=real_kind)  :: vhat(np,np,2)
-    real (kind=real_kind), dimension(np, np) :: v1, v2
-
-
-    call t_barrierf('sync_prim_advec_tracers_fvm', hybrid%par%comm)
-    call t_startf('prim_advec_tracers_fvm')
-    np1 = tl%np1
-
-    ! departure algorithm requires two velocities:
-    !
-    ! fvm%v0:        velocity at beginning of tracer timestep (time n0_qdp)
-    !                this was saved before the (possibly many) dynamics steps
-    ! elem%derived%vstar:
-    !                velocity at end of tracer timestep (time np1 = np1_qdp)
-    !                for lagrangian dynamics, this is on lagrangian levels
-    !                for eulerian dynamcis, this is on reference levels
-    !                and it should be interpolated.
-    !
-    do ie=nets,nete
-       elem(ie)%derived%vstar(:,:,:,:)=elem(ie)%state%v(:,:,:,:,np1)
-    enddo
-
-
-    if (rsplit==0) then
-       ! interpolate t+1 velocity from reference levels to lagrangian levels
-       ! For rsplit=0, we need to first compute lagrangian levels based on vertical velocity
-       ! which requires we first DSS mean vertical velocity from dynamics
-       ! note: we introduce a local eta_dot_dpdn() variable instead of DSSing elem%eta_dot_dpdn
-       ! so as to preserve BFB results in some HOMME regression tests
-       do ie=nets,nete
-          do k=1,nlevp
-             eta_dot_dpdn(:,:,k) = elem(ie)%derived%eta_dot_dpdn(:,:,k)*elem(ie)%spheremp(:,:)
-          enddo
-          ! eta_dot_dpdn at nlevp is zero, so we dont boundary exchange it:
-          call edgeVpack(edgeAdv1,eta_dot_dpdn(:,:,1:nlev),nlev,0,ie)
-       enddo
-
-       call t_startf('pat_fvm_bexchV')
-       call bndry_exchangeV(hybrid,edgeAdv1)
-       call t_stopf('pat_fvm_bexchV')
-
-       do ie=nets,nete
-          ! restor interior values.  we could avoid this if we created a global array for eta_dot_dpdn
-          do k=1,nlevp
-             eta_dot_dpdn(:,:,k) = elem(ie)%derived%eta_dot_dpdn(:,:,k)*elem(ie)%spheremp(:,:)
-          enddo
-          ! unpack DSSed edge data
-          call edgeVunpack(edgeAdv1,eta_dot_dpdn(:,:,1:nlev),nlev,0,ie)
-          do k=1,nlevp
-             eta_dot_dpdn(:,:,k) = eta_dot_dpdn(:,:,k)*elem(ie)%rspheremp(:,:)
-          enddo
-
-
-          ! SET VERTICAL VELOCITY TO ZERO FOR DEBUGGING
-          !        elem(ie)%derived%eta_dot_dpdn(:,:,:)=0
-          ! elem%state%u(np1)  = velocity at time t+1 on reference levels
-          ! elem%derived%vstar = velocity at t+1 on floating levels (computed below)
-!           call remap_UV_ref2lagrange(np1,dt,elem,hvcoord,ie)
-          do k=1,nlev
-             dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
-             dp_star(:,:,k) = dp(:,:,k) + dt*(eta_dot_dpdn(:,:,k+1) -   eta_dot_dpdn(:,:,k))
-             if (fvm_ideal_test == IDEAL_TEST_ANALYTICAL_WINDS) then
-               if (fvm_test_type == IDEAL_TEST_BOOMERANG) then
-                 elem(ie)%derived%vstar(:,:,:,k)=get_boomerang_velocities_gll(elem(ie), time_at(np1))
-               else if (fvm_test_type == IDEAL_TEST_SOLIDBODY) then
-                 elem(ie)%derived%vstar(:,:,:,k)=get_solidbody_velocities_gll(elem(ie), time_at(np1))
-               else
-                 call abortmp('Bad fvm_test_type in prim_step')
-               end if
-             end if
-          enddo
-          call remap1_nofilter(elem(ie)%derived%vstar,np,1,dp,dp_star)
-       end do
-    else
-       ! do nothing
-       ! for rsplit>0:  dynamics is also vertically Lagrangian, so we do not need
-       ! to interpolate v(np1).
-    endif
-
-
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ! 2D advection step
-    !
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!------------------------------------------------------------------------------------
-!     call t_startf('fvm_depalg')
-
-!     call fvm_mcgregordss(elem,fvm,nets,nete, hybrid, deriv, dt*fvm_supercycling, 3)
-    call fvm_rkdss(elem,fvm,nets,nete, hybrid, deriv, dt*fvm_supercycling, 3)
-    write(*,*) "fvm_rkdss dt ",dt*fvm_supercycling
-!     call t_stopf('fvm_depalg')
-
-!------------------------------------------------------------------------------------
-
-    ! fvm departure calcluation should use vstar.
-    ! from c(n0) compute c(np1):
-    if (tracer_transport_type == TRACERTRANSPORT_FLUXFORM_FVM) then
-      call cslam_runflux(elem,fvm,hybrid,deriv,dt,tl,nets,nete,hvcoord%hyai(1)*hvcoord%ps0)
-    else if (tracer_transport_type == TRACERTRANSPORT_LAGRANGIAN_FVM) then
-      call cslam_runairdensity(elem,fvm,hybrid,deriv,dt,tl,nets,nete,hvcoord%hyai(1)*hvcoord%ps0)
-    else
-      call abortmp('Bad tracer_transport_type in Prim_Advec_Tracers_fvm')
-    end if
-
-    call t_stopf('prim_advec_tracers_fvm')
-  end subroutine Prim_Advec_Tracers_fvm
-
-
 
 !=================================================================================================!
 #ifndef USE_KOKKOS_KERNELS
@@ -509,207 +366,8 @@ contains
     integer              , intent(in   ) :: nete
 
 
-  if (use_semi_lagrange_transport) then
-    call Prim_Advec_Tracers_remap_ALE( elem , deriv ,                 hybrid , dt , tl , nets , nete )
-
-  else
     call Prim_Advec_Tracers_remap_rk2( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
-  end if
   end subroutine Prim_Advec_Tracers_remap
-
-
-
-subroutine  Prim_Advec_Tracers_remap_ALE( elem , deriv , hybrid , dt , tl , nets , nete )
-  use coordinate_systems_mod, only : cartesian3D_t, cartesian2D_t
-  use dimensions_mod,         only : max_neigh_edges
-  use edge_mod,               only : initghostbuffer3D, ghostVpack_unoriented, ghostVunpack_unoriented
-  use bndry_mod,              only : ghost_exchangevfull
-  use interpolate_mod,        only : interpolate_tracers, minmax_tracers
-  use control_mod   ,         only : qsplit
-  use global_norms_mod,       only : wrap_repro_sum
-  use parallel_mod,           only: global_shared_buf, global_shared_sum, syncmp
-  use control_mod,            only : use_semi_lagrange_transport_local_conservation
-
-
-
-  implicit none
-  type (element_t)     , intent(inout) :: elem(:)
-  type (derivative_t)  , intent(in   ) :: deriv
-  type (hybrid_t)      , intent(in   ) :: hybrid
-  real(kind=real_kind) , intent(in   ) :: dt
-  type (TimeLevel_t)   , intent(in   ) :: tl
-  integer              , intent(in   ) :: nets
-  integer              , intent(in   ) :: nete
-
-
-  type(cartesian3D_t)                           :: dep_points  (np,np)
-  integer                                       :: elem_indexes(np,np)
-  type(cartesian2D_t)                           :: para_coords (np,np)
-  real(kind=real_kind)                          :: Que         (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: Que_t       (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: minq        (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: maxq        (np,np,nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: f                      (qsize)
-  real(kind=real_kind)                          :: g                      (qsize)
-  real(kind=real_kind)                          :: mass              (nlev,qsize)
-  real(kind=real_kind)                          :: elem_mass         (nlev,qsize,nets:nete)
-  real(kind=real_kind)                          :: rho         (np,np,nlev,      nets:nete)
-
-  real(kind=real_kind)                          :: neigh_q     (np,np,qsize,max_neigh_edges+1)
-  real(kind=real_kind)                          :: u           (np,np,qsize)
-
-  integer                                       :: i,j,k,l,n,q,ie,kptr, n0_qdp, np1_qdp
-  integer                                       :: num_neighbors
-
-  call t_barrierf('Prim_Advec_Tracers_remap_ALE', hybrid%par%comm)
-  call t_startf('Prim_Advec_Tracers_remap_ALE')
-
-  call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
-
-  ! compute displacements for departure grid
-  ! store in elem%derived%vstar
-  call ALE_RKdss (elem, nets, nete, hybrid, deriv, dt, tl)
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  run ghost exchange to get global ID of all neighbors
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !
-  call t_startf('Prim_Advec_Tracers_remap_ALE_ghost_exchange')
-  do ie=nets,nete
-     kptr=0
-     do k=1,nlev
-     do q=1,qsize
-        ! note: pack so that tracers per level are contiguous so we can unpack into
-        ! array neigh_q()
-        elem(ie)%state%Q(:,:,k,q) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) / elem(ie)%derived%dp(:,:,k)
-        call ghostVpack_unoriented(ghostbuf_tr, elem(ie)%state%Q(:,:,k,q),np,1,kptr,elem(ie)%desc)
-        kptr=kptr+1
-     enddo
-     enddo
-  end do
-
-  call t_startf('pat_remap_ale_gexchV')
-  call ghost_exchangeVfull(hybrid%par,hybrid%ithr,ghostbuf_tr)
-  call t_stopf('pat_remap_ale_gexchV')
-
-  do ie=nets,nete
-     num_neighbors = elem(ie)%desc%actual_neigh_edges+1
-     do k=1,nlev
-
-        ! find departure points
-        call ALE_departure_from_gll     (dep_points, elem(ie)%derived%vstar(:,:,:,k), elem(ie), dt)
-
-        ! find element containing departure point
-        call ALE_elems_with_dep_points  (elem_indexes, dep_points, num_neighbors, elem(ie)%desc%neigh_corners)
-
-        ! compute the parametric points
-        call ALE_parametric_coords      (para_coords, elem_indexes, dep_points, num_neighbors, elem(ie)%desc%neigh_corners)
-
-        ! for each level k, unpack all tracer neighbor data on that level
-        kptr=(k-1)*qsize
-        neigh_q=0
-        u(:,:,:) = elem(ie)%state%Q(:,:,k,1:qsize)
-        call ghostVunpack_unoriented (ghostbuf_tr, neigh_q, np, qsize, kptr, elem(ie)%desc, elem(ie)%GlobalId, u)
-
-        do i=1,np
-        do j=1,np
-          ! interpolate tracers to deperature grid
-          call interpolate_tracers     (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f)
-          elem(ie)%state%Q(i,j,k,:) = f
-!         call minmax_tracers          (para_coords(i,j), neigh_q(:,:,:,elem_indexes(i,j)),f,g)
-          do q=1,qsize
-            f(q) = MINVAL(neigh_q(:,:,q,elem_indexes(i,j)))
-            g(q) = MAXVAL(neigh_q(:,:,q,elem_indexes(i,j)))
-          end do
-          minq(i,j,k,:,ie) = f
-          maxq(i,j,k,:,ie) = g
-        enddo
-        enddo
-
-     end do
-  end do
-
-
-  call t_stopf('Prim_Advec_Tracers_remap_ALE_ghost_exchange')
-  ! compute original mass, at tl_1%n0
-  elem_mass = 0
-  do ie=nets,nete
-    n=0
-    do k=1,nlev
-    do q=1,qsize
-      n=n+1
-      global_shared_buf(ie,n) = 0
-      do j=1,np
-        global_shared_buf(ie,n) = global_shared_buf(ie,n) + DOT_PRODUCT(elem(ie)%state%Qdp(:,j,k,q,n0_qdp),elem(ie)%spheremp(:,j))
-        elem_mass(k,q,ie)       = elem_mass(k,q,ie)       + DOT_PRODUCT(elem(ie)%state%Qdp(:,j,k,q,n0_qdp),elem(ie)%spheremp(:,j))
-      end do
-    end do
-    end do
-  end do
-  call wrap_repro_sum(nvars=n, comm=hybrid%par%comm)
-  n=0
-  do k=1,nlev
-  do q=1,qsize
-    n=n+1
-    mass(k,q) = global_shared_sum(n)
-  enddo
-  enddo
-
-
-  do ie=nets,nete
-  do k=1,nlev
-    rho(:,:,k,ie) = elem(ie)%spheremp(:,:)*elem(ie)%state%dp3d(:,:,k,tl%np1)
-  end do
-  end do
-
-  do ie=nets,nete
-    Que_t(:,:,:,1:qsize,ie) = elem(ie)%state%Q(:,:,:,1:qsize)
-  end do
-  call t_startf('Prim_Advec_Tracers_remap_ALE_Cobra')
-  if (use_semi_lagrange_transport_local_conservation) then
-    call Cobra_Elem (Que, Que_t, rho, minq, maxq, elem_mass, hybrid, nets, nete)
-  else
-    call Cobra_SLBQP(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
-  end if
-  call t_stopf('Prim_Advec_Tracers_remap_ALE_Cobra')
-
-  do ie=nets,nete
-    elem(ie)%state%Q(:,:,:,1:qsize) =  Que(:,:,:,1:qsize,ie)
-  end do
-
-
-  do ie=nets,nete
-  do k=1,nlev
-  do q=1,qsize
-     ! note: pack so that tracers per level are contiguous so we can unpack into
-     ! array neigh_q()
-     elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%state%Q(:,:,k,q) * elem(ie)%state%dp3d(:,:,k,tl%np1)
-  enddo
-  enddo
-  end do
-
-
-! do ie=nets,nete
-!    do q = 1 , qsize
-!       do k = 1 , nlev    !  Potential loop inversion (AAM)
-!          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:)* elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
-!       enddo
-!    enddo
-!     call edgeVpack(edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
-! enddo
-! call bndry_exchangeV( hybrid , edgeAdv    )
-! do ie = nets , nete
-!    call edgeVunpack( edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
-!    do q = 1 , qsize
-!       do k = 1 , nlev    !  Potential loop inversion (AAM)
-!          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
-!       enddo
-!    enddo
-! enddo
-  call t_stopf('Prim_Advec_Tracers_remap_ALE')
-
-
-end subroutine Prim_Advec_Tracers_remap_ALE
 
 subroutine VDOT(rp,Que,rho,mass,hybrid,nets,nete)
   use parallel_mod,        only: global_shared_buf, global_shared_sum
@@ -977,154 +635,6 @@ subroutine Cobra_Elem(Que, Que_t, rho, minq, maxq, mass, hybrid, nets, nete)
 ! if (hybrid%par%masterproc) print *,__FILE__,__LINE__," MAXVAL(ABS(rc)):",MAXVAL(ABS(rc)),eta," nclip:",nclip
 end subroutine Cobra_Elem
 
-! ----------------------------------------------------------------------------------!
-!SUBROUTINE ALE_RKDSS-----------------------------------------------CE-for FVM!
-! AUTHOR: CHRISTOPH ERATH, MARK TAYLOR, 06. December 2012
-!
-! DESCRIPTION: ! create a runge kutta taylor serios mixture to calculate the departure grid
-!
-! CALLS:
-! INPUT:
-!
-! OUTPUT:
-!-----------------------------------------------------------------------------------!
-
-! this will calculate the velocity at time t+1/2  along the trajectory s(t) given the velocities
-! at the GLL points at time t and t+1 using a second order time accurate formulation.
-
-
-subroutine ALE_RKdss(elem, nets, nete, hy, deriv, dt, tl)
-
-  use derivative_mod,  only : derivative_t, ugradv_sphere
-  use edge_mod,        only : edgevpack, edgevunpack
-  use edgetype_mod,    only : EdgeBuffer_t
-  use bndry_mod,       only : bndry_exchangev
-  use kinds,           only : real_kind
-  use hybrid_mod,      only : hybrid_t
-  use element_mod,     only : element_t
-  use dimensions_mod,   only : np, nlev
-
-  implicit none
-
-  type (element_t)     , intent(inout)             :: elem(:)
-  integer              , intent(in   )             :: nets
-  integer              , intent(in   )             :: nete
-  type (hybrid_t)      , intent(in)                :: hy ! distributed parallel structure (shared)
-  type (derivative_t)  , intent(in)                :: deriv ! derivative struct
-  real (kind=real_kind), intent(in)                :: dt ! timestep
-  type (TimeLevel_t)   , intent(in)                :: tl
-
-  integer                                          :: ie, k
-  real (kind=real_kind), dimension(np,np,2)        :: vtmp
-  integer :: np1
-
-  np1 = tl%np1
-
-
-! RK-SSP 2 stage 2nd order:
-!     x*(t+1) = x(t) + U(x(t),t) dt
-!     x(t+1) = x(t) +  1/2 ( U(x*(t+1),t+1) + U(x(t),t) ) dt
-! apply taylor series:
-!  U(x*(t+1),t+1) = U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1)
-!
-! x(t+1) = x(t) +  1/2 ( U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1) + U(x(t),t) ) dt
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + (x*(t+1)-x(t)) gradU(x(t),t+1) + U(x(t),t) )
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + U(x(t),t) + (x*(t+1)-x(t)) gradU(x(t),t+1) )
-! (x(t+1) - x(t)) / dt =  1/2 ( U(x(t),t+1) + U(x(t),t) + U(x(t),t) dt  gradU(x(t),t+1) )
-!
-!
-!  (x(t+1)-x(t))/dt =  1/2(U(x(t),t+1) + U(x(t),t) + dt U(x(t),t) gradU(x(t),t+1))
-!
-! suppose dt = -ts (we go backward)
-!  (x(t-ts)-x(t))/-ts =  1/2( U(x(t),t-ts)+U(x(t),t)) - ts 1/2 U(x(t),t) gradU(x(t),t-ts)
-!
-!  x(t-ts) = x(t)) -ts * [ 1/2( U(x(t),t-ts)+U(x(t),t)) - ts 1/2 U(x(t),t) gradU(x(t),t-ts) ]
-!
-!    !------------------------------------------------------------------------------------
-
-  do ie=nets,nete
-     ! vstarn0 = U(x,t)
-     ! vstar   = U(x,t+1)
-    do k=1,nlev
-      vtmp(:,:,:)=ugradv_sphere(elem(ie)%state%v(:,:,:,k,np1), elem(ie)%derived%vstar(:,:,:,k),deriv,elem(ie))
-
-      elem(ie)%derived%vstar(:,:,:,k) = &
-           (elem(ie)%state%v(:,:,:,k,np1) + elem(ie)%derived%vstar(:,:,:,k))/2 - dt*vtmp(:,:,:)/2
-
-      elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%spheremp(:,:)
-      elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%spheremp(:,:)
-    enddo
-    call edgeVpack(edgeveloc,elem(ie)%derived%vstar,2*nlev,0,ie)
-  enddo
-
-  call t_startf('ALE_RKdss_bexchV')
-  call bndry_exchangeV(hy,edgeveloc)
-  call t_stopf('ALE_RKdss_bexchV')
-
-  do ie=nets,nete
-    call edgeVunpack(edgeveloc,elem(ie)%derived%vstar,2*nlev,0,ie)
-    do k=1, nlev
-      elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%rspheremp(:,:)
-      elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%rspheremp(:,:)
-    end do
-  end do
-end subroutine ALE_RKdss
-
-! ----------------------------------------------------------------------------------!
-!SUBROUTINE FVM_DEP_FROM_GLL----------------------------------------------CE-for FVM!
-! AUTHOR: CHRISTOPH ERATH, MARK TAYLOR 14. December 2011                            !
-! DESCRIPTION: calculates the deparute grid for fvm coming from the gll points      !
-!                                                                                   !
-! CALLS:
-! INPUT:
-!
-! OUTPUT:
-!-----------------------------------------------------------------------------------!
-subroutine ALE_departure_from_gll(acart, vstar, elem, dt)
-  use physical_constants,     only : rearth
-  use coordinate_systems_mod, only : spherical_polar_t, cartesian3D_t, change_coordinates
-  use time_mod,               only : timelevel_t
-  use element_mod,            only : element_t
-  use kinds,                  only : real_kind
-  use dimensions_mod,         only : np
-
-  implicit none
-
-  type(cartesian3D_t)     ,intent(out)  :: acart(np,np)
-  real (kind=real_kind)   ,intent(in)   :: vstar(np,np,2)
-  type (element_t)        ,intent(in)   :: elem
-  real (kind=real_kind)   ,intent(in)   :: dt
-
-  integer                               :: i,j
-
-  real (kind=real_kind)                 :: uxyz (np,np,3)
-
-   ! convert velocity from lat/lon to cartesian 3D
-
-  do i=1,3
-     ! Summing along the third dimension is a sum over components for each point.
-     ! (This is just a faster way of doing a dot product for each grid point,
-     ! since reindexing the inputs to use the intrinsic effectively would be
-     ! just asking for trouble.)
-     uxyz(:,:,i)=sum( elem%vec_sphere2cart(:,:,i,:)*vstar(:,:,:) ,3)
-  end do
-  ! interpolate velocity to fvm nodes
-  ! compute departure point
-  ! crude, 1st order accurate approximation.  to be improved
-  do i=1,np
-     do j=1,np
-        acart(i,j) = change_coordinates(elem%spherep(i,j))
-        acart(i,j)%x = acart(i,j)%x - dt*uxyz(i,j,1)/rearth
-        acart(i,j)%y = acart(i,j)%y - dt*uxyz(i,j,2)/rearth
-        acart(i,j)%z = acart(i,j)%z - dt*uxyz(i,j,3)/rearth
-     enddo
-  enddo
-
-end subroutine ALE_departure_from_gll
-
-
-
-
 subroutine ALE_elems_with_dep_points (elem_indexes, dep_points, num_neighbors, ngh_corners)
 
   use element_mod,            only : element_t
@@ -1367,30 +877,12 @@ subroutine  ALE_parametric_coords (parametric_coord, elem_indexes, dep_points, n
     sphere(:,j) = change_coordinates(dep_points(:,j))
   end do
 
-!!$  call t_startf('Prim_Advec_Tracers_remap_ALE_parametric_coords_cart')
-!!$  do i=1,np
-!!$    do j=1,np
-!!$      n = elem_indexes(i,j)
-!!$      ! Mark will fill in  parametric_coordinates for corners.
-!!$      parametric_coord(i,j) = cartesian_parametric_coordinates(sphere(i,j),ngh_corners(:,n))
-!!$    end do
-!!$  end do
-!!$  call t_stopf('Prim_Advec_Tracers_remap_ALE_parametric_coords_cart')
-!  call t_startf('Prim_Advec_Tracers_remap_ALE_parametric_coords_dmap')
   do i=1,np
     do j=1,np
       n = elem_indexes(i,j)
-      !parametric_test(i,j)  = parametric_coordinates(sphere(i,j),ngh_corners(:,n))
       parametric_coord(i,j)= parametric_coordinates(sphere(i,j),ngh_corners(:,n))
     end do
   end do
-!  call t_stopf('Prim_Advec_Tracers_remap_ALE_parametric_coords_dmap')
-! do i=1,np
-!   do j=1,np
-!     d = distance(parametric_coord(i,j),parametric_test(i,j))
-!     print *,__LINE__,parametric_coord(i,j), parametric_test(i,j), d
-!   end do
-! end do
 end subroutine ALE_parametric_coords
 
 
@@ -1489,7 +981,7 @@ end subroutine ALE_parametric_coords
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !  Dissipation
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    if ( limiter_option == 8  ) then
+    if ( (limiter_option == 8) .or. (limiter_option == 9) ) then
       ! dissipation was applied in RHS.
     else
       call t_startf('ah_scalar')
@@ -1621,7 +1113,7 @@ end subroutine ALE_parametric_coords
     !   compute biharmonic mixing term f
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     rhs_viss = 0
-    if ( limiter_option == 8  ) then
+    if ( (limiter_option == 8) .or. (limiter_option == 9) ) then
        call t_startf('bihmix_qminmax')
        ! when running lim8, we also need to limit the biharmonic, so that term needs
        ! to be included in each euler step.  three possible algorithms here:
@@ -1771,7 +1263,7 @@ end subroutine ALE_parametric_coords
        endif
        call t_stopf('bihmix_qminmax')
     endif  ! compute biharmonic mixing term and qmin/qmax
-    ! end of limiter_option == 8
+    ! end of limiter_option == 8 or == 9
 
 
     call t_startf('eus_2d_advec')
@@ -2006,28 +1498,25 @@ end subroutine ALE_parametric_coords
 #endif
 
 #ifndef USE_KOKKOS_KERNELS
-  subroutine vertical_remap_interface(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap_interface(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
     use kinds,          only: real_kind
     use hybvcoord_mod,  only: hvcoord_t
     use hybrid_mod,     only: hybrid_t
-
-    use fvm_control_volume_mod, only : fvm_struct
 
     implicit none
 
     type (hybrid_t),  intent(in)      :: hybrid  ! distributed parallel structure (shared)
     type (element_t), intent(inout)   :: elem(:)
-    type(fvm_struct), intent(inout)   :: fvm(:)
     type (hvcoord_t), intent(in)      :: hvcoord
     real (kind=real_kind), intent(in) :: dt
-    integer, intent(in)               :: np1,np1_qdp,np1_fvm,nets,nete
+    integer, intent(in)               :: np1,np1_qdp,nets,nete
 
     call t_startf('total vertical remap time')
-    call vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+    call vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
     call t_stopf('total vertical remap time')
   end subroutine vertical_remap_interface
 
-  subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
 
   ! This routine is called at the end of the vertically Lagrangian
   ! dynamics step to compute the vertical flux needed to get back
@@ -2047,19 +1536,14 @@ end subroutine ALE_parametric_coords
   use control_mod,    only: rsplit, tracer_transport_type
   use parallel_mod,   only: abortmp
   use hybrid_mod,     only: hybrid_t
-  use derivative_mod, only: interpolate_gll2fvm_points
-
-  use fvm_control_volume_mod, only : fvm_struct
 
   type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
-  type(fvm_struct), intent(inout) :: fvm(:)
-  real (kind=real_kind)           :: cdp(1:nc,1:nc,nlev,ntrac)
   real (kind=real_kind)           :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
   type (element_t), intent(inout) :: elem(:)
   type (hvcoord_t)                :: hvcoord
   real (kind=real_kind)           :: dt
 
-  integer :: ie,i,j,k,np1,nets,nete,np1_qdp,np1_fvm
+  integer :: ie,i,j,k,np1,nets,nete,np1_qdp
   integer :: q
 
   real (kind=real_kind), dimension(np,np,nlev)  :: dp,dp_star

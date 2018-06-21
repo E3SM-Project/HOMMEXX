@@ -136,10 +136,11 @@ if (BUILD_HOMMEXX_OPENMP)
   set_property (GLOBAL PROPERTY Label BowmanHOMMEXXOpenMP)
   
   set (CONFIGURE_OPTIONS
-    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme/cmake/machineFiles/ellis.cmake"
+    "-C${CTEST_SOURCE_DIRECTORY}/HOMMEXX/cmake/machineFiles/ellis.cmake"
     "-DUSE_NUM_PROCS=24"
     "-DUSE_TRILINOS=FALSE"
     "-DHOMMEXX_FPMODEL=strict"
+    "-DCMAKE_BUILD_TYPE="
     "-DKOKKOS_PATH=${CTEST_BINARY_DIRECTORY}/KokkosInstall"
     "-DHOMME_BASELINE_DIR=/home/projects/hommexx/baselines/HOMMEXX_baseline/build" 
     )
@@ -150,7 +151,7 @@ if (BUILD_HOMMEXX_OPENMP)
 
   CTEST_CONFIGURE(
     BUILD "${CTEST_BINARY_DIRECTORY}/HOMMEXXBuild"
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX/components/homme"
+    SOURCE "${CTEST_SOURCE_DIRECTORY}/HOMMEXX"
     OPTIONS "${CONFIGURE_OPTIONS}"
     RETURN_VALUE HAD_ERROR
     )

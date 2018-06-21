@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #include <cassert>
 
 #include <sstream>
@@ -5,7 +11,7 @@
 #include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
 
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
 # include <cuda.h>
 #endif
 
@@ -16,41 +22,37 @@ namespace Homme {
 // own. As a side benefit, we'll end up running on GPU platforms optimally
 // without having to specify --kokkos-ndevices on the command line.
 void initialize_kokkos () {
-#ifdef KOKKOS_HAVE_CUDA
+  // This is in fact const char*, but Kokkos::initialize requires char*.
+  std::vector<char*> args;
+
+  //   This is the only way to get the round-robin rank assignment Kokkos
+  // provides, as that algorithm is hardcoded in Kokkos::initialize(int& narg,
+  // char* arg[]). Once the behavior is exposed in the InitArguments version of
+  // initialize, we can remove this string code.
+  //   If for some reason we're running on a GPU platform, have Cuda enabled,
+  // but are using a different execution space, this initialization is still
+  // OK. The rank gets a GPU assigned and simply will ignore it.
+#ifdef KOKKOS_ENABLE_CUDA
   int nd;
   const auto ret = cudaGetDeviceCount(&nd);
   if (ret != cudaSuccess) {
     // It isn't a big deal if we can't get the device count.
     nd = 1;
   }
-  // This may seem hacky for multiple reasons.
-  //   First, it's the only way to get the round-robin rank assignment
-  // Kokkos provides, as that algorithm is hardcoded in
-  // Kokkos::initialize(int& narg, char* arg[]).
-  //   Second, the string stuff is a bit hacky. It's to get around the
-  // fact that the second arg to initialize is char*[], not const
-  // char*[], even though the second is almost surely the intent (they
-  // want to modify args, not args[i]). I *could* const_cast
-  // ss.str().c_str(), but instead I make a vector<char> whose data
-  // could in principle be modified.
-  //   By the way, if for some reason we're running on a GPU platform,
-  // have Cuda enabled, but are using a different execution space,
-  // this initialization is still OK. The rank gets a GPU assigned and
-  // simply will ignore it.
-  {
-    std::stringstream ss;
-    ss << "--kokkos-ndevices=" << nd;
-    const auto key = ss.str();
-    std::vector<char> str(key.size()+1);
-    std::copy(key.begin(), key.end(), str.begin());
-    str.back() = 0;
-    char* args[] = {str.data()};
-    int narg = 1;
-    Kokkos::initialize(narg, args);
-  }
-#else
-  Kokkos::initialize();
+  std::stringstream ss;
+  ss << "--kokkos-ndevices=" << nd;
+  const auto key = ss.str();
+  std::vector<char> str(key.size()+1);
+  std::copy(key.begin(), key.end(), str.begin());
+  str.back() = 0;
+  args.push_back(const_cast<char*>(str.data()));
 #endif
+
+  const char* silence = "--kokkos-disable-warnings";
+  args.push_back(const_cast<char*>(silence));
+
+  int narg = args.size();
+  Kokkos::initialize(narg, args.data());
 }
 
 ThreadPreferences::ThreadPreferences ()
@@ -145,14 +147,14 @@ team_num_threads_vectors (const int num_parallel_iterations,
   // number/4. That seems to be in Cuda specs, but I don't know of a function
   // that provides this number. Use a configuration option that defaults to 4.
   const int min_num_warps = HOMMEXX_CUDA_MIN_WARP_PER_TEAM;
-#ifdef KOKKOS_HAVE_CUDA
+#ifdef KOKKOS_ENABLE_CUDA
   const int num_warps_device = Kokkos::Impl::cuda_internal_maximum_concurrent_block_count();
   const int num_threads_warp = Kokkos::Impl::CudaTraits::WarpSize;
   // The number on P100 is 16, but for some reason
   // Kokkos::Impl::cuda_internal_maximum_grid_count() returns 8. I may be
   // misusing the function. I have an open issue with the Kokkos team to resolve
   // this. For now:
-# ifdef KOKKOS_HAVE_DEBUG
+# ifdef KOKKOS_ENABLE_DEBUG
   // Work around spurious "terminate called after throwing an instance
   // of 'std::runtime_error'" message.
   const int max_num_warps = 8;

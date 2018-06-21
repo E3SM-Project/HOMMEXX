@@ -1,11 +1,14 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #include "Comm.hpp"
 
 #include <iostream>
 
-#ifdef HAVE_CONFIG_H
-#include "config.h.c"
-#endif
-#include "Hommexx_config.h"
+#include "Config.hpp"
 
 #ifdef CAM
 #error "Error! We have not yet implemented the interface with CAM.\n"

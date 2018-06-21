@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #ifndef HOMMEXX_HYPERVISCOSITY_FUNCTOR_IMPL_HPP
 #define HOMMEXX_HYPERVISCOSITY_FUNCTOR_IMPL_HPP
 
@@ -235,7 +241,6 @@ public:
               laplace_dp3d(kv.ie, igp, jgp, ilev);
         });
       }
-
       // While for T and v we exchange the tendencies, for dp3d we exchange the updated state.
       // However, since the BE structure already has registerd the *tens quantities, we store
       // the updated state in dptens.

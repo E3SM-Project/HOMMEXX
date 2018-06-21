@@ -220,7 +220,7 @@ struct Algo {
 // - team policy (smaller) or range policy (bigger)
 // - space (cuda vs host)
 // - blocksize input (blk <= 4 mb = 2, otherwise mb = 4), etc.
-#if defined(KOKKOS_HAVE_CUDA)
+#if defined(KOKKOS_ENABLE_CUDA)
       template <typename ActiveMemorySpaceType>
       KOKKOS_INLINE_FUNCTION static constexpr typename std::enable_if<
           std::is_same<ActiveMemorySpaceType, Kokkos::CudaSpace>::value,
@@ -258,7 +258,7 @@ struct Algo {
 // - team policy (smaller) or range policy (bigger)
 // - space (cuda vs host)
 // - blocksize input (blk <= 4 mb = 2, otherwise mb = 4), etc.
-#if defined(KOKKOS_HAVE_CUDA)
+#if defined(KOKKOS_ENABLE_CUDA)
       template <typename ActiveMemorySpaceType>
       KOKKOS_INLINE_FUNCTION static constexpr typename std::enable_if<
           std::is_same<ActiveMemorySpaceType, Kokkos::CudaSpace>::value,
@@ -291,7 +291,7 @@ struct Algo {
   //             // - team policy (smaller) or range policy (bigger)
   //             // - space (cuda vs host)
   //             // - blocksize input (blk <= 4 mb = 2, otherwise mb = 4), etc.
-  // #if defined(KOKKOS_HAVE_CUDA)
+  // #if defined(KOKKOS_ENABLE_CUDA)
   //             template<typename ActiveMemorySpaceType> KOKKOS_INLINE_FUNCTION
   //             static constexpr
   //             typename

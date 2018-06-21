@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #ifndef HOMMEXX_DIMENSIONS_HPP
 #define HOMMEXX_DIMENSIONS_HPP
 
@@ -5,7 +11,7 @@
 #include "config.h.c"
 #endif
 
-#include <Hommexx_config.h>
+#include "Config.hpp"
 
 #include <Kokkos_Core.hpp>
 
@@ -26,13 +32,13 @@ namespace Homme {
 
 #else
 
-#if   (AVX_VERSION == 0)
+#if   (HOMMEXX_AVX_VERSION == 0)
 // Vector<VectorTag<SIMD<T, SpT>, l> > can use this for good results
 // on, e.g., Power9, where AVX doesn't exist.
-static constexpr const int VECTOR_SIZE = 8;
-#elif (AVX_VERSION == 1 || AVX_VERSION == 2)
+static constexpr const int VECTOR_SIZE = HOMMEXX_VECTOR_SIZE;
+#elif (HOMMEXX_AVX_VERSION == 1 || HOMMEXX_AVX_VERSION == 2)
 static constexpr const int VECTOR_SIZE = 4;
-#elif (AVX_VERSION == 512)
+#elif (HOMMEXX_AVX_VERSION == 512)
 static constexpr const int VECTOR_SIZE = 8;
 #endif
 static_assert(VECTOR_SIZE>0, "Error: VECTOR_SIZE=0!");

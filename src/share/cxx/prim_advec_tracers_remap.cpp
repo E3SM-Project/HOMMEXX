@@ -1,3 +1,9 @@
+/********************************************************************************
+ * HOMMEXX 1.0: Copyright of Sandia Corporation
+ * This software is released under the BSD license
+ * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
+ *******************************************************************************/
+
 #include "Context.hpp"
 #include "EulerStepFunctor.hpp"
 #include "SimulationParams.hpp"
@@ -75,7 +81,7 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
   Kokkos::fence();
   GPTLstop("tl-at qdp_time_avg");
 
-  if (params.limiter_option!=8) {
+  if ( ! EulerStepFunctor::is_quasi_monotone(params.limiter_option)) {
     Errors::option_error("prim_advec_tracers_remap_RK2","limiter_option",
                           params.limiter_option);
     // call advance_hypervis_scalar(edgeadv,elem,hvcoord,hybrid,deriv,tl%np1,np1_qdp,nets,nete,dt)
@@ -84,4 +90,3 @@ void prim_advec_tracers_remap_RK2 (const Real dt)
 }
 
 } // namespace Homme
-
