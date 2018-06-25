@@ -902,9 +902,6 @@ contains
                 deallocate(datall,var3d)
              end if
 
-             ! note: this is kind of a hack: forcing is computed during the
-             ! timestep, from timelevel nm1 and stored in FM(nm1). after
-             ! the timestep is over, nm1 data will be in FM(np1)
              if(nf_selectedvar('FU', output_varnames) .or. &
                   nf_selectedvar('FV', output_varnames)) then
                 allocate(var3d(ncnt,2,nlev,1))
@@ -912,7 +909,7 @@ contains
                 do ie=1,nelemd
                    en=st+interpdata(ie)%n_interp-1
                    call interpolate_vector(interpdata(ie), elem(ie),  &
-                        elem(ie)%derived%FM(:,:,:,:,tl%np1), nlev, var3d(st:en,:,:,1), 0)
+                        elem(ie)%derived%FM(:,:,:,:), nlev, var3d(st:en,:,:,1), 0)
                    st=st+interpdata(ie)%n_interp
                 enddo
 
