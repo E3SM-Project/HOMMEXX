@@ -71,6 +71,7 @@ public:
 
   // Getters for each managed object.
   CaarFunctor& get_caar_functor();
+  void create_comm(const int f_comm);
   Comm& get_comm();
   Diagnostics& get_diagnostics();
   Elements& get_elements();

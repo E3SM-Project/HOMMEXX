@@ -44,6 +44,14 @@ Comm& Context::get_comm() {
   return *comm_;
 }
 
+void Context::create_comm(const int f_comm) {
+  // You should NOT create a C MPI_Comm from F90 twice during the same execution
+  assert (!comm_);
+
+  MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
+  comm_.reset(new Comm(c_comm));
+}
+
 Diagnostics& Context::get_diagnostics() {
   if ( ! diagnostics_) diagnostics_.reset(new Diagnostics());
   return *diagnostics_;
