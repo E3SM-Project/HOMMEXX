@@ -26,6 +26,9 @@ SET(HOMME_TESTS
 
 #This list (COMPARE_F_C_TEST) contains tests for which
 #F vc C comparison will be run.
+#Note: we run both a cprnc on the output nc files AND
+#      a comparison of the values of diagnostic quantities
+#      on the raw output files
 SET (COMPARE_F_C_TEST
   prtcA-r0-dry
   prtcA-r3-dry

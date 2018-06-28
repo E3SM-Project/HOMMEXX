@@ -37,6 +37,7 @@ struct SimulationParams
   bool      energy_fixer;
   bool      disable_diagnostics;
   bool      use_semi_lagrangian_transport;
+  bool      use_cpstar;
 
   double    nu;
   double    nu_p;
