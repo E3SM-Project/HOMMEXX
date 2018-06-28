@@ -1,8 +1,7 @@
 ---
 BasedOnStyle: Google
 IndentWidth: 2
-ColumnLimit: 60
-SpaceBeforeParens: Never
+ColumnLimit: 80
 TabWidth: 2
 UseTab: Never
 ---
