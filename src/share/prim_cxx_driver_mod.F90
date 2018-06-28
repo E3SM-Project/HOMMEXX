@@ -8,17 +8,25 @@ module prim_cxx_driver_mod
 
   implicit none
 
-  public :: init_cxx_mpi_structures
+  public :: init_cxx_mpi_comm
+  public :: init_cxx_connectivity
   public :: cleanup_cxx_structures
 
   private :: generate_global_to_local
-  private :: init_c_connectivity
+  private :: init_cxx_connectivity_internal
 
 #include <mpif.h>
 
 contains
 
-  subroutine init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex, par)
+  subroutine init_cxx_mpi_comm (f_comm) bind(c)
+    !
+    ! Inputs
+    !
+    integer(kind=c_int), intent(in) :: f_comm
+  end subroutine init_cxx_mpi_comm
+
+  subroutine init_cxx_connectivity (nelemd, GridEdge, MetaVertex, par)
     use dimensions_mod, only : nelem
     use gridgraph_mod,  only : GridEdge_t
     use metagraph_mod,  only : MetaVertex_t
@@ -37,9 +45,9 @@ contains
 
     call generate_global_to_local(MetaVertex,Global2Local,par)
 
-    call init_c_connectivity (nelemd, Global2Local, Gridedge)
+    call init_cxx_connectivity_internal (nelemd, Global2Local, Gridedge)
 
-  end subroutine init_cxx_mpi_structures
+  end subroutine init_cxx_connectivity
 
   subroutine cleanup_cxx_structures ()
     !
@@ -78,7 +86,7 @@ contains
 
   end subroutine generate_global_to_local
 
-  subroutine init_c_connectivity (nelemd,Global2Local,GridEdge)
+  subroutine init_cxx_connectivity_internal (nelemd,Global2Local,GridEdge)
     use gridgraph_mod,  only : GridEdge_t
     use dimensions_mod, only : nelem
     !
@@ -128,6 +136,6 @@ contains
     enddo
 
     call finalize_connectivity()
-  end subroutine init_c_connectivity
+  end subroutine init_cxx_connectivity_internal
 
 end module prim_cxx_driver_mod

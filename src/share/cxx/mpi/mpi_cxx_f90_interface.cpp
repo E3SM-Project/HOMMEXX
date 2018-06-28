@@ -16,6 +16,11 @@ namespace Homme
 extern "C"
 {
 
+void init_cxx_mpi (const int& f_comm)
+{
+  Context::singleton().create_comm(f_comm);
+}
+
 void init_connectivity (const int& num_local_elems)
 {
   Connectivity& connectivity = *Context::singleton().get_connectivity();

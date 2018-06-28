@@ -32,7 +32,7 @@ program prim_main
   use prim_state_mod,   only: prim_printstate
 
 #ifdef USE_KOKKOS_KERNELS
-  use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use prim_cxx_driver_mod, only: init_cxx_mpi_comm, cleanup_cxx_structures
   use element_mod,         only: elem_state_v, elem_state_temp, elem_state_dp3d, &
                                  elem_state_Qdp, elem_state_Q, elem_state_ps_v,  &
                                  elem_derived_omega_p
@@ -134,6 +134,8 @@ program prim_main
   par=initmp()
 
 #ifdef USE_KOKKOS_KERNELS
+  call init_cxx_mpi_comm(INT(par%comm,c_int))
+
   ! Do this right away, but AFTER MPI initialization
   call initialize_hommexx_session()
 #endif
