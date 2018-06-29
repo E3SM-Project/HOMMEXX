@@ -1,5 +1,5 @@
 &ctl_nl
-vert_num_threads  = 1
+vthreads  = 1
 NThreads          = 1
 partmethod        = 4
 topology          = "cube"
