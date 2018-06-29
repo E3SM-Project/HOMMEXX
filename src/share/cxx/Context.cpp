@@ -39,7 +39,6 @@ CaarFunctor& Context::get_caar_functor() {
 Comm& Context::get_comm() {
   if ( ! comm_) {
     comm_.reset(new Comm());
-    comm_->init();
   }
   return *comm_;
 }

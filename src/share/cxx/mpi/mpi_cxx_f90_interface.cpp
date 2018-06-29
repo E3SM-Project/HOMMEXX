@@ -5,6 +5,7 @@
  *******************************************************************************/
 
 #include "Context.hpp"
+#include "Comm.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
 
@@ -18,7 +19,8 @@ extern "C"
 
 void init_cxx_mpi (const int& f_comm)
 {
-  Context::singleton().create_comm(f_comm);
+  MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
+  Context::singleton().get_comm().reset_mpi_comm(c_comm);
 }
 
 void init_connectivity (const int& num_local_elems)
