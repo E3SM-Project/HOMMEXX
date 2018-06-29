@@ -230,32 +230,7 @@ public:
     profiling_pause();
   }
 
-
-/*
-  KOKKOS_INLINE_FUNCTION
-  void operator() (const BIHPre&, const TeamMember& team) const {
-    KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
-    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
-    if (m_data.nu_p > 0) {
-      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
-      Kokkos::parallel_for (
-        Kokkos::TeamThreadRange(team, NP*NP),
-        [&] (const int loop_idx) {
-          const int i = loop_idx / NP;
-          const int j = loop_idx % NP;
-          Kokkos::parallel_for(
-            Kokkos::ThreadVectorRange(team, NUM_LEV),
-            [&] (const int& k) {
-              qtens_biharmonic(i,j,k) = qtens_biharmonic(i,j,k) * dpdiss_ave(i,j,k) / m_hvcoord.dp0(k);
-            });
-        });
-      team.team_barrier();
-    }
-    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
-  }
-*/
-
+//case when nu_p > 0
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPreNup&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
@@ -264,6 +239,7 @@ public:
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
   }
 
+//case when nu_p == 0
   KOKKOS_INLINE_FUNCTION
   void operator() (const BIHPreNoNup&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
