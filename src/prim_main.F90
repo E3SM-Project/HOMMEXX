@@ -18,9 +18,9 @@ program prim_main
                               omp_get_num_threads, omp_get_max_threads
   use time_mod,         only: tstep, nendstep, timelevel_t, TimeLevel_init
   use dimensions_mod,   only: nelemd, qsize
-  use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type
+  use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype, integration, statefreq, tstep_type, disable_diagnostics
 #ifdef USE_KOKKOS_KERNELS
-  use control_mod,      only: qsplit, rsplit, disable_diagnostics
+  use control_mod,      only: qsplit, rsplit
 #endif
   use domain_mod,       only: domain1d_t, decompose
   use element_mod,      only: element_t
@@ -29,10 +29,10 @@ program prim_main
   use perf_mod,         only: t_initf, t_prf, t_finalizef, t_startf, t_stopf ! _EXTERNAL
   use restart_io_mod ,  only: restartheader_t, writerestart
   use hybrid_mod,       only: hybrid_create
+  use prim_state_mod,   only: prim_printstate
 
 #ifdef USE_KOKKOS_KERNELS
-  use prim_state_mod,      only: prim_printstate
-  use prim_cxx_driver_mod, only: cleanup_cxx_structures
+  use prim_cxx_driver_mod, only: init_cxx_mpi_comm
   use element_mod,         only: elem_state_v, elem_state_temp, elem_state_dp3d, &
                                  elem_state_Qdp, elem_state_Q, elem_state_ps_v,  &
                                  elem_derived_omega_p
@@ -74,12 +74,12 @@ program prim_main
       integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
     end subroutine init_time_level_c
 
-    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1) bind(c)
+    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
       use iso_c_binding, only: c_int, c_double
       !
       ! Inputs
       !
-      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1
+      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
       real (kind=c_double), intent(in) :: tstep
     end subroutine prim_run_subcycle_c
 
@@ -134,6 +134,8 @@ program prim_main
   par=initmp()
 
 #ifdef USE_KOKKOS_KERNELS
+  call init_cxx_mpi_comm(par%comm)
+
   ! Do this right away, but AFTER MPI initialization
   call initialize_hommexx_session()
 #endif
@@ -337,7 +339,7 @@ program prim_main
           if (nets/=1 .or. nete/=nelemd) then
             call abortmp ("We don't allow to call C routines from a horizontally threaded region")
           endif
-          call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c)
+          call prim_run_subcycle_c(tstep,nstep_c,nm1_c,n0_c,np1_c,nEndStep)
           tl%nstep = nstep_c
           tl%nm1   = nm1_c + 1
           tl%n0    = n0_c  + 1
@@ -347,15 +349,14 @@ program prim_main
                                          elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
                                          elem_derived_omega_p_ptr)
           endif
-          
-          if(.not. disable_diagnostics) then
-            if (MODULO(tl%nstep,statefreq)==0) then
-              call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete)
-            endif
-          endif
 #else
           call prim_run_subcycle(elem, hybrid,nets,nete, tstep, tl, hvcoord,1)
 #endif
+          if(.not. disable_diagnostics) then
+            if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nEndStep) then
+              call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete)
+            endif
+          endif
         else  ! leapfrog
 #ifdef USE_KOKKOS_KERNELS
            call abortmp ("Error! Functionality not available in Kokkos build")
@@ -409,7 +410,6 @@ program prim_main
   if(par%masterproc) print *,"calling t_finalizef"
   call t_finalizef()
 #ifdef USE_KOKKOS_KERNELS
-  call cleanup_cxx_structures ()
   call finalize_hommexx_session()
 #endif
   call haltmp("exiting program...")

@@ -5,6 +5,7 @@
  *******************************************************************************/
 
 #include "Context.hpp"
+#include "Comm.hpp"
 #include "Connectivity.hpp"
 #include "BoundaryExchange.hpp"
 
@@ -15,6 +16,13 @@ namespace Homme
 
 extern "C"
 {
+
+void reset_cxx_comm (const MPI_Fint& f_comm)
+{
+  // f_comm must be a valid Fortran handle to a communicator
+  MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
+  Context::singleton().get_comm().reset_mpi_comm(c_comm);
+}
 
 void init_connectivity (const int& num_local_elems)
 {
@@ -51,10 +59,6 @@ void finalize_connectivity ()
   Connectivity& connectivity = *Context::singleton().get_connectivity();
 
   connectivity.finalize();
-}
-
-void cleanup_mpi_structures ()
-{
 }
 
 } // extern "C"

@@ -649,7 +649,7 @@ MACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE TESTS_LIST testProfile)
 
   FOREACH (TEST ${${TESTS_LIST}})
     SET (TEST_FILE_F90 "${TEST}-f.cmake")
-    
+
     set_homme_tests_parameters(${TEST} ${testProfile})
     set (PROFILE ${testProfile})
     INCLUDE (${HOMME_SOURCE_DIR}/test/reg_test/run_tests/${TEST_FILE_F90})
@@ -657,17 +657,19 @@ MACRO(CREATE_CXX_VS_F90_TESTS_WITH_PROFILE TESTS_LIST testProfile)
     SET (TEST_NAME_SUFFIX "ne${HOMME_TESTS_NE}-ndays${HOMME_TESTS_NDAYS}")
     SET (F90_TEST_NAME "${TEST}-f-${TEST_NAME_SUFFIX}")
     SET (CXX_TEST_NAME "${TEST}-c-${TEST_NAME_SUFFIX}")
+    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${F90_TEST_NAME})
+    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME})
+
+    # Compare netcdf output files bit-for-bit AND compare diagnostic lines
+    # in the raw output files
     SET (TEST_NAME "${TEST}-${TEST_NAME_SUFFIX}_cxx_vs_f90")
     MESSAGE ("-- Creating cxx-f90 comparison test ${TEST_NAME}")
 
-    SET (F90_DIR ${HOMME_BINARY_DIR}/tests/${F90_TEST_NAME}/movies)
-    SET (CXX_DIR ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/movies)
-
-    CONFIGURE_FILE (${HOMME_SOURCE_DIR}/cmake/CprncCxxVsF90.cmake.in
-                    ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/CprncCxxVsF90.cmake @ONLY)
+    CONFIGURE_FILE (${HOMME_SOURCE_DIR}/cmake/CxxVsF90.cmake.in
+                    ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME}/CxxVsF90.cmake @ONLY)
 
     ADD_TEST (NAME "${TEST_NAME}"
-              COMMAND ${CMAKE_COMMAND} -P CprncCxxVsF90.cmake
+              COMMAND ${CMAKE_COMMAND} -P CxxVsF90.cmake
               WORKING_DIRECTORY ${HOMME_BINARY_DIR}/tests/${CXX_TEST_NAME})
 
     SET_TESTS_PROPERTIES(${TEST_NAME} PROPERTIES DEPENDS "${F90_TEST_NAME};${CXX_TEST_NAME}"
@@ -680,7 +682,7 @@ macro (CREATE_CXX_VS_F90_TESTS tests_list profile)
   foreach (p ${profiles})
     message("-- For profile ${p}:")
     CREATE_CXX_VS_F90_TESTS_WITH_PROFILE(${tests_list} ${p})
-  endforeach ()  
+  endforeach ()
 endmacro (CREATE_CXX_VS_F90_TESTS)
 
 macro(testQuadPrec HOMME_QUAD_PREC)

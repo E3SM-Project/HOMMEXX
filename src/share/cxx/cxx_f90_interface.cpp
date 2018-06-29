@@ -5,6 +5,7 @@
  *******************************************************************************/
 
 #include "Derivative.hpp"
+#include "Diagnostics.hpp"
 #include "Elements.hpp"
 #include "Tracers.hpp"
 #include "Context.hpp"
@@ -33,7 +34,8 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
                                const int& time_step_type, const int& energy_fixer, const int& qsize, const int& state_frequency,
                                const Real& nu, const Real& nu_p, const Real& nu_q, const Real& nu_s, const Real& nu_div, const Real& nu_top,
                                const int& hypervis_order, const int& hypervis_subcycle, const double& hypervis_scaling,
-                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics, const bool& use_semi_lagrangian_transport)
+                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics,
+                               const bool& use_cpstar, const bool& use_semi_lagrangian_transport)
 {
   // Check that the simulation options are supported. This helps us in the future, since we
   // are currently 'assuming' some option have/not have certain values. As we support for more
@@ -79,6 +81,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.hypervis_scaling              = hypervis_scaling;
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
+  params.use_cpstar                    = use_cpstar;
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
 
   // TODO Parse a fortran string and set this properly. For now, our code does
@@ -117,7 +120,6 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
 
   sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
-  sync_to_host(tracers.q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
 }
 
 void init_derivative_c (CF90Ptr& dvv)
@@ -164,6 +166,17 @@ void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_te
 
   Kokkos::deep_copy(ps_v_host,ps_v_f90);
   Kokkos::deep_copy(elements.m_ps_v,ps_v_host);
+}
+
+void init_diagnostics_c (F90Ptr& elem_state_q_ptr, F90Ptr& elem_accum_qvar_ptr,  F90Ptr& elem_accum_qmass_ptr,
+                         F90Ptr& elem_accum_q1mass_ptr, F90Ptr& elem_accum_iener_ptr, F90Ptr& elem_accum_iener_wet_ptr,
+                         F90Ptr& elem_accum_kener_ptr, F90Ptr& elem_accum_pener_ptr)
+{
+  Elements& elements = Context::singleton().get_elements ();
+  Diagnostics& diagnostics = Context::singleton().get_diagnostics ();
+
+  diagnostics.init(elements.num_elems(), elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr,
+                   elem_accum_iener_ptr, elem_accum_iener_wet_ptr, elem_accum_kener_ptr, elem_accum_pener_ptr);
 }
 
 void init_boundary_exchanges_c ()

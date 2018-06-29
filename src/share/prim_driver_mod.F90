@@ -124,7 +124,7 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use prim_cxx_driver_mod, only: init_cxx_mpi_structures
+    use prim_cxx_driver_mod, only: init_cxx_connectivity
 #endif
 
 #ifdef TRILINOS
@@ -323,7 +323,7 @@ contains
     call genEdgeSched(elem,iam,Schedule(1),MetaVertex(1))
 
 #ifdef USE_KOKKOS_KERNELS
-    call init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex(1), par)
+    call init_cxx_connectivity (nelemd, GridEdge, MetaVertex(1), par)
 #endif
 
     allocate(global_shared_buf(nelemd,nrepro_vars))
@@ -443,11 +443,9 @@ contains
        elem(ie)%derived%FQps=0.0
        elem(ie)%derived%FT=0.0
 
-#ifndef USE_KOKKOS_KERNELS
        elem(ie)%accum%Qvar=0
        elem(ie)%accum%Qmass=0
        elem(ie)%accum%Q1mass=0
-#endif
 
        elem(ie)%derived%Omega_p=0
        elem(ie)%state%dp3d=0
@@ -568,15 +566,18 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use element_mod,          only: elem_D, elem_Dinv, elem_fcor,                   &
-                                    elem_mp, elem_spheremp, elem_rspheremp,         &
-                                    elem_metdet, elem_metinv, elem_state_phis,      &
-                                    elem_state_v, elem_state_temp, elem_state_dp3d, &
-                                    elem_state_Qdp, elem_state_ps_v,                &
-                                    elem_tensorvisc, elem_vec_sph2cart
+    use element_mod,          only: elem_D, elem_Dinv, elem_fcor,                          &
+                                    elem_mp, elem_spheremp, elem_rspheremp,                &
+                                    elem_metdet, elem_metinv, elem_state_phis,             &
+                                    elem_state_v, elem_state_temp, elem_state_dp3d,        &
+                                    elem_state_Qdp, elem_state_ps_v,                       &      
+                                    elem_tensorvisc, elem_vec_sph2cart,                    &
+                                    elem_state_q, elem_accum_qvar,                         &
+                                    elem_accum_qmass, elem_accum_q1mass, elem_accum_iener, &
+                                    elem_accum_iener_wet, elem_accum_kener, elem_accum_pener
     use control_mod,          only: prescribed_wind, disable_diagnostics, tstep_type, energy_fixer,       &
                                     nu, nu_p, nu_s, nu_top, hypervis_order, hypervis_subcycle, hypervis_scaling,  &
-                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport
+                                    vert_remap_q_alg, statefreq, use_semi_lagrange_transport, use_cpstar
     use iso_c_binding,        only: c_ptr, c_loc, c_bool
 #endif
 
@@ -604,7 +605,7 @@ contains
                                          nu, nu_p, nu_q, nu_s, nu_div, nu_top,                     &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
                                          prescribed_wind, moisture, disable_diagnostics,           &
-                                         use_semi_lagrange_transport) bind(c)
+                                         use_cpstar, use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
       !
       ! Inputs
@@ -614,7 +615,7 @@ contains
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
       real(kind=c_double),  intent(in) :: nu, nu_p, nu_q, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
-      logical(kind=c_bool), intent(in) :: prescribed_wind, disable_diagnostics, use_semi_lagrange_transport, moisture
+      logical(kind=c_bool), intent(in) :: prescribed_wind, moisture, disable_diagnostics, use_cpstar, use_semi_lagrange_transport
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
@@ -631,6 +632,17 @@ contains
       type (c_ptr) , intent(in) :: tensorvisc_ptr, vec_sph2cart_ptr
       logical(kind=c_bool), intent(in) :: consthv
     end subroutine init_elements_2d_c
+    subroutine init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
+                                   elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
+                                   elem_accum_kener_ptr, elem_accum_pener_ptr) bind(c)
+      use iso_c_binding, only : c_ptr
+      !
+      ! Inputs
+      !
+      type (c_ptr), intent(in) :: elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr
+      type (c_ptr), intent(in) :: elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr
+      type (c_ptr), intent(in) :: elem_accum_kener_ptr, elem_accum_pener_ptr
+    end subroutine init_diagnostics_c
     subroutine init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                        elem_state_Qdp_ptr, elem_state_ps_v_ptr) bind(c)
       use iso_c_binding, only : c_ptr
@@ -683,8 +695,11 @@ contains
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
-    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_state_q_ptr, elem_state_Qdp_ptr, elem_state_ps_v_ptr
     type (c_ptr) :: elem_tensorvisc_ptr, elem_vec_sph2cart_ptr
+    type (c_ptr) :: elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr
+    type (c_ptr) :: elem_accum_iener_ptr, elem_accum_iener_wet_ptr
+    type (c_ptr) :: elem_accum_kener_ptr, elem_accum_pener_ptr
 #endif
 
 #ifdef TRILINOS
@@ -993,6 +1008,7 @@ contains
                                    LOGICAL(prescribed_wind==1,c_bool),                            &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
+                                   LOGICAL(use_cpstar==1,c_bool),                           &
                                    LOGICAL(use_semi_lagrange_transport,c_bool))
 
     elem_D_ptr          = c_loc(elem_D)
@@ -1022,6 +1038,18 @@ contains
     call init_elements_states_c (elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr,   &
                                  elem_state_Qdp_ptr, elem_state_ps_v_ptr)
 
+    elem_state_q_ptr         = c_loc(elem_state_q)
+    elem_accum_qvar_ptr      = c_loc(elem_accum_qvar)
+    elem_accum_qmass_ptr     = c_loc(elem_accum_qmass)
+    elem_accum_q1mass_ptr    = c_loc(elem_accum_q1mass)
+    elem_accum_iener_ptr     = c_loc(elem_accum_iener)
+    elem_accum_iener_wet_ptr = c_loc(elem_accum_iener_wet)
+    elem_accum_kener_ptr     = c_loc(elem_accum_kener)
+    elem_accum_pener_ptr     = c_loc(elem_accum_pener)
+    call  init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
+                              elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
+                              elem_accum_kener_ptr, elem_accum_pener_ptr)
+
     call init_boundary_exchanges_c ()
 #endif
 
@@ -1050,10 +1078,11 @@ contains
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
-    use prim_state_mod,     only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
+    use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
+    use common_movie_mod,   only: nextoutputstep
 
 #if USE_OPENACC
     use openacc_utils_mod,  only: copy_qdp_h2d, copy_qdp_d2h
@@ -1086,7 +1115,7 @@ contains
 
     ! activate diagnostics periodically for display to stdout
     compute_diagnostics   = .false.
-    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0) then
+    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0 .or. nstep_end>=nextoutputstep(tl)) then
        compute_diagnostics= .true.
     endif
     if(disable_diagnostics) compute_diagnostics= .false.
@@ -1227,13 +1256,6 @@ contains
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
-
-    ! ============================================================
-    ! Print some diagnostic information
-    ! ============================================================
-    if (compute_diagnostics) then
-       call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
-    end if
   end subroutine prim_run_subcycle
 
   subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
