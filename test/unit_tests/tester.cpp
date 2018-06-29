@@ -6,6 +6,9 @@
 #include <Kokkos_Core.hpp>
 
 #include "Hommexx_Session.hpp"
+#include "Context.hpp"
+#include "Comm.hpp"
+
 #include <mpi.h>
 
 int main(int argc, char **argv) {
@@ -14,6 +17,7 @@ int main(int argc, char **argv) {
   MPI_Init(&argc,&argv);
 
   Homme::initialize_hommexx_session();
+  Homme::Context::singleton().get_comm().reset_mpi_comm(MPI_COMM_WORLD);
 
   int result = Catch::Session().run(argc, argv);
 

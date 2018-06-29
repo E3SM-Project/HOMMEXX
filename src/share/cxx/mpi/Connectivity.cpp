@@ -23,7 +23,7 @@ Connectivity::Connectivity ()
 void Connectivity::set_comm (const Comm& comm)
 {
   // Input comm must be valid (not storing a null MPI comm)
-  assert (comm.m_mpi_comm!=MPI_COMM_NULL);
+  assert (comm.mpi_comm()!=MPI_COMM_NULL);
 
   m_comm = comm;
 }
@@ -82,11 +82,11 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
   assert (!m_finalized);
 
   // Comm must not be a null comm, otherwise checks on ranks may be misleading
-  assert (m_comm.m_mpi_comm!=MPI_COMM_NULL);
+  assert (m_comm.mpi_comm()!=MPI_COMM_NULL);
 
   // I believe edges appear twice in fortran, once per each ordering.
   // Here, we only need to store them once
-  if (first_elem_pid==m_comm.m_rank)
+  if (first_elem_pid==m_comm.rank())
   {
 #ifndef NDEBUG
     // There is no edge-to-corner connection. Either the elements share a corner or an edge.
@@ -114,7 +114,7 @@ void Connectivity::add_connection (const int first_elem_lid,  const int first_el
     // Direction
     info.direction = etoi(m_helpers.CONNECTION_DIRECTION[local.pos][remote.pos]);
 
-    if (second_elem_pid!=m_comm.m_rank)
+    if (second_elem_pid!=m_comm.rank())
     {
       info.sharing = etoi(ConnectionSharing::SHARED);
       info.remote_pid = second_elem_pid;

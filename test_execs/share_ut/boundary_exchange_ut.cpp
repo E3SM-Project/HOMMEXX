@@ -68,7 +68,7 @@ TEST_CASE ("Boundary Exchange", "Testing the boundary exchange framework")
 
   // Retrieve local number of elements
   int num_elements = connectivity->get_num_local_elements();
-  int rank = connectivity->get_comm().m_rank;
+  int rank = connectivity->get_comm().rank();
 
   // Create input data arrays
   HostViewManaged<Real*[num_min_max_fields_1d][2][NUM_PHYSICAL_LEV]> field_1d_f90("", num_elements);

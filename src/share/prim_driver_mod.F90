@@ -124,7 +124,7 @@ contains
 #endif
 
 #ifdef USE_KOKKOS_KERNELS
-    use prim_cxx_driver_mod, only: init_cxx_mpi_structures
+    use prim_cxx_driver_mod, only: init_cxx_connectivity
 #endif
 
 #ifdef TRILINOS
@@ -323,7 +323,7 @@ contains
     call genEdgeSched(elem,iam,Schedule(1),MetaVertex(1))
 
 #ifdef USE_KOKKOS_KERNELS
-    call init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex(1), par)
+    call init_cxx_connectivity (nelemd, GridEdge, MetaVertex(1), par)
 #endif
 
     allocate(global_shared_buf(nelemd,nrepro_vars))

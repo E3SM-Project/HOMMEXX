@@ -8,17 +8,39 @@ module prim_cxx_driver_mod
 
   implicit none
 
-  public :: init_cxx_mpi_structures
-  public :: cleanup_cxx_structures
+  public :: init_cxx_mpi_comm
+  public :: init_cxx_connectivity
 
   private :: generate_global_to_local
-  private :: init_c_connectivity
+  private :: init_cxx_connectivity_internal
 
 #include <mpif.h>
 
 contains
 
-  subroutine init_cxx_mpi_structures (nelemd, GridEdge, MetaVertex, par)
+  subroutine init_cxx_mpi_comm (f_comm)
+    use iso_c_binding, only: c_int
+    !
+    ! Interfaces
+    !
+    interface
+      subroutine reset_cxx_comm (f_comm) bind(c)
+        use iso_c_binding, only: c_int
+        !
+        ! Inputs
+        !
+        integer(kind=c_int), intent(in) :: f_comm
+      end subroutine reset_cxx_comm
+    end interface
+    !
+    ! Inputs
+    !
+    integer, intent(in) :: f_comm
+
+    call reset_cxx_comm (INT(f_comm,c_int))
+  end subroutine init_cxx_mpi_comm
+
+  subroutine init_cxx_connectivity (nelemd, GridEdge, MetaVertex, par)
     use dimensions_mod, only : nelem
     use gridgraph_mod,  only : GridEdge_t
     use metagraph_mod,  only : MetaVertex_t
@@ -37,21 +59,9 @@ contains
 
     call generate_global_to_local(MetaVertex,Global2Local,par)
 
-    call init_c_connectivity (nelemd, Global2Local, Gridedge)
+    call init_cxx_connectivity_internal (nelemd, Global2Local, Gridedge)
 
-  end subroutine init_cxx_mpi_structures
-
-  subroutine cleanup_cxx_structures ()
-    !
-    ! Interfaces
-    !
-    interface
-      subroutine cleanup_mpi_structures () bind(c)
-      end subroutine cleanup_mpi_structures
-    end interface
-
-    call cleanup_mpi_structures()
-  end subroutine cleanup_cxx_structures
+  end subroutine init_cxx_connectivity
 
   subroutine generate_global_to_local (MetaVertex, Global2Local, par)
     use dimensions_mod, only : nelem
@@ -78,7 +88,7 @@ contains
 
   end subroutine generate_global_to_local
 
-  subroutine init_c_connectivity (nelemd,Global2Local,GridEdge)
+  subroutine init_cxx_connectivity_internal (nelemd,Global2Local,GridEdge)
     use gridgraph_mod,  only : GridEdge_t
     use dimensions_mod, only : nelem
     !
@@ -128,6 +138,6 @@ contains
     enddo
 
     call finalize_connectivity()
-  end subroutine init_c_connectivity
+  end subroutine init_cxx_connectivity_internal
 
 end module prim_cxx_driver_mod
