@@ -31,7 +31,7 @@ SET(ENABLE_CUDA TRUE CACHE BOOL "")
 
 SET(USE_TRILINOS OFF CACHE BOOL "")
 #SET(KOKKOS_PATH "/home/mdeakin/prefix" CACHE STRING "")
-SET(KOKKOS_PATH "/ascldap/users/onguba/kokkos/build-nodebug-white" CACHE STRING "")
+SET(KOKKOS_PATH "/ascldap/users/onguba/kokkos/build-debug-white" CACHE STRING "")
 
 SET(CMAKE_C_COMPILER "mpicc" CACHE STRING "")
 SET(CMAKE_CXX_COMPILER "/ascldap/users/onguba/kokkos/bin/nvcc_wrapper" CACHE STRING "")
