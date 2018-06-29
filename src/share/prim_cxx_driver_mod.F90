@@ -10,7 +10,6 @@ module prim_cxx_driver_mod
 
   public :: init_cxx_mpi_comm
   public :: init_cxx_connectivity
-  public :: cleanup_cxx_structures
 
   private :: generate_global_to_local
   private :: init_cxx_connectivity_internal
@@ -48,18 +47,6 @@ contains
     call init_cxx_connectivity_internal (nelemd, Global2Local, Gridedge)
 
   end subroutine init_cxx_connectivity
-
-  subroutine cleanup_cxx_structures ()
-    !
-    ! Interfaces
-    !
-    interface
-      subroutine cleanup_mpi_structures () bind(c)
-      end subroutine cleanup_mpi_structures
-    end interface
-
-    call cleanup_mpi_structures()
-  end subroutine cleanup_cxx_structures
 
   subroutine generate_global_to_local (MetaVertex, Global2Local, par)
     use dimensions_mod, only : nelem

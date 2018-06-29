@@ -60,10 +60,6 @@ void finalize_connectivity ()
   connectivity.finalize();
 }
 
-void cleanup_mpi_structures ()
-{
-}
-
 } // extern "C"
 
 } // namespace Homme
