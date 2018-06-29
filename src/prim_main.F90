@@ -134,7 +134,7 @@ program prim_main
   par=initmp()
 
 #ifdef USE_KOKKOS_KERNELS
-  call init_cxx_mpi_comm(INT(par%comm,c_int))
+  call init_cxx_mpi_comm(par%comm)
 
   ! Do this right away, but AFTER MPI initialization
   call initialize_hommexx_session()

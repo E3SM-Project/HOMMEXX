@@ -17,8 +17,9 @@ namespace Homme
 extern "C"
 {
 
-void init_cxx_mpi (const int& f_comm)
+void reset_cxx_comm (const int& f_comm)
 {
+  // f_comm must be a valid Fortran handle to a communicator
   MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
   Context::singleton().get_comm().reset_mpi_comm(c_comm);
 }

@@ -18,11 +18,26 @@ module prim_cxx_driver_mod
 
 contains
 
-  subroutine init_cxx_mpi_comm (f_comm) bind(c)
+  subroutine init_cxx_mpi_comm (f_comm)
+    use iso_c_binding, only: c_int
+    !
+    ! Interfaces
+    !
+    interface
+      subroutine reset_cxx_comm (f_comm) bind(c)
+        use iso_c_binding, only: c_int
+        !
+        ! Inputs
+        !
+        integer(kind=c_int), intent(in) :: f_comm
+      end subroutine reset_cxx_comm
+    end interface
     !
     ! Inputs
     !
-    integer(kind=c_int), intent(in) :: f_comm
+    integer, intent(in) :: f_comm
+
+    call reset_cxx_comm (INT(f_comm,c_int))
   end subroutine init_cxx_mpi_comm
 
   subroutine init_cxx_connectivity (nelemd, GridEdge, MetaVertex, par)
