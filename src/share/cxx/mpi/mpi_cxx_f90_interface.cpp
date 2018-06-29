@@ -17,7 +17,7 @@ namespace Homme
 extern "C"
 {
 
-void reset_cxx_comm (const int& f_comm)
+void reset_cxx_comm (const MPI_Fint& f_comm)
 {
   // f_comm must be a valid Fortran handle to a communicator
   MPI_Comm c_comm = MPI_Comm_f2c(f_comm);
