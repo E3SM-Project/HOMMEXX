@@ -35,7 +35,8 @@ CaarFunctor::CaarFunctor()
 CaarFunctor::CaarFunctor(const Elements &elements, const Tracers &tracers,
                          const Derivative &derivative,
                          const HybridVCoord &hvcoord,
-                         const SphereOperators &sphere_ops, const int rsplit)
+                         const SphereOperators &sphere_ops, 
+                         const int rsplit)
     : m_policy(
           Homme::get_default_team_policy<ExecSpace>(elements.num_elems())) {
   // Build functor impl

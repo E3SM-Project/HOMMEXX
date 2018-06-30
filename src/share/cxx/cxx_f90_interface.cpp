@@ -43,7 +43,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","vert_remap_q_alg",remap_alg,{1,2});
   Errors::check_option("init_simulation_params_c","prescribed_wind",prescribed_wind,{false});
   Errors::check_option("init_simulation_params_c","hypervis_order",hypervis_order,{2});
-  Errors::check_option("init_simulation_params_c","hypervis_scaling",hypervis_scaling,{0.0});
   Errors::check_option("init_simulation_params_c","use_semi_lagrangian_transport",use_semi_lagrangian_transport,{false});
   Errors::check_option("init_simulation_params_c","time_step_type",time_step_type,{5});
   Errors::check_option("init_simulation_params_c","limiter_option",limiter_option,{8,9});
@@ -79,6 +78,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.nu_top                        = nu_top;
   params.hypervis_order                = hypervis_order;
   params.hypervis_subcycle             = hypervis_subcycle;
+  params.hypervis_scaling              = hypervis_scaling;
   params.disable_diagnostics           = disable_diagnostics;
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_cpstar                    = use_cpstar;
@@ -90,6 +90,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
 
   // Now this structure can be used safely
   params.params_set = true;
+
 }
 
 void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_ptr,
@@ -140,11 +141,13 @@ void init_time_level_c (const int& nm1, const int& n0, const int& np1,
 
 void init_elements_2d_c (const int& num_elems, CF90Ptr& D, CF90Ptr& Dinv, CF90Ptr& fcor,
                          CF90Ptr& mp, CF90Ptr& spheremp, CF90Ptr& rspheremp,
-                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis)
+                         CF90Ptr& metdet, CF90Ptr& metinv, CF90Ptr& phis,
+                         CF90Ptr &tensorvisc, CF90Ptr &vec_sph2cart,
+                         const bool& consthv)
 {
   Elements& r = Context::singleton().get_elements ();
-  r.init (num_elems);
-  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis);
+  r.init (num_elems, consthv);
+  r.init_2d(D,Dinv,fcor,mp,spheremp,rspheremp,metdet,metinv,phis,tensorvisc,vec_sph2cart,consthv);
 }
 
 void init_elements_states_c (CF90Ptr& elem_state_v_ptr,   CF90Ptr& elem_state_temp_ptr, CF90Ptr& elem_state_dp3d_ptr,

@@ -30,8 +30,8 @@ module element_mod
 
   real (kind=real_kind),    allocatable, target, public :: elem_sub_elem_mass_flux (:,:,:,:,:)    ! (nc,nc,4,nlev,nelemd)
 
-  real (kind=real_kind),    allocatable, target, public :: elem_vec_sphere2cart(:,:,:,:,:) ! (np,np,3,2,nelemd)
-  real (kind=real_kind),    allocatable, target, public :: elem_tensorVisc     (:,:,:,:,:) ! (np,np,2,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_vec_sph2cart(:,:,:,:,:) ! (np,np,3,2,nelemd)
+  real (kind=real_kind),    allocatable, target, public :: elem_tensorvisc     (:,:,:,:,:) ! (np,np,2,2,nelemd)
 #ifdef _PRIM
 
   public :: setup_element_pointers
@@ -790,7 +790,7 @@ contains
     allocate( elem_spheremp            (np,np, nelemd)    )
     allocate( elem_rspheremp           (np,np, nelemd)    )
     allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
-    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd) )
+    allocate( elem_vec_sph2cart     (np,np,3,2,nelemd) )
     allocate( elem_tensorVisc          (np,np,2,2,nelemd) )
 
     do ie = 1 , nelemd
@@ -806,8 +806,8 @@ contains
       elem(ie)%spheremp               => elem_spheremp(:,:,ie)
       elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
       elem(ie)%sub_elem_mass_flux     => elem_sub_elem_mass_flux(:,:,:,:,ie)
-      elem(ie)%vec_sphere2cart        => elem_vec_sphere2cart(:,:,:,:,ie)
-      elem(ie)%tensorVisc             => elem_tensorVisc(:,:,:,:,ie)
+      elem(ie)%vec_sphere2cart        => elem_vec_sph2cart(:,:,:,:,ie)
+      elem(ie)%tensorVisc             => elem_tensorvisc(:,:,:,:,ie)
     enddo
 
     ! elem_state_t arrays
@@ -963,8 +963,8 @@ contains
     allocate( elem_rspheremp           (np,np, nelemd)          )
     allocate( elem_spherep             (np,np, nelemd)          )
     allocate( elem_fcor                (np,np, nelemd)          )
-    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd)        )
-    allocate( elem_tensorVisc          (np,np,2,2,nelemd)        )
+    allocate( elem_vec_sph2cart        (np,np,3,2,nelemd)        )
+    allocate( elem_tensorvisc          (np,np,2,2,nelemd)        )
     do ie = 1 , nelemd
       elem(ie)%metdet                 => elem_metdet(:,:,ie)
       elem(ie)%rmetdet                => elem_rmetdet(:,:,ie)
@@ -980,8 +980,8 @@ contains
       elem(ie)%rspheremp              => elem_rspheremp(:,:,ie)
       elem(ie)%spherep                => elem_spherep(:,:,ie)
       elem(ie)%fcor                   => elem_fcor(:,:,ie)
-      elem(ie)%vec_sphere2cart        => elem_vec_sphere2cart(:,:,:,:,ie)
-      elem(ie)%tensorVisc             => elem_tensorVisc(:,:,:,:,ie)
+      elem(ie)%vec_sphere2cart        => elem_vec_sph2cart(:,:,:,:,ie)
+      elem(ie)%tensorvisc             => elem_tensorvisc(:,:,:,:,ie)
     enddo
 #endif
   end subroutine setup_element_pointers_sw

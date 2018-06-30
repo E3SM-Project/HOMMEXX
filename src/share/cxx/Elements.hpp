@@ -22,6 +22,8 @@ public:
   ExecViewManaged<Real * [NP][NP]>        m_rspheremp;
   ExecViewManaged<Real * [2][2][NP][NP]>  m_metinv;
   ExecViewManaged<Real * [NP][NP]>        m_metdet;
+  ExecViewManaged<Real * [2][2][NP][NP]>  m_tensorvisc;
+  ExecViewManaged<Real * [2][3][NP][NP]>  m_vec_sph2cart;
   // Prescribed surface geopotential height at eta = 1
   ExecViewManaged<Real * [NP][NP]> m_phis;
 
@@ -115,7 +117,7 @@ public:
 
   Elements() = default;
 
-  void init(const int num_elems);
+  void init(const int num_elems, const bool consthv);
 
   void random_init(int num_elems, Real max_pressure = 1.0);
 
@@ -125,7 +127,11 @@ public:
   // Fill the exec space views with data coming from F90 pointers
   void init_2d(CF90Ptr &D, CF90Ptr &Dinv, CF90Ptr &fcor,
                CF90Ptr &mp, CF90Ptr &spheremp, CF90Ptr &rspheremp,
-               CF90Ptr &metdet, CF90Ptr &metinv, CF90Ptr &phis);
+               CF90Ptr &metdet, CF90Ptr &metinv, 
+               CF90Ptr &phis,
+               CF90Ptr &tensorvisc,
+               CF90Ptr &vec_sph2cart,
+               const bool consthv);
 
   // Fill the exec space views with data coming from F90 pointers
   void pull_from_f90_pointers(CF90Ptr &state_v, CF90Ptr &state_t,

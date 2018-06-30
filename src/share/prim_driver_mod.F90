@@ -570,7 +570,8 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,                &
                                     elem_metdet, elem_metinv, elem_state_phis,             &
                                     elem_state_v, elem_state_temp, elem_state_dp3d,        &
-                                    elem_state_Qdp, elem_state_ps_v,                       &
+                                    elem_state_Qdp, elem_state_ps_v,                       &      
+                                    elem_tensorvisc, elem_vec_sph2cart,                    &
                                     elem_state_q, elem_accum_qvar,                         &
                                     elem_accum_qmass, elem_accum_q1mass, elem_accum_iener, &
                                     elem_accum_iener_wet, elem_accum_kener, elem_accum_pener
@@ -618,8 +619,9 @@ contains
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr, c_int
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr,              &
+                                   tensorvisc_ptr, vec_sph2cart_ptr, consthv) bind(c)
+      use iso_c_binding, only : c_ptr, c_int, c_bool
       !
       ! Inputs
       !
@@ -627,6 +629,8 @@ contains
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
       type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
       type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
+      type (c_ptr) , intent(in) :: tensorvisc_ptr, vec_sph2cart_ptr
+      logical(kind=c_bool), intent(in) :: consthv
     end subroutine init_elements_2d_c
     subroutine init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
                                    elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
@@ -692,6 +696,7 @@ contains
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
     type (c_ptr) :: elem_state_q_ptr, elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_tensorvisc_ptr, elem_vec_sph2cart_ptr
     type (c_ptr) :: elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr
     type (c_ptr) :: elem_accum_iener_ptr, elem_accum_iener_wet_ptr
     type (c_ptr) :: elem_accum_kener_ptr, elem_accum_pener_ptr
@@ -1015,9 +1020,16 @@ contains
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_metinv_ptr     = c_loc(elem_metinv)
     elem_state_phis_ptr = c_loc(elem_state_phis)
+    elem_tensorvisc_ptr  = c_loc(elem_tensorvisc)
+    elem_vec_sph2cart_ptr = c_loc(elem_vec_sph2cart)
+
+
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
+                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr,   &
+                                   elem_tensorvisc_ptr, elem_vec_sph2cart_ptr,              &
+                                   LOGICAL(hypervis_scaling==0,c_bool))
+
     elem_state_v_ptr    = c_loc(elem_state_v)
     elem_state_temp_ptr = c_loc(elem_state_temp)
     elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
@@ -1267,6 +1279,7 @@ contains
     use control_mod,        only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
     use control_mod,        only: use_semi_lagrange_transport, tracer_transport_type
     use control_mod,        only: tracer_grid_type, TRACER_GRIDTYPE_GLL
+    use control_mod,        only: hypervis_scaling
     use derivative_mod,     only: subcell_integration
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp

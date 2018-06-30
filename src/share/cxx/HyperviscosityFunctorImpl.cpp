@@ -15,13 +15,14 @@ namespace Homme
 HyperviscosityFunctorImpl::HyperviscosityFunctorImpl (const SimulationParams& params, const Elements& elements, const Derivative& deriv)
  : m_elements   (elements)
  , m_deriv      (deriv)
- , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s)
+ , m_data       (params.hypervis_subcycle,1.0,params.nu_top,params.nu,params.nu_p,params.nu_s,params.hypervis_scaling)
  , m_sphere_ops (Context::singleton().get_sphere_operators())
 {
   // Sanity check
   assert(params.params_set);
 
   if (m_data.nu_top>0) {
+
     m_nu_scale_top = ExecViewManaged<Scalar[NUM_LEV]>("nu_scale_top");
     ExecViewManaged<Scalar[NUM_LEV]>::HostMirror h_nu_scale_top;
     h_nu_scale_top = Kokkos::create_mirror_view(m_nu_scale_top);
@@ -80,13 +81,15 @@ void HyperviscosityFunctorImpl::run (const int np1, const Real dt, const Real et
     Kokkos::parallel_for(policy_update_states, *this);
     Kokkos::fence();
   }
+
 }
 
 void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
 {
   // For the first laplacian we use a differnt kernel, which uses directly the states
   // at timelevel np1 as inputs. This way we avoid copying the states to *tens buffers.
-  auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplace>(m_elements.num_elems());
+  
+  auto policy_first_laplace = Homme::get_default_team_policy<ExecSpace,TagFirstLaplaceHV>(m_elements.num_elems());
   Kokkos::parallel_for(policy_first_laplace, *this);
   Kokkos::fence();
 
@@ -97,9 +100,14 @@ void HyperviscosityFunctorImpl::biharmonic_wk_dp3d() const
   GPTLstop("hvf-bexch");
 
   // TODO: update m_data.nu_ratio if nu_div!=nu
-  // Compute second laplacian
-  auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagLaplace>(m_elements.num_elems());
-  Kokkos::parallel_for(policy_second_laplace, *this);
+  // Compute second laplacian, tensor or const hv
+  if ( m_data.consthv ) {
+    auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagSecondLaplaceConstHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_second_laplace, *this);
+  }else{
+    auto policy_second_laplace = Homme::get_default_team_policy<ExecSpace,TagSecondLaplaceTensorHV>(m_elements.num_elems());
+    Kokkos::parallel_for(policy_second_laplace, *this);
+  }
   Kokkos::fence();
 }
 
