@@ -20,21 +20,21 @@
 //       of the error (so that one knows where the problem is, even
 //       when running outside of a debugger or without a breakpoint).
 
-#define HOMMEXX_MPI_CHECK_ERROR(X,comm)                       \
-  {                                                           \
-    int err_code = X;                                         \
-    if (err_code!=MPI_SUCCESS) {                              \
-      char err_str[MPI_MAX_ERROR_STRING];                     \
-      int resultlen;                                          \
-      MPI_Error_string(err_code,err_str,&resultlen);          \
-      printf("Hommexx mpi error: %s\n",err_str);              \
-      printf("   at line %d of file %s\n",__LINE__,__FILE__); \
-      MPI_Abort(comm,err_code);                               \
-    }                                                         \
+#define HOMMEXX_MPI_CHECK_ERROR(X, comm)                        \
+  {                                                             \
+    int err_code = X;                                           \
+    if (err_code != MPI_SUCCESS) {                              \
+      char err_str[MPI_MAX_ERROR_STRING];                       \
+      int resultlen;                                            \
+      MPI_Error_string(err_code, err_str, &resultlen);          \
+      printf("Hommexx mpi error: %s\n", err_str);               \
+      printf("   at line %d of file %s\n", __LINE__, __FILE__); \
+      MPI_Abort(comm, err_code);                                \
+    }                                                           \
   }
 
 #else
-#define HOMMEXX_MPI_CHECK_ERROR(X,comm) X
+#define HOMMEXX_MPI_CHECK_ERROR(X, comm) X
 #endif
 
-#endif // HOMMEXX_DEBUG_HPP
+#endif  // HOMMEXX_DEBUG_HPP

@@ -16,11 +16,11 @@ struct VerticalRemapManager {
 
   void run_remap(int np1, int n0_qdp, double dt) const;
 
-private:
+ private:
   struct Impl;
   std::shared_ptr<Impl> p_;
 };
 
-}
+}  // namespace Homme
 
 #endif

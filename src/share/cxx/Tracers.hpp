@@ -21,19 +21,18 @@ struct Tracers {
   void push_qdp(F90Ptr &state_qdp) const;
 
   KOKKOS_INLINE_FUNCTION
-  int num_tracers() const {
-    return nt;
-  }
+  int num_tracers() const { return nt; }
 
-  ExecViewManaged<Scalar*[Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>   qdp;
-  ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]>                      qtens_biharmonic; // Also doubles as just qtens.
-  ExecViewManaged<Scalar*[QSIZE_D][2][NUM_LEV]>                           qlim;
-  ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]>                      Q;
+  ExecViewManaged<Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> qdp;
+  ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]>
+      qtens_biharmonic;  // Also doubles as just qtens.
+  ExecViewManaged<Scalar * [QSIZE_D][2][NUM_LEV]> qlim;
+  ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]> Q;
 
-private:
+ private:
   int nt;
 };
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_TRACERS_HPP
+#endif  // HOMMEXX_TRACERS_HPP

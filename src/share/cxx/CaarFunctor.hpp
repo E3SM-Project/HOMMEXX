@@ -7,11 +7,11 @@
 #ifndef HOMMEXX_CAAR_FUNCTOR_HPP
 #define HOMMEXX_CAAR_FUNCTOR_HPP
 
+#include <memory>
 #include "Derivative.hpp"
 #include "HybridVCoord.hpp"
 #include "SphereOperators.hpp"
 #include "Types.hpp"
-#include <memory>
 
 namespace Homme {
 
@@ -22,20 +22,19 @@ class Elements;
 class Tracers;
 
 class CaarFunctor {
-public:
+ public:
   CaarFunctor();
   CaarFunctor(const Elements &elements, const Tracers &tracers,
               const Derivative &derivative, const HybridVCoord &hvcoord,
-              const SphereOperators &sphere_ops, 
-              const int rsplit);
+              const SphereOperators &sphere_ops, const int rsplit);
   CaarFunctor(const CaarFunctor &) = delete;
 
   ~CaarFunctor();
 
   CaarFunctor &operator=(const CaarFunctor &) = delete;
 
-  void
-  init_boundary_exchanges(const std::shared_ptr<BuffersManager> &bm_exchange);
+  void init_boundary_exchanges(
+      const std::shared_ptr<BuffersManager> &bm_exchange);
 
   void set_n0_qdp(const int n0_qdp);
 
@@ -48,13 +47,13 @@ public:
   void run(const int nm1, const int n0, const int np1, const Real dt,
            const Real eta_ave_w, const bool compute_diagnostics);
 
-private:
+ private:
   std::unique_ptr<CaarFunctorImpl> m_caar_impl;
 
   // Setup the policies
   Kokkos::TeamPolicy<ExecSpace, void> m_policy;
 };
 
-} // Namespace Homme
+}  // Namespace Homme
 
-#endif // HOMMEXX_CAAR_FUNCTOR_HPP
+#endif  // HOMMEXX_CAAR_FUNCTOR_HPP

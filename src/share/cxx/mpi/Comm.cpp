@@ -9,38 +9,33 @@
 #include <assert.h>
 #include "Config.hpp"
 
-namespace Homme
-{
+namespace Homme {
 
-Comm::Comm()
-{
+Comm::Comm() {
   check_mpi_inited();
-  reset_mpi_comm (MPI_COMM_SELF);
+  reset_mpi_comm(MPI_COMM_SELF);
 }
 
-Comm::Comm(MPI_Comm mpi_comm)
-{
+Comm::Comm(MPI_Comm mpi_comm) {
   check_mpi_inited();
-  reset_mpi_comm (mpi_comm);
+  reset_mpi_comm(mpi_comm);
 }
 
-void Comm::reset_mpi_comm (MPI_Comm new_mpi_comm)
-{
+void Comm::reset_mpi_comm(MPI_Comm new_mpi_comm) {
   m_mpi_comm = new_mpi_comm;
 
-  MPI_Comm_size(m_mpi_comm,&m_size);
-  MPI_Comm_rank(m_mpi_comm,&m_rank);
+  MPI_Comm_size(m_mpi_comm, &m_size);
+  MPI_Comm_rank(m_mpi_comm, &m_rank);
 
 #ifndef NDEBUG
-  MPI_Comm_set_errhandler(m_mpi_comm,MPI_ERRORS_RETURN);
+  MPI_Comm_set_errhandler(m_mpi_comm, MPI_ERRORS_RETURN);
 #endif
 }
 
-void Comm::check_mpi_inited () const
-{
+void Comm::check_mpi_inited() const {
   int flag;
-  MPI_Initialized (&flag);
-  assert (flag!=0);
+  MPI_Initialized(&flag);
+  assert(flag != 0);
 }
 
-} // namespace Homme
+}  // namespace Homme

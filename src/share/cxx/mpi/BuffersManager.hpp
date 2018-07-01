@@ -9,12 +9,11 @@
 
 #include "Types.hpp"
 
-#include <vector>
 #include <map>
 #include <memory>
+#include <vector>
 
-namespace Homme
-{
+namespace Homme {
 
 // Forward declarations
 class Connectivity;
@@ -70,81 +69,91 @@ class BoundaryExchange;
  *
  */
 
-class BuffersManager
-{
-public:
-
-  BuffersManager ();
-  BuffersManager (std::shared_ptr<Connectivity> connectivity);
-  ~BuffersManager ();
+class BuffersManager {
+ public:
+  BuffersManager();
+  BuffersManager(std::shared_ptr<Connectivity> connectivity);
+  ~BuffersManager();
 
   // I'm not sure copying this class is a good idea.
-  BuffersManager(const BuffersManager&) = delete;
-  BuffersManager& operator= (const BuffersManager&) = delete;
+  BuffersManager(const BuffersManager &) = delete;
+  BuffersManager &operator=(const BuffersManager &) = delete;
 
   // Checks whether the connectivity is already set
-  bool is_connectivity_set () const { return m_connectivity!=nullptr; }
+  bool is_connectivity_set() const { return m_connectivity != nullptr; }
 
   // Set the connectivity class
-  void set_connectivity (std::shared_ptr<Connectivity> connectivity);
+  void set_connectivity(std::shared_ptr<Connectivity> connectivity);
 
-  // Ask the manager to re-check whether there is enough storage for all the BE's
-  void check_for_reallocation ();
+  // Ask the manager to re-check whether there is enough storage for all the
+  // BE's
+  void check_for_reallocation();
 
-  // Check that the allocated views can handle the requested number of 2d/3d fields
-  bool check_views_capacity (const int num_1d_fields, const int num_2d_fields,  const int num_3d_fields) const;
+  // Check that the allocated views can handle the requested number of 2d/3d
+  // fields
+  bool check_views_capacity(const int num_1d_fields, const int num_2d_fields,
+                            const int num_3d_fields) const;
 
-  // Allocate the buffers (overwriting possibly already allocated ones if needed)
-  void allocate_buffers ();
+  // Allocate the buffers (overwriting possibly already allocated ones if
+  // needed)
+  void allocate_buffers();
 
   // Lock/unlock the buffers are busy
-  void lock_buffers ();
-  void unlock_buffers ();
+  void lock_buffers();
+  void unlock_buffers();
 
-  bool are_buffers_busy () const { return m_buffers_busy; }
+  bool are_buffers_busy() const { return m_buffers_busy; }
 
-  ExecViewUnmanaged<Real*> get_send_buffer           () const;
-  ExecViewUnmanaged<Real*> get_recv_buffer           () const;
-  ExecViewUnmanaged<Real*> get_local_buffer          () const;
-  MPIViewUnmanaged<Real*>  get_mpi_send_buffer       () const;
-  MPIViewUnmanaged<Real*>  get_mpi_recv_buffer       () const;
-  ExecViewUnmanaged<Real*> get_blackhole_send_buffer () const;
-  ExecViewUnmanaged<Real*> get_blackhole_recv_buffer () const;
+  ExecViewUnmanaged<Real *> get_send_buffer() const;
+  ExecViewUnmanaged<Real *> get_recv_buffer() const;
+  ExecViewUnmanaged<Real *> get_local_buffer() const;
+  MPIViewUnmanaged<Real *> get_mpi_send_buffer() const;
+  MPIViewUnmanaged<Real *> get_mpi_recv_buffer() const;
+  ExecViewUnmanaged<Real *> get_blackhole_send_buffer() const;
+  ExecViewUnmanaged<Real *> get_blackhole_recv_buffer() const;
 
-  std::shared_ptr<Connectivity> get_connectivity () const { return m_connectivity; }
+  std::shared_ptr<Connectivity> get_connectivity() const {
+    return m_connectivity;
+  }
 
-private:
-
-  // Make BoundaryExchange a friend, so it can call the next four methods underneath
+ private:
+  // Make BoundaryExchange a friend, so it can call the next four methods
+  // underneath
   friend class BoundaryExchange;
 
-  // Adds/removes the given BoundaryExchange to/from the list of 'customers' of this class
-  // Note: the only class that should call these methods is BoundaryExchange, so
+  // Adds/removes the given BoundaryExchange to/from the list of 'customers' of
+  // this class Note: the only class that should call these methods is
+  // BoundaryExchange, so
   //       it can register/unregister itself as a customer
-  void add_customer (BoundaryExchange* add_me);
-  void remove_customer (BoundaryExchange* remove_me);
+  void add_customer(BoundaryExchange *add_me);
+  void remove_customer(BoundaryExchange *remove_me);
   // Deep copy the send/recv buffer to/from the mpi_send/recv buffer
   // Note: these are no-ops if MPIMemSpace=ExecMemSpace
-  void sync_send_buffer (BoundaryExchange* customer);
-  void sync_recv_buffer (BoundaryExchange* customer);
+  void sync_send_buffer(BoundaryExchange *customer);
+  void sync_recv_buffer(BoundaryExchange *customer);
 
-  // Small struct, to hold customer's needs. We could use an std::pair, but this is more verbose
+  // Small struct, to hold customer's needs. We could use an std::pair, but this
+  // is more verbose
   struct CustomerNeeds {
     size_t local_buffer_size;
     size_t mpi_buffer_size;
 
-    bool operator== (const CustomerNeeds& rhs) {
-      return local_buffer_size==rhs.local_buffer_size && mpi_buffer_size==rhs.mpi_buffer_size;
+    bool operator==(const CustomerNeeds &rhs) {
+      return local_buffer_size == rhs.local_buffer_size &&
+             mpi_buffer_size == rhs.mpi_buffer_size;
     }
   };
 
-  // If necessary, updates buffers sizes so that there is enough storage to hold the required number of fields.
-  // Note: this method does not (re)allocate views
-  void update_requested_sizes (std::map<BoundaryExchange*,CustomerNeeds>::value_type& customer);
+  // If necessary, updates buffers sizes so that there is enough storage to hold
+  // the required number of fields. Note: this method does not (re)allocate
+  // views
+  void update_requested_sizes(
+      std::map<BoundaryExchange *, CustomerNeeds>::value_type &customer);
 
   // Computes the required storages
-  void required_buffer_sizes (const int num_1d_fields, const int num_2d_fields, const int num_3d_fields,
-                              size_t& mpi_buffer_size, size_t& local_buffer_size) const;
+  void required_buffer_sizes(const int num_1d_fields, const int num_2d_fields,
+                             const int num_3d_fields, size_t &mpi_buffer_size,
+                             size_t &local_buffer_size) const;
 
   // The number of customers
   size_t m_num_customers;
@@ -160,113 +169,106 @@ private:
   bool m_views_are_valid;
 
   // Customers of this BuffersManager, each with its local and mpi sizes
-  std::map<BoundaryExchange*,CustomerNeeds>  m_customers;
+  std::map<BoundaryExchange *, CustomerNeeds> m_customers;
 
   // The connectivity (needed to allocate buffers)
   std::shared_ptr<Connectivity> m_connectivity;
 
   // The buffers
-  ExecViewManaged<Real*>  m_send_buffer;
-  ExecViewManaged<Real*>  m_recv_buffer;
-  ExecViewManaged<Real*>  m_local_buffer;
+  ExecViewManaged<Real *> m_send_buffer;
+  ExecViewManaged<Real *> m_recv_buffer;
+  ExecViewManaged<Real *> m_local_buffer;
 
-  // The mpi buffers (same as the previous send/recv buffers if MPIMemSpace=ExecMemSpace)
-  MPIViewManaged<Real*>   m_mpi_send_buffer;
-  MPIViewManaged<Real*>   m_mpi_recv_buffer;
+  // The mpi buffers (same as the previous send/recv buffers if
+  // MPIMemSpace=ExecMemSpace)
+  MPIViewManaged<Real *> m_mpi_send_buffer;
+  MPIViewManaged<Real *> m_mpi_recv_buffer;
 
   // The blackhole send/recv buffers (used for missing connections)
-  ExecViewManaged<Real*>  m_blackhole_send_buffer;
-  ExecViewManaged<Real*>  m_blackhole_recv_buffer;
+  ExecViewManaged<Real *> m_blackhole_send_buffer;
+  ExecViewManaged<Real *> m_blackhole_recv_buffer;
 };
 
-inline void BuffersManager::sync_send_buffer (BoundaryExchange* customer)
-{
+inline void BuffersManager::sync_send_buffer(BoundaryExchange *customer) {
   // Only customers can call this
-  assert (m_customers.find(customer)!=m_customers.end());
+  assert(m_customers.find(customer) != m_customers.end());
 
-  const size_t customer_mpi_buffer_size = m_customers.find(customer)->second.mpi_buffer_size;
-  if (customer_mpi_buffer_size<m_mpi_buffer_size) {
+  const size_t customer_mpi_buffer_size =
+      m_customers.find(customer)->second.mpi_buffer_size;
+  if (customer_mpi_buffer_size < m_mpi_buffer_size) {
     // Avoid copying more than we need
-    MPIViewUnmanaged<Real*>  mpi_send_view(m_mpi_send_buffer.data(),customer_mpi_buffer_size);
-    ExecViewUnmanaged<const Real*> send_view(m_send_buffer.data(),customer_mpi_buffer_size);
+    MPIViewUnmanaged<Real *> mpi_send_view(m_mpi_send_buffer.data(),
+                                           customer_mpi_buffer_size);
+    ExecViewUnmanaged<const Real *> send_view(m_send_buffer.data(),
+                                              customer_mpi_buffer_size);
     Kokkos::deep_copy(mpi_send_view, send_view);
   } else {
     Kokkos::deep_copy(m_mpi_send_buffer, m_send_buffer);
   }
 }
 
-inline void BuffersManager::sync_recv_buffer (BoundaryExchange* customer)
-{
+inline void BuffersManager::sync_recv_buffer(BoundaryExchange *customer) {
   // Only customers can call this
-  assert (m_customers.find(customer)!=m_customers.end());
+  assert(m_customers.find(customer) != m_customers.end());
 
-  const size_t customer_mpi_buffer_size = m_customers.find(customer)->second.mpi_buffer_size;
-  if (customer_mpi_buffer_size<m_mpi_buffer_size) {
+  const size_t customer_mpi_buffer_size =
+      m_customers.find(customer)->second.mpi_buffer_size;
+  if (customer_mpi_buffer_size < m_mpi_buffer_size) {
     // Avoid copying more than we need
-    MPIViewUnmanaged<const Real*>  mpi_recv_view(m_mpi_recv_buffer.data(),customer_mpi_buffer_size);
-    ExecViewUnmanaged<Real*> recv_view(m_recv_buffer.data(),customer_mpi_buffer_size);
+    MPIViewUnmanaged<const Real *> mpi_recv_view(m_mpi_recv_buffer.data(),
+                                                 customer_mpi_buffer_size);
+    ExecViewUnmanaged<Real *> recv_view(m_recv_buffer.data(),
+                                        customer_mpi_buffer_size);
     Kokkos::deep_copy(recv_view, mpi_recv_view);
   } else {
     Kokkos::deep_copy(m_recv_buffer, m_mpi_recv_buffer);
   }
 }
 
-inline ExecViewUnmanaged<Real*>
-BuffersManager::get_send_buffer () const
-{
+inline ExecViewUnmanaged<Real *> BuffersManager::get_send_buffer() const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_send_buffer;
 }
 
-inline ExecViewUnmanaged<Real*>
-BuffersManager::get_recv_buffer () const
-{
+inline ExecViewUnmanaged<Real *> BuffersManager::get_recv_buffer() const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_recv_buffer;
 }
 
-inline ExecViewUnmanaged<Real*>
-BuffersManager::get_local_buffer () const
-{
+inline ExecViewUnmanaged<Real *> BuffersManager::get_local_buffer() const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_local_buffer;
 }
 
-inline MPIViewUnmanaged<Real*>
-BuffersManager::get_mpi_send_buffer() const
-{
+inline MPIViewUnmanaged<Real *> BuffersManager::get_mpi_send_buffer() const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_mpi_send_buffer;
 }
 
-inline MPIViewUnmanaged<Real*>
-BuffersManager::get_mpi_recv_buffer() const
-{
+inline MPIViewUnmanaged<Real *> BuffersManager::get_mpi_recv_buffer() const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_mpi_recv_buffer;
 }
 
-inline ExecViewUnmanaged<Real*>
-BuffersManager::get_blackhole_send_buffer () const
-{
+inline ExecViewUnmanaged<Real *> BuffersManager::get_blackhole_send_buffer()
+    const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_blackhole_send_buffer;
 }
 
-inline ExecViewUnmanaged<Real*>
-BuffersManager::get_blackhole_recv_buffer () const
-{
+inline ExecViewUnmanaged<Real *> BuffersManager::get_blackhole_recv_buffer()
+    const {
   // We ensure that the buffers are valid
   assert(m_views_are_valid);
   return m_blackhole_recv_buffer;
 }
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_MPI_BUFFERS_MANAGER_HPP
+#endif  // HOMMEXX_MPI_BUFFERS_MANAGER_HPP

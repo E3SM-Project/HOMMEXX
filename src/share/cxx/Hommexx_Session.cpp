@@ -6,20 +6,19 @@
 
 #include "Hommexx_Session.hpp"
 
-#include "ExecSpaceDefs.hpp"
-#include "profiling.hpp"
-#include "Context.hpp"
 #include "Config.hpp"
+#include "Context.hpp"
+#include "ExecSpaceDefs.hpp"
 #include "mpi/Comm.hpp"
+#include "profiling.hpp"
 
 #include "vector/vector_pragmas.hpp"
 
 #include <iostream>
 
-namespace Homme
-{
+namespace Homme {
 
-std::string active_avx_string () {
+std::string active_avx_string() {
   std::string s;
 #if defined __AVX512F__
   s += " - AVX512F";
@@ -33,8 +32,7 @@ std::string active_avx_string () {
   return s;
 }
 
-void initialize_hommexx_session ()
-{
+void initialize_hommexx_session() {
   /* Make certain profiling is only done for code we're working on */
   profiling_pause();
 
@@ -45,7 +43,7 @@ void initialize_hommexx_session ()
   const auto comm = Context::singleton().get_comm();
   if (comm.root()) {
     ExecSpace::print_configuration(std::cout, true);
-    // Print configure-time settings.
+// Print configure-time settings.
 #ifdef HOMMEXX_SHA1
     std::cout << "HOMMEXX SHA1: " << HOMMEXX_SHA1 << "\n";
 #endif
@@ -54,7 +52,8 @@ void initialize_hommexx_session ()
     std::cout << "HOMMEXX vector tag: " << Scalar::label() << "\n";
     std::cout << "HOMMEXX active AVX set:" << active_avx_string() << "\n";
     std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
-    std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
+    std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: "
+              << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
 
 #ifndef HOMMEXX_NO_VECTOR_PRAGMAS
     std::cout << "HOMMEXX has vector pragmas\n";
@@ -64,19 +63,18 @@ void initialize_hommexx_session ()
 
 #ifdef HOMMEXX_CONFIG_IS_CMAKE
     std::cout << "HOMMEXX configured with CMake\n";
-# ifdef HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
     std::cout << "HOMMEXX has config.h.c\n";
-# endif
+#endif
 #else
     std::cout << "HOMMEXX provided best default values in Config.hpp\n";
 #endif
   }
 }
 
-void finalize_hommexx_session ()
-{
+void finalize_hommexx_session() {
   Context::finalize_singleton();
   Kokkos::finalize();
 }
 
-} // namespace Homme
+}  // namespace Homme

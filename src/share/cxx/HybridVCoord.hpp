@@ -9,22 +9,17 @@
 
 #include "Types.hpp"
 
-namespace Homme
-{
+namespace Homme {
 
-struct HybridVCoord
-{
-  HybridVCoord () = default;
+struct HybridVCoord {
+  HybridVCoord() = default;
 
   // This method should only be called from the host
-  void init(const Real ps0_in,
-            CRCPtr hybrid_am_ptr,
-            CRCPtr hybrid_ai_ptr,
-            CRCPtr hybrid_bm_ptr,
-            CRCPtr hybrid_bi_ptr);
+  void init(const Real ps0_in, CRCPtr hybrid_am_ptr, CRCPtr hybrid_ai_ptr,
+            CRCPtr hybrid_bm_ptr, CRCPtr hybrid_bi_ptr);
 
   void random_init(int seed);
-  void compute_deltas ();
+  void compute_deltas();
 
   Real ps0;
   Real hybrid_ai0;
@@ -40,6 +35,6 @@ struct HybridVCoord
   ExecViewManaged<Scalar[NUM_LEV]> dp0;
 };
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_HYBRID_V_COORD_HPP
+#endif  // HOMMEXX_HYBRID_V_COORD_HPP

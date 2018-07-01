@@ -9,15 +9,11 @@
 
 #include <random>
 
-namespace Homme
-{
+namespace Homme {
 
-void HybridVCoord::init(const Real ps0_in,
-                   CRCPtr hybrid_am_ptr,
-                   CRCPtr hybrid_ai_ptr,
-                   CRCPtr hybrid_bm_ptr,
-                   CRCPtr hybrid_bi_ptr)
-{
+void HybridVCoord::init(const Real ps0_in, CRCPtr hybrid_am_ptr,
+                        CRCPtr hybrid_ai_ptr, CRCPtr hybrid_bm_ptr,
+                        CRCPtr hybrid_bi_ptr) {
   ps0 = ps0_in;
 
   // hybrid_am = ExecViewManaged<Real[NUM_PHYSICAL_LEV]>(
@@ -55,10 +51,10 @@ void HybridVCoord::init(const Real ps0_in,
 void HybridVCoord::random_init(int seed) {
   const int min_value = std::numeric_limits<Real>::epsilon();
   const int max_value = 1.0 - min_value;
-  hybrid_ai = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid a_interface coefs");
-  hybrid_bi = ExecViewManaged<Real[NUM_INTERFACE_LEV]>(
-      "Hybrid b_interface coefs");
+  hybrid_ai =
+      ExecViewManaged<Real[NUM_INTERFACE_LEV]>("Hybrid a_interface coefs");
+  hybrid_bi =
+      ExecViewManaged<Real[NUM_INTERFACE_LEV]>("Hybrid b_interface coefs");
 
   std::mt19937_64 engine(seed);
   ps0 = 1.0;
@@ -66,8 +62,9 @@ void HybridVCoord::random_init(int seed) {
   // hybrid_a can technically range from 0 to 1 like hybrid_b,
   // but doing so makes enforcing the monotonicity of p = a + b difficult
   // So only go to 0.25
-  genRandArray(hybrid_ai, engine, std::uniform_real_distribution<Real>(
-                                      min_value, max_value / 4.0));
+  genRandArray(
+      hybrid_ai, engine,
+      std::uniform_real_distribution<Real>(min_value, max_value / 4.0));
 
   HostViewManaged<Real[NUM_INTERFACE_LEV]> host_hybrid_ai(
       "Host hybrid ai coefs");
@@ -78,30 +75,30 @@ void HybridVCoord::random_init(int seed) {
   // p = a + b must be monotonically increasing
   // OG: what is this for? does a test require it?
   // (not critisizm, but i don't understand)
-  const auto check_coords = [=](
-      HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) {
-    // Enforce the boundaries
-    coords(0) = 0.0;
-    coords(1) = 1.0;
-    // Put them in order
-    std::sort(coords.data(), coords.data() + coords.size());
-    Real p_prev = hybrid_ai0 + coords(0);
-    for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
-      // Make certain they're all distinct
-      if (coords(i) <=
-          coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
-        return false;
-      }
-      // Make certain p = a + b is increasing
-      Real p_cur = coords(i) + host_hybrid_ai(i);
-      if (p_cur <= p_prev) {
-        return false;
-      }
-      p_prev = p_cur;
-    }
-    // All good!
-    return true;
-  };
+  const auto check_coords =
+      [=](HostViewUnmanaged<Real[NUM_INTERFACE_LEV]> coords) {
+        // Enforce the boundaries
+        coords(0) = 0.0;
+        coords(1) = 1.0;
+        // Put them in order
+        std::sort(coords.data(), coords.data() + coords.size());
+        Real p_prev = hybrid_ai0 + coords(0);
+        for (int i = 1; i < NUM_INTERFACE_LEV; ++i) {
+          // Make certain they're all distinct
+          if (coords(i) <=
+              coords(i - 1) * (1.0 + std::numeric_limits<Real>::epsilon())) {
+            return false;
+          }
+          // Make certain p = a + b is increasing
+          Real p_cur = coords(i) + host_hybrid_ai(i);
+          if (p_cur <= p_prev) {
+            return false;
+          }
+          p_prev = p_cur;
+        }
+        // All good!
+        return true;
+      };
   genRandArray(hybrid_bi, engine,
                std::uniform_real_distribution<Real>(min_value, max_value),
                check_coords);
@@ -109,8 +106,7 @@ void HybridVCoord::random_init(int seed) {
   compute_deltas();
 }
 
-void HybridVCoord::compute_deltas ()
-{
+void HybridVCoord::compute_deltas() {
   const auto host_hybrid_ai = Kokkos::create_mirror_view(hybrid_ai);
   const auto host_hybrid_bi = Kokkos::create_mirror_view(hybrid_bi);
   Kokkos::deep_copy(host_hybrid_ai, hybrid_ai);
@@ -148,4 +144,4 @@ void HybridVCoord::compute_deltas ()
   }
 }
 
-} // namespace Homme
+}  // namespace Homme

@@ -47,16 +47,16 @@
 #include "KokkosKernels_Util.hpp"
 
 namespace KokkosKernels {
-  namespace Batched {
-    namespace Experimental {
-      template<typename T>
-      class Vector;
-    }
-  }
+namespace Batched {
+namespace Experimental {
+template <typename T>
+class Vector;
 }
+}  // namespace Batched
+}  // namespace KokkosKernels
 
-#include "KokkosKernels_Vector_SIMD.hpp"
 #include "KokkosKernels_Vector_AVX256D.hpp"
 #include "KokkosKernels_Vector_AVX512D.hpp"
+#include "KokkosKernels_Vector_SIMD.hpp"
 
 #endif
