@@ -4,7 +4,6 @@
  * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
  *******************************************************************************/
 
-
 #include <random>
 
 #include "Tracers.hpp"
@@ -14,12 +13,11 @@
 
 namespace Homme {
 
-Tracers::Tracers(const int num_elems, const int num_tracers)
-  : nt(num_tracers)
-{
+Tracers::Tracers(const int num_elems, const int num_tracers) : nt(num_tracers) {
   Q = decltype(Q)("tracers concentration", num_elems);
   qdp = decltype(qdp)("tracers mass", num_elems);
-  qtens_biharmonic = decltype(qtens_biharmonic)("qtens(_biharmonic)", num_elems);
+  qtens_biharmonic =
+      decltype(qtens_biharmonic)("qtens(_biharmonic)", num_elems);
   qlim = decltype(qlim)("qlim", num_elems);
 }
 
@@ -35,17 +33,17 @@ void Tracers::random_init() {
 }
 
 void Tracers::pull_qdp(CF90Ptr &state_qdp) {
-  HostViewUnmanaged<
-      const Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
-  state_qdp_f90(state_qdp, qdp.extent_int(0));
+  HostViewUnmanaged<const Real *
+                    [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
+      state_qdp_f90(state_qdp, qdp.extent_int(0));
   sync_to_device(state_qdp_f90, qdp);
 }
 
 void Tracers::push_qdp(F90Ptr &state_qdp) const {
-  HostViewUnmanaged<
-      Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
-  state_qdp_f90(state_qdp, qdp.extent_int(0));
+  HostViewUnmanaged<Real *
+                    [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>
+      state_qdp_f90(state_qdp, qdp.extent_int(0));
   sync_to_host(qdp, state_qdp_f90);
 }
 
-} // namespace Homme
+}  // namespace Homme

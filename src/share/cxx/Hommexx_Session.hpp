@@ -7,16 +7,15 @@
 #ifndef HOMMEXX_SESSION_HPP
 #define HOMMEXX_SESSION_HPP
 
-namespace Homme
-{
+namespace Homme {
 
 extern "C" {
 
-void initialize_hommexx_session ();
-void finalize_hommexx_session ();
+void initialize_hommexx_session();
+void finalize_hommexx_session();
 
-} // extern "C"
+}  // extern "C"
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_SESSION_HPP
+#endif  // HOMMEXX_SESSION_HPP

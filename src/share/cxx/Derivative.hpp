@@ -12,7 +12,7 @@
 namespace Homme {
 
 class Derivative {
-public:
+ public:
   Derivative();
 
   void init(CF90Ptr &dvv);
@@ -24,10 +24,10 @@ public:
   KOKKOS_INLINE_FUNCTION
   ExecViewUnmanaged<const Real[NP][NP]> get_dvv() const { return m_dvv; }
 
-private:
+ private:
   ExecViewManaged<Real[NP][NP]> m_dvv;
 };
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_DERIVATIVE_HPP
+#endif  // HOMMEXX_DERIVATIVE_HPP

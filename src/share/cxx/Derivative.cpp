@@ -11,9 +11,7 @@
 
 namespace Homme {
 
-Derivative::Derivative()
-    : m_dvv("dvv")
-{
+Derivative::Derivative() : m_dvv("dvv") {
   // Nothing to be done here
 }
 
@@ -43,4 +41,4 @@ void Derivative::dvv(Real *dvv_ptr) {
   Kokkos::deep_copy(dvv_f90, m_dvv);
 }
 
-} // namespace Homme
+}  // namespace Homme

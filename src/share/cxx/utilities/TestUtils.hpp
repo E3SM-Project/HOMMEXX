@@ -7,8 +7,8 @@
 #ifndef HOMMEXX_TEST_UTILS_HPP
 #define HOMMEXX_TEST_UTILS_HPP
 
-#include "Types.hpp"
 #include <functional>
+#include "Types.hpp"
 
 namespace Homme {
 
@@ -57,6 +57,6 @@ Real compare_answers(FPType target, FPType computed,
   return std::fabs(target - computed) / denom;
 }
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_TEST_UTILS_HPP
+#endif  // HOMMEXX_TEST_UTILS_HPP

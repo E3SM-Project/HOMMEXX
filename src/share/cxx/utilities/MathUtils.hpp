@@ -10,8 +10,7 @@
 #include <Kokkos_Core.hpp>
 #include <cmath>
 
-namespace Homme
-{
+namespace Homme {
 
 template <typename FPType>
 KOKKOS_INLINE_FUNCTION constexpr FPType min(const FPType val_1,
@@ -37,7 +36,7 @@ KOKKOS_INLINE_FUNCTION constexpr FPType max(const FPType val, FPPack... pack) {
 
 // Computes the greatest common denominator of a and b with Euclid's algorithm
 KOKKOS_INLINE_FUNCTION constexpr int gcd(const int a, const int b) {
-	return (a % b == 0) ? b : gcd(b, a % b);
+  return (a % b == 0) ? b : gcd(b, a % b);
 }
 
 static_assert(gcd(1, 6) == 1, "gcd is broken");
@@ -46,8 +45,9 @@ static_assert(gcd(29, 20) == 1, "gcd is broken");
 static_assert(gcd(24, 16) == 8, "gcd is broken");
 
 template <typename... int_pack>
-KOKKOS_INLINE_FUNCTION constexpr int gcd(const int a, const int b, int_pack... pack) {
-	return gcd(gcd(a, b), pack...);
+KOKKOS_INLINE_FUNCTION constexpr int gcd(const int a, const int b,
+                                         int_pack... pack) {
+  return gcd(gcd(a, b), pack...);
 }
 
 static_assert(gcd(16, 24, 28) == 4, "gcd is broken");
@@ -56,7 +56,7 @@ static_assert(gcd(24, 16, 28) == 4, "gcd is broken");
 // Computes the least common multiple of a and b
 // Divide b by gcd(a, b) before multiplying to prevent overflows
 KOKKOS_INLINE_FUNCTION constexpr int lcm(const int a, const int b) {
-	return a * (b / gcd(a, b));
+  return a * (b / gcd(a, b));
 }
 
 static_assert(lcm(1, 6) == 6, "lcm is broken");
@@ -65,8 +65,9 @@ static_assert(lcm(29, 20) == 29 * 20, "lcm is broken");
 static_assert(lcm(24, 16) == 48, "lcm is broken");
 
 template <typename... int_pack>
-KOKKOS_INLINE_FUNCTION constexpr int lcm(const int a, const int b, int_pack... pack) {
-	return lcm(a, lcm(b, pack...));
+KOKKOS_INLINE_FUNCTION constexpr int lcm(const int a, const int b,
+                                         int_pack... pack) {
+  return lcm(a, lcm(b, pack...));
 }
 
 static_assert(lcm(16, 24, 28) == 336, "lcm is broken");
@@ -74,7 +75,8 @@ static_assert(lcm(24, 16, 28) == 336, "lcm is broken");
 
 template <typename ViewType>
 typename std::enable_if<
-    !std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
+    !std::is_same<typename ViewType::non_const_value_type, Scalar>::value,
+    Real>::type
 frobenius_norm(const ViewType view, bool ignore_nans = false) {
   typename ViewType::pointer_type data = view.data();
 
@@ -99,7 +101,8 @@ frobenius_norm(const ViewType view, bool ignore_nans = false) {
 
 template <typename ViewType>
 typename std::enable_if<
-    std::is_same<typename ViewType::non_const_value_type, Scalar>::value, Real>::type
+    std::is_same<typename ViewType::non_const_value_type, Scalar>::value,
+    Real>::type
 frobenius_norm(const ViewType view, bool ignore_nans = false) {
   typename ViewType::pointer_type data = view.data();
 
@@ -124,6 +127,6 @@ frobenius_norm(const ViewType view, bool ignore_nans = false) {
   return std::sqrt(norm);
 }
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_MATH_UTILS_HPP
+#endif  // HOMMEXX_MATH_UTILS_HPP

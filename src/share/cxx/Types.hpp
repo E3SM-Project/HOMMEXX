@@ -7,11 +7,11 @@
 #ifndef HOMMEXX_TYPES_HPP
 #define HOMMEXX_TYPES_HPP
 
-#include "Config.hpp"
 #include <Kokkos_Core.hpp>
+#include "Config.hpp"
 
-#include "ExecSpaceDefs.hpp"
 #include "Dimensions.hpp"
+#include "ExecSpaceDefs.hpp"
 
 #include <vector/KokkosKernels_Vector.hpp>
 
@@ -28,10 +28,10 @@ namespace Homme {
 using Real = double;
 using RCPtr = Real *const;
 using CRCPtr = const Real *const;
-using F90Ptr = Real *const; // Using this in a function signature emphasizes
-                            // that the ordering is Fortran
-using CF90Ptr = const Real *const; // Using this in a function signature
-                                   // emphasizes that the ordering is Fortran
+using F90Ptr = Real *const;  // Using this in a function signature emphasizes
+                             // that the ordering is Fortran
+using CF90Ptr = const Real *const;  // Using this in a function signature
+                                    // emphasizes that the ordering is Fortran
 
 #if (HOMMEXX_AVX_VERSION > 0)
 using VectorTagType =
@@ -39,7 +39,7 @@ using VectorTagType =
 #else
 using VectorTagType =
     KokkosKernels::Batched::Experimental::SIMD<Real, ExecSpace>;
-#endif // HOMMEXX_AVX_VERSION
+#endif  // HOMMEXX_AVX_VERSION
 
 using VectorType =
     KokkosKernels::Batched::Experimental::VectorTag<VectorTagType, VECTOR_SIZE>;
@@ -47,16 +47,19 @@ using VectorType =
 using Scalar = KokkosKernels::Batched::Experimental::Vector<VectorType>;
 
 static_assert(sizeof(Scalar) > 0, "Vector type has 0 size");
-static_assert(sizeof(Scalar) == sizeof(Real[VECTOR_SIZE]), "Vector type is not correctly defined");
-static_assert(Scalar::vector_length>0, "Vector type is not correctly defined (vector_length=0)");
+static_assert(sizeof(Scalar) == sizeof(Real[VECTOR_SIZE]),
+              "Vector type is not correctly defined");
+static_assert(Scalar::vector_length > 0,
+              "Vector type is not correctly defined (vector_length=0)");
 
-using MemoryManaged   = Kokkos::MemoryTraits<Kokkos::Restrict>;
-using MemoryUnmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict>;
+using MemoryManaged = Kokkos::MemoryTraits<Kokkos::Restrict>;
+using MemoryUnmanaged =
+    Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Restrict>;
 
 // The memory spaces
-using ExecMemSpace    = ExecSpace::memory_space;
+using ExecMemSpace = ExecSpace::memory_space;
 using ScratchMemSpace = ExecSpace::scratch_memory_space;
-using HostMemSpace    = Kokkos::HostSpace;
+using HostMemSpace = Kokkos::HostSpace;
 // Selecting the memory space for the MPI buffers, that is, where the MPI
 // buffers will be allocated. In a CPU build, this is always going to be
 // the same as ExecMemSpace, i.e., HostSpace. In a GPU build, one can choose
@@ -67,13 +70,13 @@ using HostMemSpace    = Kokkos::HostSpace;
 //       the location of the MPI buffer for send/receive.
 
 #if HOMMEXX_MPI_ON_DEVICE
-  using MPIMemSpace = ExecMemSpace;
+using MPIMemSpace = ExecMemSpace;
 #else
-  using MPIMemSpace = HostMemSpace;
+using MPIMemSpace = HostMemSpace;
 #endif
 
 // A team member type
-using TeamMember     = Kokkos::TeamPolicy<ExecSpace>::member_type;
+using TeamMember = Kokkos::TeamPolicy<ExecSpace>::member_type;
 
 // Short name for views
 template <typename DataType, typename... Properties>
@@ -93,17 +96,18 @@ using ExecView = ViewType<DataType, ExecMemSpace, Properties...>;
 // Work around Cuda 9.1.85 parse bugs.
 #if CUDA_PARSE_BUG_FIXED
 template <typename DataType, typename... Properties>
-using MPIView = typename std::conditional<std::is_same<MPIMemSpace,ExecMemSpace>::value,
-                                          ExecView<DataType,Properties...>,
-                                          typename ExecView<DataType,Properties...>::HostMirror>::type;
+using MPIView = typename std::conditional<
+    std::is_same<MPIMemSpace, ExecMemSpace>::value,
+    ExecView<DataType, Properties...>,
+    typename ExecView<DataType, Properties...>::HostMirror>::type;
 #else
-# if HOMMEXX_MPI_ON_DEVICE
+#if HOMMEXX_MPI_ON_DEVICE
 template <typename DataType, typename... Properties>
-using MPIView = ExecView<DataType,Properties...>;
-# else
+using MPIView = ExecView<DataType, Properties...>;
+#else
 template <typename DataType, typename... Properties>
-using MPIView = typename ExecView<DataType,Properties...>::HostMirror>::type;
-# endif
+using MPIView = typename ExecView<DataType, Properties...>::HostMirror > ::type;
+#endif
 #endif
 
 // Further specializations for execution space and managed/unmanaged memory
@@ -131,8 +135,9 @@ using ScratchView = ViewType<DataType, ScratchMemSpace, MemoryUnmanaged>;
 // To view the fully expanded name of a complicated template type T,
 // just try to access some non-existent field of MyDebug<T>. E.g.:
 // MyDebug<T>::type i;
-template <typename T> struct MyDebug {};
+template <typename T>
+struct MyDebug {};
 
-} // Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_TYPES_HPP
+#endif  // HOMMEXX_TYPES_HPP

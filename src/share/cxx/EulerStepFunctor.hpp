@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "Types.hpp"
 #include "SimulationParams.hpp"
+#include "Types.hpp"
 
 namespace Homme {
 
@@ -19,10 +19,10 @@ class EulerStepFunctorImpl;
 class EulerStepFunctor {
   std::shared_ptr<EulerStepFunctorImpl> p_;
 
-public:
+ public:
   EulerStepFunctor();
 
-  void reset(const SimulationParams& params);
+  void reset(const SimulationParams &params);
 
   void init_boundary_exchanges();
 
@@ -34,11 +34,11 @@ public:
                   const Real rhs_multiplier, const DSSOption DSSopt);
 
   KOKKOS_INLINE_FUNCTION
-  static bool is_quasi_monotone (const int& limiter_option) {
+  static bool is_quasi_monotone(const int &limiter_option) {
     return limiter_option == 8 || limiter_option == 9;
   }
 };
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_EULER_STEP_FUNCTOR_HPP
+#endif  // HOMMEXX_EULER_STEP_FUNCTOR_HPP

@@ -51,7 +51,7 @@ namespace Experimental {
 
 template <typename fptype, int _vector_length, typename SpT>
 class Vector<VectorTag<ImplicitVector<fptype, SpT>, _vector_length> > {
-public:
+ public:
   using type = Vector<VectorTag<ImplicitVector<fptype, SpT>, _vector_length> >;
   using value_type = fptype;
   using real_type = fptype;
@@ -65,10 +65,10 @@ public:
   KOKKOS_INLINE_FUNCTION
   static const char *label() { return "Implicit Vector"; }
 
-private:
+ private:
   mutable data_type _data;
 
-public:
+ public:
   inline Vector() : _data.d({0.0}) {}
 
   inline Vector(const value_type val) {
@@ -114,242 +114,239 @@ public:
 
 template <typename fptype, int vector_length, typename SpT>
 inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, vector_length> >
-operator+(Vector<VectorTag<ImplicitVector<fptype, SpT>, vector_length> > const &a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, vector_length> > const &b) {
+operator+(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, vector_length> > const &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, vector_length> > const &b) {
   a::type sum;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     sum._data.d[i] = a._data.d[i] + b._data.d[i];
   }
   return sum;
 }
 
 template <typename fptype, int vector_length, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator+(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          const fptype b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator+(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    const fptype b) {
   a::type sum;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     sum._data.d[i] = a._data.d[i] + b;
   }
   return sum;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator+(const double a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator+(
+    const double a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   return b + a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator+=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator+=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] += b._data.d[i];
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator+=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           const double b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator+=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, const double b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] += b;
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator++(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, int) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator++(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, int) {
   Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > a0 = a;
   a += 1.0;
   return a0;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator++(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator++(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a) {
   a += 1.0;
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator-(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator-(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   a::type diff;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     diff._data.d[i] = a._data.d[i] - b._data.d[i];
   }
   return diff;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator-(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          const double b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator-(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    const double b) {
   a::type diff;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     diff._data.d[i] = a._data.d[i] - b;
   }
   return diff;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator-(const double a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator-(
+    const double a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   return b - a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator-=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator-=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] -= b._data.d[i];
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator-=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           const double b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator-=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, const double b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] -= b;
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator--(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, int) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator--(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, int) {
   Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > a0 = a;
   a -= 1.0;
   return a0;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator--(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator--(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a) {
   a -= 1.0;
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator*(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator*(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   a::type prod;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     prod._data.d[i] = a._data.d[i] * b._data.d[i];
   }
   return prod;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator*(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          const double b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator*(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    const double b) {
   a::type prod;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     prod._data.d[i] = a._data.d[i] * b;
   }
   return prod;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator*(const double a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator*(
+    const double a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   return b * a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator*=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator*=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] *= b._data.d[i];
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator*=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           const double b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator*=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, const double b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] *= b;
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator/(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator/(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   a::type quo;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     quo._data.d[i] = a._data.d[i] / b._data.d[i];
   }
   return quo;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator/(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
-          const double b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator/(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a,
+    const double b) {
   a::type quo;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     quo._data.d[i] = a._data.d[i] / b;
   }
   return quo;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator/(const double a,
-          Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator/(
+    const double a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
   b::type quo;
-  for(int i = 0; i < vector_length; i++) {
+  for (int i = 0; i < vector_length; i++) {
     quo._data.d[i] = b / a._data.d[i];
   }
   return quo;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator/=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator/=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] /= b._data.d[i];
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &
-operator/=(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a,
-           const double b) {
-  for(int i = 0; i < vector_length; i++) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &operator/=(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > &a, const double b) {
+  for (int i = 0; i < vector_length; i++) {
     a._data.d[i] /= b;
   }
   return a;
 }
 
 template <typename fptype, typename SpT>
-inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> >
-operator-(Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a) {
+inline static Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > operator-(
+    Vector<VectorTag<ImplicitVector<fptype, SpT>, 8> > const &a) {
   return -1 * a;
 }
 
-} // Experimental
-} // Batched
-} // KokkosKernels
+}  // namespace Experimental
+}  // namespace Batched
+}  // namespace KokkosKernels
 
-#endif // __KOKKOSKERNELS_VECTOR_IMPLICIT_HPP__
+#endif  // __KOKKOSKERNELS_VECTOR_IMPLICIT_HPP__

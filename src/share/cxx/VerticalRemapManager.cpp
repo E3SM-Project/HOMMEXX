@@ -5,14 +5,14 @@
  *******************************************************************************/
 
 #include "VerticalRemapManager.hpp"
-#include "SimulationParams.hpp"
 #include "Context.hpp"
 #include "Elements.hpp"
-#include "Tracers.hpp"
-#include "HybridVCoord.hpp"
 #include "HommexxEnums.hpp"
-#include "RemapFunctor.hpp"
+#include "HybridVCoord.hpp"
 #include "PpmRemap.hpp"
+#include "RemapFunctor.hpp"
+#include "SimulationParams.hpp"
+#include "Tracers.hpp"
 
 namespace Homme {
 
@@ -31,9 +31,10 @@ struct VerticalRemapManager::Impl {
       }
     } else if (params.remap_alg == RemapAlg::PPM_FIXED_MEANS) {
       if (params.rsplit != 0) {
-        remapper = std::make_shared<Remap::RemapFunctor<
-            true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedMeans> >(
-            params.qsize, e, t, h);
+        remapper =
+            std::make_shared<Remap::RemapFunctor<true, Remap::Ppm::PpmVertRemap,
+                                                 Remap::Ppm::PpmFixedMeans> >(
+                params.qsize, e, t, h);
       } else {
         remapper = std::make_shared<Remap::RemapFunctor<
             false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmFixedMeans> >(
@@ -41,9 +42,10 @@ struct VerticalRemapManager::Impl {
       }
     } else if (params.remap_alg == RemapAlg::PPM_MIRRORED) {
       if (params.rsplit != 0) {
-        remapper = std::make_shared<Remap::RemapFunctor<
-            true, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmMirrored> >(
-            params.qsize, e, t, h);
+        remapper =
+            std::make_shared<Remap::RemapFunctor<true, Remap::Ppm::PpmVertRemap,
+                                                 Remap::Ppm::PpmMirrored> >(
+                params.qsize, e, t, h);
       } else {
         remapper = std::make_shared<Remap::RemapFunctor<
             false, Remap::Ppm::PpmVertRemap, Remap::Ppm::PpmMirrored> >(
@@ -73,4 +75,4 @@ void VerticalRemapManager::run_remap(int np1, int n0_qdp, double dt) const {
   assert(p_->remapper);
   p_->remapper->run_remap(np1, n0_qdp, dt);
 }
-}
+}  // namespace Homme

@@ -15,13 +15,13 @@ namespace Homme {
 // Used for iterating over a range of integers
 // With this, you can write
 // for(int i : int_range(start, end))
-template <typename ordered_iterable> class Loop_Range {
-
-public:
+template <typename ordered_iterable>
+class Loop_Range {
+ public:
   class iterator {
     friend class Loop_Range;
 
-  public:
+   public:
     KOKKOS_INLINE_FUNCTION
     ordered_iterable operator*() const { return i_; }
 
@@ -43,11 +43,11 @@ public:
     KOKKOS_INLINE_FUNCTION
     bool operator!=(const iterator &other) const { return i_ != other.i_; }
 
-  protected:
+   protected:
     KOKKOS_INLINE_FUNCTION
     constexpr iterator(ordered_iterable start) : i_(start) {}
 
-  private:
+   private:
     ordered_iterable i_;
   };
 
@@ -64,11 +64,11 @@ public:
   constexpr Loop_Range(ordered_iterable begin, ordered_iterable end)
       : begin_(begin), end_(end) {}
 
-private:
+ private:
   iterator begin_;
   iterator end_;
 };
 
-} // namespace Homme
+}  // namespace Homme
 
-#endif // HOMMEXX_LOOPS_UTILS_HPP
+#endif  // HOMMEXX_LOOPS_UTILS_HPP

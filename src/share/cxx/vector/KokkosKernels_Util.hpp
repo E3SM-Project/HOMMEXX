@@ -129,9 +129,11 @@ struct Flush {
   }
 };
 
-template <typename ValueType> struct Random;
+template <typename ValueType>
+struct Random;
 
-template <> struct Random<double> {
+template <>
+struct Random<double> {
   Random(const unsigned int seed = 0) { srand(seed); }
   double value() { return rand() / ((double)RAND_MAX + 1.0); }
 };
@@ -162,7 +164,8 @@ struct AVX {
   using exec_space = SpT;
 };
 
-template <class T, int l> struct VectorTag {
+template <class T, int l>
+struct VectorTag {
   using value_type = typename T::value_type;
   using exec_space = typename T::exec_space;
   using member_type =
@@ -171,8 +174,9 @@ template <class T, int l> struct VectorTag {
   static_assert(
       std::is_same<T, SIMD<value_type, exec_space>>::value ||  // host compiler
                                                                // vectorization
-          std::is_same<T, AVX<value_type, exec_space>>::value, // || // host AVX
-                                                               // vectorization
+          std::is_same<T,
+                       AVX<value_type, exec_space>>::value,  // || // host AVX
+                                                             // vectorization
       // std::is_same<T,SIMT<value_type,exec_space> >::value,   // cuda thread
       // vectorization
       "KokkosKernels:: Invalid VectorUnitTag<> type.");
@@ -310,26 +314,23 @@ struct Algo {
 };
 
 struct Util {
-
   template <typename ValueType>
-  KOKKOS_INLINE_FUNCTION static void
-  packColMajor(ValueType *__restrict__ A, const int m, const int n,
-               const ValueType *__restrict__ B, const int bs0, const int bs1) {
+  KOKKOS_INLINE_FUNCTION static void packColMajor(
+      ValueType *__restrict__ A, const int m, const int n,
+      const ValueType *__restrict__ B, const int bs0, const int bs1) {
     for (int j = 0; j < n; ++j)
-      for (int i = 0; i < m; ++i)
-        A[i + j * m] = B[i * bs0 + j * bs1];
+      for (int i = 0; i < m; ++i) A[i + j * m] = B[i * bs0 + j * bs1];
   }
 
   template <typename ValueType>
-  KOKKOS_INLINE_FUNCTION static void
-  packRowMajor(ValueType *__restrict__ A, const int m, const int n,
-               const ValueType *__restrict__ B, const int bs0, const int bs1) {
+  KOKKOS_INLINE_FUNCTION static void packRowMajor(
+      ValueType *__restrict__ A, const int m, const int n,
+      const ValueType *__restrict__ B, const int bs0, const int bs1) {
     for (int i = 0; i < m; ++i)
-      for (int j = 0; j < n; ++j)
-        A[i * n + j] = B[i * bs0 + j * bs1];
+      for (int j = 0; j < n; ++j) A[i * n + j] = B[i * bs0 + j * bs1];
   }
 };
-}
-}
-}
+}  // namespace Experimental
+}  // namespace Batched
+}  // namespace KokkosKernels
 #endif
