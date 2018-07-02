@@ -110,6 +110,7 @@ SET(PREQX_DEPS_F90
   ${SRC_SHARE_DIR}/unit_tests_mod.F90
   ${SRC_SHARE_DIR}/vertremap_mod_base.F90
   ${SRC_SHARE_DIR}/viscosity_mod_base.F90
+  ${SRC_SHARE_DIR}/prim_smooth_mod.F90
   ${UTILS_SHARE_DIR}/shr_const_mod.F90
   ${UTILS_SHARE_DIR}/shr_file_mod.F90
   ${UTILS_SHARE_DIR}/shr_kind_mod.F90

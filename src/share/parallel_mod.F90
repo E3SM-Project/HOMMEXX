@@ -38,7 +38,7 @@ module parallel_mod
   ! ==================================================
 
   integer, parameter :: ncomponents=1
-  integer, public    :: nComPoints,nPackPoints
+  integer,public     :: nComPoints,nPackPoints
 
   type, public :: parallel_t
     integer :: rank                       ! local rank
@@ -246,15 +246,15 @@ contains
   ! and prints a message
   ! =========================================================
   subroutine abortmp(string)
+#ifdef CAM
+    use cam_abortutils, only : endrun ! _EXTENRAL
+#else
 #ifdef USE_KOKKOS_KERNELS
     interface
        subroutine finalize_hommexx_session() bind(c)
        end subroutine finalize_hommexx_session
     end interface
 #endif
-#ifdef CAM
-    use cam_abortutils, only : endrun ! _EXTENRAL
-#else
 #ifdef _MPI
     integer info,ierr
 #endif

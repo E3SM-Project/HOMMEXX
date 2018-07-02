@@ -782,8 +782,7 @@ contains
     allocate( elem_spheremp            (np,np, nelemd)    )
     allocate( elem_rspheremp           (np,np, nelemd)    )
     ! allocate( elem_sub_elem_mass_flux  (nc,nc,4,nlev,nelemd))
-    ! allocate( elem_vec_sph2cart     (np,np,3,2,nelemd) )
-    allocate( elem_vec_sphere2cart     (np,np,3,2,nelemd) )
+    allocate( elem_vec_sph2cart     (np,np,3,2,nelemd) )
     allocate( elem_tensorVisc          (np,np,2,2,nelemd) )
 
     do ie = 1 , nelemd

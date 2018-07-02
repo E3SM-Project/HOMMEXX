@@ -33,8 +33,9 @@ module prim_driver_mod
 
   private
 #ifndef USE_KOKKOS_KERNELS
-  public :: prim_run_subcycle, smooth_topo_datasets
+  public :: prim_run_subcycle
 #endif
+  public :: smooth_topo_datasets
   public :: prim_init1, prim_init2 , prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
@@ -1534,14 +1535,13 @@ contains
 !=======================================================================================================!
 
 
-#ifndef USE_KOKKOS_KERNELS
     subroutine smooth_topo_datasets(phis,sghdyn,sgh30dyn,elem,hybrid,nets,nete)
     use control_mod, only : smooth_phis_numcycle,smooth_sgh_numcycle
     use hybrid_mod, only : hybrid_t
     use bndry_mod, only : bndry_exchangev
     use derivative_mod, only : derivative_t , laplace_sphere_wk
     use viscosity_mod, only : biharmonic_wk
-    use prim_advance_mod, only : smooth_phis
+    use prim_smooth_mod, only : smooth_phis
     use prim_advection_mod, only: deriv
     implicit none
 
@@ -1569,7 +1569,6 @@ contains
     call smooth_phis(sgh30dyn,elem,hybrid,deriv(hybrid%ithr),nets,nete,minf,smooth_sgh_numcycle)
 
     end subroutine smooth_topo_datasets
-#endif
 
 end module prim_driver_mod
 

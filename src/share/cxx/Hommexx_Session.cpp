@@ -4,16 +4,11 @@
  * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
  *******************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include "Hommexx_config.h"
-#endif
-// HAVE_CONFIG_H
-
+#include "Config.hpp"
 #include "Hommexx_Session.hpp"
 #include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"
-#include "Config.hpp"
 #include "mpi/Comm.hpp"
 
 #include "vector/vector_pragmas.hpp"
