@@ -77,11 +77,11 @@ contains
        end do
     end do
 
-    elemin%derived%FT(:,:,:,nm1) = elemin%derived%FT(:,:,:,nm1) + &
+    elemin%derived%FT(:,:,:) = elemin%derived%FT(:,:,:) + &
          hs_T_forcing(hvcoord,psfrc(1,1),               &
          elemin%state%T(:,:,:,nfrc),elemin%spherep,np, nlev)
 
-    elemin%derived%FM(:,:,:,:,nm1)= elemin%derived%FM(:,:,:,:,nm1) + &
+    elemin%derived%FM(:,:,:,:)= elemin%derived%FM(:,:,:,:) + &
          hs_v_forcing(hvcoord,psfrc(1,1),&
          elemin%state%v(:,:,:,:,nfrc),np,nlev)
 
@@ -99,7 +99,7 @@ contains
        do j=1,np
           do i=1,np
              FQ = rdp * g * 2.3E-5 * COS(elemin%spherep(i,j)%lat)**2
-             elemin%derived%FQ(i,j,nlev,q,nm1) =elemin%derived%FQ(i,j,nlev,q,nm1)+FQ
+             elemin%derived%FQ(i,j,nlev,q) =elemin%derived%FQ(i,j,nlev,q)+FQ
           enddo
        enddo
 
@@ -110,7 +110,7 @@ contains
                 r0=elemin%state%Q(i,j,k,q)
                 r1=r0
                 call Prim_Condense(r1,elemin%state%T(i,j,k,nfrc),pmid)
-                elemin%derived%FQ(i,j,k,q,nm1) = elemin%derived%FQ(i,j,k,q,nm1) + &
+                elemin%derived%FQ(i,j,k,q) = elemin%derived%FQ(i,j,k,q) + &
                      (r1-r0)/(dtf_q)
              enddo
           enddo

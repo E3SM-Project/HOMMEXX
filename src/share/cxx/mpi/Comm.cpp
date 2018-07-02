@@ -8,6 +8,7 @@
 
 #include <assert.h>
 #include "Config.hpp"
+#include "ErrorDefs.hpp"
 
 namespace Homme
 {

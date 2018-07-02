@@ -3,6 +3,7 @@ module edgetype_mod
 
   use kinds, only : int_kind, log_kind, real_kind
   use coordinate_systems_mod, only : cartesian3D_t
+  use dimensions_mod, only : max_elements_attached_to_node
 
   implicit none 
   private 
@@ -20,17 +21,17 @@ module edgetype_mod
   type, public :: EdgeDescriptor_t
      integer(kind=int_kind)  :: use_rotation
      integer(kind=int_kind)  :: padding
-     integer(kind=int_kind), pointer  :: putmapP(:) => null()
-     integer(kind=int_kind), pointer  :: getmapP(:) => null()
-     integer(kind=int_kind), pointer  :: putmapP_ghost(:) => null()
-     integer(kind=int_kind), pointer  :: getmapP_ghost(:) => null()
-     integer(kind=int_kind), pointer  :: putmapS(:) => null()
-     integer(kind=int_kind), pointer  :: getmapS(:) => null()
-     integer(kind=int_kind), pointer  :: globalID(:) => null()
-     integer(kind=int_kind), pointer  :: loc2buf(:) => null()
+     integer(kind=int_kind)  :: putmapP(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: getmapP(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: putmapP_ghost(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: getmapP_ghost(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: putmapS(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: getmapS(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: globalID(4*max_elements_attached_to_node-8)
+     integer(kind=int_kind)  :: loc2buf(4*max_elements_attached_to_node-8)
      type (cartesian3D_t)  , pointer  :: neigh_corners(:,:) => null()
      integer                          :: actual_neigh_edges
-     logical(kind=log_kind), pointer  :: reverse(:) => null()
+     logical(kind=log_kind)  :: reverse(4*max_elements_attached_to_node-8)
      type (rotation_t), dimension(:), pointer :: rot => null() !  Identifies list of edges
      !  that must be rotated, and how
   end type EdgeDescriptor_t

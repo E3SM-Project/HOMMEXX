@@ -66,7 +66,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   // Apply forcing
 #ifdef CAM
-  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
+  Errors::runtime_abort("CAM forcing not yet availble in C++.\n",
                         Errors::err_not_implemented);
   // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
 

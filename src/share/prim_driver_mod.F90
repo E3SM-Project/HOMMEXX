@@ -19,7 +19,7 @@ module prim_driver_mod
   use reduction_mod,    only: reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
                               red_sum, red_sum_int, red_flops, initreductionbuffer
   use solver_mod,       only: blkjac_t
-  use thread_mod,       only: nThreadsHoriz, omp_get_num_threads
+  use thread_mod,       only: hthreads, omp_get_num_threads
 
 #ifndef CAM
   use column_types_mod, only : ColumnModel_t
@@ -33,8 +33,11 @@ module prim_driver_mod
 
   private
 #ifndef USE_KOKKOS_KERNELS
-  public :: prim_run_subcycle, smooth_topo_datasets
+  public :: prim_run_subcycle
+#elif defined(CAM)
+  public :: prim_run_subcycle
 #endif
+  public :: smooth_topo_datasets
   public :: prim_init1, prim_init2 , prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
@@ -511,7 +514,7 @@ contains
     nets=1
     nete=nelemd
     ! set the actual number of threads which will be used in the horizontal
-    nThreadsHoriz = n_domains
+    hthreads = n_domains
 #ifndef CAM
     allocate(cm(0:n_domains-1))
 #endif
@@ -554,7 +557,8 @@ contains
     use hybvcoord_mod,        only: hvcoord_t
     use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
     use prim_state_mod,       only: prim_printstate, prim_diag_scalars
-    use prim_si_ref_mod,      only: prim_si_refstate_init, prim_set_mass
+    use prim_si_mod,          only: prim_set_mass
+    use prim_si_ref_mod,      only: prim_si_refstate_init
     use prim_advection_mod,   only: deriv, prim_advec_init2, prim_advec_init_deriv
     use solver_init_mod,      only: solver_init2
     use time_mod,             only: timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, smooth, nsplit, TimeLevel_Qdp
@@ -654,6 +658,19 @@ contains
     end subroutine init_elements_states_c
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
+
+# ifdef CAM
+    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
+      use iso_c_binding, only: c_int, c_double
+      !
+      ! Inputs
+      !
+      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+      real (kind=c_double), intent(in) :: tstep
+    end subroutine prim_run_subcycle_c
+! CAM
+# endif
+! USE_KOKKOS_KERNELS
 #endif
   end interface
 
@@ -1257,7 +1274,43 @@ contains
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
   end subroutine prim_run_subcycle
+! USE_KOKKOS_KERNELS
+#elif defined(CAM)
+  subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
+    ! stub, not implemented yet
+    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
+    use hybvcoord_mod,      only: hvcoord_t
+    use parallel_mod,       only: abortmp
+    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
+    use reduction_mod,      only: parallelmax
+    use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
 
+#if USE_OPENACC
+    use openacc_utils_mod,  only: copy_qdp_h2d, copy_qdp_d2h
+#endif
+
+    type (element_t) ,    intent(inout) :: elem(:)
+    type (hybrid_t),      intent(in)    :: hybrid        ! distributed parallel structure (shared)
+    type (hvcoord_t),     intent(in)    :: hvcoord       ! hybrid vertical coordinate struct
+    integer,              intent(in)    :: nets          ! starting thread element number (private)
+    integer,              intent(in)    :: nete          ! ending thread element number   (private)
+    real(kind=real_kind), intent(in)    :: dt            ! "timestep dependent" timestep
+    type (TimeLevel_t),   intent(inout) :: tl
+    integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
+
+    ! subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
+    !   use iso_c_binding, only: c_int, c_double
+    !   integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+    !   real (kind=c_double), intent(in) :: tstep
+    ! end subroutine prim_run_subcycle_c
+
+    call abortmp("prim_run_subcycle isn't implemented for CAM yet")
+
+  end subroutine prim_run_subcycle
+#endif
+
+#ifndef USE_KOKKOS_KERNELS
   subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
   !
   !   Take qsplit dynamics steps and one tracer step
@@ -1283,10 +1336,7 @@ contains
     use derivative_mod,     only: subcell_integration
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    !use prim_advance_mod,   only: overwrite_SEdensity
-#ifndef USE_KOKKOS_KERNELS
     use prim_advance_exp_mod, only: prim_advance_exp
-#endif
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
@@ -1533,14 +1583,13 @@ contains
 !=======================================================================================================!
 
 
-#ifndef USE_KOKKOS_KERNELS
     subroutine smooth_topo_datasets(phis,sghdyn,sgh30dyn,elem,hybrid,nets,nete)
     use control_mod, only : smooth_phis_numcycle,smooth_sgh_numcycle
     use hybrid_mod, only : hybrid_t
     use bndry_mod, only : bndry_exchangev
     use derivative_mod, only : derivative_t , laplace_sphere_wk
     use viscosity_mod, only : biharmonic_wk
-    use prim_advance_mod, only : smooth_phis
+    use prim_smooth_mod, only : smooth_phis
     use prim_advection_mod, only: deriv
     implicit none
 
@@ -1568,7 +1617,6 @@ contains
     call smooth_phis(sgh30dyn,elem,hybrid,deriv(hybrid%ithr),nets,nete,minf,smooth_sgh_numcycle)
 
     end subroutine smooth_topo_datasets
-#endif
 
 end module prim_driver_mod
 

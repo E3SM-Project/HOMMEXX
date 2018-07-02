@@ -7,7 +7,7 @@ module edge_mod_base
   use kinds, only : int_kind, log_kind, real_kind
   use dimensions_mod, only : max_neigh_edges, nelemd
   use perf_mod, only: t_startf, t_stopf, t_adj_detailf ! _EXTERNAL
-  use thread_mod, only: nthreadshoriz, omp_get_num_threads, omp_get_thread_num
+  use thread_mod, only: hthreads, omp_get_num_threads, omp_get_thread_num
   use coordinate_systems_mod, only : cartesian3D_t
   use schedtype_mod, only : cycle_t, schedule_t, schedule
   use parallel_mod, only : abortmp, haltmp, MPIreal_t, iam,parallel_t, &
@@ -199,7 +199,7 @@ contains
     !
     ! edge buffer must be intialized for the number of threads that will be
     ! active when calling bndry_exchange.  
-    ! default is 'nthreadshoriz', which can be overriden with the optional
+    ! default is 'hthreads', which can be overriden with the optional
     ! numthreads argument.  
     !
     ! 
@@ -228,7 +228,7 @@ contains
     if (present(numthreads_in)) then
        numthreads = numthreads_in
     else
-       numthreads = nthreadshoriz
+       numthreads = hthreads
     end if
 
 ! DO NOT REMOVE THIS NEXT BARRIER

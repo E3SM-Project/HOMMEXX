@@ -1,6 +1,6 @@
 &ctl_nl
 NThreads=1
-vert_num_threads = 1
+vthreads = 1
 partmethod    = 4
 topology      = "cube"
 test_case     = "jw_baroclinic"
