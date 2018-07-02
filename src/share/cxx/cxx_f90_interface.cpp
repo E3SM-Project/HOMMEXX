@@ -120,6 +120,7 @@ void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp
   Kokkos::deep_copy(ps_v_f90,ps_v_host);
 
   sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
+  sync_to_host(tracers.Q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
 }
 
 void init_derivative_c (CF90Ptr& dvv)

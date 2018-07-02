@@ -207,28 +207,6 @@ void update_q (const int np1_qdp, const int np1)
     const Scalar dp = hyai_delta(level)*ps0 + hybi_delta(level)*ps_v(ie,np1,igp,jgp);
     Q(ie,iq,igp,jgp,level) = qdp(ie,np1_qdp,iq,igp,jgp,level)/dp;
   });
-
-  // Get the tracers concentration from Diagnostics
-  Diagnostics& diags = Context::singleton().get_diagnostics();
-  auto h_Q = diags.h_Q;
-
-  // Update the host copy of Q, stored in Diagnostics
-  ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror Q_host;
-  Q_host = Kokkos::create_mirror_view(Q);
-  Kokkos::deep_copy(Q_host,Q);
-
-  Kokkos::parallel_for(Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,num_elems*qsize*NP*NP*NUM_PHYSICAL_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie    =  idx / (qsize*NP*NP*NUM_PHYSICAL_LEV);
-    const int iq    = (idx / (NP*NP*NUM_PHYSICAL_LEV)) % qsize;
-    const int igp   = (idx / (NP*NUM_PHYSICAL_LEV)) % NP;
-    const int jgp   = (idx / NUM_PHYSICAL_LEV) % NP;
-    const int level =  idx % NUM_PHYSICAL_LEV;
-    const int ilev = level / VECTOR_SIZE;
-    const int ivec = level % VECTOR_SIZE;
-
-    h_Q(ie,iq,level,igp,jgp) = Q_host(ie,iq,igp,jgp,ilev)[ivec];
-  });
 }
 
 } // namespace Homme
