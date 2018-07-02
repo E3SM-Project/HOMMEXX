@@ -26,12 +26,18 @@
 # define HOMMEXX_MPI_ON_DEVICE 1
 #endif
 
+#include <Kokkos_Core.hpp>
+
 #ifdef KOKKOS_ENABLE_CUDA
 # ifndef HOMMEXX_CUDA_MIN_WARP_PER_TEAM
 #  define HOMMEXX_CUDA_MIN_WARP_PER_TEAM 8
 # endif
+# ifndef HOMMEXX_CUDA_MAX_WARP_PER_TEAM
+#  define HOMMEXX_CUDA_MAX_WARP_PER_TEAM 16
+# endif
 #elif ! defined HOMMEXX_AVX_VERSION
 # define HOMMEXX_CUDA_MIN_WARP_PER_TEAM 1
+# define HOMMEXX_CUDA_MAX_WARP_PER_TEAM 1
 # if defined __AVX512F__
 #  define HOMMEXX_AVX_VERSION 512
 # elif defined __AVX2__
