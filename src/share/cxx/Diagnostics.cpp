@@ -8,6 +8,7 @@
 #include "TimeLevel.hpp"
 #include "Tracers.hpp"
 
+#include "utilities/SyncUtils.hpp"
 #include "utilities/SubviewUtils.hpp"
 
 namespace Homme
@@ -55,6 +56,10 @@ void Diagnostics::prim_diag_scalars (const bool before_advance, const int ivar)
 
   if (params.time_step_type>0) {
     const Tracers& tracers = Context::singleton().get_tracers();
+
+    sync_to_host(tracers.Q,
+                 HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(
+                   h_Q.data(), m_num_elems));
 
     // Copy back tracers concentration and mass
     auto qdp_h = Kokkos::create_mirror_view(tracers.qdp);

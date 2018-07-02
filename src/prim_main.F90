@@ -344,20 +344,21 @@ program prim_main
           tl%nm1   = nm1_c + 1
           tl%n0    = n0_c  + 1
           tl%np1   = np1_c + 1
-          if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nstep) then
-            call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
-                                         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr,                    &
-                                         elem_derived_omega_p_ptr)
-          endif
 #else
           call prim_run_subcycle(elem, hybrid,nets,nete, tstep, tl, hvcoord,1)
 #endif
-          if(.not. disable_diagnostics) then
-            if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nEndStep) then
-              call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete)
-            endif
-          endif
-        else  ! leapfrog
+#ifdef USE_KOKKOS_KERNELS
+          if (MODULO(tl%nstep,statefreq)==0 .or. tl%nstep >= nstep) then
+            call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr, &
+                                         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr, &
+                                         elem_derived_omega_p_ptr)
+         endif
+#endif
+         if (.not. disable_diagnostics .and. &
+              (MODULO(tl%nstep, statefreq) == 0 .or. tl%nstep >= nEndStep)) then
+            call prim_printstate(elem,tl,hybrid,hvcoord,nets,nete)
+         endif
+      else  ! leapfrog
 #ifdef USE_KOKKOS_KERNELS
            call abortmp ("Error! Functionality not available in Kokkos build")
 #else
