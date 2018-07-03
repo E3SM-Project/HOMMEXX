@@ -105,7 +105,7 @@ public:
             Context::singleton().get_hvcoord(),
             SphereOperators(elements, Context::singleton().get_derivative()),
             rsplit_in),
-        policy(functor.m_elements.num_elems(), 16, 4),
+        policy(Homme::get_default_team_policy<ExecSpace>(elements.num_elems())),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -159,7 +159,7 @@ public:
   }
 
   CaarFunctorImpl functor;
-  Kokkos::TeamPolicy<ExecSpace> policy;
+  Kokkos::TeamPolicy<ExecSpace,void> policy;
 
   // host
   // Arrays used to pass data to and from Fortran
