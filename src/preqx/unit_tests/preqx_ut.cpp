@@ -1202,7 +1202,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
-  HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
+  HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90");
 
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(t_vadv_f90, t_vadv);
