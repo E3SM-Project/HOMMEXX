@@ -328,7 +328,7 @@ struct Dispatch<Kokkos::Cuda> {
     // Broadcast result to all threads by doing sum of one thread's
     // non-0 value and the rest of the 0s.
     Kokkos::Impl::CudaTeamMember::vector_reduce(
-      Kokkos::Experimental::Sum<ValueType>(result));
+      Kokkos::Sum<ValueType>(result));
 #else
     Kokkos::parallel_reduce(loop_boundaries, lambda, result);
 #endif
