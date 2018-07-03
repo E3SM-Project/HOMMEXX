@@ -133,7 +133,12 @@ struct DefaultThreadsDistribution {
   team_num_threads_vectors(const int num_parallel_iterations,
                            const ThreadPreferences tp = ThreadPreferences()) {
     return Parallel::team_num_threads_vectors_from_pool(
-      ExecSpaceType::thread_pool_size(), num_parallel_iterations, tp);
+#ifdef KOKKOS_ENABLE_DEPRECATED_CODE
+      ExecSpaceType::thread_pool_size()
+#else
+      ExecSpaceType::impl_thread_pool_size()
+#endif
+      , num_parallel_iterations, tp);
   }
 };
 
