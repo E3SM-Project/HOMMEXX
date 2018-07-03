@@ -160,7 +160,7 @@ team_num_threads_vectors (const int num_parallel_iterations,
   // of 'std::runtime_error'" message.
   const int max_num_warps = 8;
 # else
-  const int max_num_warps = 16; //Kokkos::Impl::cuda_internal_maximum_grid_count();
+  const int max_num_warps = HOMMEXX_CUDA_MAX_WARP_PER_TEAM; //Kokkos::Impl::cuda_internal_maximum_grid_count();
 # endif
 #else
   // I want thread-distribution rules to be unit-testable even when Cuda is
