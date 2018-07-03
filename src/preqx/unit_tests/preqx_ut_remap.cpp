@@ -128,7 +128,7 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagGridTest &, TeamMember team) const {
+  void operator()(const TagGridTest &, const TeamMember& team) const {
     KernelVariables kv(team);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, NP * NP),
                          [&](const int &loop_idx) {
@@ -216,7 +216,7 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagPPMTest &, TeamMember team) const {
+  void operator()(const TagPPMTest &, const TeamMember& team) const {
     KernelVariables kv(team);
     Kokkos::parallel_for(Kokkos::TeamThreadRange(kv.team, num_remap * NP * NP),
                          [&](const int &loop_idx) {
@@ -366,7 +366,7 @@ public:
   }
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const TagRemapTest &, TeamMember team) const {
+  void operator()(const TagRemapTest &, const TeamMember& team) const {
     KernelVariables kv(team);
     remap.compute_grids_phase(
         kv, Homme::subview(src_layer_thickness_kokkos, kv.ie),
