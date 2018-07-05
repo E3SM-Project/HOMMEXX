@@ -754,7 +754,6 @@ private:
         Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
         f);
     } else {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev)
         f(ilev);
@@ -905,7 +904,6 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
   forij {
     const auto& sphij = sphweights(i,j);
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       const auto& dpm = dpmass(i,j,lev);
@@ -916,7 +914,6 @@ VECTOR_SIMD_LOOP
     }
   }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
   forlev {
     if (qlim(0,lev) < 0)
@@ -936,7 +933,6 @@ VECTOR_SIMD_LOOP
       Real addmass[NUM_PHYSICAL_LEV] = {0};
 
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           auto& xij = x(i,j,lev);
@@ -963,7 +959,6 @@ VECTOR_SIMD_LOOP
 
       Real f[NUM_PHYSICAL_LEV] = {0};
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
@@ -977,7 +972,6 @@ VECTOR_SIMD_LOOP
         }
       }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         if (f[lev] != 0)
@@ -985,7 +979,6 @@ VECTOR_SIMD_LOOP
       }
 
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
@@ -1003,7 +996,6 @@ VECTOR_SIMD_LOOP
     Real addmass[NUM_PHYSICAL_LEV] = {0};
 
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -1021,7 +1013,6 @@ VECTOR_SIMD_LOOP
 
     Real f[NUM_PHYSICAL_LEV] = {0};
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -1035,7 +1026,6 @@ VECTOR_SIMD_LOOP
       }
     }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       if (f[lev] != 0)
@@ -1043,7 +1033,6 @@ VECTOR_SIMD_LOOP
     }
 
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -1061,7 +1050,6 @@ VECTOR_SIMD_LOOP
   }
 
   forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       x(i,j,lev) *= dpmass(i,j,lev);
