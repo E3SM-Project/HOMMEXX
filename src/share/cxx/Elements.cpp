@@ -58,6 +58,10 @@ void Elements::init(const int num_elems, const bool consthv) {
 
   m_ps_v = ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]>("PS_V", m_num_elems);
 
+  m_fm = ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]>("F_Momentum", m_num_elems);
+  m_ft = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("F_Temperature", m_num_elems);
+  m_fq_ps = ExecViewManaged<Real * [NP][NP]>("FQ_PS", m_num_elems);
+
   m_eta_dot_dpdn =
       ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>("eta_dot_dpdn", m_num_elems);
   m_derived_dpdiss_ave = ExecViewManaged<Scalar * [NP][NP][NUM_LEV]>(

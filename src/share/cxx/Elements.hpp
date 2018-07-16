@@ -60,6 +60,14 @@ public:
     m_derived_dpdiss_biharmonic, // mean dp dissipation tendency, if nu_p>0
     m_derived_dpdiss_ave;        // mean dp used to compute psdiss_tens
 
+  // Per Element Forcings
+  // Momentum (? units are wrong in apply_cam_forcing...) forcing
+  ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_fm;
+  // Temperature forcing
+  ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_ft;
+  // Forcing of FQ on ps_v
+  ExecViewManaged<Real * [NP][NP]> m_fq_ps;
+
   //buffer views are temporaries that matter only during local RK steps
   //(dynamics and tracers time step).
   //m_ views are also used outside of local timesteps.
