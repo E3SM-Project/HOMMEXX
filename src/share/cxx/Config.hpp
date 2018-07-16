@@ -35,6 +35,11 @@
 # ifndef HOMMEXX_CUDA_MAX_WARP_PER_TEAM
 #  define HOMMEXX_CUDA_MAX_WARP_PER_TEAM 16
 # endif
+// AVX is not available on CUDA, so make certain this is 0
+# ifdef HOMMEXX_AVX_VERSION
+#  undef HOMMEXX_AVX_VERSION
+# endif
+# define HOMMEXX_AVX_VERSION 0
 #elif ! defined HOMMEXX_AVX_VERSION
 # define HOMMEXX_CUDA_MIN_WARP_PER_TEAM 1
 # define HOMMEXX_CUDA_MAX_WARP_PER_TEAM 1
