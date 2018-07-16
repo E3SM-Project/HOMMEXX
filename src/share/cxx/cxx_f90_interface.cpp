@@ -100,27 +100,67 @@ void init_hvcoord_c (const Real& ps0, CRCPtr& hybrid_am_ptr, CRCPtr& hybrid_ai_p
   hvcoord.init(ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr);
 }
 
-void cxx_push_results_to_f90(F90Ptr& elem_state_v_ptr,   F90Ptr& elem_state_temp_ptr, F90Ptr& elem_state_dp3d_ptr,
-                             F90Ptr& elem_state_Qdp_ptr, F90Ptr& elem_Q_ptr, F90Ptr& elem_state_ps_v_ptr,
-                             F90Ptr& elem_derived_omega_p_ptr)
-{
-  Elements& elements = Context::singleton().get_elements ();
-  elements.push_4d(elem_state_v_ptr,elem_state_temp_ptr,elem_state_dp3d_ptr);
+void cxx_push_results_to_f90(F90Ptr elem_state_v_ptr, F90Ptr elem_state_temp_ptr,
+                             F90Ptr elem_state_dp3d_ptr, F90Ptr elem_state_Qdp_ptr,
+                             F90Ptr elem_Q_ptr, F90Ptr elem_state_ps_v_ptr,
+                             F90Ptr elem_derived_omega_p_ptr, F90Ptr elem_derived_FM,
+                             F90Ptr elem_derived_FT, F90Ptr elem_derived_FQ) {
+  Elements &elements = Context::singleton().get_elements();
+  elements.push_4d(elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr);
 
   Tracers &tracers = Context::singleton().get_tracers();
   tracers.push_qdp(elem_state_Qdp_ptr);
 
-  // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly in an unmanaged view
+  // F90 ptrs to arrays (np,np,num_time_levels,nelemd) can be stuffed directly
+  // in an unmanaged view
   // with scalar Real*[NUM_TIME_LEVELS][NP][NP] (with runtime dimension nelemd)
-  HostViewUnmanaged<Real*[NUM_TIME_LEVELS][NP][NP]> ps_v_f90(elem_state_ps_v_ptr,elements.num_elems());
+  HostViewUnmanaged<Real * [NUM_TIME_LEVELS][NP][NP]> ps_v_f90(
+      elem_state_ps_v_ptr, elements.num_elems());
 
-  decltype(elements.m_ps_v)::HostMirror ps_v_host = Kokkos::create_mirror_view(elements.m_ps_v);
+  decltype(elements.m_ps_v)::HostMirror ps_v_host =
+      Kokkos::create_mirror_view(elements.m_ps_v);
 
-  Kokkos::deep_copy(ps_v_host,elements.m_ps_v);
-  Kokkos::deep_copy(ps_v_f90,ps_v_host);
+  Kokkos::deep_copy(ps_v_host, elements.m_ps_v);
+  Kokkos::deep_copy(ps_v_f90, ps_v_host);
 
-  sync_to_host(elements.m_omega_p,HostViewUnmanaged<Real *[NUM_PHYSICAL_LEV][NP][NP]>(elem_derived_omega_p_ptr,elements.num_elems()));
-  sync_to_host(tracers.Q,HostViewUnmanaged<Real*[QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(elem_Q_ptr,elements.num_elems()));
+  sync_to_host(elements.m_omega_p,
+               HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_derived_omega_p_ptr, elements.num_elems()));
+  sync_to_host(tracers.Q,
+               HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>(
+                   elem_Q_ptr, elements.num_elems()));
+
+  HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
+      elem_derived_FQ, elements.num_elems());
+  sync_to_host(tracers.fq, fq_f90);
+
+  HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> fm_f90(
+      elem_derived_FM, elements.num_elems());
+  sync_to_host(elements.m_fm, fm_f90);
+  HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> ft_f90(
+      elem_derived_FT, elements.num_elems());
+  sync_to_host(elements.m_ft, ft_f90);
+}
+
+void f90_push_forcing_to_cxx(F90Ptr elem_derived_FM, F90Ptr elem_derived_FT,
+                             F90Ptr elem_derived_FQ,
+                             F90Ptr elem_state_Qdp_ptr) {
+  Elements &elements = Context::singleton().get_elements();
+
+  HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> fm_f90(
+      elem_derived_FM, elements.num_elems());
+  sync_to_device(fm_f90, elements.m_fm);
+
+  HostViewUnmanaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> ft_f90(
+      elem_derived_FT, elements.num_elems());
+  sync_to_device(ft_f90, elements.m_ft);
+
+  Tracers &tracers = Context::singleton().get_tracers();
+  HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
+      elem_derived_FQ, elements.num_elems());
+  sync_to_device(fq_f90, tracers.fq);
+
+  tracers.push_qdp(elem_state_Qdp_ptr);
 }
 
 void init_derivative_c (CF90Ptr& dvv)

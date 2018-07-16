@@ -413,6 +413,32 @@ sync_to_device(Source_T source, Dest_T dest)
 template <typename Source_T, typename Dest_T>
 typename std::enable_if
   <
+    (host_view_mappable<Source_T, Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>::value &&
+     exec_view_mappable<Dest_T, Scalar * [QSIZE_D][NP][NP][NUM_LEV]>::value),
+    void
+  >::type
+sync_to_device(Source_T source, Dest_T dest)
+{
+  typename Dest_T::HostMirror dest_mirror = Kokkos::create_mirror_view(dest);
+  for (int ie = 0; ie < source.extent_int(0); ++ie) {
+    for (int tracer = 0; tracer < QSIZE_D; ++tracer) {
+      for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+        const int ilev = level / VECTOR_SIZE;
+        const int ivec = level % VECTOR_SIZE;
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            dest_mirror(ie, tracer, igp, jgp, ilev)[ivec] = source(ie, tracer, level, igp, jgp);
+          }
+        }
+      }
+    }
+  }
+  Kokkos::deep_copy(dest_mirror, dest);
+}
+
+template <typename Source_T, typename Dest_T>
+typename std::enable_if
+  <
     (host_view_mappable<Source_T,Real * [Q_NUM_TIME_LEVELS][QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]>::value &&
      exec_view_mappable<Dest_T,Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]>::value),
     void
