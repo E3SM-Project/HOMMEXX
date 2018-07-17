@@ -1266,7 +1266,7 @@ contains
 ! USE_KOKKOS_KERNELS
 #elif defined(CAM)
   subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
-    use iso_c_binding,      only: c_double, c_int
+    use iso_c_binding,      only: c_double, c_int, c_loc
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
@@ -1286,9 +1286,13 @@ contains
        subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p, FM, FT, FQ) bind(c)
          use iso_c_binding, only: c_double
          real (kind=c_double), intent(in) :: vel(:,:,:,:,:,:), temp(:,:,:,:,:), dp3d(:,:,:,:,:), &
-              Qdp(:,:,:,:,:,:), q(:,:,:,:,:), ps_v(:,:,:,:), omega_p(:,:,:,:), &
-              FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+              Qdp(:,:,:,:,:,:), q(:,:,:,:,:), ps_v(:,:,:,:), omega_p(:,:,:,:)
        end subroutine cxx_push_results_to_f90
+
+       subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
+         use iso_c_binding, only: c_double
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:)
+       end subroutine f90_push_forcing_to_cxx
 
        subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
          use iso_c_binding, only: c_int, c_double
@@ -1309,6 +1313,10 @@ contains
     type (TimeLevel_t),   intent(inout) :: tl
     integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
 
+    type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr
+
     integer(kind=c_int) :: nstep_c, nm1_c, n0_c, np1_c
 
     if (ftype == 1) then
@@ -1323,7 +1331,17 @@ contains
     tl%n0 = n0_c + 1
     tl%np1 = np1_c + 1
 
-    call cxx_push_results_to_f90(elem_state_v, elem_state_Temp, elem_state_dp3d, elem_state_Qdp, elem_state_Q, elem_state_ps_v, elem_derived_omega_p, elem_derived_FM, elem_derived_FT, elem_derived_FQ)
+    elem_state_v_ptr = c_loc(elem_state_v)
+    elem_state_Temp_ptr = c_loc(elem_state_Temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+    elem_state_Q_ptr = c_loc(elem_state_Q)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_Temp_ptr, elem_state_dp3d_ptr, &
+         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr, elem_derived_omega_p_ptr)
+
+    call cxx_push_forcing_to_f90(elem_derived_FM, elem_derived_FT, elem_derived_FQ)
 
   end subroutine prim_run_subcycle
 #endif
