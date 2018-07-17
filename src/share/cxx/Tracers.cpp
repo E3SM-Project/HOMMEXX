@@ -8,6 +8,8 @@
 #include <random>
 
 #include "Tracers.hpp"
+#include "Context.hpp"
+#include "SimulationParams.hpp"
 
 #include "utilities/SyncUtils.hpp"
 #include "utilities/TestUtils.hpp"
@@ -21,7 +23,10 @@ Tracers::Tracers(const int num_elems, const int num_tracers)
   qdp = decltype(qdp)("tracers mass", num_elems);
   qtens_biharmonic = decltype(qtens_biharmonic)("qtens(_biharmonic)", num_elems);
   qlim = decltype(qlim)("qlim", num_elems);
-  fq = decltype(fq)("fq", num_elems);
+
+  if(Context::singleton().get_simulation_params().ftype == ForcingAlg::FORCING_1) {
+    fq = decltype(fq)("fq", num_elems);
+  }
 }
 
 void Tracers::random_init() {
