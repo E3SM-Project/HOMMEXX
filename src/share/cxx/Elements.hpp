@@ -65,8 +65,6 @@ public:
   ExecViewManaged<Scalar * [2][NP][NP][NUM_LEV]> m_fm;
   // Temperature forcing
   ExecViewManaged<Scalar * [NP][NP][NUM_LEV]> m_ft;
-  // Forcing of FQ on ps_v
-  ExecViewManaged<Real * [NP][NP]> m_fq_ps;
 
   //buffer views are temporaries that matter only during local RK steps
   //(dynamics and tracers time step).
