@@ -659,17 +659,6 @@ contains
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
 
-# ifdef CAM
-    subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
-      use iso_c_binding, only: c_int, c_double
-      !
-      ! Inputs
-      !
-      integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
-      real (kind=c_double), intent(in) :: tstep
-    end subroutine prim_run_subcycle_c
-! CAM
-# endif
 ! USE_KOKKOS_KERNELS
 #endif
   end interface
@@ -1276,19 +1265,45 @@ contains
   end subroutine prim_run_subcycle
 ! USE_KOKKOS_KERNELS
 #elif defined(CAM)
-  subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
-    ! stub, not implemented yet
-    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
+  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, tl, hvcoord,nsubstep)
+    use iso_c_binding,      only: c_double, c_int, c_ptr, c_loc
+    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, &
+         disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use reduction_mod,      only: parallelmax
-    use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
+    use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
+    use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_omega_p, &
+         elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
 
-#if USE_OPENACC
-    use openacc_utils_mod,  only: copy_qdp_h2d, copy_qdp_d2h
-#endif
+    interface
+       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp, ps_v) bind(c)
+         use iso_c_binding, only: c_double
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:), &
+              Qdp(:,:,:,:,:,:), ps_v(:,:,:,:)
+       end subroutine f90_push_forcing_to_cxx
+
+       subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p) bind(c)
+         use iso_c_binding, only: c_ptr
+         type(c_ptr), intent(in) :: vel, temp, dp3d, Qdp, q, ps_v, omega_p
+       end subroutine cxx_push_results_to_f90
+
+       subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
+         use iso_c_binding, only: c_double
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+       end subroutine cxx_push_forcing_to_f90
+
+       subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
+         use iso_c_binding, only: c_int, c_double
+         !
+         ! Inputs
+         !
+         integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+         real (kind=c_double), intent(in) :: dt
+       end subroutine prim_run_subcycle_c
+    end interface
 
     type (element_t) ,    intent(inout) :: elem(:)
     type (hybrid_t),      intent(in)    :: hybrid        ! distributed parallel structure (shared)
@@ -1299,13 +1314,36 @@ contains
     type (TimeLevel_t),   intent(inout) :: tl
     integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
 
-    ! subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
-    !   use iso_c_binding, only: c_int, c_double
-    !   integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
-    !   real (kind=c_double), intent(in) :: tstep
-    ! end subroutine prim_run_subcycle_c
+    type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr
 
-    call abortmp("prim_run_subcycle isn't implemented for CAM yet")
+    integer(kind=c_int) :: nstep_c, nm1_c, n0_c, np1_c
+
+    if (ftype == 1) then
+       call abortmp("prim_run_subcycle with ftype=1 isn't supported")
+    endif
+
+    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &
+         elem_state_ps_v)
+
+    call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
+    tl%nstep = nstep_c
+    tl%nm1 = nm1_c + 1
+    tl%n0 = n0_c + 1
+    tl%np1 = np1_c + 1
+
+    elem_state_v_ptr = c_loc(elem_state_v)
+    elem_state_Temp_ptr = c_loc(elem_state_Temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+    elem_state_Q_ptr = c_loc(elem_state_Q)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_Temp_ptr, elem_state_dp3d_ptr, &
+         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr, elem_derived_omega_p_ptr)
+
+    call cxx_push_forcing_to_f90(elem_derived_FM, elem_derived_FT, elem_derived_FQ)
 
   end subroutine prim_run_subcycle
 #endif
