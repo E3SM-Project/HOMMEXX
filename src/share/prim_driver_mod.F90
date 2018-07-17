@@ -1265,34 +1265,35 @@ contains
   end subroutine prim_run_subcycle
 ! USE_KOKKOS_KERNELS
 #elif defined(CAM)
-  subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
-    use iso_c_binding,      only: c_double, c_int, c_loc
-    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
+  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, tl, hvcoord,nsubstep)
+    use iso_c_binding,      only: c_double, c_int, c_ptr, c_loc
+    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, &
+         disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
     use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
-    use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_FQps, elem_derived_omega_p, elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
+    use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_omega_p, &
+         elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
 
     interface
        subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp, ps_v) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:), &
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:), &
               Qdp(:,:,:,:,:,:), ps_v(:,:,:,:)
        end subroutine f90_push_forcing_to_cxx
 
-       subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p, FM, FT, FQ) bind(c)
-         use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: vel(:,:,:,:,:,:), temp(:,:,:,:,:), dp3d(:,:,:,:,:), &
-              Qdp(:,:,:,:,:,:), q(:,:,:,:,:), ps_v(:,:,:,:), omega_p(:,:,:,:)
+       subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p) bind(c)
+         use iso_c_binding, only: c_ptr
+         type(c_ptr), intent(in) :: vel, temp, dp3d, Qdp, q, ps_v, omega_p
        end subroutine cxx_push_results_to_f90
 
        subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:)
-       end subroutine f90_push_forcing_to_cxx
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+       end subroutine cxx_push_forcing_to_f90
 
        subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
          use iso_c_binding, only: c_int, c_double
@@ -1323,7 +1324,8 @@ contains
        call abortmp("prim_run_subcycle with ftype=1 isn't supported")
     endif
 
-    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQps, elem_state_Qdp, elem_state_ps_v)
+    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &
+         elem_state_ps_v)
 
     call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
     tl%nstep = nstep_c
