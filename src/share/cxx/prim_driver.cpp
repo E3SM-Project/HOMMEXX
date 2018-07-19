@@ -13,6 +13,7 @@
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
+#include "CamForcing.hpp"
 #include "profiling.hpp"
 
 #include <iostream>
@@ -66,20 +67,17 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   // Apply forcing
 #ifdef CAM
-  Errors::runtime_abort("CAM forcing not yet availble in C++.\n",
-                        Errors::err_not_implemented);
-  // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
+  tl.update_tracer_levels(params.qsplit);
 
-  // if (ftype==0) then
-  //   call t_startf("ApplyCAMForcing")
-  //   call ApplyCAMForcing(elem, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
-  //   call t_stopf("ApplyCAMForcing")
-
-  // elseif (ftype==2) then
-  //   call t_startf("ApplyCAMForcing_dynamics")
-  //   call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
-  //   call t_stopf("ApplyCAMForcing_dynamics")
-  // endif
+  // Corresponds to ftype == 0 in Fortran
+  if(params.ftype == ForcingAlg::FORCING_DEBUG) {
+    apply_cam_forcing(dt_remap)
+  }
+  else if(params.ftype == ForcingAlg::FORCING_2) {
+    GPTLstart("ApplyCAMForcing_dynamics");
+    // call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
+    GPTLstop("ApplyCAMForcing_dynamics");
+  }
 
 #else
   apply_test_forcing ();
