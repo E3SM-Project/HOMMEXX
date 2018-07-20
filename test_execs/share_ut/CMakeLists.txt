@@ -150,3 +150,71 @@ ELSE()
   SET (NUM_CPUS 1)
 ENDIF()
 cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDARY_EXCHANGE_UT_CXX_SRCS}" "${BOUNDARY_EXCHANGE_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
+
+### CAM Forcing unit stest
+
+SET (CAM_FORCING_UT_CXX_SRCS
+  ${SHARE_UT_DIR}/cam_forcing_ut.cpp
+  ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/Context.cpp
+  ${SRC_SHARE_DIR}/cxx/Derivative.cpp
+  ${SRC_SHARE_DIR}/cxx/Diagnostics.cpp
+  ${SRC_SHARE_DIR}/cxx/Elements.cpp
+  ${SRC_SHARE_DIR}/cxx/ErrorDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/EulerStepFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
+  ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
+  ${SRC_SHARE_DIR}/cxx/Tracers.cpp
+  ${SRC_SHARE_DIR}/cxx/VerticalRemapManager.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BoundaryExchange.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/BuffersManager.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Comm.cpp
+  ${SRC_SHARE_DIR}/cxx/mpi/Connectivity.cpp
+)
+
+SET (CAM_FORCING_UT_F90_SRCS
+  ${SRC_PREQX_DIR}/bndry_mod.F90
+  ${SRC_PREQX_DIR}/derivative_mod.F90
+  ${SRC_PREQX_DIR}/edge_mod.F90
+  ${SRC_SHARE_DIR}/bndry_mod_base.F90
+  ${SRC_SHARE_DIR}/control_mod.F90
+  ${SRC_SHARE_DIR}/coordinate_systems_mod.F90
+  ${SRC_SHARE_DIR}/cube_mod.F90
+  ${SRC_SHARE_DIR}/derivative_mod_base.F90
+  ${SRC_SHARE_DIR}/dimensions_mod.F90
+  ${SRC_SHARE_DIR}/edge_mod_base.F90
+  ${SRC_SHARE_DIR}/edgetype_mod.F90
+  ${SRC_SHARE_DIR}/element_mod.F90
+  ${SRC_SHARE_DIR}/gridgraph_mod.F90
+  ${SRC_SHARE_DIR}/hybrid_mod.F90
+  ${SRC_SHARE_DIR}/kinds.F90
+  ${SRC_SHARE_DIR}/ll_mod.F90
+  ${SRC_SHARE_DIR}/metagraph_mod.F90
+  ${SRC_SHARE_DIR}/parallel_mod.F90
+  ${SRC_SHARE_DIR}/params_mod.F90
+  ${SRC_SHARE_DIR}/physical_constants.F90
+  ${SRC_SHARE_DIR}/quadrature_mod.F90
+  ${SRC_SHARE_DIR}/schedtype_mod.F90
+  ${SRC_SHARE_DIR}/schedule_mod.F90
+  ${SRC_SHARE_DIR}/spacecurve_mod.F90
+  ${SRC_SHARE_DIR}/thread_mod.F90
+  ${SRC_SHARE_DIR}/viscosity_mod_base.F90
+  ${UTILS_TIMING_DIR}/perf_mod.F90
+  ${UTILS_TIMING_DIR}/perf_utils.F90
+)
+
+SET (CONFIG_DEFINES PIO_INTERP NP=4 NC=4 QSIZE_D=1 PLEV=8 _PRIM _MPI)
+SET (CAM_FORCING_UT_INCLUDE_DIRS
+  ${CONFIG_DIR}
+  ${SRC_SHARE_DIR}
+  ${SRC_SHARE_DIR}/cxx
+  ${SRC_SHARE_DIR}/cxx/mpi
+  ${SHARE_UT_DIR}
+  ${UTILS_TIMING_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+SET (NUM_CPUS 1)
+cxx_unit_test (cam_forcing_ut "${CAM_FORCING_UT_F90_SRCS}" "${CAM_FORCING_UT_CXX_SRCS}" "${CAM_FORCING_UT_INCLUDE_DIRS}" "${CONFIG_DEFINES}" ${NUM_CPUS})
