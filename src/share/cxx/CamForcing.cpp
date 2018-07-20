@@ -5,6 +5,7 @@
  *******************************************************************************/
 
 #include "Context.hpp"
+#include "CamForcing.hpp"
 #include "Tracers.hpp"
 #include "Elements.hpp"
 #include "TimeLevel.hpp"

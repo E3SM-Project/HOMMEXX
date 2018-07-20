@@ -77,7 +77,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   }
   // Corresponds to ftype == 2 in Fortran
   else if(params.ftype == ForcingAlg::FORCING_2) {
-    apply_cam_forcing_dynamics(dt_remap)
+    apply_cam_forcing_dynamics(dt_remap);
   }
 
   if (compute_diagnostics) {
