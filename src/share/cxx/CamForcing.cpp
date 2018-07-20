@@ -18,9 +18,15 @@ namespace Homme {
 
 // ----------------- SIGNATURES ---------------- //
 
-void tracer_forcing(const Elements &elems, const Tracers &tracers,
-                    const HybridVCoord &hvcoord, const TimeLevel &tl,
-                    const MoistDry &moisture, const Real &dt);
+void tracer_forcing(
+    const ExecViewUnmanaged<const Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &f_q,
+    const HybridVCoord &hvcoord, const TimeLevel &tl, const int &num_q,
+    const MoistDry &moisture, const double &dt,
+    const ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> &ps_v,
+    const ExecViewManaged<
+        Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> &qdp,
+    const ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &Q);
+
 void state_forcing(
     const ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> &f_t,
     const ExecViewUnmanaged<const Scalar * [2][NP][NP][NUM_LEV]> &f_m,
@@ -41,8 +47,15 @@ void apply_cam_forcing(const Real &dt) {
       Context::singleton().get_simulation_params();
   const HybridVCoord &hvcoord = Context::singleton().get_hvcoord();
   const Tracers &tracers = Context::singleton().get_tracers();
-  tracer_forcing(elems, tracers, hvcoord, tl, sim_params.moisture, dt);
+  tracer_forcing(tracers.fq, hvcoord, tl, tracers.num_tracers(),
+                 sim_params.moisture, dt, elems.m_ps_v, tracers.qdp, tracers.Q);
   GPTLstop("ApplyCAMForcing");
+}
+
+void apply_cam_forcing_dynamics(const Real &dt) {
+  const Elements &elems = Context::singleton().get_elements();
+  const TimeLevel &tl = Context::singleton().get_time_level();
+  state_forcing(elems.m_ft, elems.m_fm, tl, dt, elems.m_t, elems.m_v);
 }
 
 void state_forcing(
@@ -76,14 +89,19 @@ void state_forcing(
       });
 }
 
-void tracer_forcing(const Elements &elems, const Tracers &tracers,
-                    const HybridVCoord &hvcoord, const TimeLevel &tl,
-                    const MoistDry &moisture, const double &dt) {
-  const int num_e = elems.num_elems();
+void tracer_forcing(
+    const ExecViewUnmanaged<const Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &f_q,
+    const HybridVCoord &hvcoord, const TimeLevel &tl, const int &num_q,
+    const MoistDry &moisture, const double &dt,
+    const ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> &ps_v,
+    const ExecViewManaged<
+        Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> &qdp,
+    const ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &Q) {
+
+  const int num_e = ps_v.extent_int(0);
 
   const auto policy = Homme::get_default_team_policy<ExecSpace>(num_e);
 
-  const int num_q = tracers.num_tracers();
   Kokkos::parallel_for(
       "tracer qdp forcing",
       Kokkos::RangePolicy<ExecSpace>(0, num_e * num_q * NP * NP * NUM_LEV),
@@ -93,18 +111,18 @@ void tracer_forcing(const Elements &elems, const Tracers &tracers,
         const int igp = ((idx / NUM_LEV) / NP) % NP;
         const int jgp = (idx / NUM_LEV) % NP;
         const int k = idx % NUM_LEV;
-        Scalar &v1 = tracers.fq(ie, iq, igp, jgp, k);
-        Scalar &qdp = tracers.qdp(ie, tl.np1_qdp, iq, igp, jgp, k);
+        Scalar v1 = f_q(ie, iq, igp, jgp, k);
+        Scalar qdp_s = qdp(ie, tl.np1_qdp, iq, igp, jgp, k);
         VECTOR_SIMD_LOOP
         for (int vlev = 0; vlev < VECTOR_SIZE; ++vlev) {
-          if (qdp[vlev] + v1[vlev] * dt < 0.0 && v1[vlev] < 0.0) {
-            if (qdp[vlev] < 0.0) {
+          if (qdp_s[vlev] + v1[vlev] * dt < 0.0 && v1[vlev] < 0.0) {
+            if (qdp_s[vlev] < 0.0) {
               v1[vlev] = 0.0;
             } else {
-              v1[vlev] = -qdp[vlev] / dt;
+              v1[vlev] = -qdp_s[vlev] / dt;
             }
           }
-          qdp[vlev] += v1[vlev];
+          qdp_s[vlev] += v1[vlev];
         }
       });
 
@@ -131,39 +149,38 @@ void tracer_forcing(const Elements &elems, const Tracers &tracers,
             [&](const int &k, Real &accumulator) {
               const int &&ilev = k / VECTOR_SIZE;
               const int &&vlev = k % VECTOR_SIZE;
-              double v1 = tracers.fq(ie, 0, igp, jgp, ilev)[vlev];
-              const double &qdp =
-                  tracers.qdp(ie, tl.np1_qdp, 0, igp, jgp, ilev)[vlev];
-              if (qdp + v1 * dt < 0.0 && v1 < 0.0) {
-                if (qdp < 0.0) {
+              double v1 = f_q(ie, 0, igp, jgp, ilev)[vlev];
+              const double &qdp_s =
+                  qdp(ie, tl.np1_qdp, 0, igp, jgp, ilev)[vlev];
+              if (qdp_s + v1 * dt < 0.0 && v1 < 0.0) {
+                if (qdp_s < 0.0) {
                   v1 = 0.0;
                 } else {
-                  v1 = -qdp / dt;
+                  v1 = -qdp_s / dt;
                 }
               }
               accumulator += v1;
-            }, ps_v_forcing);
-        elems.m_ps_v(ie, tl.np1, igp, jgp) += ps_v_forcing;
+            },
+            ps_v_forcing);
+        ps_v(ie, tl.np1, igp, jgp) += ps_v_forcing;
       });
     });
   }
 
-  Kokkos::parallel_for(
-      "tracer forcing ps_v",
-      Kokkos::RangePolicy<ExecSpace>(0, num_e * num_q * NP * NP * NUM_LEV),
-      KOKKOS_LAMBDA(const int & idx) {
-        const int ie = (((idx / NUM_LEV) / NP) / NP) / num_q;
-        const int iq = (((idx / NUM_LEV) / NP) / NP) % num_q;
-        const int igp = ((idx / NUM_LEV) / NP) % NP;
-        const int jgp = (idx / NUM_LEV) % NP;
-        const int k = idx % NUM_LEV;
+  Kokkos::parallel_for("tracer forcing ps_v",
+                       Kokkos::RangePolicy<ExecSpace>(0, num_e * num_q * NP *
+                                                             NP * NUM_LEV),
+                       KOKKOS_LAMBDA(const int & idx) {
+    const int ie = (((idx / NUM_LEV) / NP) / NP) / num_q;
+    const int iq = (((idx / NUM_LEV) / NP) / NP) % num_q;
+    const int igp = ((idx / NUM_LEV) / NP) % NP;
+    const int jgp = (idx / NUM_LEV) % NP;
+    const int k = idx % NUM_LEV;
 
-        const Scalar dp =
-            hvcoord.hybrid_ai_delta(k) * hvcoord.ps0 +
-            hvcoord.hybrid_bi_delta(k) * elems.m_ps_v(ie, tl.np1, igp, jgp);
-        tracers.Q(ie, iq, igp, jgp, k) =
-            tracers.qdp(ie, tl.np1_qdp, iq, igp, jgp, k) / dp;
-      });
+    const Scalar dp = hvcoord.hybrid_ai_delta(k) * hvcoord.ps0 +
+                      hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.np1, igp, jgp);
+    Q(ie, iq, igp, jgp, k) = qdp(ie, tl.np1_qdp, iq, igp, jgp, k) / dp;
+  });
 }
 
 // ---------------------------------------- //

@@ -75,7 +75,7 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   }
   else if(params.ftype == ForcingAlg::FORCING_2) {
     GPTLstart("ApplyCAMForcing_dynamics");
-    // call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
+    apply_cam_forcing_dynamics(dt_remap)
     GPTLstop("ApplyCAMForcing_dynamics");
   }
 
