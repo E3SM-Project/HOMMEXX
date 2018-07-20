@@ -18,7 +18,7 @@ namespace Homme
  */
 struct SimulationParams
 {
-  SimulationParams() : params_set(false), ftype(ForcingAlg::FORCING_DEBUG) {}
+  SimulationParams() : params_set(false), ftype(ForcingAlg::FORCING_OFF) {}
 
   int       time_step_type; // TODO: convert to enum
   int       rsplit;

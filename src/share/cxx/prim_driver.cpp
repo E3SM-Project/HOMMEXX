@@ -65,23 +65,20 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   tl.update_tracers_levels(params.qsplit);
 
-  // Apply forcing
-#ifdef CAM
-  tl.update_tracer_levels(params.qsplit);
-
-  // Corresponds to ftype == 0 in Fortran
-  if(params.ftype == ForcingAlg::FORCING_DEBUG) {
-    apply_cam_forcing(dt_remap)
-  }
-  else if(params.ftype == ForcingAlg::FORCING_2) {
-    GPTLstart("ApplyCAMForcing_dynamics");
-    apply_cam_forcing_dynamics(dt_remap)
-    GPTLstop("ApplyCAMForcing_dynamics");
-  }
-
-#else
+#ifndef CAM
   apply_test_forcing ();
 #endif
+
+  // Apply forcing.
+  // In standalone mode, params.ftype == ForcingAlg::FORCING_OFF
+  // Corresponds to ftype == 0 in Fortran
+  if(params.ftype == ForcingAlg::FORCING_DEBUG) {
+    apply_cam_forcing(dt_remap);
+  }
+  // Corresponds to ftype == 2 in Fortran
+  else if(params.ftype == ForcingAlg::FORCING_2) {
+    apply_cam_forcing_dynamics(dt_remap)
+  }
 
   if (compute_diagnostics) {
     Diagnostics& diags = Context::singleton().get_diagnostics();

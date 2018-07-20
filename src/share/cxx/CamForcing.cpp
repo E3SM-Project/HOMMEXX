@@ -53,9 +53,11 @@ void apply_cam_forcing(const Real &dt) {
 }
 
 void apply_cam_forcing_dynamics(const Real &dt) {
+  GPTLstart("ApplyCAMForcing_dynamics");
   const Elements &elems = Context::singleton().get_elements();
   const TimeLevel &tl = Context::singleton().get_time_level();
   state_forcing(elems.m_ft, elems.m_fm, tl, dt, elems.m_t, elems.m_v);
+  GPTLstop("ApplyCAMForcing_dynamics");
 }
 
 void state_forcing(

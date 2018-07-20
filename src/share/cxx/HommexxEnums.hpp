@@ -39,6 +39,7 @@ enum class ComparisonOp {
 // =================== Run parameters enums ====================== //
 
 enum class ForcingAlg {
+  FORCING_OFF,
   FORCING_DEBUG,
   FORCING_1, // Unsupported
   FORCING_2,
