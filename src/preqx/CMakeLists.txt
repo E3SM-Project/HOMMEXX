@@ -95,6 +95,7 @@ SET(PREQX_DEPS_F90
   ${SRC_SHARE_DIR}/physics_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
+  ${SRC_SHARE_DIR}/prim_forcing_mod.F90
   ${SRC_SHARE_DIR}/prim_si_mod.F90
   ${SRC_SHARE_DIR}/prim_si_ref_mod.F90
   ${SRC_SHARE_DIR}/prim_state_mod.F90

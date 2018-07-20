@@ -1083,7 +1083,7 @@ contains
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1265,13 +1265,13 @@ contains
   end subroutine prim_run_subcycle
 ! USE_KOKKOS_KERNELS
 #elif defined(CAM)
-  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, tl, hvcoord,nsubstep)
+  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, single_column, tl, hvcoord, nsubstep)
     use iso_c_binding,      only: c_double, c_int, c_ptr, c_loc
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, &
          disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
@@ -1311,6 +1311,7 @@ contains
     integer,              intent(in)    :: nets          ! starting thread element number (private)
     integer,              intent(in)    :: nete          ! ending thread element number   (private)
     real(kind=real_kind), intent(in)    :: dt            ! "timestep dependent" timestep
+    logical,              intent(in)    :: single_column
     type (TimeLevel_t),   intent(inout) :: tl
     integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
 
