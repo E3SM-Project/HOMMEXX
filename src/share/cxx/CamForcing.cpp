@@ -115,7 +115,7 @@ void tracer_forcing(
         const int jgp = (idx / NUM_LEV) % NP;
         const int k = idx % NUM_LEV;
         Scalar v1 = f_q(ie, iq, igp, jgp, k);
-        Scalar qdp_s = qdp(ie, tl.np1_qdp, iq, igp, jgp, k);
+        Scalar &qdp_s = qdp(ie, tl.np1_qdp, iq, igp, jgp, k);
         VECTOR_SIMD_LOOP
         for (int vlev = 0; vlev < VECTOR_SIZE; ++vlev) {
           if (qdp_s[vlev] + v1[vlev] * dt < 0.0 && v1[vlev] < 0.0) {

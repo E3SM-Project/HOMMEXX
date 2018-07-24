@@ -18,16 +18,16 @@ module prim_forcing_mod
 
 contains
 
-  subroutine CAM_forcing_tracers(dt_q, ps0, np1, np1_qdp, wet, hyai, hybi, FQ, Qdp, ps_v, Q) bind(c)
+  subroutine CAM_forcing_tracers(dt_q, ps0, qsize, np1, np1_qdp, wet, hyai, hybi, FQ, Qdp, ps_v, Q) bind(c)
     use iso_c_binding,  only: c_int, c_bool
     use element_mod,    only: timelevels
-    use dimensions_mod, only: np, nlev, qsize
+    use dimensions_mod, only: np, nlev
     use physical_constants, only: Cp
 
     implicit none
 
     real (kind=real_kind), intent(in) :: dt_q, ps0
-    integer (kind=c_int), intent(in) :: np1, np1_qdp
+    integer (kind=c_int), intent(in) :: qsize, np1, np1_qdp
     logical (kind=c_bool), intent(in) :: wet
     real (kind=real_kind), intent(in) :: hyai(nlev)
     real (kind=real_kind), intent(in) :: hybi(nlev)
@@ -103,7 +103,7 @@ contains
 
   subroutine applyCAMforcing(elem,hvcoord,np1,np1_qdp,dt_q,nets,nete)
     use iso_c_binding,  only: c_bool
-    use dimensions_mod, only: np, nlev
+    use dimensions_mod, only: np, nlev, qsize
     use hybvcoord_mod,  only: hvcoord_t
     use control_mod,    only: moisture
     use physical_constants, only: Cp
@@ -121,7 +121,7 @@ contains
     wet = (moisture /= "dry")
 
     do ie=nets,nete
-       call CAM_forcing_tracers(dt_q, hvcoord%ps0, np1, np1_qdp, wet, hvcoord%hyai, hvcoord%hybi, &
+       call CAM_forcing_tracers(dt_q, hvcoord%ps0, qsize, np1, np1_qdp, wet, hvcoord%hyai, hvcoord%hybi, &
             elem(ie)%derived%FQ, elem(ie)%state%Qdp,  elem(ie)%state%ps_v,  elem(ie)%state%Q)
 
        call CAM_forcing_states(dt_q, np1, elem(ie)%derived%FT, elem(ie)%derived%FM, &

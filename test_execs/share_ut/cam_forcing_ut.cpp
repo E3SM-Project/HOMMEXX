@@ -21,7 +21,7 @@ using rngAlg = std::mt19937_64;
 extern "C" {
 // cam_forcing_tracers
 // real (kind=real_kind), intent(in) :: dt_q, ps0
-// integer (kind=c_int), intent(in) :: np1, np1_qdp
+// integer (kind=c_int), intent(in) :: qsize, np1, np1_qdp
 // real (kind=real_kind), intent(in) :: hyai(nlev)
 // real (kind=real_kind), intent(in) :: hybi(nlev)
 // real (kind=real_kind), intent(in) :: hyai(nlev)
@@ -29,11 +29,13 @@ extern "C" {
 // real (kind=real_kind), intent(in) :: FQ(np, np, nlev, qsize)
 // real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize, timelevels)
 // real (kind=real_kind), intent(inout) :: ps_v(np, np, timelevels)
+// real (kind=real_kind), intent(out) :: Q(np, np, nlev, qsize)
 
-void cam_forcing_tracers(const double &dt_q, const double &ps0, const int &np1,
-                         const int &np1_qdp, const bool &wet,
-                         const double *hyai, const double *hybi,
-                         const double *FQ, double *Qdp, double *ps_v);
+void cam_forcing_tracers(const double &dt_q, const double &ps0,
+                         const int &qsize, const int &np1, const int &np1_qdp,
+                         const bool &wet, const double *hyai,
+                         const double *hybi, const double *FQ, double *Qdp,
+                         double *ps_v, double *Q);
 
 // cam_forcing_states
 // real (kind=real_kind), intent(in) :: dt_q
@@ -130,10 +132,10 @@ TEST_CASE("cam_forcing_states", "cam_forcing") {
 }
 
 TEST_CASE("cam_forcing_tracers", "cam_forcing") {
-  constexpr int num_elems = 2;
-  constexpr int num_q = QSIZE_D;
+  constexpr int num_elems = 4;
   constexpr MoistDry moisture = MoistDry::MOIST;
 
+  const int num_q = QSIZE_D;
   const Real dt_q = 1.0;
   const int np1 = 1;
   const int np1_qdp = 2;
@@ -183,23 +185,20 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
 
   tracer_forcing(fq_cxx, hvcoord, tl, num_q, moisture, dt_q, ps_v_cxx, qdp_cxx,
                  q_cxx);
+  auto ps_v_mirror = Kokkos::create_mirror_view(ps_v_cxx);
+  Kokkos::deep_copy(ps_v_mirror, ps_v_cxx);
   auto qdp_mirror = Kokkos::create_mirror_view(qdp_cxx);
   Kokkos::deep_copy(qdp_mirror, qdp_cxx);
   auto q_mirror = Kokkos::create_mirror_view(q_cxx);
   Kokkos::deep_copy(q_mirror, q_cxx);
 
   for (int ie = 0; ie < num_elems; ++ie) {
-    // void cam_forcing_tracers(const double &dt_q, const double &ps0, const int
-    // &np1,
-    //                          const int &np1_qdp, const bool &wet,
-    //                          const double *hyai, const double *hybi,
-    //                          const double *FQ, double *Qdp, double *ps_v);
-
-    cam_forcing_tracers(dt_q, hvcoord.ps0, np1, np1_qdp,
-                        moisture == MoistDry::MOIST, hybrid_ai_f90.data(),
-                        hybrid_bi_f90.data(), Homme::subview(fq_f90, ie).data(),
-                        Homme::subview(qdp_f90, ie).data(),
-                        Homme::subview(ps_v_f90, ie).data());
+    cam_forcing_tracers(
+        dt_q, hvcoord.ps0, num_q, np1, np1_qdp, moisture == MoistDry::MOIST,
+        hybrid_ai_f90.data(), hybrid_bi_f90.data(),
+        Homme::subview(fq_f90, ie).data(), Homme::subview(qdp_f90, ie).data(),
+        Homme::subview(ps_v_f90, ie).data(), Homme::subview(q_f90, ie).data());
+    fflush(stdout);
     for (int q_idx = 0; q_idx < QSIZE_D; ++q_idx) {
       for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
         const int ilev = k / VECTOR_SIZE;
@@ -212,6 +211,14 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
             }
             REQUIRE(q_f90(ie, q_idx, k, igp, jgp) ==
                     q_mirror(ie, q_idx, igp, jgp, ilev)[vlev]);
+          }
+        }
+      }
+      for (int tl_idx = 0; tl_idx < Q_NUM_TIME_LEVELS; ++tl_idx) {
+        for (int igp = 0; igp < NP; ++igp) {
+          for (int jgp = 0; jgp < NP; ++jgp) {
+            REQUIRE(ps_v_f90(ie, tl_idx, igp, jgp) ==
+                    ps_v_mirror(ie, tl_idx, igp, jgp));
           }
         }
       }
