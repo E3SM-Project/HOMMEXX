@@ -17,50 +17,6 @@
 
 namespace Homme {
 
-// ----------------- SIGNATURES ---------------- //
-
-void tracer_forcing(
-    const ExecViewUnmanaged<const Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &f_q,
-    const HybridVCoord &hvcoord, const TimeLevel &tl, const int &num_q,
-    const MoistDry &moisture, const double &dt,
-    const ExecViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> &ps_v,
-    const ExecViewManaged<
-        Scalar * [Q_NUM_TIME_LEVELS][QSIZE_D][NP][NP][NUM_LEV]> &qdp,
-    const ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &Q);
-
-void state_forcing(
-    const ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> &f_t,
-    const ExecViewUnmanaged<const Scalar * [2][NP][NP][NUM_LEV]> &f_m,
-    const int &np1, const Real &dt,
-    const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> &t,
-    const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> &v);
-
-// -------------- IMPLEMENTATIONS -------------- //
-
-void apply_cam_forcing(const Real &dt) {
-  GPTLstart("ApplyCAMForcing");
-  const Elements &elems = Context::singleton().get_elements();
-  const TimeLevel &tl = Context::singleton().get_time_level();
-
-  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
-
-  const SimulationParams &sim_params =
-      Context::singleton().get_simulation_params();
-  const HybridVCoord &hvcoord = Context::singleton().get_hvcoord();
-  const Tracers &tracers = Context::singleton().get_tracers();
-  tracer_forcing(tracers.fq, hvcoord, tl, tracers.num_tracers(),
-                 sim_params.moisture, dt, elems.m_ps_v, tracers.qdp, tracers.Q);
-  GPTLstop("ApplyCAMForcing");
-}
-
-void apply_cam_forcing_dynamics(const Real &dt) {
-  GPTLstart("ApplyCAMForcing_dynamics");
-  const Elements &elems = Context::singleton().get_elements();
-  const TimeLevel &tl = Context::singleton().get_time_level();
-  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
-  GPTLstop("ApplyCAMForcing_dynamics");
-}
-
 void state_forcing(
     const ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> &f_t,
     const ExecViewUnmanaged<const Scalar * [2][NP][NP][NUM_LEV]> &f_m,
@@ -184,6 +140,30 @@ void tracer_forcing(
                       hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.np1, igp, jgp);
     Q(ie, iq, igp, jgp, k) = qdp(ie, tl.np1_qdp, iq, igp, jgp, k) / dp;
   });
+}
+
+void apply_cam_forcing(const Real &dt) {
+  GPTLstart("ApplyCAMForcing");
+  const Elements &elems = Context::singleton().get_elements();
+  const TimeLevel &tl = Context::singleton().get_time_level();
+
+  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
+
+  const SimulationParams &sim_params =
+      Context::singleton().get_simulation_params();
+  const HybridVCoord &hvcoord = Context::singleton().get_hvcoord();
+  const Tracers &tracers = Context::singleton().get_tracers();
+  tracer_forcing(tracers.fq, hvcoord, tl, tracers.num_tracers(),
+                 sim_params.moisture, dt, elems.m_ps_v, tracers.qdp, tracers.Q);
+  GPTLstop("ApplyCAMForcing");
+}
+
+void apply_cam_forcing_dynamics(const Real &dt) {
+  GPTLstart("ApplyCAMForcing_dynamics");
+  const Elements &elems = Context::singleton().get_elements();
+  const TimeLevel &tl = Context::singleton().get_time_level();
+  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
+  GPTLstop("ApplyCAMForcing_dynamics");
 }
 
 // ---------------------------------------- //
