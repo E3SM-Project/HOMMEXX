@@ -155,8 +155,8 @@ cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDA
 
 SET (CAM_FORCING_UT_CXX_SRCS
   ${SHARE_UT_DIR}/cam_forcing_ut.cpp
-  ${SRC_SHARE_DIR}/cxx/CamForcing.cpp
   ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
+  ${SRC_SHARE_DIR}/cxx/CamForcing.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
   ${SRC_SHARE_DIR}/cxx/Diagnostics.cpp
@@ -165,6 +165,7 @@ SET (CAM_FORCING_UT_CXX_SRCS
   ${SRC_SHARE_DIR}/cxx/EulerStepFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/ExecSpaceDefs.cpp
   ${SRC_SHARE_DIR}/cxx/Hommexx_Session.cpp
+  ${SRC_SHARE_DIR}/cxx/HybridVCoord.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/HyperviscosityFunctorImpl.cpp
   ${SRC_SHARE_DIR}/cxx/Tracers.cpp
