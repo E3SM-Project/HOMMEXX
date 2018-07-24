@@ -31,7 +31,7 @@ void tracer_forcing(
 void state_forcing(
     const ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> &f_t,
     const ExecViewUnmanaged<const Scalar * [2][NP][NP][NUM_LEV]> &f_m,
-    const TimeLevel &tl, const Real &dt,
+    const int &np1, const Real &dt,
     const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> &t,
     const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> &v);
 
@@ -42,7 +42,7 @@ void apply_cam_forcing(const Real &dt) {
   const Elements &elems = Context::singleton().get_elements();
   const TimeLevel &tl = Context::singleton().get_time_level();
 
-  state_forcing(elems.m_ft, elems.m_fm, tl, dt, elems.m_t, elems.m_v);
+  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
 
   const SimulationParams &sim_params =
       Context::singleton().get_simulation_params();
@@ -57,14 +57,14 @@ void apply_cam_forcing_dynamics(const Real &dt) {
   GPTLstart("ApplyCAMForcing_dynamics");
   const Elements &elems = Context::singleton().get_elements();
   const TimeLevel &tl = Context::singleton().get_time_level();
-  state_forcing(elems.m_ft, elems.m_fm, tl, dt, elems.m_t, elems.m_v);
+  state_forcing(elems.m_ft, elems.m_fm, tl.np1, dt, elems.m_t, elems.m_v);
   GPTLstop("ApplyCAMForcing_dynamics");
 }
 
 void state_forcing(
     const ExecViewUnmanaged<const Scalar * [NP][NP][NUM_LEV]> &f_t,
     const ExecViewUnmanaged<const Scalar * [2][NP][NP][NUM_LEV]> &f_m,
-    const TimeLevel &tl, const Real &dt,
+    const int &np1, const Real &dt,
     const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][NP][NP][NUM_LEV]> &t,
     const ExecViewUnmanaged<Scalar * [NUM_TIME_LEVELS][2][NP][NP][NUM_LEV]> &
         v) {
@@ -77,7 +77,7 @@ void state_forcing(
         const int igp = ((idx / NUM_LEV) / NP) % NP;
         const int jgp = (idx / NUM_LEV) % NP;
         const int k = idx % NUM_LEV;
-        t(ie, tl.np1, igp, jgp, k) += dt * f_t(ie, igp, jgp, k);
+        t(ie, np1, igp, jgp, k) += dt * f_t(ie, igp, jgp, k);
       });
   Kokkos::parallel_for(
       "state velocity forcing",
@@ -88,7 +88,7 @@ void state_forcing(
         const int igp = ((idx / NUM_LEV) / NP) % NP;
         const int jgp = (idx / NUM_LEV) % NP;
         const int k = idx % NUM_LEV;
-        v(ie, tl.np1, dim, igp, jgp, k) += dt * f_m(ie, dim, igp, jgp, k);
+        v(ie, np1, dim, igp, jgp, k) += dt * f_m(ie, dim, igp, jgp, k);
       });
 }
 

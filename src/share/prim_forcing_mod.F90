@@ -14,15 +14,98 @@ module prim_forcing_mod
   private
   save
 
-  public :: applyCAMforcing_dynamics, applyCAMforcing
+  public :: applyCAMforcing_dynamics, applyCAMforcing, CAM_forcing_tracers, CAM_forcing_states
 
 contains
 
+  subroutine CAM_forcing_tracers(dt_q, ps0, np1, np1_qdp, wet, hyai, hybi, FQ, Qdp, ps_v, Q) bind(c)
+    use iso_c_binding,  only: c_int, c_bool
+    use element_mod,    only: timelevels
+    use dimensions_mod, only: np, nlev, qsize
+    use physical_constants, only: Cp
+
+    implicit none
+
+    real (kind=real_kind), intent(in) :: dt_q, ps0
+    integer (kind=c_int), intent(in) :: np1, np1_qdp
+    logical (kind=c_bool), intent(in) :: wet
+    real (kind=real_kind), intent(in) :: hyai(nlev)
+    real (kind=real_kind), intent(in) :: hybi(nlev)
+    real (kind=real_kind), intent(in) :: FQ(np, np, nlev, qsize)
+    real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize, timelevels)
+    real (kind=real_kind), intent(inout) :: ps_v(np, np, timelevels)
+    real (kind=real_kind), intent(out) :: Q(np, np, nlev, qsize)
+
+    integer :: i, j, k, q_idx
+    real (kind=real_kind) :: v1, dp
+    real (kind=real_kind) :: FQps(np, np)
+
+    FQps(:, :)=0
+#if (defined COLUMN_OPENMP)
+    !$omp parallel do private(q_idx,k,i,j,v1,FQps)
+#endif
+    do q_idx = 1, qsize
+       do k = 1, nlev
+          do j = 1, np
+             do i = 1, np
+                v1 = dt_q * FQ(i, j, k, q_idx)
+                if (Qdp(i, j, k, q_idx, np1_qdp) + v1 < 0 .and. v1 < 0) then
+                   if (Qdp(i, j, k, q_idx, np1_qdp) < 0 ) then
+                      v1 = 0  ! Q already negative, dont make it more so
+                   else
+                      v1 = -Qdp(i, j, k, q_idx, np1_qdp)
+                   endif
+                endif
+                Qdp(i, j, k, q_idx, np1_qdp) = Qdp(i, j, k, q_idx, np1_qdp) + v1
+                if (q_idx == 1) then
+                   FQps(i, j) = FQps(i, j) + v1 / dt_q
+                endif
+             enddo
+          enddo
+       enddo
+    enddo
+
+    if (wet .and. qsize>0) then
+       ! to conserve dry mass in the precese of Q1 forcing:
+       ps_v(:, :, np1) = ps_v(:, :, np1) + dt_q * FQps(:, :)
+    endif
+
+    ! Qdp(np1) and ps_v(np1) were updated by forcing - update Q(np1)
+    do q_idx = 1, qsize
+       do k = 1, nlev
+          do j = 1, np
+             do i = 1, np
+                dp = ( hyai(k+1) - hyai(k) ) * ps0 + &
+                     ( hybi(k+1) - hybi(k) ) * ps_v(i, j, np1)
+                Q(i, j, k, q_idx) = Qdp(i, j, k, q_idx, np1_qdp) / dp
+             enddo
+          enddo
+       enddo
+    enddo
+  end subroutine CAM_Forcing_Tracers
+
+  subroutine CAM_forcing_states(dt_q, np1, FT, FM, T, v) bind(c)
+    use iso_c_binding, only: c_int
+    use dimensions_mod, only: np, nlev
+    use element_mod,   only: timelevels
+    implicit none
+
+    real (kind=real_kind), intent(in) :: dt_q
+    integer (kind=c_int), intent(in) :: np1
+    real (kind=real_kind), intent(in) :: FT(np, np, nlev)
+    real (kind=real_kind), intent(in) :: FM(np, np, 2, nlev)
+    real (kind=real_kind), intent(inout) :: T(np, np, nlev, timelevels)
+    real (kind=real_kind), intent(inout) :: v(np, np, 2, nlev, timelevels)
+
+    T(:,:,:,np1)   = T(:,:,:,np1)   + dt_q * FT(:,:,:)
+    v(:,:,:,:,np1) = v(:,:,:,:,np1) + dt_q * FM(:,:,:,:)
+  end subroutine CAM_forcing_states
+
   subroutine applyCAMforcing(elem,hvcoord,np1,np1_qdp,dt_q,nets,nete)
-    use dimensions_mod, only: np, nc, nlev, qsize
+    use iso_c_binding,  only: c_bool
+    use dimensions_mod, only: np, nlev
     use hybvcoord_mod,  only: hvcoord_t
-    use control_mod,    only: moisture, tracer_grid_type
-    use control_mod,    only: TRACER_GRIDTYPE_GLL
+    use control_mod,    only: moisture
     use physical_constants, only: Cp
 
     implicit none
@@ -32,93 +115,38 @@ contains
     integer,                intent(in)    :: np1,nets,nete,np1_qdp
 
     ! local
-    integer :: i,j,k,ie,q
-    real (kind=real_kind) :: v1,dp
-    real (kind=real_kind) :: beta(np,np),E0(np,np),ED(np,np),dp0m1(np,np),dpsum(np,np)
-    logical :: wet
+    integer :: ie
+    logical (kind=c_bool) :: wet
 
     wet = (moisture /= "dry")
 
     do ie=nets,nete
-       ! apply forcing to Qdp
-       elem(ie)%derived%FQps(:,:,1)=0
-#if (defined COLUMN_OPENMP)
-       !$omp parallel do private(q,k,i,j,v1)
-#endif
-       do q=1,qsize
-          do k=1,nlev
-             do j=1,np
-                do i=1,np
-                   v1 = dt_q*elem(ie)%derived%FQ(i,j,k,q)
-                   !if (elem(ie)%state%Qdp(i,j,k,q,np1) + v1 < 0 .and. v1<0) then
-                   if (elem(ie)%state%Qdp(i,j,k,q,np1_qdp) + v1 < 0 .and. v1<0) then
-                      !if (elem(ie)%state%Qdp(i,j,k,q,np1) < 0 ) then
-                      if (elem(ie)%state%Qdp(i,j,k,q,np1_qdp) < 0 ) then
-                         v1=0  ! Q already negative, dont make it more so
-                      else
-                         !v1 = -elem(ie)%state%Qdp(i,j,k,q,np1)
-                         v1 = -elem(ie)%state%Qdp(i,j,k,q,np1_qdp)
-                      endif
-                   endif
-                   !elem(ie)%state%Qdp(i,j,k,q,np1) = elem(ie)%state%Qdp(i,j,k,q,np1)+v1
-                   elem(ie)%state%Qdp(i,j,k,q,np1_qdp) = elem(ie)%state%Qdp(i,j,k,q,np1_qdp)+v1
-                   if (q==1) then
-                      elem(ie)%derived%FQps(i,j,1)=elem(ie)%derived%FQps(i,j,1)+v1/dt_q
-                   endif
-                enddo
-             enddo
-          enddo
-       enddo
+       call CAM_forcing_tracers(dt_q, hvcoord%ps0, np1, np1_qdp, wet, hvcoord%hyai, hvcoord%hybi, &
+            elem(ie)%derived%FQ, elem(ie)%state%Qdp,  elem(ie)%state%ps_v,  elem(ie)%state%Q)
 
-       if (wet .and. qsize>0) then
-          ! to conserve dry mass in the precese of Q1 forcing:
-          elem(ie)%state%ps_v(:,:,np1) = elem(ie)%state%ps_v(:,:,np1) + &
-               dt_q*elem(ie)%derived%FQps(:,:,1)
-       endif
-
-       ! Qdp(np1) and ps_v(np1) were updated by forcing - update Q(np1)
-#if (defined COLUMN_OPENMP)
-       !$omp parallel do private(q,k,i,j,dp)
-#endif
-       do q=1,qsize
-          do k=1,nlev
-             do j=1,np
-                do i=1,np
-                   dp = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-                        ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,np1)
-                   elem(ie)%state%Q(i,j,k,q) = elem(ie)%state%Qdp(i,j,k,q,np1_qdp)/dp
-                enddo
-             enddo
-          enddo
-       enddo
-
-       elem(ie)%state%T(:,:,:,np1)   = elem(ie)%state%T(:,:,:,np1)   + dt_q*elem(ie)%derived%FT(:,:,:)
-       elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:)
-
+       call CAM_forcing_states(dt_q, np1, elem(ie)%derived%FT, elem(ie)%derived%FM, &
+            elem(ie)%state%T, elem(ie)%state%v)
     enddo
   end subroutine applyCAMforcing
 
-
-
   subroutine applyCAMforcing_dynamics(elem,hvcoord,np1,dt_q,nets,nete)
-
-    use dimensions_mod, only: np, nlev, qsize
+    use dimensions_mod, only: np
     use element_mod,    only: element_t
     use hybvcoord_mod,  only: hvcoord_t
 
     implicit none
+
     type (element_t)     ,  intent(inout) :: elem(:)
     real (kind=real_kind),  intent(in)    :: dt_q
     type (hvcoord_t),       intent(in)    :: hvcoord
     integer,                intent(in)    :: np1,nets,nete
 
-    integer :: i,j,k,ie,q
-    real (kind=real_kind) :: v1,dp
-    logical :: wet
+    ! local
+    integer :: ie
 
     do ie=nets,nete
-       elem(ie)%state%T(:,:,:,np1)  = elem(ie)%state%T(:,:,:,np1)    + dt_q*elem(ie)%derived%FT(:,:,:)
-       elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,np1) + dt_q*elem(ie)%derived%FM(:,:,:,:)
+       call CAM_forcing_states(dt_q, np1, elem(ie)%derived%FT, elem(ie)%derived%FM, &
+            elem(ie)%state%T, elem(ie)%state%v)
     enddo
   end subroutine applyCAMforcing_dynamics
 

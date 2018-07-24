@@ -155,6 +155,7 @@ cxx_unit_test (boundary_exchange_ut "${BOUNDARY_EXCHANGE_UT_F90_SRCS}" "${BOUNDA
 
 SET (CAM_FORCING_UT_CXX_SRCS
   ${SHARE_UT_DIR}/cam_forcing_ut.cpp
+  ${SRC_SHARE_DIR}/cxx/CamForcing.cpp
   ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Context.cpp
   ${SRC_SHARE_DIR}/cxx/Derivative.cpp
@@ -189,12 +190,14 @@ SET (CAM_FORCING_UT_F90_SRCS
   ${SRC_SHARE_DIR}/element_mod.F90
   ${SRC_SHARE_DIR}/gridgraph_mod.F90
   ${SRC_SHARE_DIR}/hybrid_mod.F90
+  ${SRC_SHARE_DIR}/hybvcoord_mod.F90
   ${SRC_SHARE_DIR}/kinds.F90
   ${SRC_SHARE_DIR}/ll_mod.F90
   ${SRC_SHARE_DIR}/metagraph_mod.F90
   ${SRC_SHARE_DIR}/parallel_mod.F90
   ${SRC_SHARE_DIR}/params_mod.F90
   ${SRC_SHARE_DIR}/physical_constants.F90
+  ${SRC_SHARE_DIR}/prim_forcing_mod.F90
   ${SRC_SHARE_DIR}/quadrature_mod.F90
   ${SRC_SHARE_DIR}/schedtype_mod.F90
   ${SRC_SHARE_DIR}/schedule_mod.F90
