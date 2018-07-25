@@ -109,7 +109,9 @@ contains
     use params_mod,         only: sfcurve
     use physical_constants, only: dd_pi
     use prim_advection_mod, only: prim_advec_init1
-#ifndef USE_KOKKOS_KERNELS
+#ifdef USE_KOKKOS_KERNELS
+    use prim_cxx_driver_mod, only: init_cxx_mpi_comm
+#else
     use prim_advance_mod,   only: prim_advance_init
 #endif
     use prim_state_mod,     only: prim_printstate_init
@@ -135,6 +137,13 @@ contains
 #endif
 
     implicit none
+
+#ifdef USE_KOKKOS_KERNELS
+    interface
+       subroutine initialize_hommexx_session() bind(c)
+       end subroutine initialize_hommexx_session
+    end interface
+#endif
 
     type (element_t),   pointer     :: elem(:)
     type (parallel_t),  intent(in)  :: par
@@ -171,6 +180,11 @@ contains
     real(kind=real_kind) :: repro_sum_rel_diff_max
 #endif
 
+#ifdef USE_KOKKOS_KERNELS
+    ! Do this before any environment changes from the Fortran
+    call init_cxx_mpi_comm(par%comm)
+    call initialize_hommexx_session()
+#endif
     ! =====================================
     ! Read in model control information
     ! =====================================
@@ -660,6 +674,24 @@ contains
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
 
+    subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_double
+      !
+      ! Inputs
+      !
+      real (kind=c_double),  intent(in) :: ps0
+      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
+    end subroutine init_hvcoord_c
+
+    subroutine init_time_level_c(nm1,n0,np1,nstep,nstep0) bind(c)
+      use iso_c_binding, only: c_int
+      !
+      ! Inputs
+      !
+      integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
+    end subroutine init_time_level_c
+
 ! USE_KOKKOS_KERNELS
 #endif
   end interface
@@ -698,6 +730,8 @@ contains
     integer :: n0_qdp
 
 #ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
+
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
@@ -1058,6 +1092,14 @@ contains
                               elem_accum_kener_ptr, elem_accum_pener_ptr)
 
     call init_boundary_exchanges_c ()
+
+    hybrid_am_ptr = c_loc(hvcoord%hyam)
+    hybrid_ai_ptr = c_loc(hvcoord%hyai)
+    hybrid_bm_ptr = c_loc(hvcoord%hybm)
+    hybrid_bi_ptr = c_loc(hvcoord%hybi)
+    call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
+
+    call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
 #endif
 
   end subroutine prim_init2

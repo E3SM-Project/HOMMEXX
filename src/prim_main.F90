@@ -53,26 +53,6 @@ program prim_main
   implicit none
 #ifdef USE_KOKKOS_KERNELS
   interface
-    subroutine initialize_hommexx_session() bind(c)
-    end subroutine initialize_hommexx_session
-
-    subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
-      use iso_c_binding , only : c_ptr, c_double
-      !
-      ! Inputs
-      !
-      real (kind=c_double),  intent(in) :: ps0
-      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
-      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
-    end subroutine init_hvcoord_c
-
-    subroutine init_time_level_c(nm1,n0,np1,nstep,nstep0) bind(c)
-      use iso_c_binding, only: c_int
-      !
-      ! Inputs
-      !
-      integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
-    end subroutine init_time_level_c
 
     subroutine prim_run_subcycle_c(tstep,nstep,nm1,n0,np1,last_time_step) bind(c)
       use iso_c_binding, only: c_int, c_double
@@ -110,7 +90,6 @@ program prim_main
   type (hvcoord_t), target    :: hvcoord        ! hybrid vertical coordinate struct
 
 #ifdef USE_KOKKOS_KERNELS
-  type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
   type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
   type (c_ptr) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
   type (c_ptr) :: elem_derived_omega_p_ptr
@@ -132,13 +111,6 @@ program prim_main
   ! Begin executable code set distributed memory world...
   ! =====================================================
   par=initmp()
-
-#ifdef USE_KOKKOS_KERNELS
-  call init_cxx_mpi_comm(par%comm)
-
-  ! Do this right away, but AFTER MPI initialization
-  call initialize_hommexx_session()
-#endif
 
   ! =====================================
   ! Set number of threads...
@@ -204,14 +176,6 @@ program prim_main
   if (ierr /= 0) then
      call haltmp("error in hvcoord_init")
   end if
-
-#ifdef USE_KOKKOS_KERNELS
-  hybrid_am_ptr = c_loc(hvcoord%hyam)
-  hybrid_ai_ptr = c_loc(hvcoord%hyai)
-  hybrid_bm_ptr = c_loc(hvcoord%hybm)
-  hybrid_bi_ptr = c_loc(hvcoord%hybi)
-  call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
-#endif
 
 #ifdef PIO_INTERP
   if(runtype<0) then
@@ -306,8 +270,6 @@ program prim_main
   endif
 
 #ifdef USE_KOKKOS_KERNELS
-  call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
-
   ! Set pointers to states
   elem_state_v_ptr         = c_loc(elem_state_v)
   elem_state_temp_ptr      = c_loc(elem_state_temp)
