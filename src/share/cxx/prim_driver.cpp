@@ -69,8 +69,9 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   apply_test_forcing ();
 #endif
 
+
   // Apply forcing.
-  // In standalone mode, params.ftype == ForcingAlg::FORCING_OFF
+  // In standalone mode, params.ftype == ForcingAlg::FORCING_DEBUG
   // Corresponds to ftype == 0 in Fortran
   if(params.ftype == ForcingAlg::FORCING_DEBUG) {
     apply_cam_forcing(dt_remap);

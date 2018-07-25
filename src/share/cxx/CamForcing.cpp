@@ -152,7 +152,10 @@ void apply_cam_forcing(const Real &dt) {
   const SimulationParams &sim_params =
       Context::singleton().get_simulation_params();
   const HybridVCoord &hvcoord = Context::singleton().get_hvcoord();
-  const Tracers &tracers = Context::singleton().get_tracers();
+  Tracers &tracers = Context::singleton().get_tracers();
+  if(tracers.fq.data() == nullptr) {
+    tracers.fq = decltype(tracers.fq)("fq", elems.num_elems());
+  }
   tracer_forcing(tracers.fq, hvcoord, tl, tracers.num_tracers(),
                  sim_params.moisture, dt, elems.m_ps_v, tracers.qdp, tracers.Q);
   GPTLstop("ApplyCAMForcing");
