@@ -261,7 +261,7 @@ struct Dispatch {
   // Match the HOMMEXX_GPU_BFB_WITH_CPU function in the Cuda
   // specialization.
   template<typename LoopBdyType, class Lambda, typename ValueType>
-  KOKKOS_FORCEINLINE_FUNCTION
+  static KOKKOS_FORCEINLINE_FUNCTION
   void parallel_reduce (
     const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
     const LoopBdyType& loop_boundaries,
