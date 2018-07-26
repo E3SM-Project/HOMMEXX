@@ -699,7 +699,7 @@ contains
     type (element_t),   intent(inout) :: elem(:)
     type (hybrid_t),    intent(in)    :: hybrid
     type (TimeLevel_t), intent(inout) :: tl       ! time level struct
-    type (hvcoord_t),   intent(inout) :: hvcoord  ! hybrid vertical coordinate struct
+    type (hvcoord_t), target, intent(inout) :: hvcoord  ! hybrid vertical coordinate struct
     integer,            intent(in)    :: nets     ! starting thread element number (private)
     integer,            intent(in)    :: nete     ! ending thread element number   (private)
 
