@@ -33,7 +33,6 @@ vert_remap_q_alg  = 1
 hypervis_scaling  =0
 hypervis_order    = 2
 hypervis_subcycle =3
-hypervis_subcycle =3
 /
 &solver_nl
 precon_method = "identity"
