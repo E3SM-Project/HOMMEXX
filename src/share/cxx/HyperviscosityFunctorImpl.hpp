@@ -22,10 +22,10 @@ namespace Homme
 class HyperviscosityFunctorImpl
 {
   struct HyperviscosityData {
-    HyperviscosityData(const int hypervis_subcycle_in, const Real nu_ratio_in, const Real nu_top_in,
+    HyperviscosityData(const int hypervis_subcycle_in, const Real nu_ratio1_in, const Real nu_ratio2_in, const Real nu_top_in,
                        const Real nu_in, const Real nu_p_in, const Real nu_s_in,
                        const Real hypervis_scaling_in)
-                      : hypervis_subcycle(hypervis_subcycle_in), nu_ratio(nu_ratio_in)
+                      : hypervis_subcycle(hypervis_subcycle_in), nu_ratio1(nu_ratio1_in), nu_ratio2(nu_ratio2_in),
                       , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in)
                       , hypervis_scaling(hypervis_scaling_in)
                       , consthv(hypervis_scaling_in == 0){}
@@ -33,7 +33,9 @@ class HyperviscosityFunctorImpl
 
     const int   hypervis_subcycle;
 
-    const Real  nu_ratio;
+    const Real  nu_ratio1;
+    const Real  nu_ratio2;
+
     const Real  nu_top;
     const Real  nu;
     const Real  nu_p;
@@ -79,7 +81,7 @@ public:
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
+    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio1,
                               Homme::subview(m_elements.m_v,kv.ie,m_data.np1),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
@@ -99,7 +101,7 @@ public:
                    Homme::subview(m_elements.buffers.dptens,kv.ie));
 
     // Laplacian of velocity
-    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio,
+    m_sphere_ops.vlaplace_sphere_wk_contra(kv, m_data.nu_ratio2,
                               Homme::subview(m_elements.buffers.vtens,kv.ie),
                               Homme::subview(m_elements.buffers.vtens,kv.ie));
   }
