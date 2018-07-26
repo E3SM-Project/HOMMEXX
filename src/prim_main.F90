@@ -87,7 +87,7 @@ program prim_main
   type (domain1d_t), pointer  :: dom_mt(:)
   type (RestartHeader_t)      :: RestartHeader
   type (TimeLevel_t)          :: tl             ! Main time level struct
-  type (hvcoord_t), target    :: hvcoord        ! hybrid vertical coordinate struct
+  type (hvcoord_t)            :: hvcoord        ! hybrid vertical coordinate struct
 
 #ifdef USE_KOKKOS_KERNELS
   type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
