@@ -50,7 +50,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","nu_p",nu_p,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu",nu,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu_div",nu_div,0.0,Errors::ComparisonOp::GT);
-  Errors::check_options_relation("init_simulation_params_c","nu_div","nu",nu_div,nu,Errors::ComparisonOp::EQ);
 
   // Get the simulation params struct
   SimulationParams& params = Context::singleton().get_simulation_params();
