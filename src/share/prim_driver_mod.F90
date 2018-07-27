@@ -1345,7 +1345,8 @@ contains
          !
          ! Inputs
          !
-         integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+         integer(kind=c_int),  intent(inout) :: nstep, nm1, n0, np1
+         integer(kind=c_int),  intent(in) :: last_time_step
          real (kind=c_double), intent(in) :: dt
        end subroutine prim_run_subcycle_c
     end interface
@@ -1376,6 +1377,10 @@ contains
 
     call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp)
 
+    nstep_c = tl%nstep
+    nm1_c = tl%nm1 - 1
+    n0_c = tl%n0 - 1
+    np1_c = tl%np1 - 1
     call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
     tl%nstep = nstep_c
     tl%nm1 = nm1_c + 1
