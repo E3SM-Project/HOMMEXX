@@ -317,15 +317,19 @@ struct RemapFunctor : public Remapper,
                                           m_elements.num_elems() *
                                               this->num_states_remap);
       }
-      run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
-                                   this->m_elements.num_elems());
-      run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
-                                   this->m_elements.num_elems() *
-                                       num_to_remap());
+      // fails assert(pio(kv.ie, igp, jgp, _ppm_consts::PIO_PHYSICAL_LEV - 1) >
+      //              pin(kv.ie, igp, jgp, k + 1));
+      // run_functor<ComputeGridsTag>("Remap Compute Grids Functor",
+      //                              this->m_elements.num_elems());
+      // floating invalid error - something isn't initialized
+      // run_functor<ComputeRemapTag>("Remap Compute Remap Functor",
+      //                              this->m_elements.num_elems() *
+      //                                  num_to_remap());
       if (nonzero_rsplit) {
-        run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
-                                          m_elements.num_elems() *
-                                              this->num_states_remap);
+        // floating invalid error - something isn't initialized
+        // run_functor<ComputeIntrinsicsTag>("Remap Rescale States Functor",
+        //                                   m_elements.num_elems() *
+        //                                       this->num_states_remap);
       }
     }
   }

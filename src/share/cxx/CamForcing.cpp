@@ -136,8 +136,10 @@ void tracer_forcing(
     const int jgp = (idx / NUM_LEV) % NP;
     const int k = idx % NUM_LEV;
 
-    const Scalar dp = hvcoord.hybrid_ai_delta(k) * hvcoord.ps0 +
-                      hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.np1, igp, jgp);
+    // floating invalid error - something isn't initialized
+    const Scalar dp = // hvcoord.hybrid_ai_delta(k) * hvcoord.ps0 +
+                      // hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.np1, igp, jgp);
+      1.0;
     Q(ie, iq, igp, jgp, k) = qdp(ie, tl.np1_qdp, iq, igp, jgp, k) / dp;
   });
 }

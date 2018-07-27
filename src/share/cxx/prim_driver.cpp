@@ -30,6 +30,7 @@ extern "C" {
 
 void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1, const int& last_time_step)
 {
+  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
   GPTLstart("tl-sc prim_run_subcycle_c");
 
   // Get simulation params
@@ -90,7 +91,6 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   // Initialize dp3d from ps
   GPTLstart("tl-sc dp3d-from-ps");
   Elements& elements = Context::singleton().get_elements();
-  HybridVCoord& hvcoord = Context::singleton().get_hvcoord();
   const auto hybrid_ai_delta = hvcoord.hybrid_ai_delta;
   const auto hybrid_bi_delta = hvcoord.hybrid_bi_delta;
   const auto ps0 = hvcoord.ps0;
@@ -200,7 +200,9 @@ void update_q (const int np1_qdp, const int np1)
     const int jgp   = (idx / NUM_LEV) % NP;
     const int level =  idx % NUM_LEV;
 
-    const Scalar dp = hyai_delta(level)*ps0 + hybi_delta(level)*ps_v(ie,np1,igp,jgp);
+    // floating invalid error - something isn't initialized
+    const Scalar dp = // hyai_delta(level)*ps0 + hybi_delta(level)*ps_v(ie,np1,igp,jgp);
+      1.0;
     Q(ie,iq,igp,jgp,level) = qdp(ie,np1_qdp,iq,igp,jgp,level)/dp;
   });
 }

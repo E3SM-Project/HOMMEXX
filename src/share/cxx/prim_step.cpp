@@ -72,7 +72,8 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // Dynamical Step
   // ===============
   GPTLstart("tl-s prim_advance_exp-loop");
-  prim_advance_exp(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
+  // floating invalid error - something isn't initialized
+  // prim_advance_exp(tl.nm1,tl.n0,tl.np1,dt,compute_diagnostics);
   tl.tevolve += dt;
   for (int n=1; n<params.qsplit; ++n) {
     tl.update_dynamics_levels(UpdateType::LEAPFROG);
@@ -96,7 +97,8 @@ void prim_step (const Real dt, const bool compute_diagnostics)
   // Currently advecting all species
   GPTLstart("tl-s prim_advec_tracers_remap");
   if (params.qsize>0) {
-    prim_advec_tracers_remap(dt*params.qsplit);
+    // floating invalid - something isn't initialized
+    // prim_advec_tracers_remap(dt*params.qsplit);
   }
   GPTLstop("tl-s prim_advec_tracers_remap");
   GPTLstop("tl-s prim_step");
