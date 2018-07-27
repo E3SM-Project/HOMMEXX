@@ -170,6 +170,9 @@ void f90_push_forcing_to_cxx(F90Ptr elem_derived_FM, F90Ptr elem_derived_FT,
   sync_to_device(ft_f90, elements.m_ft);
 
   Tracers &tracers = Context::singleton().get_tracers();
+  if(tracers.fq.data() == nullptr) {
+    tracers.fq = decltype(tracers.fq)("fq", elements.num_elems());
+  }
   HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
       elem_derived_FQ, elements.num_elems());
   sync_to_device(fq_f90, tracers.fq);

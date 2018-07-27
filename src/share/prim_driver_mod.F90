@@ -1320,12 +1320,13 @@ contains
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
     use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_omega_p, &
          elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
+    use dimensions_mod,     only: np, nlev, qsize_d, nelemd
 
     interface
-       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp, ps_v) bind(c)
+       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:), &
-              Qdp(:,:,:,:,:,:), ps_v(:,:,:,:)
+         use dimensions_mod,     only: np, nlev, qsize_d, nelemd
+         real (kind=c_double), intent(in) :: FM(np,np,2,nlev,nelemd), FT(np,np,nlev,nelemd), FQ(np,np,nlev,qsize_d,nelemd), Qdp(np,np,nlev,qsize_d,2,nelemd)
        end subroutine f90_push_forcing_to_cxx
 
        subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p) bind(c)
@@ -1335,7 +1336,8 @@ contains
 
        subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+         use dimensions_mod,     only: np, nlev, qsize_d, nelemd
+         real (kind=c_double), intent(in) :: FM(np,np,2,nlev,nelemd), FT(np,np,nlev,nelemd), FQ(np,np,nlev,qsize_d,nelemd)
        end subroutine cxx_push_forcing_to_f90
 
        subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
@@ -1372,8 +1374,7 @@ contains
        call abortmp("prim_run_subcycle in single column mode isn't supported")
     endif
 
-    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &
-         elem_state_ps_v)
+    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp)
 
     call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
     tl%nstep = nstep_c
