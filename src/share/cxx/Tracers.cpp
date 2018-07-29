@@ -8,6 +8,8 @@
 #include <random>
 
 #include "Tracers.hpp"
+#include "Context.hpp"
+#include "SimulationParams.hpp"
 
 #include "utilities/SyncUtils.hpp"
 #include "utilities/TestUtils.hpp"

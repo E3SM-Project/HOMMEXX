@@ -13,6 +13,7 @@
 #include "SimulationParams.hpp"
 #include "TimeLevel.hpp"
 #include "ErrorDefs.hpp"
+#include "CamForcing.hpp"
 #include "profiling.hpp"
 
 #include <iostream>
@@ -64,26 +65,21 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 
   tl.update_tracers_levels(params.qsplit);
 
-  // Apply forcing
-#ifdef CAM
-  Errors::runtime_abort("CAM forcing not yet availble in C++.\n"
-                        Errors::err_not_implemented);
-  // call TimeLevel_Qdp(tl, qsplit, n0_qdp)
-
-  // if (ftype==0) then
-  //   call t_startf("ApplyCAMForcing")
-  //   call ApplyCAMForcing(elem, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
-  //   call t_stopf("ApplyCAMForcing")
-
-  // elseif (ftype==2) then
-  //   call t_startf("ApplyCAMForcing_dynamics")
-  //   call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
-  //   call t_stopf("ApplyCAMForcing_dynamics")
-  // endif
-
-#else
+#ifndef CAM
   apply_test_forcing ();
 #endif
+
+
+  // Apply forcing.
+  // In standalone mode, params.ftype == ForcingAlg::FORCING_DEBUG
+  // Corresponds to ftype == 0 in Fortran
+  if(params.ftype == ForcingAlg::FORCING_DEBUG) {
+    apply_cam_forcing(dt_remap);
+  }
+  // Corresponds to ftype == 2 in Fortran
+  else if(params.ftype == ForcingAlg::FORCING_2) {
+    apply_cam_forcing_dynamics(dt_remap);
+  }
 
   if (compute_diagnostics) {
     Diagnostics& diags = Context::singleton().get_diagnostics();
@@ -206,28 +202,6 @@ void update_q (const int np1_qdp, const int np1)
 
     const Scalar dp = hyai_delta(level)*ps0 + hybi_delta(level)*ps_v(ie,np1,igp,jgp);
     Q(ie,iq,igp,jgp,level) = qdp(ie,np1_qdp,iq,igp,jgp,level)/dp;
-  });
-
-  // Get the tracers concentration from Diagnostics
-  Diagnostics& diags = Context::singleton().get_diagnostics();
-  auto h_Q = diags.h_Q;
-
-  // Update the host copy of Q, stored in Diagnostics
-  ExecViewManaged<Scalar*[QSIZE_D][NP][NP][NUM_LEV]>::HostMirror Q_host;
-  Q_host = Kokkos::create_mirror_view(Q);
-  Kokkos::deep_copy(Q_host,Q);
-
-  Kokkos::parallel_for(Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0,num_elems*qsize*NP*NP*NUM_PHYSICAL_LEV),
-                       KOKKOS_LAMBDA(const int idx) {
-    const int ie    =  idx / (qsize*NP*NP*NUM_PHYSICAL_LEV);
-    const int iq    = (idx / (NP*NP*NUM_PHYSICAL_LEV)) % qsize;
-    const int igp   = (idx / (NP*NUM_PHYSICAL_LEV)) % NP;
-    const int jgp   = (idx / NUM_PHYSICAL_LEV) % NP;
-    const int level =  idx % NUM_PHYSICAL_LEV;
-    const int ilev = level / VECTOR_SIZE;
-    const int ivec = level % VECTOR_SIZE;
-
-    h_Q(ie,iq,level,igp,jgp) = Q_host(ie,iq,igp,jgp,ilev)[ivec];
   });
 }
 

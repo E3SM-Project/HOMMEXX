@@ -26,7 +26,8 @@ public:
   CaarFunctor();
   CaarFunctor(const Elements &elements, const Tracers &tracers,
               const Derivative &derivative, const HybridVCoord &hvcoord,
-              const SphereOperators &sphere_ops, const int rsplit);
+              const SphereOperators &sphere_ops, 
+              const int rsplit);
   CaarFunctor(const CaarFunctor &) = delete;
 
   ~CaarFunctor();

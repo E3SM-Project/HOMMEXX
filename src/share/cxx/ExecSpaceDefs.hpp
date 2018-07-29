@@ -133,7 +133,12 @@ struct DefaultThreadsDistribution {
   team_num_threads_vectors(const int num_parallel_iterations,
                            const ThreadPreferences tp = ThreadPreferences()) {
     return Parallel::team_num_threads_vectors_from_pool(
-      ExecSpaceType::thread_pool_size(), num_parallel_iterations, tp);
+#ifdef KOKKOS_ENABLE_DEPRECATED_CODE
+      ExecSpaceType::thread_pool_size()
+#else
+      ExecSpaceType::impl_thread_pool_size()
+#endif
+      , num_parallel_iterations, tp);
   }
 };
 
@@ -256,7 +261,7 @@ struct Dispatch {
   // Match the HOMMEXX_GPU_BFB_WITH_CPU function in the Cuda
   // specialization.
   template<typename LoopBdyType, class Lambda, typename ValueType>
-  KOKKOS_FORCEINLINE_FUNCTION
+  static KOKKOS_FORCEINLINE_FUNCTION
   void parallel_reduce (
     const Kokkos::TeamPolicy<ExecSpace>::member_type& team,
     const LoopBdyType& loop_boundaries,
@@ -274,7 +279,6 @@ struct Dispatch {
     const typename Kokkos::TeamPolicy<ExeSpace>::member_type& team,
     const Lambda& lambda)
   {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     for (int k = 0; k < NP*NP; ++k)
       lambda(k);
@@ -328,7 +332,7 @@ struct Dispatch<Kokkos::Cuda> {
     // Broadcast result to all threads by doing sum of one thread's
     // non-0 value and the rest of the 0s.
     Kokkos::Impl::CudaTeamMember::vector_reduce(
-      Kokkos::Experimental::Sum<ValueType>(result));
+      Kokkos::Sum<ValueType>(result));
 #else
     Kokkos::parallel_reduce(loop_boundaries, lambda, result);
 #endif

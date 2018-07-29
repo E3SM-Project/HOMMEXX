@@ -118,7 +118,7 @@ TEST_CASE("ExecSpaceDefs",
 
 template <typename Dispatcher, int num_points, int scan_length>
 void test_parallel_scan(
-    Kokkos::TeamPolicy<ExecSpace> policy,
+    Kokkos::TeamPolicy<ExecSpace,void> policy,
     ExecViewManaged<const Real * [num_points][scan_length]> input,
     ExecViewManaged<Real * [num_points][scan_length]> output) {
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const TeamMember & team) {
@@ -143,7 +143,7 @@ void test_parallel_scan(
 template <typename ExeSpace> struct KokkosDispatcher {
   template <class Lambda>
   static KOKKOS_FORCEINLINE_FUNCTION void
-  parallel_scan(const typename Kokkos::TeamPolicy<ExeSpace>::member_type &team,
+  parallel_scan(const typename Kokkos::TeamPolicy<ExeSpace,void>::member_type &team,
                 const int num_iters, const Lambda &lambda) {
     Kokkos::parallel_scan(Kokkos::ThreadVectorRange(team, num_iters), lambda);
   }
@@ -162,7 +162,7 @@ TEST_CASE("Parallel_scan",
                                                                   num_elems);
 
   // Policy used in all parallel for's below
-  Kokkos::TeamPolicy<ExecSpace> policy(num_elems,num_points,vector_length);
+  auto policy = Homme::get_default_team_policy<ExecSpace>(num_elems);
   policy.set_chunk_size(1);
 
   // Fill the input view.

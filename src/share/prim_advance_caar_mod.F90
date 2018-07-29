@@ -14,13 +14,11 @@ module prim_advance_caar_mod
   use dimensions_mod, only: np, nlev, nlevp, nvar, nc, nelemd
   use element_mod,    only: element_t
   use perf_mod,       only: t_startf, t_stopf
+  use prim_smooth_mod, only: edge3p1
   implicit none
   private
   save
 
-
-  type (EdgeBuffer_t) :: edge3p1
-  public :: edge3p1
   public :: distribute_flux_at_corners, compute_and_apply_rhs
 
 contains

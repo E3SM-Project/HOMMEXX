@@ -44,5 +44,5 @@ SET (USE_TRILINOS OFF CACHE BOOL "")
 SET (KOKKOS_PATH "/global/homes/o/onguba/kokkos/build-omp-nodebug/" CACHE STRING "")
 SET (USE_QUEUING FALSE CACHE BOOL "")
 SET (USE_MPIEXEC "srun" CACHE STRING "")
-
+SET(USE_MPI_OPTIONS "-N 1 -c 4 --cpu_bind=cores" CACHE STRING "")
 

@@ -18,7 +18,7 @@ namespace Homme
  */
 struct SimulationParams
 {
-  SimulationParams() : params_set(false) {}
+  SimulationParams() : params_set(false), ftype(ForcingAlg::FORCING_OFF) {}
 
   int       time_step_type; // TODO: convert to enum
   int       rsplit;
@@ -28,6 +28,7 @@ struct SimulationParams
   MoistDry  moisture;
   RemapAlg  remap_alg;
   TestCase  test_case;
+  ForcingAlg ftype;
 
   int       limiter_option; // TODO: convert to enum
 

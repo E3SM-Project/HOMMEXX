@@ -60,7 +60,7 @@ SET(PREQX_DEPS_F90
   ${SRC_BASE_DIR}/surfaces_mod.F90
   ${SRC_BASE_DIR}/vertical_mod.F90
   ${SRC_BASE_DIR}/test_mod.F90
-  ${SRC_BASE_DIR}/utils_mod.F90
+  ${SRC_SHARE_DIR}/utils_mod.F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_SHARE_DIR}/bndry_mod_base.F90
   ${SRC_SHARE_DIR}/cg_mod.F90
@@ -95,6 +95,7 @@ SET(PREQX_DEPS_F90
   ${SRC_SHARE_DIR}/physics_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod_base.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
+  ${SRC_SHARE_DIR}/prim_forcing_mod.F90
   ${SRC_SHARE_DIR}/prim_si_mod.F90
   ${SRC_SHARE_DIR}/prim_si_ref_mod.F90
   ${SRC_SHARE_DIR}/prim_state_mod.F90
@@ -110,6 +111,7 @@ SET(PREQX_DEPS_F90
   ${SRC_SHARE_DIR}/unit_tests_mod.F90
   ${SRC_SHARE_DIR}/vertremap_mod_base.F90
   ${SRC_SHARE_DIR}/viscosity_mod_base.F90
+  ${SRC_SHARE_DIR}/prim_smooth_mod.F90
   ${UTILS_SHARE_DIR}/shr_const_mod.F90
   ${UTILS_SHARE_DIR}/shr_file_mod.F90
   ${UTILS_SHARE_DIR}/shr_kind_mod.F90
@@ -152,6 +154,7 @@ SET(PREQX_DEPS_CXX
   ${SRC_SHARE_DIR}/cxx/prim_driver.cpp
   ${SRC_SHARE_DIR}/cxx/prim_step.cpp
   ${SRC_SHARE_DIR}/cxx/vertical_remap.cpp
+  ${SRC_SHARE_DIR}/cxx/CamForcing.cpp
   ${SRC_SHARE_DIR}/cxx/CaarFunctor.cpp
   ${SRC_SHARE_DIR}/cxx/Diagnostics.cpp
   ${SRC_SHARE_DIR}/cxx/Elements.cpp

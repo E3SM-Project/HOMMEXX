@@ -105,7 +105,7 @@ public:
             Context::singleton().get_hvcoord(),
             SphereOperators(elements, Context::singleton().get_derivative()),
             rsplit_in),
-        policy(functor.m_elements.num_elems(), 16, 4),
+        policy(Homme::get_default_team_policy<ExecSpace>(elements.num_elems())),
         velocity("Velocity", elements.num_elems()),
         temperature("Temperature", elements.num_elems()),
         dp3d("DP3D", elements.num_elems()),
@@ -159,7 +159,7 @@ public:
   }
 
   CaarFunctorImpl functor;
-  Kokkos::TeamPolicy<ExecSpace> policy;
+  Kokkos::TeamPolicy<ExecSpace,void> policy;
 
   // host
   // Arrays used to pass data to and from Fortran
@@ -1202,7 +1202,7 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real * [NUM_INTERFACE_LEV][NP][NP]> eta_dot_f90("eta_dot f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][NP][NP]> t_vadv_f90("tavd f90", num_elems);
   HostViewManaged<Real * [NUM_PHYSICAL_LEV][2][NP][NP]> v_vadv_f90("vavd f90", num_elems);
-  HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90", num_elems);
+  HostViewManaged<Real [NUM_PHYSICAL_LEV][NP][NP]> rdp_f90("rdp f90");
 
   deep_copy(eta_dot_f90, eta_dot);
   deep_copy(t_vadv_f90, t_vadv);

@@ -68,15 +68,17 @@ contains
        do k=1,nlev
           do j=1,np
              do i=1,np
+                ! elem_derived_FM(np,np,2,nlev,nelemd)
+                ! elem_derived_FT(np,np,nlev,nelemd)
                 elemin%state%v(i,j,1,k,np1_d) = &
                      an*elemin%state%v(i,j,1,k,n0_d) + anm1*elemin%state%v(i,j,1,k,nm1_d) + &
-                     bn*dt*elemin%derived%FM(i,j,1,k,n0_p) + bnm1*dt*elemin%derived%FM(i,j,1,k,nm1_p)
+                     bn*dt*elemin%derived%FM(i,j,1,k) + bnm1*dt*elemin%derived%FM(i,j,1,k)
                 elemin%state%v(i,j,2,k,np1_d) = &
                      an*elemin%state%v(i,j,2,k,n0_d) + anm1*elemin%state%v(i,j,2,k,nm1_d) + &
-                     bn*dt*elemin%derived%FM(i,j,2,k,n0_p) + bnm1*dt*elemin%derived%FM(i,j,2,k,nm1_p)
+                     bn*dt*elemin%derived%FM(i,j,2,k) + bnm1*dt*elemin%derived%FM(i,j,2,k)
                 elemin%state%T(i,j,k,np1_d) = &
                      an*elemin%state%T(i,j,k,n0_d) + anm1*elemin%state%T(i,j,k,nm1_d) + &
-                     bn*dt*elemin%derived%FT(i,j,k,n0_p) + bnm1*dt*elemin%derived%FT(i,j,k,nm1_p)                 
+                     bn*dt*elemin%derived%FT(i,j,k) + bnm1*dt*elemin%derived%FT(i,j,k)                 
              enddo
           enddo
        enddo
@@ -84,7 +86,7 @@ contains
           do k=1,nlev
              do j=1,np
                 do i=1,np
-                   elemin%state%Q(i,j,k,m) = elemin%state%Q(i,j,k,m) + dt2_q*elemin%derived%FQ(i,j,k,m,nm1_p)
+                   elemin%state%Q(i,j,k,m) = elemin%state%Q(i,j,k,m) + dt2_q*elemin%derived%FQ(i,j,k,m)
                 end do
              end do
           end do
@@ -94,15 +96,15 @@ contains
        do k=1,nlev
           do j=1,np
              do i=1,np
-                elemin%state%v(i,j,1,k,np1_d) = elemin%state%v(i,j,1,k,np1_d) + dt2*elemin%derived%FM(i,j,1,k,nm1_p)
-                elemin%state%v(i,j,2,k,np1_d) = elemin%state%v(i,j,2,k,np1_d) + dt2*elemin%derived%FM(i,j,2,k,nm1_p)
-                elemin%state%T(i,j,k,np1_d)   = elemin%state%T(i,j,k,np1_d)   + dt2*elemin%derived%FT(i,j,k,nm1_p)
+                elemin%state%v(i,j,1,k,np1_d) = elemin%state%v(i,j,1,k,np1_d) + dt2*elemin%derived%FM(i,j,1,k)
+                elemin%state%v(i,j,2,k,np1_d) = elemin%state%v(i,j,2,k,np1_d) + dt2*elemin%derived%FM(i,j,2,k)
+                elemin%state%T(i,j,k,np1_d)   = elemin%state%T(i,j,k,np1_d)   + dt2*elemin%derived%FT(i,j,k)
              enddo
           enddo
        enddo
        do m=1,qsize
           elemin%state%Q(:,:,:,m) = elemin%state%Q(:,:,:,m)&
-               + dt2_q*elemin%derived%FQ(:,:,:,m,nm1_p) 
+               + dt2_q*elemin%derived%FQ(:,:,:,m)
        end do
 
     case default
@@ -139,9 +141,9 @@ contains
     do k=1,nlev
        do j=1,np
           do i=1,np
-             elemin%derived%FM(i,j,1,k,nm1) = 0.0_real_kind
-             elemin%derived%FM(i,j,2,k,nm1) = 0.0_real_kind
-             elemin%derived%FT(i,j,k,nm1) = 0.0_real_kind
+             elemin%derived%FM(i,j,1,k) = 0.0_real_kind
+             elemin%derived%FM(i,j,2,k) = 0.0_real_kind
+             elemin%derived%FT(i,j,k) = 0.0_real_kind
           enddo
        enddo
     enddo
@@ -149,7 +151,7 @@ contains
        do k=1,nlev
           do j=1,np
              do i=1,np
-                elemin%derived%FQ(i,j,k,m,nm1) = 0.0_real_kind
+                elemin%derived%FQ(i,j,k,m) = 0.0_real_kind
              end do
           end do
        end do

@@ -128,8 +128,8 @@ subroutine apply_test_forcing(elem,hybrid,hvcoord,n,n_tracer,dt,nets,nete)
   do ie=nets,nete
 
     ! apply dynamics forcing
-    elem(ie)%state%T(:,:,:,  n) = elem(ie)%state%T(:,:,:,  n) + dt * elem(ie)%derived%FT(:,:,:,  n)
-    elem(ie)%state%v(:,:,:,:,n) = elem(ie)%state%v(:,:,:,:,n) + dt * elem(ie)%derived%FM(:,:,:,:,n)
+    elem(ie)%state%T(:,:,:,  n) = elem(ie)%state%T(:,:,:,  n) + dt * elem(ie)%derived%FT(:,:,:)
+    elem(ie)%state%v(:,:,:,:,n) = elem(ie)%state%v(:,:,:,:,n) + dt * elem(ie)%derived%FM(:,:,:,:)
 
     ! apply tracer forcing (todo)
   enddo

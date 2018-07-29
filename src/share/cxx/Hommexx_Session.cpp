@@ -4,12 +4,11 @@
  * See the file 'COPYRIGHT' in the HOMMEXX/src/share/cxx directory
  *******************************************************************************/
 
+#include "Config.hpp"
 #include "Hommexx_Session.hpp"
-
 #include "ExecSpaceDefs.hpp"
 #include "profiling.hpp"
 #include "Context.hpp"
-#include "Config.hpp"
 #include "mpi/Comm.hpp"
 
 #include "vector/vector_pragmas.hpp"
@@ -54,8 +53,8 @@ void initialize_hommexx_session ()
     std::cout << "HOMMEXX vector tag: " << Scalar::label() << "\n";
     std::cout << "HOMMEXX active AVX set:" << active_avx_string() << "\n";
     std::cout << "HOMMEXX MPI_ON_DEVICE: " << HOMMEXX_MPI_ON_DEVICE << "\n";
-    std::cout << "HOMMEXX CUDA_MIN_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM << "\n";
-
+    std::cout << "HOMMEXX CUDA_(MIN/MAX)_WARP_PER_TEAM: " << HOMMEXX_CUDA_MIN_WARP_PER_TEAM
+              << " / " << HOMMEXX_CUDA_MAX_WARP_PER_TEAM << "\n";
 #ifndef HOMMEXX_NO_VECTOR_PRAGMAS
     std::cout << "HOMMEXX has vector pragmas\n";
 #else

@@ -70,7 +70,7 @@ struct SerialLimiter<Kokkos::Cuda> {
 class EulerStepFunctorImpl {
   struct EulerStepData {
     EulerStepData ()
-      : qsize(-1), limiter_option(0), nu_p(0), nu_q(0)
+      : qsize(-1), limiter_option(0), nu_p(0), nu_q(0), consthv(1)
     {}
 
     int   qsize;
@@ -86,6 +86,8 @@ class EulerStepFunctorImpl {
     int   n0_qdp;
 
     DSSOption   DSSopt;
+
+    bool consthv;
   };
 
   const Elements      m_elements;
@@ -119,6 +121,7 @@ public:
     m_data.limiter_option = params.limiter_option;
     m_data.nu_p = params.nu_p;
     m_data.nu_q = params.nu_q;
+    m_data.consthv = (params.hypervis_scaling == 0);
 
     if (m_data.limiter_option == 4) {
       std::string msg = "[EulerStepFunctorImpl::reset]:";
@@ -178,8 +181,10 @@ public:
     return m_kernel_will_run_limiters ? limiter_team_shmem_size(team_size) : 0;
   }
 
-  struct BIHPre {};
-  struct BIHPost {};
+  struct BIHPreNup {};
+  struct BIHPreNoNup {};
+  struct BIHPostConstHV {};
+  struct BIHPostTensorHV {};
 
   /*
     ! get new min/max values, and also compute biharmonic mixing term
@@ -193,9 +198,16 @@ public:
     assert(m_data.rhs_multiplier == 2.0);
     m_data.rhs_viss = 3.0;
 
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPre>(
+    if(m_data.nu_p > 0){
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPreNup>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
+    }else{
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPreNoNup>(
+                             m_elements.num_elems() * m_data.qsize),
+                         *this);
+
+    }
 
     ExecSpace::fence();
     profiling_pause();
@@ -205,21 +217,41 @@ public:
     profiling_resume();
     assert(m_data.rhs_multiplier == 2.0);
 
-    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPost>(
+    if(m_data.consthv){
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPostConstHV>(
                              m_elements.num_elems() * m_data.qsize),
                          *this);
-
+    }else{
+    Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, BIHPostTensorHV>(
+                             m_elements.num_elems() * m_data.qsize),
+                         *this);
+    }
     ExecSpace::fence();
     profiling_pause();
   }
 
+//case when nu_p > 0
   KOKKOS_INLINE_FUNCTION
-  void operator() (const BIHPre&, const TeamMember& team) const {
+  void operator() (const BIHPreNup&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
-    if (m_data.nu_p > 0) {
-      const auto dpdiss_ave = Homme::subview(e.m_derived_dpdiss_ave, kv.ie);
+    dpdiss_adjustment(kv, team);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
+  }
+
+//case when nu_p == 0
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPreNoNup&, const TeamMember& team) const {
+    KernelVariables kv(team,m_data.qsize);
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void dpdiss_adjustment (KernelVariables & kv, const TeamMember& team) const {
+
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+      const auto dpdiss_ave = Homme::subview(m_elements.m_derived_dpdiss_ave, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
@@ -232,21 +264,37 @@ public:
             });
         });
       team.team_barrier();
-    }
-    m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
   }
 
+
+
   KOKKOS_INLINE_FUNCTION
-  void operator() (const BIHPost&, const TeamMember& team) const {
+  void operator() (const BIHPostConstHV&, const TeamMember& team) const {
     KernelVariables kv(team,m_data.qsize);
-    const auto& e = m_elements;
     const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
     team.team_barrier();
     m_sphere_ops.laplace_simple(kv, qtens_biharmonic, qtens_biharmonic);
     // laplace_simple provides the barrier.
-    {
-      const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
-      const auto spheremp = Homme::subview(e.m_spheremp, kv.ie);
+   rhsviss_adjustment(kv, team);
+  }//end of BIHPostConstHV ()
+
+  KOKKOS_INLINE_FUNCTION
+  void operator() (const BIHPostTensorHV&, const TeamMember& team) const {
+    KernelVariables kv(team,m_data.qsize);
+    const auto& e = m_elements;
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto tensor = Homme::subview(e.m_tensorvisc, kv.ie);
+    team.team_barrier();
+    m_sphere_ops.laplace_tensor(kv, tensor, qtens_biharmonic, qtens_biharmonic);
+    // divergence_sphere_wk provides the barrier.
+    rhsviss_adjustment(kv, team);
+    }//end of BIHPostTensorHV ()
+
+  KOKKOS_INLINE_FUNCTION
+  void rhsviss_adjustment (KernelVariables & kv, const TeamMember & team) const {
+    const auto qtens_biharmonic = Homme::subview(m_tracers.qtens_biharmonic, kv.ie, kv.iq);
+    const auto f = -m_data.rhs_viss * m_data.dt * m_data.nu_q;
+    const auto spheremp = Homme::subview(m_elements.m_spheremp, kv.ie);
       Kokkos::parallel_for (
         Kokkos::TeamThreadRange(team, NP*NP),
         [&] (const int loop_idx) {
@@ -260,7 +308,8 @@ public:
             });
         });
     }
-  }
+
+
 
   struct AALSetupPhase {};
   struct AALTracerPhase {};
@@ -705,7 +754,6 @@ private:
         Kokkos::TeamThreadRange(team, NUM_PHYSICAL_LEV),
         f);
     } else {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       for (int ilev = 0; ilev < NUM_PHYSICAL_LEV; ++ilev)
         f(ilev);
@@ -856,7 +904,6 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
   forij {
     const auto& sphij = sphweights(i,j);
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       const auto& dpm = dpmass(i,j,lev);
@@ -867,7 +914,6 @@ VECTOR_SIMD_LOOP
     }
   }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
   forlev {
     if (qlim(0,lev) < 0)
@@ -887,7 +933,6 @@ VECTOR_SIMD_LOOP
       Real addmass[NUM_PHYSICAL_LEV] = {0};
 
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           auto& xij = x(i,j,lev);
@@ -914,7 +959,6 @@ VECTOR_SIMD_LOOP
 
       Real f[NUM_PHYSICAL_LEV] = {0};
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
@@ -928,7 +972,6 @@ VECTOR_SIMD_LOOP
         }
       }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         if (f[lev] != 0)
@@ -936,7 +979,6 @@ VECTOR_SIMD_LOOP
       }
 
       forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
         forlev {
           if (done[lev]) continue;
@@ -954,7 +996,6 @@ VECTOR_SIMD_LOOP
     Real addmass[NUM_PHYSICAL_LEV] = {0};
 
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -972,7 +1013,6 @@ VECTOR_SIMD_LOOP
 
     Real f[NUM_PHYSICAL_LEV] = {0};
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -986,7 +1026,6 @@ VECTOR_SIMD_LOOP
       }
     }
 
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       if (f[lev] != 0)
@@ -994,7 +1033,6 @@ VECTOR_SIMD_LOOP
     }
 
     forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
       forlev {
         auto& xij = x(i,j,lev);
@@ -1012,7 +1050,6 @@ VECTOR_SIMD_LOOP
   }
 
   forij {
-VECTOR_IVDEP_LOOP
 VECTOR_SIMD_LOOP
     forlev {
       x(i,j,lev) *= dpmass(i,j,lev);

@@ -19,7 +19,7 @@ module prim_driver_mod
   use reduction_mod,    only: reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
                               red_sum, red_sum_int, red_flops, initreductionbuffer
   use solver_mod,       only: blkjac_t
-  use thread_mod,       only: nThreadsHoriz, omp_get_num_threads
+  use thread_mod,       only: hthreads, omp_get_num_threads
 
 #ifndef CAM
   use column_types_mod, only : ColumnModel_t
@@ -33,8 +33,11 @@ module prim_driver_mod
 
   private
 #ifndef USE_KOKKOS_KERNELS
-  public :: prim_run_subcycle, smooth_topo_datasets
+  public :: prim_run_subcycle
+#elif defined(CAM)
+  public :: prim_run_subcycle
 #endif
+  public :: smooth_topo_datasets
   public :: prim_init1, prim_init2 , prim_finalize
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
@@ -511,7 +514,7 @@ contains
     nets=1
     nete=nelemd
     ! set the actual number of threads which will be used in the horizontal
-    nThreadsHoriz = n_domains
+    hthreads = n_domains
 #ifndef CAM
     allocate(cm(0:n_domains-1))
 #endif
@@ -542,7 +545,7 @@ contains
   !_____________________________________________________________________
   subroutine prim_init2(elem, hybrid, nets, nete, tl, hvcoord)
 
-    use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, &
+    use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, ftype, &
                                     debug_level, vfile_int, filter_freq, filter_freq_advection,  transfer_type,&
                                     vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, s_bv, &
                                     topology,columnpackage, moisture, precon_method, rsplit, qsplit, rk_stage_user,&
@@ -554,7 +557,8 @@ contains
     use hybvcoord_mod,        only: hvcoord_t
     use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
     use prim_state_mod,       only: prim_printstate, prim_diag_scalars
-    use prim_si_ref_mod,      only: prim_si_refstate_init, prim_set_mass
+    use prim_si_mod,          only: prim_set_mass
+    use prim_si_ref_mod,      only: prim_si_refstate_init
     use prim_advection_mod,   only: deriv, prim_advec_init2, prim_advec_init_deriv
     use solver_init_mod,      only: solver_init2
     use time_mod,             only: timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, smooth, nsplit, TimeLevel_Qdp
@@ -570,7 +574,8 @@ contains
                                     elem_mp, elem_spheremp, elem_rspheremp,                &
                                     elem_metdet, elem_metinv, elem_state_phis,             &
                                     elem_state_v, elem_state_temp, elem_state_dp3d,        &
-                                    elem_state_Qdp, elem_state_ps_v,                       &
+                                    elem_state_Qdp, elem_state_ps_v,                       &      
+                                    elem_tensorvisc, elem_vec_sph2cart,                    &
                                     elem_state_q, elem_accum_qvar,                         &
                                     elem_accum_qmass, elem_accum_q1mass, elem_accum_iener, &
                                     elem_accum_iener_wet, elem_accum_kener, elem_accum_pener
@@ -603,7 +608,7 @@ contains
                                          energy_fixer, qsize, state_frequency,                     &
                                          nu, nu_p, nu_q, nu_s, nu_div, nu_top,                     &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
-                                         prescribed_wind, moisture, disable_diagnostics,           &
+                                         ftype, prescribed_wind, moisture, disable_diagnostics,    &
                                          use_cpstar, use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
       !
@@ -614,12 +619,14 @@ contains
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
       real(kind=c_double),  intent(in) :: nu, nu_p, nu_q, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      integer(kind=c_int),  intent(in) :: ftype
       logical(kind=c_bool), intent(in) :: prescribed_wind, moisture, disable_diagnostics, use_cpstar, use_semi_lagrange_transport
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr) bind(c)
-      use iso_c_binding, only : c_ptr, c_int
+                                   elem_metdet_ptr, elem_metinv_ptr, phis_ptr,              &
+                                   tensorvisc_ptr, vec_sph2cart_ptr, consthv) bind(c)
+      use iso_c_binding, only : c_ptr, c_int, c_bool
       !
       ! Inputs
       !
@@ -627,6 +634,8 @@ contains
       type (c_ptr) , intent(in) :: D_ptr, Dinv_ptr, elem_fcor_ptr
       type (c_ptr) , intent(in) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
       type (c_ptr) , intent(in) :: elem_metdet_ptr, elem_metinv_ptr, phis_ptr
+      type (c_ptr) , intent(in) :: tensorvisc_ptr, vec_sph2cart_ptr
+      logical(kind=c_bool), intent(in) :: consthv
     end subroutine init_elements_2d_c
     subroutine init_diagnostics_c (elem_state_q_ptr, elem_accum_qvar_ptr, elem_accum_qmass_ptr,           &
                                    elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
@@ -650,6 +659,8 @@ contains
     end subroutine init_elements_states_c
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
+
+! USE_KOKKOS_KERNELS
 #endif
   end interface
 
@@ -692,6 +703,7 @@ contains
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
     type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
     type (c_ptr) :: elem_state_q_ptr, elem_state_Qdp_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_tensorvisc_ptr, elem_vec_sph2cart_ptr
     type (c_ptr) :: elem_accum_qvar_ptr, elem_accum_qmass_ptr, elem_accum_q1mass_ptr
     type (c_ptr) :: elem_accum_iener_ptr, elem_accum_iener_wet_ptr
     type (c_ptr) :: elem_accum_kener_ptr, elem_accum_pener_ptr
@@ -1000,7 +1012,7 @@ contains
                                    energy_fixer, qsize, statefreq,                                &
                                    nu, nu_p, nu_q, nu_s, nu_div, nu_top,                          &
                                    hypervis_order, hypervis_subcycle, hypervis_scaling,           &
-                                   LOGICAL(prescribed_wind==1,c_bool),                            &
+                                   ftype, LOGICAL(prescribed_wind==1,c_bool),                     &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
                                    LOGICAL(use_cpstar==1,c_bool),                           &
@@ -1015,9 +1027,16 @@ contains
     elem_metdet_ptr     = c_loc(elem_metdet)
     elem_metinv_ptr     = c_loc(elem_metinv)
     elem_state_phis_ptr = c_loc(elem_state_phis)
+    elem_tensorvisc_ptr  = c_loc(elem_tensorvisc)
+    elem_vec_sph2cart_ptr = c_loc(elem_vec_sph2cart)
+
+
     call init_elements_2d_c (nelemd, elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr,              &
                                    elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr,      &
-                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr)
+                                   elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr,   &
+                                   elem_tensorvisc_ptr, elem_vec_sph2cart_ptr,              &
+                                   LOGICAL(hypervis_scaling==0,c_bool))
+
     elem_state_v_ptr    = c_loc(elem_state_v)
     elem_state_temp_ptr = c_loc(elem_state_temp)
     elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
@@ -1065,7 +1084,7 @@ contains
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1245,7 +1264,97 @@ contains
     !   u(n0)    dynamics at  t+dt_remap
     !   u(np1)   undefined
   end subroutine prim_run_subcycle
+! USE_KOKKOS_KERNELS
+#elif defined(CAM)
+  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, single_column, tl, hvcoord, nsubstep)
+    use iso_c_binding,      only: c_double, c_int, c_ptr, c_loc
+    use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, &
+         disable_diagnostics
+    use hybvcoord_mod,      only: hvcoord_t
+    use parallel_mod,       only: abortmp
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
+    use reduction_mod,      only: parallelmax
+    use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
+    use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_omega_p, &
+         elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
 
+    interface
+       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp, ps_v) bind(c)
+         use iso_c_binding, only: c_double
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:), &
+              Qdp(:,:,:,:,:,:), ps_v(:,:,:,:)
+       end subroutine f90_push_forcing_to_cxx
+
+       subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p) bind(c)
+         use iso_c_binding, only: c_ptr
+         type(c_ptr), intent(in) :: vel, temp, dp3d, Qdp, q, ps_v, omega_p
+       end subroutine cxx_push_results_to_f90
+
+       subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
+         use iso_c_binding, only: c_double
+         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+       end subroutine cxx_push_forcing_to_f90
+
+       subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
+         use iso_c_binding, only: c_int, c_double
+         !
+         ! Inputs
+         !
+         integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+         real (kind=c_double), intent(in) :: dt
+       end subroutine prim_run_subcycle_c
+    end interface
+
+    type (element_t) ,    intent(inout) :: elem(:)
+    type (hybrid_t),      intent(in)    :: hybrid        ! distributed parallel structure (shared)
+    type (hvcoord_t),     intent(in)    :: hvcoord       ! hybrid vertical coordinate struct
+    integer,              intent(in)    :: nets          ! starting thread element number (private)
+    integer,              intent(in)    :: nete          ! ending thread element number   (private)
+    real(kind=real_kind), intent(in)    :: dt            ! "timestep dependent" timestep
+    logical,              intent(in)    :: single_column
+    type (TimeLevel_t),   intent(inout) :: tl
+    integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
+
+    type (c_ptr) :: elem_state_v_ptr, elem_state_temp_ptr, elem_state_dp3d_ptr
+    type (c_ptr) :: elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr
+    type (c_ptr) :: elem_derived_omega_p_ptr
+
+    integer(kind=c_int) :: nstep_c, nm1_c, n0_c, np1_c
+
+    if (ftype == 1) then
+       call abortmp("prim_run_subcycle with ftype=1 isn't supported")
+    endif
+
+    if (single_column) then
+       call abortmp("prim_run_subcycle in single column mode isn't supported")
+    endif
+
+    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &
+         elem_state_ps_v)
+
+    call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
+    tl%nstep = nstep_c
+    tl%nm1 = nm1_c + 1
+    tl%n0 = n0_c + 1
+    tl%np1 = np1_c + 1
+
+    elem_state_v_ptr = c_loc(elem_state_v)
+    elem_state_Temp_ptr = c_loc(elem_state_Temp)
+    elem_state_dp3d_ptr = c_loc(elem_state_dp3d)
+    elem_state_Qdp_ptr = c_loc(elem_state_Qdp)
+    elem_state_Q_ptr = c_loc(elem_state_Q)
+    elem_state_ps_v_ptr = c_loc(elem_state_ps_v)
+    elem_derived_omega_p_ptr = c_loc(elem_derived_omega_p)
+    call cxx_push_results_to_f90(elem_state_v_ptr, elem_state_Temp_ptr, elem_state_dp3d_ptr, &
+         elem_state_Qdp_ptr, elem_state_Q_ptr, elem_state_ps_v_ptr, elem_derived_omega_p_ptr)
+
+    call cxx_push_forcing_to_f90(elem_derived_FM, elem_derived_FT, elem_derived_FQ)
+
+  end subroutine prim_run_subcycle
+#endif
+
+#ifndef USE_KOKKOS_KERNELS
   subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
   !
   !   Take qsplit dynamics steps and one tracer step
@@ -1267,13 +1376,11 @@ contains
     use control_mod,        only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
     use control_mod,        only: use_semi_lagrange_transport, tracer_transport_type
     use control_mod,        only: tracer_grid_type, TRACER_GRIDTYPE_GLL
+    use control_mod,        only: hypervis_scaling
     use derivative_mod,     only: subcell_integration
     use hybvcoord_mod,      only : hvcoord_t
     use parallel_mod,       only: abortmp
-    !use prim_advance_mod,   only: overwrite_SEdensity
-#ifndef USE_KOKKOS_KERNELS
     use prim_advance_exp_mod, only: prim_advance_exp
-#endif
     use prim_advection_mod, only: prim_advec_tracers_remap, deriv
     use reduction_mod,      only: parallelmax
     use time_mod,           only: time_at,TimeLevel_t, timelevel_update, nsplit
@@ -1520,14 +1627,13 @@ contains
 !=======================================================================================================!
 
 
-#ifndef USE_KOKKOS_KERNELS
     subroutine smooth_topo_datasets(phis,sghdyn,sgh30dyn,elem,hybrid,nets,nete)
     use control_mod, only : smooth_phis_numcycle,smooth_sgh_numcycle
     use hybrid_mod, only : hybrid_t
     use bndry_mod, only : bndry_exchangev
     use derivative_mod, only : derivative_t , laplace_sphere_wk
     use viscosity_mod, only : biharmonic_wk
-    use prim_advance_mod, only : smooth_phis
+    use prim_smooth_mod, only : smooth_phis
     use prim_advection_mod, only: deriv
     implicit none
 
@@ -1555,7 +1661,6 @@ contains
     call smooth_phis(sgh30dyn,elem,hybrid,deriv(hybrid%ithr),nets,nete,minf,smooth_sgh_numcycle)
 
     end subroutine smooth_topo_datasets
-#endif
 
 end module prim_driver_mod
 

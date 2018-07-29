@@ -39,6 +39,7 @@ struct CaarFunctorImpl {
     Real      eta_ave_w;
 
     const int rsplit;
+
     bool      compute_diagnostics;
   };
 
@@ -53,7 +54,8 @@ struct CaarFunctorImpl {
 
   CaarFunctorImpl(const Elements &elements, const Tracers &tracers,
                   const Derivative &derivative, const HybridVCoord &hvcoord,
-                  const SphereOperators &sphere_ops, const int rsplit)
+                  const SphereOperators &sphere_ops, 
+                  const int rsplit)
       : m_data(rsplit)
       , m_hvcoord(hvcoord)
       , m_elements(elements)

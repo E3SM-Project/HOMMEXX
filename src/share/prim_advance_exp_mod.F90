@@ -40,7 +40,8 @@ module prim_advance_exp_mod
     use reduction_mod,  only: reductionbuffer_ordered_1d_t
     use time_mod,       only: timelevel_qdp, tevolve
     use diffusion_mod,  only: prim_diffusion
-    use prim_advance_caar_mod, only: compute_and_apply_rhs, edge3p1
+    use prim_advance_caar_mod, only: compute_and_apply_rhs
+    use prim_smooth_mod, only: edge3p1
     use prim_advance_hypervis_mod, only: advance_hypervis_dp, advance_hypervis_lf
 
 #ifdef TRILINOS

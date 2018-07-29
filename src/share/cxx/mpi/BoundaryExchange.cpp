@@ -158,8 +158,8 @@ void BoundaryExchange::clean_up()
   assert (!m_send_pending && !m_recv_pending);
 
   // Clear stored fields
-  m_2d_fields = decltype(m_2d_fields)(0, 0);
-  m_3d_fields = decltype(m_3d_fields)(0, 0);
+  m_2d_fields = decltype(m_2d_fields)("m_2d_fields", 0, 0);
+  m_3d_fields = decltype(m_3d_fields)("m_3d_fields", 0, 0);
 
   m_num_2d_fields = 0;
   m_num_3d_fields = 0;
@@ -1124,12 +1124,12 @@ void BoundaryExchange::clear_buffer_views_and_requests ()
   free_requests();
 
   // Clear buffer views
-  m_send_1d_buffers = decltype(m_send_1d_buffers)(0, 0);
-  m_recv_1d_buffers = decltype(m_recv_1d_buffers)(0, 0);
-  m_send_2d_buffers = decltype(m_send_2d_buffers)(0, 0);
-  m_recv_2d_buffers = decltype(m_recv_2d_buffers)(0, 0);
-  m_send_3d_buffers = decltype(m_send_3d_buffers)(0, 0);
-  m_recv_3d_buffers = decltype(m_recv_3d_buffers)(0, 0);
+  m_send_1d_buffers = decltype(m_send_1d_buffers)("m_send_1d_buffers", 0, 0);
+  m_recv_1d_buffers = decltype(m_recv_1d_buffers)("m_recv_1d_buffers", 0, 0);
+  m_send_2d_buffers = decltype(m_send_2d_buffers)("m_send_2d_buffers", 0, 0);
+  m_recv_2d_buffers = decltype(m_recv_2d_buffers)("m_recv_2d_buffers", 0, 0);
+  m_send_3d_buffers = decltype(m_send_3d_buffers)("m_send_3d_buffers", 0, 0);
+  m_recv_3d_buffers = decltype(m_recv_3d_buffers)("m_recv_3d_buffers", 0, 0);
 
   // Done
   m_buffer_views_and_requests_built = false;

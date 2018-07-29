@@ -237,9 +237,7 @@ class compute_sphere_operator_test {
   // put in a param in run_functor(param) to only branch
   // policy type
   void run_functor_simple_laplace() {
-    // league, team, vector_length_request=1
-    Kokkos::TeamPolicy<ExecSpace, TagSimpleLaplace> policy(
-        _num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace,TagSimpleLaplace>(_num_elems);
     sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
@@ -248,9 +246,7 @@ class compute_sphere_operator_test {
   };
 
   void run_functor_gradient_sphere() {
-    // league, team, vector_length_request=1
-    Kokkos::TeamPolicy<ExecSpace, TagGradientSphere> policy(
-        _num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace,TagGradientSphere>(_num_elems);
     sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();
@@ -259,9 +255,7 @@ class compute_sphere_operator_test {
   };
 
   void run_functor_div_wk() {
-    // league, team, vector_length_request=1
-    Kokkos::TeamPolicy<ExecSpace, TagDivergenceSphereWk>
-        policy(_num_elems, 16);
+    auto policy = Homme::get_default_team_policy<ExecSpace,TagDivergenceSphereWk>(_num_elems);
     sphere_ops.allocate_buffers(policy);
     Kokkos::parallel_for(policy, *this);
     ExecSpace::fence();

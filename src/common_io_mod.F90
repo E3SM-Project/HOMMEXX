@@ -191,9 +191,5 @@ contains
           end do
        end if
     end do
-
-    
   end subroutine nf_addrequiredvar
-
-
 end module common_io_mod

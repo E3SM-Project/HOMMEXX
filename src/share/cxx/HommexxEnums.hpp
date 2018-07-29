@@ -38,6 +38,13 @@ enum class ComparisonOp {
 
 // =================== Run parameters enums ====================== //
 
+enum class ForcingAlg {
+  FORCING_OFF,
+  FORCING_DEBUG,
+  FORCING_1, // Unsupported
+  FORCING_2, // TODO: Rename FORCING_1 and FORCING_2 to something more descriptive
+};
+
 enum class MoistDry {
   MOIST,
   DRY
