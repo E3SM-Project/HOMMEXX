@@ -25,7 +25,7 @@ class HyperviscosityFunctorImpl
     HyperviscosityData(const int hypervis_subcycle_in, const Real nu_ratio1_in, const Real nu_ratio2_in, const Real nu_top_in,
                        const Real nu_in, const Real nu_p_in, const Real nu_s_in,
                        const Real hypervis_scaling_in)
-                      : hypervis_subcycle(hypervis_subcycle_in), nu_ratio1(nu_ratio1_in), nu_ratio2(nu_ratio2_in),
+                      : hypervis_subcycle(hypervis_subcycle_in), nu_ratio1(nu_ratio1_in), nu_ratio2(nu_ratio2_in)
                       , nu_top(nu_top_in), nu(nu_in), nu_p(nu_p_in), nu_s(nu_s_in)
                       , hypervis_scaling(hypervis_scaling_in)
                       , consthv(hypervis_scaling_in == 0){}
@@ -189,8 +189,9 @@ public:
 
     if (m_data.nu_top > 0) {
 
+      //for top 3 levels and laplace, there is trivial nu_ratio only
       m_sphere_ops.vlaplace_sphere_wk_contra<NUM_BIHARMONIC_LEV>(
-            kv, m_data.nu_ratio,
+            kv, 1.0,
             // input
             Homme::subview(m_elements.m_v, kv.ie, m_data.np1),
             // output
