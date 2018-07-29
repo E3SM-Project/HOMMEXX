@@ -545,7 +545,7 @@ contains
   !_____________________________________________________________________
   subroutine prim_init2(elem, hybrid, nets, nete, tl, hvcoord)
 
-    use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, &
+    use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, ftype, &
                                     debug_level, vfile_int, filter_freq, filter_freq_advection,  transfer_type,&
                                     vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, s_bv, &
                                     topology,columnpackage, moisture, precon_method, rsplit, qsplit, rk_stage_user,&
@@ -608,7 +608,7 @@ contains
                                          energy_fixer, qsize, state_frequency,                     &
                                          nu, nu_p, nu_q, nu_s, nu_div, nu_top,                     &
                                          hypervis_order, hypervis_subcycle, hypervis_scaling,      &
-                                         prescribed_wind, moisture, disable_diagnostics,           &
+                                         ftype, prescribed_wind, moisture, disable_diagnostics,    &
                                          use_cpstar, use_semi_lagrange_transport) bind(c)
       use iso_c_binding, only: c_int, c_bool, c_double
       !
@@ -619,6 +619,7 @@ contains
       integer(kind=c_int),  intent(in) :: state_frequency, qsize
       real(kind=c_double),  intent(in) :: nu, nu_p, nu_q, nu_s, nu_div, nu_top, hypervis_scaling
       integer(kind=c_int),  intent(in) :: hypervis_order, hypervis_subcycle
+      integer(kind=c_int),  intent(in) :: ftype
       logical(kind=c_bool), intent(in) :: prescribed_wind, moisture, disable_diagnostics, use_cpstar, use_semi_lagrange_transport
     end subroutine init_simulation_params_c
     subroutine init_elements_2d_c (nelemd, D_ptr, Dinv_ptr, elem_fcor_ptr,                  &
@@ -1011,7 +1012,7 @@ contains
                                    energy_fixer, qsize, statefreq,                                &
                                    nu, nu_p, nu_q, nu_s, nu_div, nu_top,                          &
                                    hypervis_order, hypervis_subcycle, hypervis_scaling,           &
-                                   LOGICAL(prescribed_wind==1,c_bool),                            &
+                                   ftype, LOGICAL(prescribed_wind==1,c_bool),                     &
                                    LOGICAL(moisture/="dry",c_bool),                               &
                                    LOGICAL(disable_diagnostics,c_bool),                           &
                                    LOGICAL(use_cpstar==1,c_bool),                           &
@@ -1083,7 +1084,7 @@ contains
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use prim_advection_mod, only: vertical_remap_interface
     use reduction_mod,      only: parallelmax
@@ -1265,13 +1266,13 @@ contains
   end subroutine prim_run_subcycle
 ! USE_KOKKOS_KERNELS
 #elif defined(CAM)
-  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, tl, hvcoord,nsubstep)
+  subroutine prim_run_subcycle(elem, hybrid, nets, nete, dt, single_column, tl, hvcoord, nsubstep)
     use iso_c_binding,      only: c_double, c_int, c_ptr, c_loc
     use control_mod,        only: statefreq, energy_fixer, ftype, qsplit, rsplit, test_cfldep, &
          disable_diagnostics
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
-    use prim_advance_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
+    use prim_forcing_mod,   only: ApplyCAMForcing, ApplyCAMForcing_dynamics
     use prim_state_mod,     only: prim_diag_scalars, prim_energy_halftimes
     use reduction_mod,      only: parallelmax
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
@@ -1311,6 +1312,7 @@ contains
     integer,              intent(in)    :: nets          ! starting thread element number (private)
     integer,              intent(in)    :: nete          ! ending thread element number   (private)
     real(kind=real_kind), intent(in)    :: dt            ! "timestep dependent" timestep
+    logical,              intent(in)    :: single_column
     type (TimeLevel_t),   intent(inout) :: tl
     integer,              intent(in)    :: nsubstep      ! nsubstep = 1 .. nsplit
 
@@ -1322,6 +1324,10 @@ contains
 
     if (ftype == 1) then
        call abortmp("prim_run_subcycle with ftype=1 isn't supported")
+    endif
+
+    if (single_column) then
+       call abortmp("prim_run_subcycle in single column mode isn't supported")
     endif
 
     call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &

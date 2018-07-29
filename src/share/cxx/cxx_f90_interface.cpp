@@ -34,7 +34,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
                                const int& time_step_type, const int& energy_fixer, const int& qsize, const int& state_frequency,
                                const Real& nu, const Real& nu_p, const Real& nu_q, const Real& nu_s, const Real& nu_div, const Real& nu_top,
                                const int& hypervis_order, const int& hypervis_subcycle, const double& hypervis_scaling,
-                               const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics,
+                               const int& ftype, const bool& prescribed_wind, const bool& moisture, const bool& disable_diagnostics,
                                const bool& use_cpstar, const bool& use_semi_lagrangian_transport)
 {
   // Check that the simulation options are supported. This helps us in the future, since we
@@ -46,6 +46,7 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","use_semi_lagrangian_transport",use_semi_lagrangian_transport,{false});
   Errors::check_option("init_simulation_params_c","time_step_type",time_step_type,{5});
   Errors::check_option("init_simulation_params_c","limiter_option",limiter_option,{8,9});
+  Errors::check_option("init_simulation_params_c","ftype",ftype, {-1, 0, 2});
   Errors::check_option("init_simulation_params_c","nu_p",nu_p,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu",nu,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu_div",nu_div,0.0,Errors::ComparisonOp::GT);
@@ -96,6 +97,14 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   }else{
     params.nu_ratio1 = 1.0;
     params.nu_ratio2 = 1.0;
+  }
+
+  if (ftype == -1) {
+    params.ftype = ForcingAlg::FORCING_OFF;
+  } else if (ftype == 0) {
+    params.ftype = ForcingAlg::FORCING_DEBUG;
+  } else if (ftype == 2) {
+    params.ftype = ForcingAlg::FORCING_2;
   }
 
   // TODO Parse a fortran string and set this properly. For now, our code does
