@@ -22,7 +22,7 @@ energy_fixer      = -1
 integration       = "explicit"
 smooth            = 0
 nu                = 7e15
-nu_div            = 7e15
+nu_div            = 1e15
 nu_p              = 7e15
 nu_q              = 7e15
 nu_s              =-1
@@ -51,8 +51,8 @@ kcut_fm       = 2
 /
 &vert_nl
 vform     = "ccm"
-vfile_mid = './vcoord/camm-26.ascii'
-vfile_int = './vcoord/cami-26.ascii'
+vfile_mid = './vcoord/acme-72m.ascii'
+vfile_int = './vcoord/acme-72i.ascii'
 /
 
 &prof_inparm

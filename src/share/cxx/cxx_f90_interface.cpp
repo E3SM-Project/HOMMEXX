@@ -50,7 +50,6 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   Errors::check_option("init_simulation_params_c","nu_p",nu_p,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu",nu,0.0,Errors::ComparisonOp::GT);
   Errors::check_option("init_simulation_params_c","nu_div",nu_div,0.0,Errors::ComparisonOp::GT);
-  Errors::check_options_relation("init_simulation_params_c","nu_div","nu",nu_div,nu,Errors::ComparisonOp::EQ);
 
   // Get the simulation params struct
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -84,6 +83,21 @@ void init_simulation_params_c (const int& remap_alg, const int& limiter_option, 
   params.moisture                      = (moisture ? MoistDry::MOIST : MoistDry::DRY);
   params.use_cpstar                    = use_cpstar;
   params.use_semi_lagrangian_transport = use_semi_lagrangian_transport;
+
+  //set nu_ratios values
+  if (params.nu != params.nu_div) {
+    Real ratio = params.nu_div / params.nu;
+    if (params.hypervis_scaling != 0.0) {
+      params.nu_ratio1 = ratio * ratio;
+      params.nu_ratio2 = 1.0;
+    }else{
+      params.nu_ratio1 = ratio;
+      params.nu_ratio2 = ratio;
+    }
+  }else{
+    params.nu_ratio1 = 1.0;
+    params.nu_ratio2 = 1.0;
+  }
 
   if (ftype == -1) {
     params.ftype = ForcingAlg::FORCING_OFF;

@@ -14,6 +14,8 @@ SET(HOMME_TESTS
   prtcB-r3-tensorhv-dry-c
   prtcB-r3-lim9-dry-f
   prtcB-r3-lim9-dry-c
+  prtcB-r3-nudiv-dry-f
+  prtcB-r3-nudiv-dry-c
   prtcA-r0-moist-f
   prtcA-r3-moist-f
   prtcA-r0-moist-c
@@ -37,6 +39,7 @@ SET (COMPARE_F_C_TEST
   prtcB-r3-q6-dry
   prtcB-r3-tensorhv-dry
   prtcB-r3-lim9-dry
+  prtcB-r3-nudiv-dry
   prtcA-r0-moist
   prtcA-r3-moist
   prtcB-r0-moist

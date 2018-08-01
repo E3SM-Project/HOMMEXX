@@ -49,6 +49,7 @@ struct SimulationParams
   int       hypervis_order;
   int       hypervis_subcycle;
   double    hypervis_scaling;
+  double    nu_ratio1, nu_ratio2; //control balance between div and vort components in vector laplace
 
   // Use this member to check whether the struct has been initialized
   bool      params_set;
