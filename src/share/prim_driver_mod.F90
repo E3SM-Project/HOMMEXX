@@ -1091,13 +1091,15 @@ contains
                               elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
                               elem_accum_kener_ptr, elem_accum_pener_ptr)
 
-    call init_boundary_exchanges_c ()
-
+    ! hvcoord is needed by the EulerStepFunctor object,
+    ! which (admittedly confusingly) is initialized in init_boundary_exchanges_c
     hybrid_am_ptr = c_loc(hvcoord%hyam)
     hybrid_ai_ptr = c_loc(hvcoord%hyai)
     hybrid_bm_ptr = c_loc(hvcoord%hybm)
     hybrid_bi_ptr = c_loc(hvcoord%hybi)
     call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
+
+    call init_boundary_exchanges_c ()
 
     call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
 #endif
