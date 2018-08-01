@@ -17,6 +17,8 @@
 #include "profiling.hpp"
 
 #include <iostream>
+#include <signal.h>
+#include <fenv.h>
 
 namespace Homme
 {
@@ -31,6 +33,16 @@ extern "C" {
 void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np1, const int& last_time_step)
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
+
+  // We need to disable the FPE exception, since otherwise it may trigger in
+  // the AVX min function due to NaN's under the Earth's surface
+  sigset_t fp_sig;
+  sigset_t prev_sigs;
+  sigemptyset(&fp_sig);
+  sigaddset(&fp_sig, SIGFPE);
+  sigprocmask(SIG_BLOCK, &fp_sig, &prev_sigs);
+
+  fedisableexcept(-1);
 
   // Get simulation params
   SimulationParams& params = Context::singleton().get_simulation_params();
@@ -151,6 +163,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
   nm1   = tl.nm1;
   n0    = tl.n0;
   np1   = tl.np1;
+
+  sigprocmask(SIG_BLOCK, &prev_sigs, nullptr);
 
   GPTLstop("tl-sc prim_run_subcycle_c");
 }
