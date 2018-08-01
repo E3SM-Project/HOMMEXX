@@ -17,7 +17,14 @@ SET (CMAKE_Fortran_COMPILER mpif90 CACHE FILEPATH "")
 SET (CMAKE_C_COMPILER mpicc CACHE FILEPATH "")
 SET (CMAKE_CXX_COMPILER mpicc CACHE FILEPATH "")
 
-SET (FORCE_Fortran_FLAGS "-openmp -traceback -fp-model precise -ftz -g -O2" CACHE STRING "")
+
+#this way opt. flags won't be overwritten
+set(CMAKE_BUILD_TYPE "" CACHE STRING "")
+
+set (CMAKE_Fortran_FLAGS "-g -O1" CACHE STRING "")
+set (CMAKE_C_FLAGS "-g -O3" CACHE STRING "")
+set (CMAKE_CXX_FLAGS "-g -O3" CACHE STRING "")
+
 
 SET (WITH_PNETCDF FALSE CACHE FILEPATH "")
 SET (NETCDF_DIR $ENV{SEMS_NETCDF_ROOT} CACHE FILEPATH "")

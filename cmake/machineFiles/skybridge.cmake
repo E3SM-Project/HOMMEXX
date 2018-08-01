@@ -16,13 +16,13 @@ SET (CMAKE_CXX_COMPILER mpicc CACHE FILEPATH "")
 # this is ignored if we use FORCE_Fortran_FLAGS
 SET (ADD_Fortran_FLAGS "-traceback" CACHE STRING "")
 
-# override cmake's intel defaults:
-# default cmake options for Intel: 
-#      -assume byterecl -fp-model precise -ftz -g -O3 
-# -O3 causes problems on redsky when openMP is enabled (even for 1 thread)
-#
-#SET (FORCE_Fortran_FLAGS "-openmp -fp-model fast -ftz -g -O2" CACHE STRING "")
-SET (FORCE_Fortran_FLAGS "-openmp -traceback -fp-model precise -ftz -g -O2" CACHE STRING "")
+#this way opt. flags won't be overwritten
+set(CMAKE_BUILD_TYPE "" CACHE STRING "")
+
+set (CMAKE_Fortran_FLAGS "-g -O1" CACHE STRING "")
+set (CMAKE_C_FLAGS "-g -O3" CACHE STRING "")
+set (CMAKE_CXX_FLAGS "-g -O3" CACHE STRING "")
+
 
 SET (NETCDF_DIR $ENV{SEMS_NETCDF_ROOT} CACHE FILEPATH "")
 SET (HDF5_DIR $ENV{SEMS_HDF5_ROOT} CACHE FILEPATH "")
