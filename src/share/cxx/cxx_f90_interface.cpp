@@ -153,8 +153,9 @@ void cxx_push_results_to_f90(F90Ptr &elem_state_v_ptr, F90Ptr &elem_state_temp_p
                    elem_Q_ptr, elements.num_elems()));
 }
 
-void cxx_push_forcing_to_f90(F90Ptr elem_derived_FM,
-                             F90Ptr elem_derived_FT, F90Ptr elem_derived_FQ) {
+// Probably not needed
+void cxx_push_forcing_to_f90(F90Ptr elem_derived_FM, F90Ptr elem_derived_FT,
+                             F90Ptr elem_derived_FQ) {
   Elements &elements = Context::singleton().get_elements();
   Tracers &tracers = Context::singleton().get_tracers();
 
@@ -165,9 +166,15 @@ void cxx_push_forcing_to_f90(F90Ptr elem_derived_FM,
       elem_derived_FT, elements.num_elems());
   sync_to_host(elements.m_ft, ft_f90);
 
-  HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
-      elem_derived_FQ, elements.num_elems());
-  sync_to_host(tracers.fq, fq_f90);
+  const SimulationParams &params = Context::singleton().get_simulation_params();
+  if (params.ftype == ForcingAlg::FORCING_DEBUG) {
+    if (tracers.fq.data() == nullptr) {
+      tracers.fq = decltype(tracers.fq)("fq", elements.num_elems());
+    }
+    HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
+        elem_derived_FQ, elements.num_elems());
+    sync_to_host(tracers.fq, fq_f90);
+  }
 }
 
 void f90_push_forcing_to_cxx(F90Ptr elem_derived_FM, F90Ptr elem_derived_FT,
@@ -183,10 +190,16 @@ void f90_push_forcing_to_cxx(F90Ptr elem_derived_FM, F90Ptr elem_derived_FT,
       elem_derived_FT, elements.num_elems());
   sync_to_device(ft_f90, elements.m_ft);
 
+  const SimulationParams &params = Context::singleton().get_simulation_params();
   Tracers &tracers = Context::singleton().get_tracers();
-  HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
-      elem_derived_FQ, elements.num_elems());
-  sync_to_device(fq_f90, tracers.fq);
+  if (params.ftype == ForcingAlg::FORCING_DEBUG) {
+    if (tracers.fq.data() == nullptr) {
+      tracers.fq = decltype(tracers.fq)("fq", elements.num_elems());
+    }
+    HostViewUnmanaged<Real * [QSIZE_D][NUM_PHYSICAL_LEV][NP][NP]> fq_f90(
+        elem_derived_FQ, elements.num_elems());
+    sync_to_device(fq_f90, tracers.fq);
+  }
 
   tracers.push_qdp(elem_state_Qdp_ptr);
 }

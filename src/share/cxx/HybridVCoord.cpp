@@ -134,6 +134,13 @@ void HybridVCoord::compute_deltas ()
     host_hybrid_bi_delta(ilev)[ivec] =
         host_hybrid_bi(level + 1) - host_hybrid_bi(level);
   }
+  for(int level = NUM_PHYSICAL_LEV; level < NUM_LEV * VECTOR_SIZE; ++level) {
+    const int ilev = level / VECTOR_SIZE;
+    const int ivec = level % VECTOR_SIZE;
+
+    host_hybrid_ai_delta(ilev)[ivec] = std::numeric_limits<Real>::quiet_NaN();
+    host_hybrid_bi_delta(ilev)[ivec] = std::numeric_limits<Real>::quiet_NaN();
+  }
   Kokkos::deep_copy(hybrid_ai_delta, host_hybrid_ai_delta);
   Kokkos::deep_copy(hybrid_bi_delta, host_hybrid_bi_delta);
   {

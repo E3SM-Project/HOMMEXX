@@ -257,9 +257,9 @@ module element_mod
 
 #ifdef CAM
     ! forcing terms for CAM
-    real (kind=real_kind) :: FQ(np,np,nlev,qsize_d)                   ! tracer forcing
-    real (kind=real_kind) :: FM(np,np,2,nlev)                         ! momentum forcing
-    real (kind=real_kind) :: FT(np,np,nlev)                           ! temperature forcing
+    real (kind=real_kind), pointer :: FQ(:,:,:,:)                     ! tracer forcing
+    real (kind=real_kind), pointer :: FM(:,:,:,:)                     ! momentum forcing
+    real (kind=real_kind), pointer :: FT(:,:,:)                       ! temperature forcing
     real (kind=real_kind) :: etadot_prescribed(np,np,nlevp)           ! prescribed vertical tendency
     real (kind=real_kind) :: u_met(np,np,nlev)                        ! zonal component of prescribed meteorology winds
     real (kind=real_kind) :: dudt_met(np,np,nlev)                     ! rate of change of zonal component of prescribed meteorology winds
@@ -835,9 +835,7 @@ contains
     allocate( elem_derived_dp               (np,np,nlev,nelemd)                    )
     allocate( elem_derived_divdp            (np,np,nlev,nelemd)                    )
     allocate( elem_derived_divdp_proj       (np,np,nlev,nelemd)                    )
-#ifndef USE_KOKKOS_KERNELS
     allocate( elem_derived_FQ               (np,np,nlev,qsize_d,nelemd) )
-#endif
     allocate( elem_derived_FM               (np,np,2,nlev,nelemd)       )
     allocate( elem_derived_FT               (np,np,nlev,nelemd)         )
     allocate( elem_derived_FQps             (np,np,timelevels,nelemd)              )

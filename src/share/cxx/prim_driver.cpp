@@ -32,6 +32,8 @@ void prim_run_subcycle_c (const Real& dt, int& nstep, int& nm1, int& n0, int& np
 {
   GPTLstart("tl-sc prim_run_subcycle_c");
 
+  printf("prim_run_subcycle_c running\n");
+
   // Get simulation params
   SimulationParams& params = Context::singleton().get_simulation_params();
   assert(params.params_set);

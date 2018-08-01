@@ -109,7 +109,9 @@ contains
     use params_mod,         only: sfcurve
     use physical_constants, only: dd_pi
     use prim_advection_mod, only: prim_advec_init1
-#ifndef USE_KOKKOS_KERNELS
+#ifdef USE_KOKKOS_KERNELS
+    use prim_cxx_driver_mod, only: init_cxx_mpi_comm
+#else
     use prim_advance_mod,   only: prim_advance_init
 #endif
     use prim_state_mod,     only: prim_printstate_init
@@ -135,6 +137,13 @@ contains
 #endif
 
     implicit none
+
+#ifdef USE_KOKKOS_KERNELS
+    interface
+       subroutine initialize_hommexx_session() bind(c)
+       end subroutine initialize_hommexx_session
+    end interface
+#endif
 
     type (element_t),   pointer     :: elem(:)
     type (parallel_t),  intent(in)  :: par
@@ -171,6 +180,11 @@ contains
     real(kind=real_kind) :: repro_sum_rel_diff_max
 #endif
 
+#ifdef USE_KOKKOS_KERNELS
+    ! Do this before any environment changes from the Fortran
+    call init_cxx_mpi_comm(par%comm)
+    call initialize_hommexx_session()
+#endif
     ! =====================================
     ! Read in model control information
     ! =====================================
@@ -660,6 +674,24 @@ contains
     subroutine init_boundary_exchanges_c () bind(c)
     end subroutine init_boundary_exchanges_c
 
+    subroutine init_hvcoord_c (ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr) bind(c)
+      use iso_c_binding , only : c_ptr, c_double
+      !
+      ! Inputs
+      !
+      real (kind=c_double),  intent(in) :: ps0
+      type (c_ptr),          intent(in) :: hybrid_am_ptr, hybrid_ai_ptr
+      type (c_ptr),          intent(in) :: hybrid_bm_ptr, hybrid_bi_ptr
+    end subroutine init_hvcoord_c
+
+    subroutine init_time_level_c(nm1,n0,np1,nstep,nstep0) bind(c)
+      use iso_c_binding, only: c_int
+      !
+      ! Inputs
+      !
+      integer(kind=c_int), intent(in) :: nm1, n0, np1, nstep, nstep0
+    end subroutine init_time_level_c
+
 ! USE_KOKKOS_KERNELS
 #endif
   end interface
@@ -667,7 +699,7 @@ contains
     type (element_t),   intent(inout) :: elem(:)
     type (hybrid_t),    intent(in)    :: hybrid
     type (TimeLevel_t), intent(inout) :: tl       ! time level struct
-    type (hvcoord_t),   intent(inout) :: hvcoord  ! hybrid vertical coordinate struct
+    type (hvcoord_t), target, intent(inout) :: hvcoord  ! hybrid vertical coordinate struct
     integer,            intent(in)    :: nets     ! starting thread element number (private)
     integer,            intent(in)    :: nete     ! ending thread element number   (private)
 
@@ -698,6 +730,8 @@ contains
     integer :: n0_qdp
 
 #ifdef USE_KOKKOS_KERNELS
+    type (c_ptr) :: hybrid_am_ptr, hybrid_ai_ptr, hybrid_bm_ptr, hybrid_bi_ptr
+
     type (c_ptr) :: elem_D_ptr, elem_Dinv_ptr, elem_fcor_ptr
     type (c_ptr) :: elem_mp_ptr, elem_spheremp_ptr, elem_rspheremp_ptr
     type (c_ptr) :: elem_metdet_ptr, elem_metinv_ptr, elem_state_phis_ptr
@@ -1057,7 +1091,17 @@ contains
                               elem_accum_q1mass_ptr, elem_accum_iener_ptr, elem_accum_iener_wet_ptr, &
                               elem_accum_kener_ptr, elem_accum_pener_ptr)
 
+    ! hvcoord is needed by the EulerStepFunctor object,
+    ! which (admittedly confusingly) is initialized in init_boundary_exchanges_c
+    hybrid_am_ptr = c_loc(hvcoord%hyam)
+    hybrid_ai_ptr = c_loc(hvcoord%hyai)
+    hybrid_bm_ptr = c_loc(hvcoord%hybm)
+    hybrid_bi_ptr = c_loc(hvcoord%hybi)
+    call init_hvcoord_c (hvcoord%ps0,hybrid_am_ptr,hybrid_ai_ptr,hybrid_bm_ptr,hybrid_bi_ptr)
+
     call init_boundary_exchanges_c ()
+
+    call init_time_level_c(tl%nm1,tl%n0,tl%np1, tl%nstep, tl%nstep0)
 #endif
 
   end subroutine prim_init2
@@ -1278,12 +1322,13 @@ contains
     use time_mod,           only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit, nEndStep
     use element_mod,        only: elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_derived_omega_p, &
          elem_state_Q, elem_state_Qdp, elem_state_ps_v, elem_state_v, elem_state_Temp, elem_state_dp3d
+    use dimensions_mod,     only: np, nlev, qsize_d, nelemd
 
     interface
-       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp, ps_v) bind(c)
+       subroutine f90_push_forcing_to_cxx(FM, FT, FQ, Qdp) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:), &
-              Qdp(:,:,:,:,:,:), ps_v(:,:,:,:)
+         use dimensions_mod,     only: np, nlev, qsize_d, nelemd
+         real (kind=c_double), intent(in) :: FM(np,np,2,nlev,nelemd), FT(np,np,nlev,nelemd), FQ(np,np,nlev,qsize_d,nelemd), Qdp(np,np,nlev,qsize_d,2,nelemd)
        end subroutine f90_push_forcing_to_cxx
 
        subroutine cxx_push_results_to_f90(vel, temp, dp3d, Qdp, q, ps_v, omega_p) bind(c)
@@ -1293,7 +1338,8 @@ contains
 
        subroutine cxx_push_forcing_to_f90(FM, FT, FQ) bind(c)
          use iso_c_binding, only: c_double
-         real (kind=c_double), intent(in) :: FM(:,:,:,:,:), FT(:,:,:,:), FQ(:,:,:,:,:)
+         use dimensions_mod,     only: np, nlev, qsize_d, nelemd
+         real (kind=c_double), intent(in) :: FM(np,np,2,nlev,nelemd), FT(np,np,nlev,nelemd), FQ(np,np,nlev,qsize_d,nelemd)
        end subroutine cxx_push_forcing_to_f90
 
        subroutine prim_run_subcycle_c(dt,nstep,nm1,n0,np1,last_time_step) bind(c)
@@ -1301,7 +1347,8 @@ contains
          !
          ! Inputs
          !
-         integer(kind=c_int),  intent(in) :: nstep, nm1, n0, np1, last_time_step
+         integer(kind=c_int),  intent(inout) :: nstep, nm1, n0, np1
+         integer(kind=c_int),  intent(in) :: last_time_step
          real (kind=c_double), intent(in) :: dt
        end subroutine prim_run_subcycle_c
     end interface
@@ -1330,9 +1377,12 @@ contains
        call abortmp("prim_run_subcycle in single column mode isn't supported")
     endif
 
-    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp, &
-         elem_state_ps_v)
+    call f90_push_forcing_to_cxx(elem_derived_FM, elem_derived_FT, elem_derived_FQ, elem_state_Qdp)
 
+    nstep_c = tl%nstep
+    nm1_c = tl%nm1 - 1
+    n0_c = tl%n0 - 1
+    np1_c = tl%np1 - 1
     call prim_run_subcycle_c(dt, nstep_c, nm1_c, n0_c, np1_c, nEndStep)
     tl%nstep = nstep_c
     tl%nm1 = nm1_c + 1
