@@ -32,7 +32,7 @@ contains
     real (kind=real_kind), intent(in) :: hyai(nlev)
     real (kind=real_kind), intent(in) :: hybi(nlev)
     real (kind=real_kind), intent(in) :: FQ(np, np, nlev, qsize_d)
-    real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize_d, timelevels)
+    real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize_d, 2)
     real (kind=real_kind), intent(inout) :: ps_v(np, np, timelevels)
     real (kind=real_kind), intent(out) :: Q(np, np, nlev, qsize_d)
 
@@ -58,7 +58,7 @@ contains
                 endif
                 Qdp(i, j, k, q_idx, np1_qdp) = Qdp(i, j, k, q_idx, np1_qdp) + v1
                 if (q_idx == 1) then
-                   FQps(i, j) = FQps(i, j) + v1 / dt_q
+                   FQps(i, j) = FQps(i, j) + v1
                 endif
              enddo
           enddo
@@ -67,7 +67,7 @@ contains
 
     if (wet .and. qsize>0) then
        ! to conserve dry mass in the precese of Q1 forcing:
-       ps_v(:, :, np1) = ps_v(:, :, np1) + dt_q * FQps(:, :)
+       ps_v(:, :, np1) = ps_v(:, :, np1) + FQps(:, :)
     endif
 
     ! Qdp(np1) and ps_v(np1) were updated by forcing - update Q(np1)
