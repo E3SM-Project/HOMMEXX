@@ -21,7 +21,7 @@ contains
   subroutine CAM_forcing_tracers(dt_q, ps0, qsize, np1, np1_qdp, wet, hyai, hybi, FQ, Qdp, ps_v, Q) bind(c)
     use iso_c_binding,  only: c_int, c_bool
     use element_mod,    only: timelevels
-    use dimensions_mod, only: np, nlev
+    use dimensions_mod, only: np, nlev, qsize_d
     use physical_constants, only: Cp
 
     implicit none
@@ -31,10 +31,10 @@ contains
     logical (kind=c_bool), intent(in) :: wet
     real (kind=real_kind), intent(in) :: hyai(nlev)
     real (kind=real_kind), intent(in) :: hybi(nlev)
-    real (kind=real_kind), intent(in) :: FQ(np, np, nlev, qsize)
-    real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize, timelevels)
+    real (kind=real_kind), intent(in) :: FQ(np, np, nlev, qsize_d)
+    real (kind=real_kind), intent(inout) :: Qdp(np, np, nlev, qsize_d, timelevels)
     real (kind=real_kind), intent(inout) :: ps_v(np, np, timelevels)
-    real (kind=real_kind), intent(out) :: Q(np, np, nlev, qsize)
+    real (kind=real_kind), intent(out) :: Q(np, np, nlev, qsize_d)
 
     integer :: i, j, k, q_idx
     real (kind=real_kind) :: v1, dp
