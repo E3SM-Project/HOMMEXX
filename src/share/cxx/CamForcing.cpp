@@ -58,9 +58,10 @@ void tracer_forcing(
     const ExecViewManaged<Scalar * [QSIZE_D][NP][NP][NUM_LEV]> &Q) {
 
   const int num_e = ps_v.extent_int(0);
+  const int np1 = tl.n0;
+  const int np1_qdp = tl.n0_qdp;
 
   const auto policy = Homme::get_default_team_policy<ExecSpace>(num_e);
-
   Kokkos::parallel_for(
       "tracer qdp forcing",
       Kokkos::RangePolicy<ExecSpace>(0, num_e * num_q * NP * NP * NUM_LEV),
@@ -71,7 +72,7 @@ void tracer_forcing(
         const int jgp = (idx / NUM_LEV) % NP;
         const int k = idx % NUM_LEV;
         Scalar v1 = f_q(ie, iq, igp, jgp, k);
-        Scalar &qdp_s = qdp(ie, tl.np1_qdp, iq, igp, jgp, k);
+        Scalar &qdp_s = qdp(ie, np1_qdp, iq, igp, jgp, k);
         VECTOR_SIMD_LOOP
         for (int vlev = 0; vlev < VECTOR_SIZE; ++vlev) {
           if (qdp_s[vlev] + v1[vlev] * dt < 0.0 && v1[vlev] < 0.0) {
@@ -110,7 +111,7 @@ void tracer_forcing(
               const int &&vlev = k % VECTOR_SIZE;
               double v1 = f_q(ie, 0, igp, jgp, ilev)[vlev];
               const double &qdp_s =
-                  qdp(ie, tl.np1_qdp, 0, igp, jgp, ilev)[vlev];
+                  qdp(ie, np1_qdp, 0, igp, jgp, ilev)[vlev];
               if (qdp_s + v1 * dt < 0.0 && v1 < 0.0) {
                 if (qdp_s < 0.0) {
                   v1 = 0.0;
@@ -121,7 +122,7 @@ void tracer_forcing(
               accumulator += v1;
             },
             ps_v_forcing);
-        ps_v(ie, tl.np1, igp, jgp) += ps_v_forcing;
+        ps_v(ie, np1, igp, jgp) += ps_v_forcing;
       });
     });
   }
@@ -137,8 +138,8 @@ void tracer_forcing(
     const int k = idx % NUM_LEV;
 
     const Scalar dp = hvcoord.hybrid_ai_delta(k) * hvcoord.ps0 +
-                      hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.np1, igp, jgp);
-    Q(ie, iq, igp, jgp, k) = qdp(ie, tl.np1_qdp, iq, igp, jgp, k) / dp;
+                      hvcoord.hybrid_bi_delta(k) * ps_v(ie, tl.n0, igp, jgp);
+    Q(ie, iq, igp, jgp, k) = qdp(ie, tl.n0_qdp, iq, igp, jgp, k) / dp;
   });
 }
 
