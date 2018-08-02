@@ -136,7 +136,7 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
   constexpr MoistDry moisture = MoistDry::MOIST;
 
   const int num_q = QSIZE_D;
-  const Real dt_q = 1.0;
+  const Real dt_q = 0.42;
   const int np1 = 1;
   const int np1_qdp = 2;
 
@@ -180,11 +180,12 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
   Kokkos::deep_copy(hybrid_bi_f90, hvcoord.hybrid_bi);
 
   TimeLevel tl;
-  tl.np1 = np1 - 1;
-  tl.np1_qdp = np1_qdp - 1;
+  tl.n0 = np1 - 1;
+  tl.n0_qdp = np1_qdp - 1;
 
   tracer_forcing(fq_cxx, hvcoord, tl, num_q, moisture, dt_q, ps_v_cxx, qdp_cxx,
                  q_cxx);
+
   auto ps_v_mirror = Kokkos::create_mirror_view(ps_v_cxx);
   Kokkos::deep_copy(ps_v_mirror, ps_v_cxx);
   auto qdp_mirror = Kokkos::create_mirror_view(qdp_cxx);
