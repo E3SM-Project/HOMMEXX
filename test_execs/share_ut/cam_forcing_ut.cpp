@@ -150,6 +150,8 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
       "Tracer Forcing cxx", num_elems);
   genRandArray(fq_f90, engine, dist);
   sync_to_device(fq_f90, fq_cxx);
+  auto h_fq_cxx = Kokkos::create_mirror_view(fq_cxx);
+  Kokkos::deep_copy(h_fq_cxx, fq_cxx);
 
   HostViewManaged<Real * [NUM_TIME_LEVELS][NP][NP]> ps_v_f90(
       "Pressure Coord F90", num_elems);
@@ -206,6 +208,8 @@ TEST_CASE("cam_forcing_tracers", "cam_forcing") {
         const int vlev = k % VECTOR_SIZE;
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
+            REQUIRE(fq_f90(ie, q_idx, k, igp, jgp) ==
+                    h_fq_cxx(ie, q_idx, igp, jgp, ilev)[vlev]);
             for (int tl_idx = 0; tl_idx < Q_NUM_TIME_LEVELS; ++tl_idx) {
               REQUIRE(qdp_f90(ie, tl_idx, q_idx, k, igp, jgp) ==
                       qdp_mirror(ie, tl_idx, q_idx, igp, jgp, ilev)[vlev]);
