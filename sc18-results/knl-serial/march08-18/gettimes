@@ -1,4 +1,0 @@
-
-for i in run/*/time-* ; do echo -n ${i}": " ; awk '/prim_main_loop/ && !seen {print $6 ; seen=1}' $i ; unset seen ; done
-
-

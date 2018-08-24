@@ -1,5 +1,0 @@
-
-Andrew Bradley [4:14 PM]
-i think the speed robustness test set for knl needs to be {1 node, 2 node} x {64x1 serial, 64x2 omp}
-
-
