@@ -124,6 +124,7 @@ ELSEIF ("${PERF_PROF_UPPER}" STREQUAL "GPROF")
 ENDIF ()
 
 # Handle Cuda.
+#DISABLE THIS BLOCK (9 lines) TO BUILD ON CORI KNL (not sure about hsw)
 find_package(CUDA QUIET)
 if (${CUDA_FOUND})
   string (FIND ${CMAKE_CXX_COMPILER} "nvcc" pos)
