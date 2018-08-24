@@ -1,0 +1,21 @@
+#modules
+source /etc/profile.d/modules.sh
+module load cmake cray-hdf5-parallel/1.10.0 cray-netcdf-hdf5parallel
+
+#build serial kokkos
+../generate_makefile.bash --prefix=~/kokkos/build-serial-nodebug-edison/ --with-options=aggressive_vectorization,disable_profiling --arch=SNB --with-serial --compiler=icpc
+make ; make install
+
+#config hommexx serial 
+cmake -C ~/acmexx/components/homme/cmake/machineFiles/edison-serial.cmake -DHOMMEXX_FPMODEL=fast -DUSE_TRILINOS=OFF ~/acmexx/components/homme/
+
+#make allocation
+salloc --account=m2664 -t 30 -q debug -N 1
+
+#running, NO BINDING< AFFINITY, OR ANYTHING for now
+~/runhomme/bxx-master/test_execs/prtcA_flat_c> srun -n 8 ./prtcA_flat_c < namelist.nl
+
+
+
+
+
