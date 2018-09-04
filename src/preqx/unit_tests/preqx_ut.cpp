@@ -1260,8 +1260,33 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   }//ie loop
 }//end of test case preq_vertadv
 
+extern "C" void limiter_optim_iter_full_c_callable(
+  Real* ptens, const Real* sphweights, Real* minp, Real* maxp,
+  const Real* dpmass);
+extern "C" void limiter_clip_and_sum_c_callable(
+  Real* ptens, const Real* sphweights, Real* minp, Real* maxp,
+  const Real* dpmass);
+
 struct LimiterTester {
   static constexpr Real eps { std::numeric_limits<Real>::epsilon() };
+
+  struct FortranData {
+    typedef Kokkos::LayoutLeft Layout;
+    using ArrayPlvl = Kokkos::View<Real[NUM_PHYSICAL_LEV],
+                                   Layout, HostMemSpace>;
+    using ArrayGll = Kokkos::View<Real[NP][NP],
+                                  Layout, HostMemSpace>;
+    using ArrayGllPlvl = Kokkos::View<Real[NP][NP][NUM_PHYSICAL_LEV],
+                                      Layout, HostMemSpace>;
+    ArrayPlvl minp, maxp;
+    ArrayGll sphweights;
+    ArrayGllPlvl ptens, dpmass;
+
+    FortranData ()
+      : minp("minp"), maxp("maxp"), sphweights("sphweights"), ptens("ptens"),
+        dpmass("dpmass")
+    {}
+  };
 
   using HostGll = HostViewManaged<Real[NP][NP]>;
   using HostGllLvl = HostViewManaged<Scalar[NP][NP][NUM_LEV]>;
@@ -1275,10 +1300,12 @@ struct LimiterTester {
   using DevGll = ExecViewManaged<Real[NP][NP]>;
   using DevGllLvl = ExecViewManaged<Scalar[NP][NP][NUM_LEV]>;
   using Dev2Lvl = ExecViewManaged<Scalar[2][NUM_LEV]>;
+  using Dev2GllLvl = ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>;
 
   DevGll sphweights_d;
-  DevGllLvl dpmass_d, ptens_d, rwrk_d;
+  DevGllLvl dpmass_d, ptens_d;
   Dev2Lvl qlim_d;
+  Dev2GllLvl rwrk_d;
 
   // For correctness checking.
   HostGllLvl ptens_orig;
@@ -1293,12 +1320,11 @@ struct LimiterTester {
 
   LimiterTester ()
     : sphweights_d("sphweights"), dpmass_d("dpmass"),
-      ptens_d("ptens"), rwrk_d("rwrk"), qlim_d("qlim"),
+      ptens_d("ptens"), qlim_d("qlim"), rwrk_d("rwrk"),
       ptens_orig("ptens_orig"), Qmass("Qmass")
   { init(); }
 
-  void deep_copy (const LimiterTester& lv)
-  {
+  void deep_copy (const LimiterTester& lv) {
     Kokkos::deep_copy(sphweights, lv.sphweights);
     Kokkos::deep_copy(dpmass, lv.dpmass);
     Kokkos::deep_copy(ptens, lv.ptens);
@@ -1382,6 +1408,59 @@ struct LimiterTester {
     todevice();
   }
 
+  // Trigger the .not.modified cycle line in limiter_clip_and_sum.
+  void init_to_trigger_cycle () {
+    init_feasible();
+
+    const int k = 0;
+    const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+
+    Real minq = 2, maxq = 0;
+    for (int i = 0; i < NP; ++i)
+      for (int j = 0; j < NP; ++j) {
+        const Real q = ptens(i,j,vi)[si] / dpmass(i,j,vi)[si];
+        minq = std::min(minq, q);
+        maxq = std::max(maxq, q);
+      }
+    qlim(0,vi)[si] = std::max(0.0, minq - 1e-2);
+    qlim(1,vi)[si] = std::min(1.0, maxq + 1e-2);
+
+    Kokkos::deep_copy(qlim_d, qlim);
+  }
+
+  void fill_fortran (FortranData& d) {
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      d.minp(k) = qlim(0,vi)[si];
+      d.maxp(k) = qlim(1,vi)[si];
+      for (int i = 0; i < NP; ++i)
+        for (int j = 0; j < NP; ++j) {
+          d.ptens(j,i,k) = ptens(i,j,vi)[si];
+          d.dpmass(j,i,k) = dpmass(i,j,vi)[si];
+        }
+    }
+    for (int i = 0; i < NP; ++i)
+      for (int j = 0; j < NP; ++j)
+        d.sphweights(j,i) = sphweights(i,j);
+  }
+
+  void compare_with_fortran (const int limiter_option, FortranData& d) {
+    if (limiter_option == 9)
+      limiter_clip_and_sum_c_callable(d.ptens.data(), d.sphweights.data(),
+                                      d.minp.data(), d.maxp.data(),
+                                      d.dpmass.data());
+    else
+      limiter_optim_iter_full_c_callable(d.ptens.data(), d.sphweights.data(),
+                                         d.minp.data(), d.maxp.data(),
+                                         d.dpmass.data());      
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      for (int i = 0; i < NP; ++i)
+        for (int j = 0; j < NP; ++j)
+          REQUIRE(d.ptens(j,i,k) == ptens(i,j,vi)[si]);
+    }
+  }
+
   size_t team_shmem_size (const int team_size) const {
     return Homme::EulerStepFunctorImpl::limiter_team_shmem_size(team_size);
   }
@@ -1440,40 +1519,52 @@ struct LimiterTester {
   }
 };
 
-TEST_CASE("lim=8 math correctness", "limiter") {
+void test_limiter (const int limiter_option, const int impl, const int init) {
+  if (impl == 1 && OnGpu<ExecSpace>::value) return;
+  std::cout << "test limiter " << limiter_option << ","
+            << (impl == 0 ? " Kokkos impl," : " serial impl,")
+            << (init == 0 ? " with feasible\n" : " with early exit\n");
   LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::Lim8>(1), lv);
+  if (init == 0)
+    lv.init_feasible();
+  else
+    lv.init_to_trigger_cycle();
+  LimiterTester::FortranData fd;
+  lv.fill_fortran(fd);
+  if (limiter_option == 8) {
+    if (impl == 0)
+      Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::Lim8>(1), lv);
+    else
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);    
+  } else {
+    if (impl == 0)
+      Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv);
+    else
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
+  }
   lv.fromdevice();
   lv.check();
+  lv.compare_with_fortran(limiter_option, fd);
+}
+
+TEST_CASE("lim=8 math correctness", "limiter") {
+  for (int init = 0; init < 2; ++init)
+    test_limiter(8, 0, init);
 }
 
 TEST_CASE("CAAS math correctness", "limiter") {
-  LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv);
-  lv.fromdevice();
-  lv.check();
+  for (int init = 0; init < 2; ++init)
+    test_limiter(9, 0, init);
 }
 
 TEST_CASE("serial lim=8 math correctness", "limiter") {
-  if (!OnGpu<ExecSpace>::value) {
-    LimiterTester lv;
-    lv.init_feasible();
-    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);
-    lv.fromdevice();
-    lv.check();
-  }
+  for (int init = 0; init < 2; ++init)
+    test_limiter(8, 1, init);
 }
 
 TEST_CASE("serial CAAS math correctness", "limiter") {
-  if (!OnGpu<ExecSpace>::value) {
-    LimiterTester lv;
-    lv.init_feasible();
-    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
-    lv.fromdevice();
-    lv.check();
-  }
+  for (int init = 0; init < 2; ++init)
+    test_limiter(9, 1, init);
 }
 
 // The best thing to do here would be to check the KKT conditions for the
