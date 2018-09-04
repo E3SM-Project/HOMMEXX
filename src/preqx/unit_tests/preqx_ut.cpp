@@ -1300,10 +1300,12 @@ struct LimiterTester {
   using DevGll = ExecViewManaged<Real[NP][NP]>;
   using DevGllLvl = ExecViewManaged<Scalar[NP][NP][NUM_LEV]>;
   using Dev2Lvl = ExecViewManaged<Scalar[2][NUM_LEV]>;
+  using Dev2GllLvl = ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>;
 
   DevGll sphweights_d;
-  DevGllLvl dpmass_d, ptens_d, rwrk_d;
+  DevGllLvl dpmass_d, ptens_d;
   Dev2Lvl qlim_d;
+  Dev2GllLvl rwrk_d;
 
   // For correctness checking.
   HostGllLvl ptens_orig;
@@ -1318,7 +1320,7 @@ struct LimiterTester {
 
   LimiterTester ()
     : sphweights_d("sphweights"), dpmass_d("dpmass"),
-      ptens_d("ptens"), rwrk_d("rwrk"), qlim_d("qlim"),
+      ptens_d("ptens"), qlim_d("qlim"), rwrk_d("rwrk"),
       ptens_orig("ptens_orig"), Qmass("Qmass")
   { init(); }
 
@@ -1518,7 +1520,7 @@ struct LimiterTester {
 };
 
 void test_limiter (const int limiter_option, const int impl, const int init) {
-  if (impl == 1 && ! OnGpu<ExecSpace>::value) return;
+  if (impl == 1 && OnGpu<ExecSpace>::value) return;
   std::cout << "test limiter " << limiter_option << ","
             << (impl == 0 ? " Kokkos impl," : " serial impl,")
             << (init == 0 ? " with feasible\n" : " with early exit\n");
