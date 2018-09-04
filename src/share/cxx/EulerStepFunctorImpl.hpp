@@ -890,6 +890,8 @@ public: // Expose for unit testing.
   }
 };
 
+// Code repetition results from needing BFB and slight differences between lim 8
+// and 9 Fortran impls.
 template <typename ExecSpace>
 template <int limiter_option, typename ArrayGll, typename ArrayGllLvl, typename Array2Lvl,
           typename Array2GllLvl>
@@ -898,8 +900,8 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
        const Array2Lvl& iqlim, const ArrayGllLvl& iptens,
        const Array2GllLvl& irwrk) {
 
-# define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
-# define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
+#define forij for (int i = 0; i < NP; ++i) for (int j = 0; j < NP; ++j)
+#define forlev for (int lev = 0; lev < NUM_PHYSICAL_LEV; ++lev)
 
   ViewUnmanaged<const Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
     dpmass(&idpmass(0,0,0)[0]);
@@ -908,19 +910,10 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
   ViewUnmanaged<Real[2][NUM_LEV*VECTOR_SIZE]>
     qlim(&iqlim(0,0)[0]);
 
-  Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
-  VECTOR_SIMD_LOOP forlev {
-    if (qlim(0,lev) < 0)
-      qlim(0,lev) = 0;
-    if (mass[lev] < qlim(0,lev)*sumc[lev])
-      qlim(0,lev) = mass[lev]/sumc[lev];
-    if (mass[lev] > qlim(1,lev)*sumc[lev])
-      qlim(1,lev) = mass[lev]/sumc[lev];
-  }
-
   if (limiter_option == 8) {
     ViewUnmanaged<Real[NP][NP][NUM_LEV*VECTOR_SIZE]>
       x(&iptens(0,0,0)[0]);
+    Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
 
     forij {
       const auto& sphij = sphweights(i,j);
@@ -931,6 +924,15 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         mass[lev] += c(i,j,lev)*x(i,j,lev);
         sumc[lev] += c(i,j,lev);
       }
+    }
+
+    VECTOR_SIMD_LOOP forlev {
+      if (qlim(0,lev) < 0)
+        qlim(0,lev) = 0;
+      if (mass[lev] < qlim(0,lev)*sumc[lev])
+        qlim(0,lev) = mass[lev]/sumc[lev];
+      if (mass[lev] > qlim(1,lev)*sumc[lev])
+        qlim(1,lev) = mass[lev]/sumc[lev];
     }
 
     static const int maxiter = NP*NP - 1;
@@ -1007,6 +1009,7 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
       ptens(&iptens(0,0,0)[0]);
     ViewUnmanaged<Real[NP][NP][NUM_PHYSICAL_LEV]>
       x(&irwrk(1,0,0,0)[0]);
+    Real mass[NUM_PHYSICAL_LEV] = {0}, sumc[NUM_PHYSICAL_LEV] = {0};
 
     forij {
       const auto& sphij = sphweights(i,j);
@@ -1017,6 +1020,15 @@ KOKKOS_INLINE_FUNCTION void SerialLimiter<ExecSpace>
         mass[lev] += c(i,j,lev)*x(i,j,lev);
         sumc[lev] += c(i,j,lev);
       }
+    }
+
+    VECTOR_SIMD_LOOP forlev {
+      if (qlim(0,lev) < 0)
+        qlim(0,lev) = 0;
+      if (mass[lev] < qlim(0,lev)*sumc[lev])
+        qlim(0,lev) = mass[lev]/sumc[lev];
+      if (mass[lev] > qlim(1,lev)*sumc[lev])
+        qlim(1,lev) = mass[lev]/sumc[lev];
     }
 
     Real addmass[NUM_PHYSICAL_LEV] = {0};
