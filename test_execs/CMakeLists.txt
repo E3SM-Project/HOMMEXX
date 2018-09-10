@@ -168,10 +168,10 @@ IF(${BUILD_HOMME_PREQX})
   # Setting HOMME_TESTS_NE and HOMME_TESTS_NDAYS, so the namelist.nl file in
   # the test_exec/prtc* directories is usable. Since that namelist should be
   # used for development/debugging purposes only, we use ne=2 and ndays=1
-  ADD_SUBDIRECTORY(prtcA)
-  ADD_SUBDIRECTORY(prtcA_c)
-  ADD_SUBDIRECTORY(prtcB)
-  ADD_SUBDIRECTORY(prtcB_c)
+  ADD_SUBDIRECTORY(preqx-nlev26)
+  ADD_SUBDIRECTORY(preqx-nlev26-kokkos)
+  ADD_SUBDIRECTORY(preqx-nlev72)
+  ADD_SUBDIRECTORY(preqx-nlev72-kokkos)
 ENDIF()
 
 # Read the test-list.cmake file to get the HOMME_TESTS list
