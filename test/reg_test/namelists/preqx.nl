@@ -20,6 +20,7 @@ qsplit            = 1
 tstep_type        = 5
 integration       = "explicit"
 smooth            = 0
+energy_fixer      = -1
 nu                = 7e15
 nu_div            = 7e15
 nu_p              = 7e15
