@@ -21,6 +21,9 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define AMB_NO_MPI
+#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
+
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
@@ -245,8 +248,10 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real[NP][NP]> press("press");
   HostViewManaged<Real[2][NP][NP]> press_grad("press_grad");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int level = 0; level < NUM_LEV; ++level) {
-      for (int v = 0; v < VECTOR_SIZE; ++v) {
+    for (int plev = 0; plev < NUM_PHYSICAL_LEV; ++plev) {
+      const int level = plev / VECTOR_SIZE;
+      const int v = plev % VECTOR_SIZE;
+      {
         for (int i = 0; i < NP; i++) {
           for (int j = 0; j < NP; j++) {
             press_grad(0, i, j) = pressure_grad_in(ie, 0, i, j, level)[v];
@@ -341,9 +346,10 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
             .data(),
         Homme::subview(test_functor.dinv, ie).data(),
         test_functor.dvv.data());
-    for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      // Note this MUST be this loop so that k is set properly
-      for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vec_lev = k / VECTOR_SIZE;
+      const int v = k % VECTOR_SIZE;
+      {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(omega_p(ie, igp, jgp, vec_lev)[v]));
@@ -457,6 +463,12 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  // eta_dot has the constraint that the BC is 0, and the impl of
+  // compute_dp3d_np1 assumes this is true of the array itself. That's fine, but
+  // we need to provide consistent data.
+  for (int igp = 0; igp < NP; ++igp)
+    for (int jgp = 0; jgp < NP; ++jgp)
+      eta_dot(0,NUM_INTERFACE_LEV-1,igp,jgp) = 0;
 
   sync_to_device(div_vdp, elements.buffers.div_vdp);
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
@@ -542,8 +554,10 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real[2][NP][NP]> vdp_f90("vdp f90 results");
   HostViewManaged<Real[NP][NP]> div_vdp_f90("div_vdp f90 results");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      const int vec_lev = level / VECTOR_SIZE;
+      const int vector = level % VECTOR_SIZE;
+      {
         caar_compute_divdp_c_int(
             compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
             Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
