@@ -2878,9 +2878,7 @@ end do
           end if
        end do
 
-! Commented out for BFB with C++ version; Fortran version in E3SM master
-! benefits from this line.
-!       if (.not. modified) cycle
+       if (.not. modified) cycle
 
        if (addmass /= zero) then
           ! Determine weights.
@@ -2907,6 +2905,27 @@ end do
     enddo
 
   end subroutine limiter_clip_and_sum
+
+  subroutine limiter_optim_iter_full_c_callable(ptens,sphweights,minp,maxp,dpmass) bind(c)
+    use kinds         , only : real_kind
+    use dimensions_mod, only : np, np, nlev
+    implicit none
+    real (kind=real_kind), dimension(np,np,nlev), intent(inout) :: ptens
+    real (kind=real_kind), dimension(np,np),      intent(in)    :: sphweights
+    real (kind=real_kind), dimension(nlev),       intent(inout) :: minp, maxp
+    real (kind=real_kind), dimension(np,np,nlev), intent(in)    :: dpmass
+    call limiter_optim_iter_full(ptens,sphweights,minp,maxp,dpmass)
+  end subroutine limiter_optim_iter_full_c_callable
+  subroutine limiter_clip_and_sum_c_callable(ptens,sphweights,minp,maxp,dpmass) bind(c)
+    use kinds         , only : real_kind
+    use dimensions_mod, only : np, np, nlev
+    implicit none
+    real (kind=real_kind), dimension(np,np,nlev), intent(inout) :: ptens
+    real (kind=real_kind), dimension(np,np),      intent(in)    :: sphweights
+    real (kind=real_kind), dimension(nlev),       intent(inout) :: minp, maxp
+    real (kind=real_kind), dimension(np,np,nlev), intent(in)    :: dpmass
+    call limiter_clip_and_sum(ptens,sphweights,minp,maxp,dpmass)
+  end subroutine limiter_clip_and_sum_c_callable
 
 end module derivative_mod_base
 

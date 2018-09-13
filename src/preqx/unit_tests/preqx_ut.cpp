@@ -21,6 +21,9 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define AMB_NO_MPI
+#include "/home/ambradl/climate/sik/hommexx/dbg.hpp"
+
 using namespace Homme;
 
 using rngAlg = std::mt19937_64;
@@ -245,8 +248,10 @@ TEST_CASE("compute_energy_grad", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real[NP][NP]> press("press");
   HostViewManaged<Real[2][NP][NP]> press_grad("press_grad");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int level = 0; level < NUM_LEV; ++level) {
-      for (int v = 0; v < VECTOR_SIZE; ++v) {
+    for (int plev = 0; plev < NUM_PHYSICAL_LEV; ++plev) {
+      const int level = plev / VECTOR_SIZE;
+      const int v = plev % VECTOR_SIZE;
+      {
         for (int i = 0; i < NP; i++) {
           for (int j = 0; j < NP; j++) {
             press_grad(0, i, j) = pressure_grad_in(ie, 0, i, j, level)[v];
@@ -341,9 +346,10 @@ TEST_CASE("preq_omega_ps", "monolithic compute_and_apply_rhs") {
             .data(),
         Homme::subview(test_functor.dinv, ie).data(),
         test_functor.dvv.data());
-    for (int k = 0, vec_lev = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      // Note this MUST be this loop so that k is set properly
-      for (int v = 0; v < VECTOR_SIZE; ++k, ++v) {
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vec_lev = k / VECTOR_SIZE;
+      const int v = k % VECTOR_SIZE;
+      {
         for (int igp = 0; igp < NP; ++igp) {
           for (int jgp = 0; jgp < NP; ++jgp) {
             REQUIRE(!std::isnan(omega_p(ie, igp, jgp, vec_lev)[v]));
@@ -457,6 +463,12 @@ TEST_CASE("dp3d", "monolithic compute_and_apply_rhs") {
 
   genRandArray(div_vdp, engine, std::uniform_real_distribution<Real>(0, 100.0));
   genRandArray(eta_dot, engine, std::uniform_real_distribution<Real>(-10.0, 10.0));
+  // eta_dot has the constraint that the BC is 0, and the impl of
+  // compute_dp3d_np1 assumes this is true of the array itself. That's fine, but
+  // we need to provide consistent data.
+  for (int igp = 0; igp < NP; ++igp)
+    for (int jgp = 0; jgp < NP; ++jgp)
+      eta_dot(0,NUM_INTERFACE_LEV-1,igp,jgp) = 0;
 
   sync_to_device(div_vdp, elements.buffers.div_vdp);
   sync_to_device(eta_dot, elements.buffers.eta_dot_dpdn_buf);
@@ -542,8 +554,10 @@ TEST_CASE("vdp_vn0", "monolithic compute_and_apply_rhs") {
   HostViewManaged<Real[2][NP][NP]> vdp_f90("vdp f90 results");
   HostViewManaged<Real[NP][NP]> div_vdp_f90("div_vdp f90 results");
   for (int ie = 0; ie < num_elems; ++ie) {
-    for (int vec_lev = 0, level = 0; vec_lev < NUM_LEV; ++vec_lev) {
-      for (int vector = 0; vector < VECTOR_SIZE; ++vector, ++level) {
+    for (int level = 0; level < NUM_PHYSICAL_LEV; ++level) {
+      const int vec_lev = level / VECTOR_SIZE;
+      const int vector = level % VECTOR_SIZE;
+      {
         caar_compute_divdp_c_int(
             compute_subfunctor_test<vdp_vn0_test>::eta_ave_w,
             Homme::subview(test_functor.velocity, ie, test_functor.n0, level).data(),
@@ -1260,8 +1274,33 @@ TEST_CASE("preq_vertadv", "monolithic compute_and_apply_rhs") {
   }//ie loop
 }//end of test case preq_vertadv
 
+extern "C" void limiter_optim_iter_full_c_callable(
+  Real* ptens, const Real* sphweights, Real* minp, Real* maxp,
+  const Real* dpmass);
+extern "C" void limiter_clip_and_sum_c_callable(
+  Real* ptens, const Real* sphweights, Real* minp, Real* maxp,
+  const Real* dpmass);
+
 struct LimiterTester {
   static constexpr Real eps { std::numeric_limits<Real>::epsilon() };
+
+  struct FortranData {
+    typedef Kokkos::LayoutLeft Layout;
+    using ArrayPlvl = Kokkos::View<Real[NUM_PHYSICAL_LEV],
+                                   Layout, HostMemSpace>;
+    using ArrayGll = Kokkos::View<Real[NP][NP],
+                                  Layout, HostMemSpace>;
+    using ArrayGllPlvl = Kokkos::View<Real[NP][NP][NUM_PHYSICAL_LEV],
+                                      Layout, HostMemSpace>;
+    ArrayPlvl minp, maxp;
+    ArrayGll sphweights;
+    ArrayGllPlvl ptens, dpmass;
+
+    FortranData ()
+      : minp("minp"), maxp("maxp"), sphweights("sphweights"), ptens("ptens"),
+        dpmass("dpmass")
+    {}
+  };
 
   using HostGll = HostViewManaged<Real[NP][NP]>;
   using HostGllLvl = HostViewManaged<Scalar[NP][NP][NUM_LEV]>;
@@ -1275,10 +1314,12 @@ struct LimiterTester {
   using DevGll = ExecViewManaged<Real[NP][NP]>;
   using DevGllLvl = ExecViewManaged<Scalar[NP][NP][NUM_LEV]>;
   using Dev2Lvl = ExecViewManaged<Scalar[2][NUM_LEV]>;
+  using Dev2GllLvl = ExecViewManaged<Scalar[2][NP][NP][NUM_LEV]>;
 
   DevGll sphweights_d;
-  DevGllLvl dpmass_d, ptens_d, rwrk_d;
+  DevGllLvl dpmass_d, ptens_d;
   Dev2Lvl qlim_d;
+  Dev2GllLvl rwrk_d;
 
   // For correctness checking.
   HostGllLvl ptens_orig;
@@ -1293,12 +1334,11 @@ struct LimiterTester {
 
   LimiterTester ()
     : sphweights_d("sphweights"), dpmass_d("dpmass"),
-      ptens_d("ptens"), rwrk_d("rwrk"), qlim_d("qlim"),
+      ptens_d("ptens"), qlim_d("qlim"), rwrk_d("rwrk"),
       ptens_orig("ptens_orig"), Qmass("Qmass")
   { init(); }
 
-  void deep_copy (const LimiterTester& lv)
-  {
+  void deep_copy (const LimiterTester& lv) {
     Kokkos::deep_copy(sphweights, lv.sphweights);
     Kokkos::deep_copy(dpmass, lv.dpmass);
     Kokkos::deep_copy(ptens, lv.ptens);
@@ -1382,6 +1422,59 @@ struct LimiterTester {
     todevice();
   }
 
+  // Trigger the .not.modified cycle line in limiter_clip_and_sum.
+  void init_to_trigger_cycle () {
+    init_feasible();
+
+    const int k = 0;
+    const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+
+    Real minq = 2, maxq = 0;
+    for (int i = 0; i < NP; ++i)
+      for (int j = 0; j < NP; ++j) {
+        const Real q = ptens(i,j,vi)[si] / dpmass(i,j,vi)[si];
+        minq = std::min(minq, q);
+        maxq = std::max(maxq, q);
+      }
+    qlim(0,vi)[si] = std::max(0.0, minq - 1e-2);
+    qlim(1,vi)[si] = std::min(1.0, maxq + 1e-2);
+
+    Kokkos::deep_copy(qlim_d, qlim);
+  }
+
+  void fill_fortran (FortranData& d) {
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      d.minp(k) = qlim(0,vi)[si];
+      d.maxp(k) = qlim(1,vi)[si];
+      for (int i = 0; i < NP; ++i)
+        for (int j = 0; j < NP; ++j) {
+          d.ptens(j,i,k) = ptens(i,j,vi)[si];
+          d.dpmass(j,i,k) = dpmass(i,j,vi)[si];
+        }
+    }
+    for (int i = 0; i < NP; ++i)
+      for (int j = 0; j < NP; ++j)
+        d.sphweights(j,i) = sphweights(i,j);
+  }
+
+  void compare_with_fortran (const int limiter_option, FortranData& d) {
+    if (limiter_option == 9)
+      limiter_clip_and_sum_c_callable(d.ptens.data(), d.sphweights.data(),
+                                      d.minp.data(), d.maxp.data(),
+                                      d.dpmass.data());
+    else
+      limiter_optim_iter_full_c_callable(d.ptens.data(), d.sphweights.data(),
+                                         d.minp.data(), d.maxp.data(),
+                                         d.dpmass.data());      
+    for (int k = 0; k < NUM_PHYSICAL_LEV; ++k) {
+      const int vi = k / VECTOR_SIZE, si = k % VECTOR_SIZE;
+      for (int i = 0; i < NP; ++i)
+        for (int j = 0; j < NP; ++j)
+          REQUIRE(d.ptens(j,i,k) == ptens(i,j,vi)[si]);
+    }
+  }
+
   size_t team_shmem_size (const int team_size) const {
     return Homme::EulerStepFunctorImpl::limiter_team_shmem_size(team_size);
   }
@@ -1440,40 +1533,52 @@ struct LimiterTester {
   }
 };
 
-TEST_CASE("lim=8 math correctness", "limiter") {
+void test_limiter (const int limiter_option, const int impl, const int init) {
+  if (impl == 1 && OnGpu<ExecSpace>::value) return;
+  std::cout << "test limiter " << limiter_option << ","
+            << (impl == 0 ? " Kokkos impl," : " serial impl,")
+            << (init == 0 ? " with feasible\n" : " with early exit\n");
   LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::Lim8>(1), lv);
+  if (init == 0)
+    lv.init_feasible();
+  else
+    lv.init_to_trigger_cycle();
+  LimiterTester::FortranData fd;
+  lv.fill_fortran(fd);
+  if (limiter_option == 8) {
+    if (impl == 0)
+      Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::Lim8>(1), lv);
+    else
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);    
+  } else {
+    if (impl == 0)
+      Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv);
+    else
+      Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
+  }
   lv.fromdevice();
   lv.check();
+  lv.compare_with_fortran(limiter_option, fd);
+}
+
+TEST_CASE("lim=8 math correctness", "limiter") {
+  for (int init = 0; init < 2; ++init)
+    test_limiter(8, 0, init);
 }
 
 TEST_CASE("CAAS math correctness", "limiter") {
-  LimiterTester lv;
-  lv.init_feasible();
-  Kokkos::parallel_for(Homme::get_default_team_policy<ExecSpace, LimiterTester::CAAS>(1), lv);
-  lv.fromdevice();
-  lv.check();
+  for (int init = 0; init < 2; ++init)
+    test_limiter(9, 0, init);
 }
 
 TEST_CASE("serial lim=8 math correctness", "limiter") {
-  if (!OnGpu<ExecSpace>::value) {
-    LimiterTester lv;
-    lv.init_feasible();
-    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerLim8>(1, 1, 1), lv);
-    lv.fromdevice();
-    lv.check();
-  }
+  for (int init = 0; init < 2; ++init)
+    test_limiter(8, 1, init);
 }
 
 TEST_CASE("serial CAAS math correctness", "limiter") {
-  if (!OnGpu<ExecSpace>::value) {
-    LimiterTester lv;
-    lv.init_feasible();
-    Kokkos::parallel_for(Kokkos::TeamPolicy<ExecSpace, LimiterTester::SerCAAS>(1, 1, 1), lv);
-    lv.fromdevice();
-    lv.check();
-  }
+  for (int init = 0; init < 2; ++init)
+    test_limiter(9, 1, init);
 }
 
 // The best thing to do here would be to check the KKT conditions for the

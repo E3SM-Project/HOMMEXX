@@ -474,6 +474,8 @@ struct CaarFunctorImpl {
                            [&](const int &ilev) {
         Scalar tmp = m_elements.buffers.eta_dot_dpdn_buf(kv.team_idx, igp, jgp, ilev);
         tmp.shift_left(1);
+        // This should technically be NUM_LEV_P, but it works b/c we're shifting
+        // in a 0 BC, which holds in either branch of this conditional.
         tmp[VECTOR_SIZE - 1] = (ilev + 1 < NUM_LEV)
                                    ? m_elements.buffers.eta_dot_dpdn_buf(
                                          kv.team_idx, igp, jgp, ilev + 1)[0]
